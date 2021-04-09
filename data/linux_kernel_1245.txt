@@ -1,0 +1,21 @@
+On Wed, Apr 7, 2021 at 7:18 PM Martin K. Petersen<br>
+<martin.petersen@xxxxxxxxxx> wrote:<br>
+><i></i><br>
+><i></i><br>
+><i> Hi Colin!</i><br>
+><i></i><br>
+><i> > The for-loop iterates with a u8 loop counter i and compares this with</i><br>
+><i> > the loop upper limit of pm8001_ha->max_q_num which is a u32 type.</i><br>
+><i> > There is a potential infinite loop if pm8001_ha->max_q_num is larger</i><br>
+><i> > than the u8 loop counter. Fix this by making the loop counter the same</i><br>
+><i> > type as pm8001_ha->max_q_num.</i><br>
+><i></i><br>
+><i> No particular objections to the patch for future-proofing. However, as</i><br>
+><i> far as I can tell max_q_num is capped at 64 (PM8001_MAX_MSIX_VEC).</i><br>
+Exactly.<br>
+><i></i><br>
+><i> --</i><br>
+><i> Martin K. Petersen      Oracle Linux Engineering</i><br>
+<br>
+<br>
+

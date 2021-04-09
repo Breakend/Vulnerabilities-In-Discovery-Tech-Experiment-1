@@ -1,0 +1,241 @@
+Don't truncate the iterator to correspond to the actual data size when<br>
+fetching the data from the server - rather, pass the length we want to read<br>
+to rxrpc.<br>
+<br>
+This will allow the clear-after-read code in future to simply clear the<br>
+remaining iterator capacity rather than having to reinitialise the<br>
+iterator.<br>
+<br>
+Signed-off-by: David Howells <dhowells@xxxxxxxxxx><br>
+cc: linux-afs@xxxxxxxxxxxxxxxxxxx<br>
+cc: linux-cachefs@xxxxxxxxxx<br>
+cc: linux-fsdevel@xxxxxxxxxxxxxxx<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/158861249201.340223.13035445866976590375.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/158861249201.340223.13035445866976590375.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # rfc<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/159465825061.1377938.14403904452300909320.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/159465825061.1377938.14403904452300909320.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a><br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/160588531418.3465195.10712005940763063144.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/160588531418.3465195.10712005940763063144.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # rfc<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161118148567.1232039.13380313332292947956.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161118148567.1232039.13380313332292947956.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # rfc<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161161044610.2537118.17908520793806837792.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161161044610.2537118.17908520793806837792.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v2<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161340407907.1303470.6501394859511712746.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161340407907.1303470.6501394859511712746.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v3<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161539551721.286939.14655713136572200716.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161539551721.286939.14655713136572200716.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v4<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161653807790.2770958.14034599989374173734.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161653807790.2770958.14034599989374173734.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v5<br>
+---<br>
+<br>
+ fs/afs/fsclient.c      |    6 ++++--<br>
+ fs/afs/internal.h      |    6 ++++++<br>
+ fs/afs/rxrpc.c         |   13 +++++++++----<br>
+ fs/afs/yfsclient.c     |    6 ++++--<br>
+ include/net/af_rxrpc.h |    2 +-<br>
+ net/rxrpc/recvmsg.c    |    9 +++++----<br>
+ 6 files changed, 29 insertions(+), 13 deletions(-)<br>
+<br>
+diff --git a/fs/afs/fsclient.c b/fs/afs/fsclient.c<br>
+index 1d95ed9dd86e..4a57c6c6f12b 100644<br>
+--- a/fs/afs/fsclient.c<br>
++++ b/fs/afs/fsclient.c<br>
+@@ -305,8 +305,9 @@ static int afs_deliver_fs_fetch_data(struct afs_call *call)<br>
+ 	unsigned int size;<br>
+ 	int ret;<br>
+ <br>
+-	_enter("{%u,%zu/%llu}",<br>
+-	       call->unmarshall, iov_iter_count(call->iter), req->actual_len);<br>
++	_enter("{%u,%zu,%zu/%llu}",<br>
++	       call->unmarshall, call->iov_len, iov_iter_count(call->iter),<br>
++	       req->actual_len);<br>
+ <br>
+ 	switch (call->unmarshall) {<br>
+ 	case 0:<br>
+@@ -343,6 +344,7 @@ static int afs_deliver_fs_fetch_data(struct afs_call *call)<br>
+ 			size = PAGE_SIZE - req->offset;<br>
+ 		else<br>
+ 			size = req->remain;<br>
++		call->iov_len = size;<br>
+ 		call->bvec[0].bv_len = size;<br>
+ 		call->bvec[0].bv_offset = req->offset;<br>
+ 		call->bvec[0].bv_page = req->pages[req->index];<br>
+diff --git a/fs/afs/internal.h b/fs/afs/internal.h<br>
+index 995fef267be7..7b8306d8e81e 100644<br>
+--- a/fs/afs/internal.h<br>
++++ b/fs/afs/internal.h<br>
+@@ -104,6 +104,7 @@ struct afs_call {<br>
+ 	struct afs_server	*server;	/* The fileserver record if fs op (pins ref) */<br>
+ 	struct afs_vlserver	*vlserver;	/* The vlserver record if vl op */<br>
+ 	void			*request;	/* request data (first part) */<br>
++	size_t			iov_len;	/* Size of *iter to be used */<br>
+ 	struct iov_iter		def_iter;	/* Default buffer/data iterator */<br>
+ 	struct iov_iter		*iter;		/* Iterator currently in use */<br>
+ 	union {	/* Convenience for ->def_iter */<br>
+@@ -1271,6 +1272,7 @@ static inline void afs_make_op_call(struct afs_operation *op, struct afs_call *c<br>
+ <br>
+ static inline void afs_extract_begin(struct afs_call *call, void *buf, size_t size)<br>
+ {<br>
++	call->iov_len = size;<br>
+ 	call->kvec[0].iov_base = buf;<br>
+ 	call->kvec[0].iov_len = size;<br>
+ 	iov_iter_kvec(&call->def_iter, READ, call->kvec, 1, size);<br>
+@@ -1278,21 +1280,25 @@ static inline void afs_extract_begin(struct afs_call *call, void *buf, size_t si<br>
+ <br>
+ static inline void afs_extract_to_tmp(struct afs_call *call)<br>
+ {<br>
++	call->iov_len = sizeof(call->tmp);<br>
+ 	afs_extract_begin(call, &call->tmp, sizeof(call->tmp));<br>
+ }<br>
+ <br>
+ static inline void afs_extract_to_tmp64(struct afs_call *call)<br>
+ {<br>
++	call->iov_len = sizeof(call->tmp64);<br>
+ 	afs_extract_begin(call, &call->tmp64, sizeof(call->tmp64));<br>
+ }<br>
+ <br>
+ static inline void afs_extract_discard(struct afs_call *call, size_t size)<br>
+ {<br>
++	call->iov_len = size;<br>
+ 	iov_iter_discard(&call->def_iter, READ, size);<br>
+ }<br>
+ <br>
+ static inline void afs_extract_to_buf(struct afs_call *call, size_t size)<br>
+ {<br>
++	call->iov_len = size;<br>
+ 	afs_extract_begin(call, call->buffer, size);<br>
+ }<br>
+ <br>
+diff --git a/fs/afs/rxrpc.c b/fs/afs/rxrpc.c<br>
+index 8be709cb8542..0ec38b758f29 100644<br>
+--- a/fs/afs/rxrpc.c<br>
++++ b/fs/afs/rxrpc.c<br>
+@@ -363,6 +363,7 @@ void afs_make_call(struct afs_addr_cursor *ac, struct afs_call *call, gfp_t gfp)<br>
+ 	struct rxrpc_call *rxcall;<br>
+ 	struct msghdr msg;<br>
+ 	struct kvec iov[1];<br>
++	size_t len;<br>
+ 	s64 tx_total_len;<br>
+ 	int ret;<br>
+ <br>
+@@ -466,9 +467,10 @@ void afs_make_call(struct afs_addr_cursor *ac, struct afs_call *call, gfp_t gfp)<br>
+ 		rxrpc_kernel_abort_call(call->net->socket, rxcall,<br>
+ 					RX_USER_ABORT, ret, "KSD");<br>
+ 	} else {<br>
++		len = 0;<br>
+ 		iov_iter_kvec(&msg.msg_iter, READ, NULL, 0, 0);<br>
+ 		rxrpc_kernel_recv_data(call->net->socket, rxcall,<br>
+-				       &msg.msg_iter, false,<br>
++				       &msg.msg_iter, &len, false,<br>
+ 				       &call->abort_code, &call->service_id);<br>
+ 		ac->abort_code = call->abort_code;<br>
+ 		ac->responded = true;<br>
+@@ -504,6 +506,7 @@ void afs_make_call(struct afs_addr_cursor *ac, struct afs_call *call, gfp_t gfp)<br>
+ static void afs_deliver_to_call(struct afs_call *call)<br>
+ {<br>
+ 	enum afs_call_state state;<br>
++	size_t len;<br>
+ 	u32 abort_code, remote_abort = 0;<br>
+ 	int ret;<br>
+ <br>
+@@ -516,10 +519,11 @@ static void afs_deliver_to_call(struct afs_call *call)<br>
+ 	       state == AFS_CALL_SV_AWAIT_ACK<br>
+ 	       ) {<br>
+ 		if (state == AFS_CALL_SV_AWAIT_ACK) {<br>
++			len = 0;<br>
+ 			iov_iter_kvec(&call->def_iter, READ, NULL, 0, 0);<br>
+ 			ret = rxrpc_kernel_recv_data(call->net->socket,<br>
+ 						     call->rxcall, &call->def_iter,<br>
+-						     false, &remote_abort,<br>
++						     &len, false, &remote_abort,<br>
+ 						     &call->service_id);<br>
+ 			trace_afs_receive_data(call, &call->def_iter, false, ret);<br>
+ <br>
+@@ -929,10 +933,11 @@ int afs_extract_data(struct afs_call *call, bool want_more)<br>
+ 	u32 remote_abort = 0;<br>
+ 	int ret;<br>
+ <br>
+-	_enter("{%s,%zu},%d", call->type->name, iov_iter_count(iter), want_more);<br>
++	_enter("{%s,%zu,%zu},%d",<br>
++	       call->type->name, call->iov_len, iov_iter_count(iter), want_more);<br>
+ <br>
+ 	ret = rxrpc_kernel_recv_data(net->socket, call->rxcall, iter,<br>
+-				     want_more, &remote_abort,<br>
++				     &call->iov_len, want_more, &remote_abort,<br>
+ 				     &call->service_id);<br>
+ 	if (ret == 0 || ret == -EAGAIN)<br>
+ 		return ret;<br>
+diff --git a/fs/afs/yfsclient.c b/fs/afs/yfsclient.c<br>
+index bd787e71a657..6c45d32da13c 100644<br>
+--- a/fs/afs/yfsclient.c<br>
++++ b/fs/afs/yfsclient.c<br>
+@@ -363,8 +363,9 @@ static int yfs_deliver_fs_fetch_data64(struct afs_call *call)<br>
+ 	unsigned int size;<br>
+ 	int ret;<br>
+ <br>
+-	_enter("{%u,%zu/%llu}",<br>
+-	       call->unmarshall, iov_iter_count(call->iter), req->actual_len);<br>
++	_enter("{%u,%zu, %zu/%llu}",<br>
++	       call->unmarshall, call->iov_len, iov_iter_count(call->iter),<br>
++	       req->actual_len);<br>
+ <br>
+ 	switch (call->unmarshall) {<br>
+ 	case 0:<br>
+@@ -396,6 +397,7 @@ static int yfs_deliver_fs_fetch_data64(struct afs_call *call)<br>
+ 			size = PAGE_SIZE - req->offset;<br>
+ 		else<br>
+ 			size = req->remain;<br>
++		call->iov_len = size;<br>
+ 		call->bvec[0].bv_len = size;<br>
+ 		call->bvec[0].bv_offset = req->offset;<br>
+ 		call->bvec[0].bv_page = req->pages[req->index];<br>
+diff --git a/include/net/af_rxrpc.h b/include/net/af_rxrpc.h<br>
+index f6abcc0bbd6e..cee5f83c0f11 100644<br>
+--- a/include/net/af_rxrpc.h<br>
++++ b/include/net/af_rxrpc.h<br>
+@@ -53,7 +53,7 @@ int rxrpc_kernel_send_data(struct socket *, struct rxrpc_call *,<br>
+ 			   struct msghdr *, size_t,<br>
+ 			   rxrpc_notify_end_tx_t);<br>
+ int rxrpc_kernel_recv_data(struct socket *, struct rxrpc_call *,<br>
+-			   struct iov_iter *, bool, u32 *, u16 *);<br>
++			   struct iov_iter *, size_t *, bool, u32 *, u16 *);<br>
+ bool rxrpc_kernel_abort_call(struct socket *, struct rxrpc_call *,<br>
+ 			     u32, int, const char *);<br>
+ void rxrpc_kernel_end_call(struct socket *, struct rxrpc_call *);<br>
+diff --git a/net/rxrpc/recvmsg.c b/net/rxrpc/recvmsg.c<br>
+index fef3573fdc8b..eca6dda26c77 100644<br>
+--- a/net/rxrpc/recvmsg.c<br>
++++ b/net/rxrpc/recvmsg.c<br>
+@@ -669,6 +669,7 @@ int rxrpc_recvmsg(struct socket *sock, struct msghdr *msg, size_t len,<br>
+  * @sock: The socket that the call exists on<br>
+  * @call: The call to send data through<br>
+  * @iter: The buffer to receive into<br>
++ * @_len: The amount of data we want to receive (decreased on return)<br>
+  * @want_more: True if more data is expected to be read<br>
+  * @_abort: Where the abort code is stored if -ECONNABORTED is returned<br>
+  * @_service: Where to store the actual service ID (may be upgraded)<br>
+@@ -684,7 +685,7 @@ int rxrpc_recvmsg(struct socket *sock, struct msghdr *msg, size_t len,<br>
+  * *_abort should also be initialised to 0.<br>
+  */<br>
+ int rxrpc_kernel_recv_data(struct socket *sock, struct rxrpc_call *call,<br>
+-			   struct iov_iter *iter,<br>
++			   struct iov_iter *iter, size_t *_len,<br>
+ 			   bool want_more, u32 *_abort, u16 *_service)<br>
+ {<br>
+ 	size_t offset = 0;<br>
+@@ -692,7 +693,7 @@ int rxrpc_kernel_recv_data(struct socket *sock, struct rxrpc_call *call,<br>
+ <br>
+ 	_enter("{%d,%s},%zu,%d",<br>
+ 	       call->debug_id, rxrpc_call_states[call->state],<br>
+-	       iov_iter_count(iter), want_more);<br>
++	       *_len, want_more);<br>
+ <br>
+ 	ASSERTCMP(call->state, !=, RXRPC_CALL_SERVER_SECURING);<br>
+ <br>
+@@ -703,8 +704,8 @@ int rxrpc_kernel_recv_data(struct socket *sock, struct rxrpc_call *call,<br>
+ 	case RXRPC_CALL_SERVER_RECV_REQUEST:<br>
+ 	case RXRPC_CALL_SERVER_ACK_REQUEST:<br>
+ 		ret = rxrpc_recvmsg_data(sock, call, NULL, iter,<br>
+-					 iov_iter_count(iter), 0,<br>
+-					 &offset);<br>
++					 *_len, 0, &offset);<br>
++		*_len -= offset;<br>
+ 		if (ret < 0)<br>
+ 			goto out;<br>
+ <br>
+<br>
+<br>
+<br>
+

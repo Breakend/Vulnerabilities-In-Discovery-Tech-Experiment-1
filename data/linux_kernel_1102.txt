@@ -1,0 +1,20 @@
+Quoting Abel Vesa (2021-04-04 13:40:24)<br>
+><i> The following changes since commit a38fd8748464831584a19438cbb3082b5a2dab15:</i><br>
+><i> </i><br>
+><i>   Linux 5.12-rc2 (2021-03-05 17:33:41 -0800)</i><br>
+><i> </i><br>
+><i> are available in the Git repository at:</i><br>
+><i> </i><br>
+><i>   git://git.kernel.org/pub/scm/linux/kernel/git/abelvesa/linux.git clk/imx</i><br>
+><i> </i><br>
+><i> for you to fetch changes up to 054ef44ea3ef2883e0f63c9a54c91c07f321a0b4:</i><br>
+><i> </i><br>
+><i>   clk: imx: Reference preceded by free (2021-04-04 22:39:05 +0300)</i><br>
+><i> </i><br>
+><i> ----------------------------------------------------------------</i><br>
+<br>
+Thanks. Pulled into clk-next. Next time can you send a signed tag with a<br>
+small blurb about what is included?<br>
+<br>
+<br>
+

@@ -1,0 +1,18 @@
+><i> I have one scenario, may you take into account:</i><br>
+><i></i><br>
+><i> If one copyin case occurs, write() returned by your patch, the user process may</i><br>
+><i> check the return values, for errors, it may exit the process, then the error page</i><br>
+><i> will be freed, and then the page maybe alloced to other process or to kernel itself,</i><br>
+><i> then code will initialize it and this will trigger one SRAO, if it's used by kernel,</i><br>
+><i> we may do nothing for this, and kernel may still touch it, and lead to one panic.</i><br>
+<br>
+In this case kill_me_never() calls memory_failure() with flags == 0. I think (hope!)<br>
+that means that it will unmap the page from the task, but will not send a signal.<br>
+<br>
+When the task exits the PTE for this page has the swap/poison signature, so the<br>
+page is not freed for re-use.<br>
+<br>
+-Tony<br>
+<br>
+<br>
+

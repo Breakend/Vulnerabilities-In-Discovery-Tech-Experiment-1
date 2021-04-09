@@ -1,0 +1,82 @@
+Hi Andy,<br>
+<br>
+><i> > > On Thu, Mar 25, 2021 at 07:34:07PM +0200, Andy Shevchenko wrote:</i><br>
+><i> > > > The series provides one fix (patch 1) for GPIO to be able to wait for</i><br>
+><i> > > > the GPIO driver to appear. This is separated from the conversion to</i><br>
+><i> > > > the GPIO descriptors (patch 2) in order to have a possibility for</i><br>
+><i> > > > backporting. Patches 3 and 4 fix a minor warnings from Sparse while</i><br>
+><i> > > > moving to a new APIs. Patch 5 is MODULE_VERSION() clean up.</i><br>
+><i> > > ></i><br>
+><i> > > > Tested on Intel Minnowboard (v1).</i><br>
+><i> > ></i><br>
+><i> > > Anything should I do here?</i><br>
+><i> ></i><br>
+><i> > it's ok for me</i><br>
+><i> </i><br>
+><i> Thanks!</i><br>
+><i> Who may apply them?</i><br>
+<br>
+I used your patches on kernel net-next 5.12.0-rc2, on a board with an<br>
+Intel(R) Atom(TM) CPU E640   @ 1.00GHz and an EG20T PCH.<br>
+I used the built-in OKI gigabit ethernet controller:<br>
+<br>
+02:00.1 Ethernet controller: Intel Corporation Platform Controller Hub EG20T Gigabit Ethernet Controller (rev 02)<br>
+	Kernel driver in use: pch_gbe<br>
+<br>
+with a simple iperf test and all works fine:<br>
+<br>
+ht-700 ~ # iperf -c 192.168.200.1<br>
+------------------------------------------------------------<br>
+Client connecting to 192.168.200.1, TCP port 5001<br>
+TCP window size: 45.0 KByte (default)<br>
+------------------------------------------------------------<br>
+[  3] local 192.168.200.159 port 38638 connected with 192.168.200.1 port 5001<br>
+[ ID] Interval       Transfer     Bandwidth<br>
+[  3]  0.0-10.0 sec   178 MBytes   149 Mbits/sec<br>
+ht-700 ~ # iperf -c 192.168.200.1<br>
+------------------------------------------------------------<br>
+Client connecting to 192.168.200.1, TCP port 5001<br>
+TCP window size: 45.0 KByte (default)<br>
+------------------------------------------------------------<br>
+[  3] local 192.168.200.159 port 38640 connected with 192.168.200.1 port 5001<br>
+[ ID] Interval       Transfer     Bandwidth<br>
+[  3]  0.0-10.0 sec   178 MBytes   149 Mbits/sec<br>
+ht-700 ~ # iperf -c 192.168.200.1 -u<br>
+------------------------------------------------------------<br>
+Client connecting to 192.168.200.1, UDP port 5001<br>
+Sending 1470 byte datagrams<br>
+UDP buffer size:  208 KByte (default)<br>
+------------------------------------------------------------<br>
+[  3] local 192.168.200.159 port 58364 connected with 192.168.200.1 port 5001<br>
+[ ID] Interval       Transfer     Bandwidth<br>
+[  3]  0.0-10.0 sec  1.25 MBytes  1.05 Mbits/sec<br>
+[  3] Sent 893 datagrams<br>
+ht-700 ~ # iperf -c 192.168.200.1 -u<br>
+------------------------------------------------------------<br>
+Client connecting to 192.168.200.1, UDP port 5001<br>
+Sending 1470 byte datagrams<br>
+UDP buffer size:  208 KByte (default)<br>
+------------------------------------------------------------<br>
+[  3] local 192.168.200.159 port 32778 connected with 192.168.200.1 port 5001<br>
+[ ID] Interval       Transfer     Bandwidth<br>
+[  3]  0.0-10.0 sec  1.25 MBytes  1.05 Mbits/sec<br>
+[  3] Sent 893 datagrams<br>
+ht-700 ~ # uname -a<br>
+Linux ht-700 5.12.0-rc2-watchdog+ #12 SMP Thu Apr 8 11:08:49 CEST 2021 x86_64 x86_64 x86_64 GNU/Linux<br>
+ht-700 ~ # <br>
+<br>
+I hope this can help you.<br>
+<br>
+><i> </i><br>
+<br>
+Tested-by: Flavio Suligoi <f.suligoi@xxxxxxx><br>
+<br>
+><i> --</i><br>
+><i> With Best Regards,</i><br>
+><i> Andy Shevchenko</i><br>
+><i> </i><br>
+Best regards,<br>
+Flavio Suligoi<br>
+<br>
+<br>
+

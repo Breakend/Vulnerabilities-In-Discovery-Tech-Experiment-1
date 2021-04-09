@@ -1,0 +1,15 @@
+On Wed, 07 Apr 2021 20:16:37 -0500, Zev Weiss wrote:<br>
+><i> These correspond to the existing lpc_address, sirq, and sirq_polarity</i><br>
+><i> sysfs attributes; the second element of aspeed,lpc-interrupts provides</i><br>
+><i> a replacement for the deprecated aspeed,sirq-polarity-sense property.</i><br>
+><i> </i><br>
+><i> Signed-off-by: Zev Weiss <zev@xxxxxxxxxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  .../devicetree/bindings/serial/8250.yaml      | 27 ++++++++++++++++---</i><br>
+><i>  1 file changed, 24 insertions(+), 3 deletions(-)</i><br>
+><i> </i><br>
+<br>
+Reviewed-by: Rob Herring <robh@xxxxxxxxxx><br>
+<br>
+<br>
+

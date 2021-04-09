@@ -1,0 +1,29 @@
+On Thu, Apr 08, 2021 at 12:30:16PM +0200, Javier González wrote:<br>
+><i>>> Aligning to MDTS is our current behavior, although all kernels up to</i><br>
+><i>>> 5.11 had a bug in the calculation.</i><br>
+><i>></i><br>
+><i>> I see. Let me check internally and see what's going on with</i><br>
+><i>> write-zeroes on this model.</i><br>
+><i></i><br>
+><i> We still need to confirm, but it seems like MDTS for write-zeroes is</i><br>
+><i> reported wrong in the FW that Dmitry is using. We can at least reproduce</i><br>
+><i> it.</i><br>
+><i></i><br>
+><i> Would it be a possibility to add quirk infrastructure to hardcode MDTS</i><br>
+><i> for FW versions prior TP4040?</i><br>
+><i></i><br>
+><i> Another possibility is to add quirks to the TP4040 support patches to</i><br>
+><i> enable this - it might also help reduce the list of models currently</i><br>
+><i> blacklisted for write-zeroes.</i><br>
+<br>
+I'm not sure I understand you.  Before TP4040 there is only the MDTS,<br>
+which only applies to data transfer commands, although we also<br>
+"volunarily" apply it to Write Zeroes.  If MDTS is wrong this would<br>
+also affect normal I/O, so we really either need a firmware update<br>
+or a quirk.  Or is the Write Zeroes limit even smaller than MTDS?<br>
+I'd rather not add another quirk with a specific limit in that case,<br>
+as well grow way too many of those.  TP4040 is the way to go for that<br>
+case.<br>
+<br>
+<br>
+

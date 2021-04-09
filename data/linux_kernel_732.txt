@@ -1,0 +1,52 @@
+The PM reference count is not expected to be incremented on return in<br>
+these functions.<br>
+<br>
+However, pm_runtime_get_sync() will increment the PM reference count<br>
+even on failure. forgetting to put the reference again will result in<br>
+a leak.<br>
+<br>
+Replace it with pm_runtime_resume_and_get() to keep the usage counter<br>
+balanced.<br>
+<br>
+Reported-by: Hulk Robot <hulkci@xxxxxxxxxx><br>
+Signed-off-by: Ye Weihua <yeweihua4@xxxxxxxxxx><br>
+---<br>
+ drivers/i2c/busses/i2c-imx.c | 6 +++---<br>
+ 1 file changed, 3 insertions(+), 3 deletions(-)<br>
+<br>
+diff --git a/drivers/i2c/busses/i2c-imx.c b/drivers/i2c/busses/i2c-imx.c<br>
+index b80fdc1f0092..dc5ca71906db 100644<br>
+--- a/drivers/i2c/busses/i2c-imx.c<br>
++++ b/drivers/i2c/busses/i2c-imx.c<br>
+@@ -801,7 +801,7 @@ static int i2c_imx_reg_slave(struct i2c_client *client)<br>
+ 	i2c_imx->last_slave_event = I2C_SLAVE_STOP;<br>
+ <br>
+ 	/* Resume */<br>
+-	ret = pm_runtime_get_sync(i2c_imx->adapter.dev.parent);<br>
++	ret = pm_runtime_resume_and_get(i2c_imx->adapter.dev.parent);<br>
+ 	if (ret < 0) {<br>
+ 		dev_err(&i2c_imx->adapter.dev, "failed to resume i2c controller");<br>
+ 		return ret;<br>
+@@ -1253,7 +1253,7 @@ static int i2c_imx_xfer(struct i2c_adapter *adapter,<br>
+ 	struct imx_i2c_struct *i2c_imx = i2c_get_adapdata(adapter);<br>
+ 	int result;<br>
+ <br>
+-	result = pm_runtime_get_sync(i2c_imx->adapter.dev.parent);<br>
++	result = pm_runtime_resume_and_get(i2c_imx->adapter.dev.parent);<br>
+ 	if (result < 0)<br>
+ 		return result;<br>
+ <br>
+@@ -1496,7 +1496,7 @@ static int i2c_imx_remove(struct platform_device *pdev)<br>
+ 	struct imx_i2c_struct *i2c_imx = platform_get_drvdata(pdev);<br>
+ 	int irq, ret;<br>
+ <br>
+-	ret = pm_runtime_get_sync(&pdev->dev);<br>
++	ret = pm_runtime_resume_and_get(&pdev->dev);<br>
+ 	if (ret < 0)<br>
+ 		return ret;<br>
+ <br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+

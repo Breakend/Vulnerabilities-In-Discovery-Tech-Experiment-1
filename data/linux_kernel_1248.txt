@@ -1,0 +1,64 @@
+
+Hey Sujit,<br>
+Thanks for the patch.<br>
+<br>
+On 2021-03-30 07:16, Sujit Kautkar wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+Move rmtfs memory region so that it does not overlap with system<br>
+RAM (kernel data) when KAsan is enabled. This puts rmtfs right<br>
+after mba_mem which is not supposed to increase beyond 0x94600000<br>
+<br>
+Signed-off-by: Sujit Kautkar <sujitka@xxxxxxxxxxxx><br>
+---<br>
+ arch/arm64/boot/dts/qcom/sc7180-trogdor.dtsi | 2 +-<br>
+ arch/arm64/boot/dts/qcom/sc7180.dtsi         | 4 ++--<br>
+ 2 files changed, 3 insertions(+), 3 deletions(-)<br>
+<br>
+diff --git a/arch/arm64/boot/dts/qcom/sc7180-trogdor.dtsi<br>
+b/arch/arm64/boot/dts/qcom/sc7180-trogdor.dtsi<br>
+index 07c8b2c926c0..fe052b477b72 100644<br>
+--- a/arch/arm64/boot/dts/qcom/sc7180-trogdor.dtsi<br>
++++ b/arch/arm64/boot/dts/qcom/sc7180-trogdor.dtsi<br>
+@@ -45,7 +45,7 @@ trips {<br>
+<br>
+ /* Increase the size from 2MB to 8MB */<br>
+ &rmtfs_mem {<br>
+-	reg = <0x0 0x84400000 0x0 0x800000>;<br>
++	reg = <0x0 0x94600000 0x0 0x800000>;<br>
+</blockquote>
+<br>
+Sorry for the late comments. Can you<br>
+please do the same for sc7180-idp<br>
+as well?<br>
+<br>
+Reviewed-by: Sibi Sankar <sibis@xxxxxxxxxxxxxx><br>
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+ };<br>
+<br>
+ / {<br>
+diff --git a/arch/arm64/boot/dts/qcom/sc7180.dtsi<br>
+b/arch/arm64/boot/dts/qcom/sc7180.dtsi<br>
+index 1ea3344ab62c..ac956488908f 100644<br>
+--- a/arch/arm64/boot/dts/qcom/sc7180.dtsi<br>
++++ b/arch/arm64/boot/dts/qcom/sc7180.dtsi<br>
+@@ -110,9 +110,9 @@ tz_mem: memory@80b00000 {<br>
+ 			no-map;<br>
+ 		};<br>
+<br>
+-		rmtfs_mem: memory@84400000 {<br>
++		rmtfs_mem: memory@94600000 {<br>
+ 			compatible = "qcom,rmtfs-mem";<br>
+-			reg = <0x0 0x84400000 0x0 0x200000>;<br>
++			reg = <0x0 0x94600000 0x0 0x200000>;<br>
+ 			no-map;<br>
+<br>
+ 			qcom,client-id = <1>;<br>
+</blockquote>
+<br>
+--<br>
+Qualcomm Innovation Center, Inc. is a member of Code Aurora Forum,<br>
+a Linux Foundation Collaborative Project.<br>
+<br>
+<br>
+

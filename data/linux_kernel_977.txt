@@ -1,0 +1,133 @@
+On Thu, Apr 01, 2021 at 11:32:19AM -0700, Dave Hansen wrote:<br>
+><i> </i><br>
+><i> From: Dave Hansen <dave.hansen@xxxxxxxxxxxxxxx></i><br>
+><i> </i><br>
+><i> When memory fills up on a node, memory contents can be</i><br>
+><i> automatically migrated to another node.  The biggest problems are</i><br>
+><i> knowing when to migrate and to where the migration should be</i><br>
+><i> targeted.</i><br>
+><i> </i><br>
+><i> The most straightforward way to generate the "to where" list would</i><br>
+><i> be to follow the page allocator fallback lists.  Those lists</i><br>
+><i> already tell us if memory is full where to look next.  It would</i><br>
+><i> also be logical to move memory in that order.</i><br>
+><i> </i><br>
+><i> But, the allocator fallback lists have a fatal flaw: most nodes</i><br>
+><i> appear in all the lists.  This would potentially lead to migration</i><br>
+><i> cycles (A->B, B->A, A->B, ...).</i><br>
+><i> </i><br>
+><i> Instead of using the allocator fallback lists directly, keep a</i><br>
+><i> separate node migration ordering.  But, reuse the same data used</i><br>
+><i> to generate page allocator fallback in the first place:</i><br>
+><i> find_next_best_node().</i><br>
+><i> </i><br>
+><i> This means that the firmware data used to populate node distances</i><br>
+><i> essentially dictates the ordering for now.  It should also be</i><br>
+><i> architecture-neutral since all NUMA architectures have a working</i><br>
+><i> find_next_best_node().</i><br>
+><i> </i><br>
+><i> The protocol for node_demotion[] access and writing is not</i><br>
+><i> standard.  It has no specific locking and is intended to be read</i><br>
+><i> locklessly.  Readers must take care to avoid observing changes</i><br>
+><i> that appear incoherent.  This was done so that node_demotion[]</i><br>
+<br>
+It might be just me being dense here, but that reads odd.<br>
+<br>
+"Readers must take care to avoid observing changes that appear<br>
+incoherent" - I am not sure what is that supposed to mean.<br>
+<br>
+I guess you mean readers of next_demotion_node()?<br>
+And if so, how do they have to take care? And what would apply for<br>
+"incoherent" terminology here?<br>
+<br>
+><i> locking has no chance of becoming a bottleneck on large systems</i><br>
+><i> with lots of CPUs in direct reclaim.</i><br>
+><i> </i><br>
+><i> This code is unused for now.  It will be called later in the</i><br>
+><i> series.</i><br>
+><i> </i><br>
+><i> Signed-off-by: Dave Hansen <dave.hansen@xxxxxxxxxxxxxxx></i><br>
+><i> Reviewed-by: Yang Shi <shy828301@xxxxxxxxx></i><br>
+><i> Cc: Wei Xu <weixugc@xxxxxxxxxx></i><br>
+><i> Cc: David Rientjes <rientjes@xxxxxxxxxx></i><br>
+><i> Cc: Huang Ying <ying.huang@xxxxxxxxx></i><br>
+><i> Cc: Dan Williams <dan.j.williams@xxxxxxxxx></i><br>
+><i> Cc: David Hildenbrand <david@xxxxxxxxxx></i><br>
+><i> Cc: osalvador <osalvador@xxxxxxx></i><br>
+<br>
+...<br>
+<br>
+><i> +static void __set_migration_target_nodes(void)</i><br>
+><i> +{</i><br>
+><i> +	nodemask_t next_pass	= NODE_MASK_NONE;</i><br>
+><i> +	nodemask_t this_pass	= NODE_MASK_NONE;</i><br>
+><i> +	nodemask_t used_targets = NODE_MASK_NONE;</i><br>
+><i> +	int node;</i><br>
+><i> +</i><br>
+><i> +	/*</i><br>
+><i> +	 * Avoid any oddities like cycles that could occur</i><br>
+><i> +	 * from changes in the topology.  This will leave</i><br>
+><i> +	 * a momentary gap when migration is disabled.</i><br>
+><i> +	 */</i><br>
+><i> +	disable_all_migrate_targets();</i><br>
+><i> +</i><br>
+><i> +	/*</i><br>
+><i> +	 * Ensure that the "disable" is visible across the system.</i><br>
+><i> +	 * Readers will see either a combination of before+disable</i><br>
+><i> +	 * state or disable+after.  They will never see before and</i><br>
+><i> +	 * after state together.</i><br>
+><i> +	 *</i><br>
+><i> +	 * The before+after state together might have cycles and</i><br>
+><i> +	 * could cause readers to do things like loop until this</i><br>
+><i> +	 * function finishes.  This ensures they can only see a</i><br>
+><i> +	 * single "bad" read and would, for instance, only loop</i><br>
+><i> +	 * once.</i><br>
+><i> +	 */</i><br>
+><i> +	smp_wmb();</i><br>
+><i> +</i><br>
+><i> +	/*</i><br>
+><i> +	 * Allocations go close to CPUs, first.  Assume that</i><br>
+><i> +	 * the migration path starts at the nodes with CPUs.</i><br>
+><i> +	 */</i><br>
+><i> +	next_pass = node_states[N_CPU];</i><br>
+><i> +again:</i><br>
+><i> +	this_pass = next_pass;</i><br>
+><i> +	next_pass = NODE_MASK_NONE;</i><br>
+><i> +	/*</i><br>
+><i> +	 * To avoid cycles in the migration "graph", ensure</i><br>
+><i> +	 * that migration sources are not future targets by</i><br>
+><i> +	 * setting them in 'used_targets'.  Do this only</i><br>
+><i> +	 * once per pass so that multiple source nodes can</i><br>
+><i> +	 * share a target node.</i><br>
+><i> +	 *</i><br>
+><i> +	 * 'used_targets' will become unavailable in future</i><br>
+><i> +	 * passes.  This limits some opportunities for</i><br>
+><i> +	 * multiple source nodes to share a destination.</i><br>
+><i> +	 */</i><br>
+><i> +	nodes_or(used_targets, used_targets, this_pass);</i><br>
+><i> +	for_each_node_mask(node, this_pass) {</i><br>
+><i> +		int target_node = establish_migrate_target(node, &used_targets);</i><br>
+><i> +</i><br>
+><i> +		if (target_node == NUMA_NO_NODE)</i><br>
+><i> +			continue;</i><br>
+><i> +</i><br>
+><i> +		/* Visit targets from this pass in the next pass: */</i><br>
+><i> +		node_set(target_node, next_pass);</i><br>
+><i> +	}</i><br>
+><i> +	/* Is another pass necessary? */</i><br>
+><i> +	if (!nodes_empty(next_pass))</i><br>
+<br>
+When I read this I was about puzzled and it took me a while to figure<br>
+out how the passes were made.<br>
+I think this could benefit from a better explanation on how the passes<br>
+are being performed e.g: why next_pass should be empty before leaving.<br>
+<br>
+Other than that looks good to me.<br>
+<br>
+<br>
+-- <br>
+Oscar Salvador<br>
+SUSE L3<br>
+<br>
+<br>
+

@@ -1,0 +1,17 @@
+On Wed, 07 Apr 2021 20:16:34 -0500, Zev Weiss wrote:<br>
+><i> This property ties SIRQ polarity to SCU register bits that don't</i><br>
+><i> necessarily have any direct relationship to it; the only use of it was</i><br>
+><i> removed in commit c82bf6e133d3 ("ARM: aspeed: g5: Do not set sirq</i><br>
+><i> polarity").</i><br>
+><i> </i><br>
+><i> Signed-off-by: Zev Weiss <zev@xxxxxxxxxxxxxxxxx></i><br>
+><i> Reviewed-by: Joel Stanley <joel@xxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  Documentation/devicetree/bindings/serial/8250.yaml | 1 +</i><br>
+><i>  1 file changed, 1 insertion(+)</i><br>
+><i> </i><br>
+<br>
+Acked-by: Rob Herring <robh@xxxxxxxxxx><br>
+<br>
+<br>
+

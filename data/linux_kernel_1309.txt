@@ -1,0 +1,45 @@
+Otherwise build fails if the headers are not in the default location. While at<br>
+it also ask pkg-config for the libs, with fallback to the existing value.<br>
+<br>
+Signed-off-by: Rolf Eike Beer <eb@xxxxxxxxx><br>
+Cc: stable@xxxxxxxxxxxxxxx # 5.6.x<br>
+---<br>
+ scripts/Makefile | 10 ++++++++--<br>
+ 1 file changed, 8 insertions(+), 2 deletions(-)<br>
+<br>
+diff --git a/scripts/Makefile b/scripts/Makefile<br>
+index 95ecf970c74c..35ed997e074b 100644<br>
+--- a/scripts/Makefile<br>
++++ b/scripts/Makefile<br>
+@@ -3,6 +3,11 @@<br>
+ # scripts contains sources for various helper programs used throughout<br>
+ # the kernel for the build process.<br>
+ <br>
++PKG_CONFIG?= pkg-config<br>
++<br>
++CRYPTO_LIBS = $(shell $(PKG_CONFIG) --libs libcrypto 2> /dev/null || echo -lcrypto)<br>
++CRYPTO_CFLAGS = $(shell $(PKG_CONFIG) --cflags libcrypto 2> /dev/null)<br>
++<br>
+ always-$(CONFIG_BUILD_BIN2C)			+= bin2c<br>
+ always-$(CONFIG_KALLSYMS)			+= kallsyms<br>
+ always-$(BUILD_C_RECORDMCOUNT)			+= recordmcount<br>
+@@ -14,8 +19,9 @@ always-$(CONFIG_SYSTEM_EXTRA_CERTIFICATE)	+= insert-sys-cert<br>
+ <br>
+ HOSTCFLAGS_sorttable.o = -I$(srctree)/tools/include<br>
+ HOSTCFLAGS_asn1_compiler.o = -I$(srctree)/include<br>
+-HOSTLDLIBS_sign-file = -lcrypto<br>
+-HOSTLDLIBS_extract-cert = -lcrypto<br>
++HOSTLDLIBS_sign-file = $(CRYPTO_LIBS)<br>
++HOSTCFLAGS_extract-cert.o = $(CRYPTO_CFLAGS)<br>
++HOSTLDLIBS_extract-cert = $(CRYPTO_LIBS)<br>
+ <br>
+ ifdef CONFIG_UNWINDER_ORC<br>
+ ifeq ($(ARCH),x86_64)<br>
+-- <br>
+2.26.1<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+

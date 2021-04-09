@@ -1,0 +1,49 @@
+Remove the header <linux/version.h> that is not needed.<br>
+<br>
+Reported-by: Hulk Robot <hulkci@xxxxxxxxxx><br>
+Signed-off-by: Ruiqi Gong <gongruiqi1@xxxxxxxxxx><br>
+---<br>
+ fs/cifsd/mgmt/tree_connect.c | 1 -<br>
+ fs/cifsd/mgmt/user_session.c | 1 -<br>
+ fs/cifsd/mgmt/user_session.h | 1 -<br>
+ 3 files changed, 3 deletions(-)<br>
+<br>
+diff --git a/fs/cifsd/mgmt/tree_connect.c b/fs/cifsd/mgmt/tree_connect.c<br>
+index d3f28b10db4b..b9cd8fc46e5e 100644<br>
+--- a/fs/cifsd/mgmt/tree_connect.c<br>
++++ b/fs/cifsd/mgmt/tree_connect.c<br>
+@@ -5,7 +5,6 @@<br>
+ <br>
+ #include <linux/list.h><br>
+ #include <linux/slab.h><br>
+-#include <linux/version.h><br>
+ #include <linux/xarray.h><br>
+ <br>
+ #include "../buffer_pool.h"<br>
+diff --git a/fs/cifsd/mgmt/user_session.c b/fs/cifsd/mgmt/user_session.c<br>
+index bd5789b7e08e..52c5c036ecf9 100644<br>
+--- a/fs/cifsd/mgmt/user_session.c<br>
++++ b/fs/cifsd/mgmt/user_session.c<br>
+@@ -6,7 +6,6 @@<br>
+ #include <linux/list.h><br>
+ #include <linux/slab.h><br>
+ #include <linux/rwsem.h><br>
+-#include <linux/version.h><br>
+ #include <linux/xarray.h><br>
+ <br>
+ #include "ksmbd_ida.h"<br>
+diff --git a/fs/cifsd/mgmt/user_session.h b/fs/cifsd/mgmt/user_session.h<br>
+index 1a97c851f2fc..ad5c0430b62a 100644<br>
+--- a/fs/cifsd/mgmt/user_session.h<br>
++++ b/fs/cifsd/mgmt/user_session.h<br>
+@@ -7,7 +7,6 @@<br>
+ #define __USER_SESSION_MANAGEMENT_H__<br>
+ <br>
+ #include <linux/hashtable.h><br>
+-#include <linux/version.h><br>
+ #include <linux/xarray.h><br>
+ <br>
+ #include "../smb_common.h"<br>
+<br>
+<br>
+

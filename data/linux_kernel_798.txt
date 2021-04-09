@@ -1,0 +1,63 @@
+On Mon, Mar 29, 2021 at 6:48 PM Mickaël Salaün <mic@xxxxxxxxxxx> wrote:<br>
+><i></i><br>
+><i> From: Mickaël Salaün <mic@xxxxxxxxxxxxxxxxxxx></i><br>
+><i></i><br>
+><i> Since commit 6815f479ca90 ("ovl: use only uppermetacopy state in</i><br>
+><i> ovl_lookup()"), overlayfs doesn't put temporary dentry when there is a</i><br>
+><i> metacopy error, which leads to dentry leaks when shutting down the</i><br>
+><i> related superblock:</i><br>
+><i></i><br>
+><i>   overlayfs: refusing to follow metacopy origin for (/file0)</i><br>
+><i>   ...</i><br>
+><i>   BUG: Dentry (____ptrval____){i=3f33,n=file3}  still in use (1) [unmount of overlay overlay]</i><br>
+><i>   ...</i><br>
+><i>   WARNING: CPU: 1 PID: 432 at umount_check.cold+0x107/0x14d</i><br>
+><i>   CPU: 1 PID: 432 Comm: unmount-overlay Not tainted 5.12.0-rc5 #1</i><br>
+><i>   ...</i><br>
+><i>   RIP: 0010:umount_check.cold+0x107/0x14d</i><br>
+><i>   ...</i><br>
+><i>   Call Trace:</i><br>
+><i>    d_walk+0x28c/0x950</i><br>
+><i>    ? dentry_lru_isolate+0x2b0/0x2b0</i><br>
+><i>    ? __kasan_slab_free+0x12/0x20</i><br>
+><i>    do_one_tree+0x33/0x60</i><br>
+><i>    shrink_dcache_for_umount+0x78/0x1d0</i><br>
+><i>    generic_shutdown_super+0x70/0x440</i><br>
+><i>    kill_anon_super+0x3e/0x70</i><br>
+><i>    deactivate_locked_super+0xc4/0x160</i><br>
+><i>    deactivate_super+0xfa/0x140</i><br>
+><i>    cleanup_mnt+0x22e/0x370</i><br>
+><i>    __cleanup_mnt+0x1a/0x30</i><br>
+><i>    task_work_run+0x139/0x210</i><br>
+><i>    do_exit+0xb0c/0x2820</i><br>
+><i>    ? __kasan_check_read+0x1d/0x30</i><br>
+><i>    ? find_held_lock+0x35/0x160</i><br>
+><i>    ? lock_release+0x1b6/0x660</i><br>
+><i>    ? mm_update_next_owner+0xa20/0xa20</i><br>
+><i>    ? reacquire_held_locks+0x3f0/0x3f0</i><br>
+><i>    ? __sanitizer_cov_trace_const_cmp4+0x22/0x30</i><br>
+><i>    do_group_exit+0x135/0x380</i><br>
+><i>    __do_sys_exit_group.isra.0+0x20/0x20</i><br>
+><i>    __x64_sys_exit_group+0x3c/0x50</i><br>
+><i>    do_syscall_64+0x45/0x70</i><br>
+><i>    entry_SYSCALL_64_after_hwframe+0x44/0xae</i><br>
+><i>   ...</i><br>
+><i>   VFS: Busy inodes after unmount of overlay. Self-destruct in 5 seconds.  Have a nice day...</i><br>
+><i></i><br>
+><i> This fix has been tested with a syzkaller reproducer.</i><br>
+><i></i><br>
+><i> Cc: Amir Goldstein <amir73il@xxxxxxxxx></i><br>
+><i> Cc: Miklos Szeredi <miklos@xxxxxxxxxx></i><br>
+><i> Cc: Vivek Goyal <vgoyal@xxxxxxxxxx></i><br>
+><i> Cc: <stable@xxxxxxxxxxxxxxx> # v5.7+</i><br>
+><i> Reported-by: syzbot <syzkaller@xxxxxxxxxxxxxxxx></i><br>
+><i> Fixes: 6815f479ca90 ("ovl: use only uppermetacopy state in ovl_lookup()")</i><br>
+><i> Signed-off-by: Mickaël Salaün <mic@xxxxxxxxxxxxxxxxxxx></i><br>
+><i> Link: <a  rel="nofollow" href="https://lore.kernel.org/r/20210329164907.2133175-1-mic@xxxxxxxxxxx">https://lore.kernel.org/r/20210329164907.2133175-1-mic@xxxxxxxxxxx</a></i><br>
+<br>
+Thanks, applied.<br>
+<br>
+Miklos<br>
+<br>
+<br>
+

@@ -1,0 +1,31 @@
+On 31/03/2021 20.47, Matthew Wilcox (Oracle) wrote:<br>
+<br>
+><i> +static inline void folio_build_bug(void)</i><br>
+><i> +{</i><br>
+><i> +#define FOLIO_MATCH(pg, fl)						\</i><br>
+><i> +BUILD_BUG_ON(offsetof(struct page, pg) != offsetof(struct folio, fl));</i><br>
+><i> +</i><br>
+><i> +	FOLIO_MATCH(flags, flags);</i><br>
+><i> +	FOLIO_MATCH(lru, lru);</i><br>
+><i> +	FOLIO_MATCH(mapping, mapping);</i><br>
+><i> +	FOLIO_MATCH(index, index);</i><br>
+><i> +	FOLIO_MATCH(private, private);</i><br>
+><i> +	FOLIO_MATCH(_mapcount, _mapcount);</i><br>
+><i> +	FOLIO_MATCH(_refcount, _refcount);</i><br>
+><i> +#ifdef CONFIG_MEMCG</i><br>
+><i> +	FOLIO_MATCH(memcg_data, memcg_data);</i><br>
+><i> +#endif</i><br>
+><i> +#undef FOLIO_MATCH</i><br>
+><i> +	BUILD_BUG_ON(sizeof(struct page) != sizeof(struct folio));</i><br>
+><i> +}</i><br>
+><i> +</i><br>
+<br>
+Perhaps do this next to the definition of struct folio instead of hiding<br>
+it in some arbitrary TU - hint, we have static_assert() that doesn't<br>
+need to be in function context. And consider amending FOLIO_MATCH by a<br>
+static_assert(__same_type(typeof_member(...), typeof_member(...))).<br>
+<br>
+Rasmus<br>
+<br>
+<br>
+

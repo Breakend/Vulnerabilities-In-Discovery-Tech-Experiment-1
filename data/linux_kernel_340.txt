@@ -1,0 +1,38 @@
+On Wed, Apr 7, 2021 at 9:37 PM Bjorn Andersson<br>
+<bjorn.andersson@xxxxxxxxxx> wrote:<br>
+><i></i><br>
+><i> On Wed 07 Apr 10:37 CDT 2021, skakit@xxxxxxxxxxxxxx wrote:</i><br>
+><i></i><br>
+><i> > Hi Bjorn,</i><br>
+><i> ></i><br>
+><i> > On 2021-03-11 22:33, Bjorn Andersson wrote:</i><br>
+><i> > > On Thu 11 Mar 01:29 CST 2021, satya priya wrote:</i><br>
+><i> [..]</i><br>
+><i> > > > +patternProperties:</i><br>
+><i> > > > +  "rtc@[0-9a-f]+$":</i><br>
+><i> > ></i><br>
+><i> > > Can we somehow link this to individual binding docs instead of listing</i><br>
+><i> > > all the possible functions here?</i><br>
+><i> > ></i><br>
+><i> ></i><br>
+><i> > you mean we should split this into two:</i><br>
+><i> > qcom-pm8xxx.yaml and qcom-pm8xxx-rtc.yaml</i><br>
+><i> > Please correct me if wrong.</i><br>
+><i> ></i><br>
+><i></i><br>
+><i> Right, I'm worried that it will be quite hard to maintain this document</i><br>
+><i> once we start adding all the various pmic blocks to it. So if we somehow</i><br>
+><i> can maintain a series of qcom-pm8xxx-<func>.yaml and just ref them into</i><br>
+><i> the main PMIC definition.</i><br>
+><i></i><br>
+><i> @Rob, can you give us some guidance on how to structure this binding,</i><br>
+><i> with the various PMICs described will have some defined subset of a</i><br>
+><i> larger set of hardware blocks that's often shared between versions?</i><br>
+<br>
+How you suggest is good. The only other thing is just 1 complete<br>
+example rather than a bunch of <func> fragments.<br>
+<br>
+Rob<br>
+<br>
+<br>
+

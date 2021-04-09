@@ -1,0 +1,157 @@
+Hi Reinette,<br>
+<br>
+On 07/04/2021 00:42, Reinette Chatre wrote:<br>
+><i> On 4/6/2021 10:13 AM, James Morse wrote:</i><br>
+><i>> On 31/03/2021 22:35, Reinette Chatre wrote:</i><br>
+><i>>> On 3/12/2021 9:58 AM, James Morse wrote:</i><br>
+><i>>>> resctrl is the defacto Linux ABI for SoC resource partitioning features.</i><br>
+><i>>>> To support it on another architecture, it needs to be abstracted from</i><br>
+><i>>>> the features provided by Intel RDT and AMD PQoS, and moved to /fs/.</i><br>
+><i>>>></i><br>
+><i>>>> Start by splitting struct rdt_resource, (the name is kept to keep the noise</i><br>
+><i>>>> down), and add some type-trickery to keep the foreach helpers working.</i><br>
+<br>
+><i>>>> Move everything that is particular to resctrl into a new header</i><br>
+><i>>>> file, keeping the x86 hardware accessors where they are. resctrl code</i><br>
+><i>>>> paths touching a 'hw' struct indicates where an abstraction is needed.</i><br>
+><i>>></i><br>
+><i>>> This establishes the significance of this patch. Here the rdt_resource struct is split up</i><br>
+><i>>> and it is this split that guides the subsequent abstraction. Considering this I find that</i><br>
+><i>>> this description does not explain the resulting split sufficiently.</i><br>
+><i>>></i><br>
+><i>>> Specifically, after reading the above summary I expect fs information in rdt_resource and</i><br>
+><i>>> hw information in rdt_hw_resource but that does not seem to be the case. For example,</i><br>
+><i>>> num_rmid is a property obtained from hardware but is found in rdt_resource while other</i><br>
+><i>>> hardware properties initialized at the same time are found in rdt_hw_resource. It is</i><br>
+><i>>> interesting to look at when the hardware is discovered (for example, functions like</i><br>
+><i>>> cache_alloc_hsw_probe(), __get_mem_config_intel(), __rdt_get_mem_config_amd(),</i><br>
+><i>>> rdt_get_cache_alloc_cfg()). Note how some of the discovered values end up in rdt_resource</i><br>
+><i>>> and some in rdt_hw_resource.</i><br>
+><i>></i><br>
+><i>>> I was expecting these properties discovered from hardware to</i><br>
+><i>>> be in rdt_hw_resource.</i><br>
+><i>></i><br>
+><i>> Not all values discovered from the hardware are private to the architecture. They only</i><br>
+><i>> need to be private if there is some further abstraction involved.</i><br>
+<br>
+><i> ok, but rdt_hw_resource is described as "hw attributes of a resctrl resource" so this can</i><br>
+><i> be very confusing if rdt_hw_resource does _not_ actually contain (all of) the hw</i><br>
+><i> attributes of a resctrl resource.</i><br>
+<br>
+Aha, right. I'm bad at naming things. This started as untangling the hardware (cough:<br>
+arch) specific bits, but some things have migrated back the other way.<br>
+<br>
+Do you think either of arch_rdt_resource or rdt_priv_resource are clearer?<br>
+<br>
+<br>
+><i> Could you please expand the kernel doc for rdt_hw_resource to explain that, apart from</i><br>
+><i> @resctrl (that I just noticed is missing a description),</i><br>
+<br>
+I'll add one for mbm_width too,<br>
+<br>
+><i> it contains attributes needing</i><br>
+><i> abstraction for different architectures as opposed to the actual hardware attributes?</i><br>
+<br>
+|/**<br>
+| * struct rdt_hw_resource - arch private attributes of a resctrl resource<br>
+| * @resctrl:		Attributes of the resource used directly by resctrl.<br>
+| * @num_closid:	Number of CLOSIDs available.<br>
+| * @msr_base:		Base MSR address for CBMs<br>
+| * @msr_update:	Function pointer to update QOS MSRs<br>
+| * @mon_scale:		cqm counter * mon_scale = occupancy in bytes<br>
+| * @mbm_width:		Monitor width, to detect and correct for overflow.<br>
+| *<br>
+| * Members of this structure are either private to the architecture<br>
+| * e.g. mbm_width, or accessed via helpers that provide abstraction. e.g.<br>
+| * msr_update and msr_base.<br>
+| */<br>
+<br>
+<br>
+><i>> On your specific example: the resctrl filesystem code allocates from num_rmid. Its meaning</i><br>
+><i>> doesn't change. num_closid on the other hand changes depending on whether CDP is in use.</i><br>
+><i>></i><br>
+><i>> Putting num_closid in resctrl's struct rdt_resource would work, but the value is wrong</i><br>
+><i>> once CDP is enabled. This would be annoying to debug, hiding the hardware value and</i><br>
+><i>> providing it via a helper avoids this, as by the end of the series there is only one</i><br>
+><i>> consumer: schemata_list_create().</i><br>
+><i>></i><br>
+><i>> For MPAM, the helper would return arm64's version of rdt_min_closid as there is only one</i><br>
+><i>> 'num_closid' for the system, regardless of the resource. The driver has to duplicate the</i><br>
+><i>> logic in closid_init() to find the minimum common value of all the resources, as not all</i><br>
+><i>> the resources are exposed to resctrl, and an out-of-range closid value triggers an error</i><br>
+><i>> interrupt.</i><br>
+><i>></i><br>
+><i>></i><br>
+><i>>> It is also not clear to me how these structures are intended to be used for related</i><br>
+><i>>> hardware properties. For example, rdt_resource keeps the properties</i><br>
+><i>>> alloc_capable/alloc_enabled/mon_capable/mon_enabled - but in this series companion</i><br>
+><i>>> properties of cdp_capable/cdp_enabled are introduced and placed in rdt_hw_resource.</i><br>
+><i>></i><br>
+><i>> There needs to be further abstraction around cdp_enabled. For Arm's MPAM CDP is emulated</i><br>
+><i>> by providing different closid for data-access and instruction-fetch. This is done in the</i><br>
+><i>> equivalent to IA32_PQR_ASSOC, so it affects all the resources.</i><br>
+><i>></i><br>
+><i>> For MPAM all resources would be cdp_capable, so the field doesn't need to exist.</i><br>
+><i> </i><br>
+><i> Will it be removed?</i><br>
+<br>
+It wouldn't exist in the MPAM version of rdt_hw_resource.<br>
+<br>
+It is needed for Intel's RDT to ensure CDP can be supported and enabled per-resource,<br>
+which is how I read your no 'force enabling of CDP on all cache levels' comment from:<br>
+<a  rel="nofollow" href="https://lore.kernel.org/lkml/fa703609-4eed-7266-c389-a5dbba14d2ce@xxxxxxxxx/">https://lore.kernel.org/lkml/fa703609-4eed-7266-c389-a5dbba14d2ce@xxxxxxxxx/</a><br>
+<br>
+If you don't think per-resources tracking is needed, did I read that wrong?<br>
+(it only 'forced' CDP on for the L2 if it had been enabled for L3. My understanding is no<br>
+SoC today has both)<br>
+<br>
+<br>
+><i>> cdp_enabled has to be used via a helper, as its a global property for all the tasks that</i><br>
+><i>> resctrl is in control of, not a per-resource field.</i><br>
+><i>></i><br>
+><i>> (this is the reason the previous version tried to make the CDP state global, on the</i><br>
+><i>> assumption it would never appear on both L2 and L3 for x86 systems)</i><br>
+><i>></i><br>
+><i>> (The next patch after these removes alloc_enabled, as it no longer means anything once the</i><br>
+><i>> resources are merged. I didn't post it to try and keep the series small)</i><br>
+><i>>> That seems contradicting to me.</i><br>
+><i>></i><br>
+><i>>> Since this change is so foundational it would be very helpful if the resulting split could</i><br>
+><i>>> be explained in more detail.</i><br>
+><i>></i><br>
+><i>> Sure. I'll add a paragraph on where I think extra abstraction is needed for the members of</i><br>
+><i>> struct rdt_hw_resource. The two not described above are mon_scale and mbm_width.</i><br>
+><i>></i><br>
+><i>> Currently rephrased as:</i><br>
+><i>></i><br>
+><i>> | Move as much of the structure as possible into the common structure</i><br>
+><i>> | in the core code's header file. The x86 hardware accessors remain</i><br>
+><i>> | part of the architecture private code, as do num_closid, mon_scale</i><br>
+><i>> | and mbm_width.</i><br>
+><i>> | mon_scale and mbm_width are used to detect overflow of the hardware</i><br>
+><i>> | counters, and convert them from their native size to bytes. Any</i><br>
+><i>> | cross-architecture abstraction should be in terms of bytes, making</i><br>
+><i>> | these properties private.</i><br>
+><i>> | The hardware's num_closid is kept in the private structure to force</i><br>
+><i>> | the filesystem code to use a helper to access it. MPAM would return a</i><br>
+><i>> | single value for the system, regardless of the resource. Using the</i><br>
+><i>> | helper prevents this field from being confused with the version of</i><br>
+><i>> | num_closid that is being exposed to user-space (added in a later patch).</i><br>
+<br>
+><i> This is very helpful. Thank you. I also think that adding a similar per-property summary</i><br>
+><i> to the kernel-doc of rt_hw_resource would be very helpful.</i><br>
+<br>
+The problem is 'any cross-architecture abstraction' refers to patches that will show up<br>
+quite a bit later. I think this is fine for the motivation in the commit message as the<br>
+information is only relevant at the point of the change, but its decidedly weird to refer<br>
+to MPAM in the x86's header files.<br>
+<br>
+I'll add the reason behind num_closid being odd to the patch that adds the helper.<br>
+<br>
+<br>
+Thanks,<br>
+<br>
+James<br>
+<br>
+<br>
+

@@ -1,0 +1,564 @@
+Add HiSilicon I2C controller driver for the Kunpeng SoC. It provides<br>
+the access to the i2c busses, which connects to the eeprom, rtc, etc.<br>
+<br>
+The driver works with IRQ mode, and supports basic I2C features and 10bit<br>
+address. The DMA is not supported.<br>
+<br>
+Reviewed-by: Andy Shevchenko <andriy.shevchenko@xxxxxxxxxxxxxxx><br>
+Reviewed-by: Dmitry Osipenko <digetx@xxxxxxxxx><br>
+Signed-off-by: Yicong Yang <yangyicong@xxxxxxxxxxxxx><br>
+---<br>
+ drivers/i2c/busses/Kconfig    |  10 +<br>
+ drivers/i2c/busses/Makefile   |   1 +<br>
+ drivers/i2c/busses/i2c-hisi.c | 504 ++++++++++++++++++++++++++++++++++++++++++<br>
+ 3 files changed, 515 insertions(+)<br>
+ create mode 100644 drivers/i2c/busses/i2c-hisi.c<br>
+<br>
+diff --git a/drivers/i2c/busses/Kconfig b/drivers/i2c/busses/Kconfig<br>
+index 05ebf75..eddf7bf 100644<br>
+--- a/drivers/i2c/busses/Kconfig<br>
++++ b/drivers/i2c/busses/Kconfig<br>
+@@ -645,6 +645,16 @@ config I2C_HIGHLANDER<br>
+ 	  This driver can also be built as a module.  If so, the module<br>
+ 	  will be called i2c-highlander.<br>
+ <br>
++config I2C_HISI<br>
++	tristate "HiSilicon I2C controller"<br>
++	depends on ARM64 || COMPILE_TEST<br>
++	help<br>
++	  Say Y here if you want to have Hisilicon I2C controller support<br>
++	  available on the Kunpeng Server.<br>
++<br>
++	  This driver can also be built as a module. If so, the module<br>
++	  will be called i2c-hisi.<br>
++<br>
+ config I2C_IBM_IIC<br>
+ 	tristate "IBM PPC 4xx on-chip I2C interface"<br>
+ 	depends on 4xx<br>
+diff --git a/drivers/i2c/busses/Makefile b/drivers/i2c/busses/Makefile<br>
+index 615f35e..e1c9292 100644<br>
+--- a/drivers/i2c/busses/Makefile<br>
++++ b/drivers/i2c/busses/Makefile<br>
+@@ -63,6 +63,7 @@ obj-$(CONFIG_I2C_EMEV2)		+= i2c-emev2.o<br>
+ obj-$(CONFIG_I2C_EXYNOS5)	+= i2c-exynos5.o<br>
+ obj-$(CONFIG_I2C_GPIO)		+= i2c-gpio.o<br>
+ obj-$(CONFIG_I2C_HIGHLANDER)	+= i2c-highlander.o<br>
++obj-$(CONFIG_I2C_HISI)		+= i2c-hisi.o<br>
+ obj-$(CONFIG_I2C_HIX5HD2)	+= i2c-hix5hd2.o<br>
+ obj-$(CONFIG_I2C_IBM_IIC)	+= i2c-ibm_iic.o<br>
+ obj-$(CONFIG_I2C_IMG)		+= i2c-img-scb.o<br>
+diff --git a/drivers/i2c/busses/i2c-hisi.c b/drivers/i2c/busses/i2c-hisi.c<br>
+new file mode 100644<br>
+index 0000000..acf3948<br>
+--- /dev/null<br>
++++ b/drivers/i2c/busses/i2c-hisi.c<br>
+@@ -0,0 +1,504 @@<br>
++// SPDX-License-Identifier: GPL-2.0<br>
++/*<br>
++ * HiSilicon I2C Controller Driver for Kunpeng SoC<br>
++ *<br>
++ * Copyright (c) 2021 HiSilicon Technologies Co., Ltd.<br>
++ */<br>
++<br>
++#include <linux/bits.h><br>
++#include <linux/bitfield.h><br>
++#include <linux/completion.h><br>
++#include <linux/i2c.h><br>
++#include <linux/interrupt.h><br>
++#include <linux/io.h><br>
++#include <linux/module.h><br>
++#include <linux/mod_devicetable.h><br>
++#include <linux/platform_device.h><br>
++#include <linux/property.h><br>
++<br>
++#define HISI_I2C_FRAME_CTRL		0x0000<br>
++#define   HISI_I2C_FRAME_CTRL_SPEED_MODE	GENMASK(1, 0)<br>
++#define   HISI_I2C_FRAME_CTRL_ADDR_TEN	BIT(2)<br>
++#define HISI_I2C_SLV_ADDR		0x0004<br>
++#define   HISI_I2C_SLV_ADDR_VAL		GENMASK(9, 0)<br>
++#define   HISI_I2C_SLV_ADDR_GC_S_MODE	BIT(10)<br>
++#define   HISI_I2C_SLV_ADDR_GC_S_EN	BIT(11)<br>
++#define HISI_I2C_CMD_TXDATA		0x0008<br>
++#define   HISI_I2C_CMD_TXDATA_DATA	GENMASK(7, 0)<br>
++#define   HISI_I2C_CMD_TXDATA_RW	BIT(8)<br>
++#define   HISI_I2C_CMD_TXDATA_P_EN	BIT(9)<br>
++#define   HISI_I2C_CMD_TXDATA_SR_EN	BIT(10)<br>
++#define HISI_I2C_RXDATA			0x000c<br>
++#define   HISI_I2C_RXDATA_DATA		GENMASK(7, 0)<br>
++#define HISI_I2C_SS_SCL_HCNT		0x0010<br>
++#define HISI_I2C_SS_SCL_LCNT		0x0014<br>
++#define HISI_I2C_FS_SCL_HCNT		0x0018<br>
++#define HISI_I2C_FS_SCL_LCNT		0x001c<br>
++#define HISI_I2C_HS_SCL_HCNT		0x0020<br>
++#define HISI_I2C_HS_SCL_LCNT		0x0024<br>
++#define HISI_I2C_FIFO_CTRL		0x0028<br>
++#define   HISI_I2C_FIFO_RX_CLR		BIT(0)<br>
++#define   HISI_I2C_FIFO_TX_CLR		BIT(1)<br>
++#define   HISI_I2C_FIFO_RX_AF_THRESH	GENMASK(7, 2)<br>
++#define   HISI_I2C_FIFO_TX_AE_THRESH	GENMASK(13, 8)<br>
++#define HISI_I2C_FIFO_STATE		0x002c<br>
++#define   HISI_I2C_FIFO_STATE_RX_RERR	BIT(0)<br>
++#define   HISI_I2C_FIFO_STATE_RX_WERR	BIT(1)<br>
++#define   HISI_I2C_FIFO_STATE_RX_EMPTY	BIT(3)<br>
++#define   HISI_I2C_FIFO_STATE_TX_RERR	BIT(6)<br>
++#define   HISI_I2C_FIFO_STATE_TX_WERR	BIT(7)<br>
++#define   HISI_I2C_FIFO_STATE_TX_FULL	BIT(11)<br>
++#define HISI_I2C_SDA_HOLD		0x0030<br>
++#define   HISI_I2C_SDA_HOLD_TX		GENMASK(15, 0)<br>
++#define   HISI_I2C_SDA_HOLD_RX		GENMASK(23, 16)<br>
++#define HISI_I2C_FS_SPK_LEN		0x0038<br>
++#define   HISI_I2C_FS_SPK_LEN_CNT	GENMASK(7, 0)<br>
++#define HISI_I2C_HS_SPK_LEN		0x003c<br>
++#define   HISI_I2C_HS_SPK_LEN_CNT	GENMASK(7, 0)<br>
++#define HISI_I2C_INT_MSTAT		0x0044<br>
++#define HISI_I2C_INT_CLR		0x0048<br>
++#define HISI_I2C_INT_MASK		0x004C<br>
++#define HISI_I2C_TRANS_STATE		0x0050<br>
++#define HISI_I2C_TRANS_ERR		0x0054<br>
++#define HISI_I2C_VERSION		0x0058<br>
++<br>
++#define HISI_I2C_INT_ALL	GENMASK(4, 0)<br>
++#define HISI_I2C_INT_TRANS_CPLT	BIT(0)<br>
++#define HISI_I2C_INT_TRANS_ERR	BIT(1)<br>
++#define HISI_I2C_INT_FIFO_ERR	BIT(2)<br>
++#define HISI_I2C_INT_RX_FULL	BIT(3)<br>
++#define HISI_I2C_INT_TX_EMPTY	BIT(4)<br>
++#define HISI_I2C_INT_ERR \<br>
++	(HISI_I2C_INT_TRANS_ERR | HISI_I2C_INT_FIFO_ERR)<br>
++<br>
++#define HISI_I2C_STD_SPEED_MODE		0<br>
++#define HISI_I2C_FAST_SPEED_MODE	1<br>
++#define HISI_I2C_HIGH_SPEED_MODE	2<br>
++<br>
++#define HISI_I2C_TX_FIFO_DEPTH		64<br>
++#define HISI_I2C_RX_FIFO_DEPTH		64<br>
++#define HISI_I2C_TX_F_AE_THRESH		1<br>
++#define HISI_I2C_RX_F_AF_THRESH		60<br>
++<br>
++#define HZ_PER_KHZ	1000<br>
++<br>
++#define NSEC_TO_CYCLES(ns, clk_rate_khz) \<br>
++	DIV_ROUND_UP_ULL((clk_rate_khz) * (ns), NSEC_PER_MSEC)<br>
++<br>
++struct hisi_i2c_controller {<br>
++	struct i2c_adapter adapter;<br>
++	void __iomem *iobase;<br>
++	struct device *dev;<br>
++	int irq;<br>
++<br>
++	/* Intermediates for recording the transfer process */<br>
++	struct completion *completion;<br>
++	struct i2c_msg *msgs;<br>
++	int msg_num;<br>
++	int msg_tx_idx;<br>
++	int buf_tx_idx;<br>
++	int msg_rx_idx;<br>
++	int buf_rx_idx;<br>
++	u16 tar_addr;<br>
++	u32 xfer_err;<br>
++<br>
++	/* I2C bus configuration */<br>
++	struct i2c_timings t;<br>
++	u32 clk_rate_khz;<br>
++	u32 spk_len;<br>
++};<br>
++<br>
++static void hisi_i2c_enable_int(struct hisi_i2c_controller *ctlr, u32 mask)<br>
++{<br>
++	writel_relaxed(mask, ctlr->iobase + HISI_I2C_INT_MASK);<br>
++}<br>
++<br>
++static void hisi_i2c_disable_int(struct hisi_i2c_controller *ctlr, u32 mask)<br>
++{<br>
++	writel_relaxed((~mask) & HISI_I2C_INT_ALL, ctlr->iobase + HISI_I2C_INT_MASK);<br>
++}<br>
++<br>
++static void hisi_i2c_clear_int(struct hisi_i2c_controller *ctlr, u32 mask)<br>
++{<br>
++	writel_relaxed(mask, ctlr->iobase + HISI_I2C_INT_CLR);<br>
++}<br>
++<br>
++static void hisi_i2c_handle_errors(struct hisi_i2c_controller *ctlr)<br>
++{<br>
++	u32 int_err = ctlr->xfer_err, reg;<br>
++<br>
++	if (int_err & HISI_I2C_INT_FIFO_ERR) {<br>
++		reg = readl(ctlr->iobase + HISI_I2C_FIFO_STATE);<br>
++<br>
++		if (reg & HISI_I2C_FIFO_STATE_RX_RERR)<br>
++			dev_err(ctlr->dev, "rx fifo error read\n");<br>
++<br>
++		if (reg & HISI_I2C_FIFO_STATE_RX_WERR)<br>
++			dev_err(ctlr->dev, "rx fifo error write\n");<br>
++<br>
++		if (reg & HISI_I2C_FIFO_STATE_TX_RERR)<br>
++			dev_err(ctlr->dev, "tx fifo error read\n");<br>
++<br>
++		if (reg & HISI_I2C_FIFO_STATE_TX_WERR)<br>
++			dev_err(ctlr->dev, "tx fifo error write\n");<br>
++	}<br>
++}<br>
++<br>
++static int hisi_i2c_start_xfer(struct hisi_i2c_controller *ctlr)<br>
++{<br>
++	struct i2c_msg *msg = ctlr->msgs;<br>
++	u32 reg;<br>
++<br>
++	reg = readl(ctlr->iobase + HISI_I2C_FRAME_CTRL);<br>
++	reg &= ~HISI_I2C_FRAME_CTRL_ADDR_TEN;<br>
++	if (msg->flags & I2C_M_TEN)<br>
++		reg |= HISI_I2C_FRAME_CTRL_ADDR_TEN;<br>
++	writel(reg, ctlr->iobase + HISI_I2C_FRAME_CTRL);<br>
++<br>
++	reg = readl(ctlr->iobase + HISI_I2C_SLV_ADDR);<br>
++	reg &= ~HISI_I2C_SLV_ADDR_VAL;<br>
++	reg |= FIELD_PREP(HISI_I2C_SLV_ADDR_VAL, msg->addr);<br>
++	writel(reg, ctlr->iobase + HISI_I2C_SLV_ADDR);<br>
++<br>
++	reg = readl(ctlr->iobase + HISI_I2C_FIFO_CTRL);<br>
++	reg |= HISI_I2C_FIFO_RX_CLR | HISI_I2C_FIFO_TX_CLR;<br>
++	writel(reg, ctlr->iobase + HISI_I2C_FIFO_CTRL);<br>
++	reg &= ~(HISI_I2C_FIFO_RX_CLR | HISI_I2C_FIFO_TX_CLR);<br>
++	writel(reg, ctlr->iobase + HISI_I2C_FIFO_CTRL);<br>
++<br>
++	hisi_i2c_clear_int(ctlr, HISI_I2C_INT_ALL);<br>
++	hisi_i2c_enable_int(ctlr, HISI_I2C_INT_ALL);<br>
++<br>
++	return 0;<br>
++}<br>
++<br>
++static void hisi_i2c_reset_xfer(struct hisi_i2c_controller *ctlr)<br>
++{<br>
++	ctlr->msg_num = 0;<br>
++	ctlr->xfer_err = 0;<br>
++	ctlr->msg_tx_idx = 0;<br>
++	ctlr->msg_rx_idx = 0;<br>
++	ctlr->buf_tx_idx = 0;<br>
++	ctlr->buf_rx_idx = 0;<br>
++}<br>
++<br>
++/*<br>
++ * Initialize the transfer information and start the I2C bus transfer.<br>
++ * We only configure the transfer and do some pre/post works here, and<br>
++ * wait for the transfer done. The major transfer process is performed<br>
++ * in the IRQ handler.<br>
++ */<br>
++static int hisi_i2c_master_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,<br>
++				int num)<br>
++{<br>
++	struct hisi_i2c_controller *ctlr = i2c_get_adapdata(adap);<br>
++	DECLARE_COMPLETION_ONSTACK(done);<br>
++	int ret = num;<br>
++<br>
++	hisi_i2c_reset_xfer(ctlr);<br>
++	ctlr->completion = &done;<br>
++	ctlr->msg_num = num;<br>
++	ctlr->msgs = msgs;<br>
++<br>
++	hisi_i2c_start_xfer(ctlr);<br>
++<br>
++	if (!wait_for_completion_timeout(ctlr->completion, adap->timeout)) {<br>
++		hisi_i2c_disable_int(ctlr, HISI_I2C_INT_ALL);<br>
++		synchronize_irq(ctlr->irq);<br>
++		i2c_recover_bus(&ctlr->adapter);<br>
++		dev_err(ctlr->dev, "bus transfer timeout\n");<br>
++		ret = -EIO;<br>
++	}<br>
++<br>
++	if (ctlr->xfer_err) {<br>
++		hisi_i2c_handle_errors(ctlr);<br>
++		ret = -EIO;<br>
++	}<br>
++<br>
++	hisi_i2c_reset_xfer(ctlr);<br>
++	ctlr->completion = NULL;<br>
++<br>
++	return ret;<br>
++}<br>
++<br>
++static u32 hisi_i2c_functionality(struct i2c_adapter *adap)<br>
++{<br>
++	return I2C_FUNC_I2C | I2C_FUNC_10BIT_ADDR | I2C_FUNC_SMBUS_EMUL;<br>
++}<br>
++<br>
++static const struct i2c_algorithm hisi_i2c_algo = {<br>
++	.master_xfer	= hisi_i2c_master_xfer,<br>
++	.functionality	= hisi_i2c_functionality,<br>
++};<br>
++<br>
++static int hisi_i2c_read_rx_fifo(struct hisi_i2c_controller *ctlr)<br>
++{<br>
++	struct i2c_msg *cur_msg;<br>
++	u32 fifo_state;<br>
++<br>
++	while (ctlr->msg_rx_idx < ctlr->msg_num) {<br>
++		cur_msg = ctlr->msgs + ctlr->msg_rx_idx;<br>
++<br>
++		if (!(cur_msg->flags & I2C_M_RD)) {<br>
++			ctlr->msg_rx_idx++;<br>
++			continue;<br>
++		}<br>
++<br>
++		fifo_state = readl(ctlr->iobase + HISI_I2C_FIFO_STATE);<br>
++		while (!(fifo_state & HISI_I2C_FIFO_STATE_RX_EMPTY) &&<br>
++		       ctlr->buf_rx_idx < cur_msg->len) {<br>
++			cur_msg->buf[ctlr->buf_rx_idx++] = readl(ctlr->iobase + HISI_I2C_RXDATA);<br>
++			fifo_state = readl(ctlr->iobase + HISI_I2C_FIFO_STATE);<br>
++		}<br>
++<br>
++		if (ctlr->buf_rx_idx == cur_msg->len) {<br>
++			ctlr->buf_rx_idx = 0;<br>
++			ctlr->msg_rx_idx++;<br>
++		}<br>
++<br>
++		if (fifo_state & HISI_I2C_FIFO_STATE_RX_EMPTY)<br>
++			break;<br>
++	}<br>
++<br>
++	return 0;<br>
++}<br>
++<br>
++static void hisi_i2c_xfer_msg(struct hisi_i2c_controller *ctlr)<br>
++{<br>
++	int max_write = HISI_I2C_TX_FIFO_DEPTH;<br>
++	bool need_restart = false, last_msg;<br>
++	struct i2c_msg *cur_msg;<br>
++	u32 cmd, fifo_state;<br>
++<br>
++	while (ctlr->msg_tx_idx < ctlr->msg_num) {<br>
++		cur_msg = ctlr->msgs + ctlr->msg_tx_idx;<br>
++		last_msg = (ctlr->msg_tx_idx == ctlr->msg_num - 1);<br>
++<br>
++		/* Signal the SR bit when we start transferring a new message */<br>
++		if (ctlr->msg_tx_idx && !ctlr->buf_tx_idx)<br>
++			need_restart = true;<br>
++<br>
++		fifo_state = readl(ctlr->iobase + HISI_I2C_FIFO_STATE);<br>
++		while (!(fifo_state & HISI_I2C_FIFO_STATE_TX_FULL) &&<br>
++		       ctlr->buf_tx_idx < cur_msg->len && max_write) {<br>
++			cmd = 0;<br>
++<br>
++			if (need_restart) {<br>
++				cmd |= HISI_I2C_CMD_TXDATA_SR_EN;<br>
++				need_restart = false;<br>
++			}<br>
++<br>
++			/* Signal the STOP bit at the last frame of the last message */<br>
++			if (ctlr->buf_tx_idx == cur_msg->len - 1 && last_msg)<br>
++				cmd |= HISI_I2C_CMD_TXDATA_P_EN;<br>
++<br>
++			if (cur_msg->flags & I2C_M_RD)<br>
++				cmd |= HISI_I2C_CMD_TXDATA_RW;<br>
++			else<br>
++				cmd |= FIELD_PREP(HISI_I2C_CMD_TXDATA_DATA,<br>
++						  cur_msg->buf[ctlr->buf_tx_idx]);<br>
++<br>
++			writel(cmd, ctlr->iobase + HISI_I2C_CMD_TXDATA);<br>
++			ctlr->buf_tx_idx++;<br>
++			max_write--;<br>
++<br>
++			fifo_state = readl(ctlr->iobase + HISI_I2C_FIFO_STATE);<br>
++		}<br>
++<br>
++		/* Update the transfer index after per message transfer is done. */<br>
++		if (ctlr->buf_tx_idx == cur_msg->len) {<br>
++			ctlr->buf_tx_idx = 0;<br>
++			ctlr->msg_tx_idx++;<br>
++		}<br>
++<br>
++		if ((fifo_state & HISI_I2C_FIFO_STATE_TX_FULL) ||<br>
++		    max_write == 0)<br>
++			break;<br>
++	}<br>
++}<br>
++<br>
++static irqreturn_t hisi_i2c_irq(int irq, void *context)<br>
++{<br>
++	struct hisi_i2c_controller *ctlr = context;<br>
++	u32 int_stat;<br>
++<br>
++	int_stat = readl(ctlr->iobase + HISI_I2C_INT_MSTAT);<br>
++	hisi_i2c_clear_int(ctlr, int_stat);<br>
++	if (!(int_stat & HISI_I2C_INT_ALL))<br>
++		return IRQ_NONE;<br>
++<br>
++	if (int_stat & HISI_I2C_INT_TX_EMPTY)<br>
++		hisi_i2c_xfer_msg(ctlr);<br>
++<br>
++	if (int_stat & HISI_I2C_INT_ERR) {<br>
++		ctlr->xfer_err = int_stat;<br>
++		goto out;<br>
++	}<br>
++<br>
++	/* Drain the rx fifo before finish the transfer */<br>
++	if (int_stat & (HISI_I2C_INT_TRANS_CPLT | HISI_I2C_INT_RX_FULL))<br>
++		hisi_i2c_read_rx_fifo(ctlr);<br>
++<br>
++out:<br>
++	if (int_stat & HISI_I2C_INT_TRANS_CPLT || ctlr->xfer_err) {<br>
++		hisi_i2c_disable_int(ctlr, HISI_I2C_INT_ALL);<br>
++		hisi_i2c_clear_int(ctlr, HISI_I2C_INT_ALL);<br>
++		complete(ctlr->completion);<br>
++	}<br>
++<br>
++	return IRQ_HANDLED;<br>
++}<br>
++<br>
++/*<br>
++ * Helper function for calculating and configuring the HIGH and LOW<br>
++ * periods of SCL clock. The caller will pass the ratio of the<br>
++ * counts (divide / divisor) according to the target speed mode,<br>
++ * and the target registers.<br>
++ */<br>
++static void hisi_i2c_set_scl(struct hisi_i2c_controller *ctlr,<br>
++			     u32 divide, u32 divisor,<br>
++			     u32 reg_hcnt, u32 reg_lcnt)<br>
++{<br>
++	u32 total_cnt, t_scl_hcnt, t_scl_lcnt, scl_fall_cnt, scl_rise_cnt;<br>
++	u32 scl_hcnt, scl_lcnt;<br>
++<br>
++	/* Total SCL clock cycles per speed period */<br>
++	total_cnt = DIV_ROUND_UP_ULL(ctlr->clk_rate_khz * HZ_PER_KHZ, ctlr->t.bus_freq_hz);<br>
++	/* Total HIGH level SCL clock cycles including edges */<br>
++	t_scl_hcnt = DIV_ROUND_UP_ULL(total_cnt * divide, divisor);<br>
++	/* Total LOW level SCL clock cycles including edges */<br>
++	t_scl_lcnt = total_cnt - t_scl_hcnt;<br>
++	/* Fall edge SCL clock cycles */<br>
++	scl_fall_cnt = NSEC_TO_CYCLES(ctlr->t.scl_fall_ns, ctlr->clk_rate_khz);<br>
++	/* Rise edge SCL clock cycles */<br>
++	scl_rise_cnt = NSEC_TO_CYCLES(ctlr->t.scl_rise_ns, ctlr->clk_rate_khz);<br>
++<br>
++	/* Calculated HIGH and LOW periods of SCL clock */<br>
++	scl_hcnt = t_scl_hcnt - ctlr->spk_len - 7 - scl_fall_cnt;<br>
++	scl_lcnt = t_scl_lcnt - 1 - scl_rise_cnt;<br>
++<br>
++	writel(scl_hcnt, ctlr->iobase + reg_hcnt);<br>
++	writel(scl_lcnt, ctlr->iobase + reg_lcnt);<br>
++}<br>
++<br>
++static void hisi_i2c_configure_bus(struct hisi_i2c_controller *ctlr)<br>
++{<br>
++	u32 reg, sda_hold_cnt, speed_mode;<br>
++<br>
++	i2c_parse_fw_timings(ctlr->dev, &ctlr->t, true);<br>
++	ctlr->spk_len = NSEC_TO_CYCLES(ctlr->t.digital_filter_width_ns, ctlr->clk_rate_khz);<br>
++<br>
++	switch (ctlr->t.bus_freq_hz) {<br>
++	case I2C_MAX_FAST_MODE_FREQ:<br>
++		speed_mode = HISI_I2C_FAST_SPEED_MODE;<br>
++		hisi_i2c_set_scl(ctlr, 26, 76, HISI_I2C_FS_SCL_HCNT, HISI_I2C_FS_SCL_LCNT);<br>
++		break;<br>
++	case I2C_MAX_HIGH_SPEED_MODE_FREQ:<br>
++		speed_mode = HISI_I2C_HIGH_SPEED_MODE;<br>
++		hisi_i2c_set_scl(ctlr, 6, 22, HISI_I2C_HS_SCL_HCNT, HISI_I2C_HS_SCL_LCNT);<br>
++		break;<br>
++	case I2C_MAX_STANDARD_MODE_FREQ:<br>
++	default:<br>
++		speed_mode = HISI_I2C_STD_SPEED_MODE;<br>
++<br>
++		/* For default condition force the bus speed to standard mode. */<br>
++		ctlr->t.bus_freq_hz = I2C_MAX_STANDARD_MODE_FREQ;<br>
++		hisi_i2c_set_scl(ctlr, 40, 87, HISI_I2C_SS_SCL_HCNT, HISI_I2C_SS_SCL_LCNT);<br>
++		break;<br>
++	}<br>
++<br>
++	reg = readl(ctlr->iobase + HISI_I2C_FRAME_CTRL);<br>
++	reg &= ~HISI_I2C_FRAME_CTRL_SPEED_MODE;<br>
++	reg |= FIELD_PREP(HISI_I2C_FRAME_CTRL_SPEED_MODE, speed_mode);<br>
++	writel(reg, ctlr->iobase + HISI_I2C_FRAME_CTRL);<br>
++<br>
++	sda_hold_cnt = NSEC_TO_CYCLES(ctlr->t.sda_hold_ns, ctlr->clk_rate_khz);<br>
++<br>
++	reg = FIELD_PREP(HISI_I2C_SDA_HOLD_TX, sda_hold_cnt);<br>
++	writel(reg, ctlr->iobase + HISI_I2C_SDA_HOLD);<br>
++<br>
++	writel(ctlr->spk_len, ctlr->iobase + HISI_I2C_FS_SPK_LEN);<br>
++<br>
++	reg = FIELD_PREP(HISI_I2C_FIFO_RX_AF_THRESH, HISI_I2C_RX_F_AF_THRESH);<br>
++	reg |= FIELD_PREP(HISI_I2C_FIFO_TX_AE_THRESH, HISI_I2C_TX_F_AE_THRESH);<br>
++	writel(reg, ctlr->iobase + HISI_I2C_FIFO_CTRL);<br>
++}<br>
++<br>
++static int hisi_i2c_probe(struct platform_device *pdev)<br>
++{<br>
++	struct hisi_i2c_controller *ctlr;<br>
++	struct device *dev = &pdev->dev;<br>
++	struct i2c_adapter *adapter;<br>
++	u64 clk_rate_hz;<br>
++	u32 hw_version;<br>
++	int ret;<br>
++<br>
++	ctlr = devm_kzalloc(dev, sizeof(*ctlr), GFP_KERNEL);<br>
++	if (!ctlr)<br>
++		return -ENOMEM;<br>
++<br>
++	ctlr->iobase = devm_platform_ioremap_resource(pdev, 0);<br>
++	if (IS_ERR(ctlr->iobase))<br>
++		return PTR_ERR(ctlr->iobase);<br>
++<br>
++	ctlr->irq = platform_get_irq(pdev, 0);<br>
++	if (ctlr->irq < 0)<br>
++		return ctlr->irq;<br>
++<br>
++	ctlr->dev = dev;<br>
++<br>
++	hisi_i2c_disable_int(ctlr, HISI_I2C_INT_ALL);<br>
++<br>
++	ret = devm_request_irq(dev, ctlr->irq, hisi_i2c_irq, 0, "hisi-i2c", ctlr);<br>
++	if (ret) {<br>
++		dev_err(dev, "failed to request irq handler, ret = %d\n", ret);<br>
++		return ret;<br>
++	}<br>
++<br>
++	ret = device_property_read_u64(dev, "clk_rate", &clk_rate_hz);<br>
++	if (ret) {<br>
++		dev_err(dev, "failed to get clock frequency, ret = %d\n", ret);<br>
++		return ret;<br>
++	}<br>
++<br>
++	ctlr->clk_rate_khz = DIV_ROUND_UP_ULL(clk_rate_hz, HZ_PER_KHZ);<br>
++<br>
++	hisi_i2c_configure_bus(ctlr);<br>
++<br>
++	adapter = &ctlr->adapter;<br>
++	snprintf(adapter->name, sizeof(adapter->name),<br>
++		 "HiSilicon I2C Controller %s", dev_name(dev));<br>
++	adapter->owner = THIS_MODULE;<br>
++	adapter->algo = &hisi_i2c_algo;<br>
++	adapter->dev.parent = dev;<br>
++	i2c_set_adapdata(adapter, ctlr);<br>
++<br>
++	ret = devm_i2c_add_adapter(dev, adapter);<br>
++	if (ret)<br>
++		return ret;<br>
++<br>
++	hw_version = readl(ctlr->iobase + HISI_I2C_VERSION);<br>
++	dev_info(ctlr->dev, "speed mode is %s. hw version 0x%x\n",<br>
++		 i2c_freq_mode_string(ctlr->t.bus_freq_hz), hw_version);<br>
++<br>
++	return 0;<br>
++}<br>
++<br>
++static const struct acpi_device_id hisi_i2c_acpi_ids[] = {<br>
++	{ "HISI03D1", 0 },<br>
++	{ }<br>
++};<br>
++MODULE_DEVICE_TABLE(acpi, hisi_i2c_acpi_ids);<br>
++<br>
++static struct platform_driver hisi_i2c_driver = {<br>
++	.probe		= hisi_i2c_probe,<br>
++	.driver		= {<br>
++		.name	= "hisi-i2c",<br>
++		.acpi_match_table = hisi_i2c_acpi_ids,<br>
++	},<br>
++};<br>
++module_platform_driver(hisi_i2c_driver);<br>
++<br>
++MODULE_AUTHOR("Yicong Yang <yangyicong@xxxxxxxxxxxxx>");<br>
++MODULE_DESCRIPTION("HiSilicon I2C Controller Driver");<br>
++MODULE_LICENSE("GPL");<br>
+-- <br>
+2.8.1<br>
+<br>
+<br>
+

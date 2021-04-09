@@ -1,0 +1,46 @@
+<br>
+><i> On Apr 8, 2021, at 12:18 AM, Joerg Roedel <joro@xxxxxxxxxx> wrote:</i><br>
+><i> </i><br>
+><i> Hi Nadav,</i><br>
+><i> </i><br>
+><i> On Wed, Apr 07, 2021 at 05:57:31PM +0000, Nadav Amit wrote:</i><br>
+><i>> I tested it on real bare-metal hardware. I ran some basic I/O workloads</i><br>
+><i>> with the IOMMU enabled, checkers enabled/disabled, and so on.</i><br>
+><i>> </i><br>
+><i>> However, I only tested the IOMMU-flushes and I did not test that the</i><br>
+><i>> device-IOTLB flush work, since I did not have the hardware for that.</i><br>
+><i>> </i><br>
+><i>> If you can refer me to the old patches, I will have a look and see</i><br>
+><i>> whether I can see a difference in the logic or test them. If you want</i><br>
+><i>> me to run different tests - let me know. If you want me to remove</i><br>
+><i>> the device-IOTLB invalidations logic - that is also fine with me.</i><br>
+><i> </i><br>
+><i> Here is the patch-set, it is from 2010 and against a very old version of</i><br>
+><i> the AMD IOMMU driver:</i><br>
+<br>
+Thanks. I looked at your code and I see a difference between the<br>
+implementations.<br>
+<br>
+As far as I understand, pages are always assumed to be aligned to their<br>
+own sizes. I therefore assume that flushes should regard the lower bits<br>
+as a “mask” and not just as encoding of the size.<br>
+<br>
+In the version that you referred me to, iommu_update_domain_tlb() only<br>
+regards the size of the region to be flushed and disregards the<br>
+alignment:<br>
+<br>
++	order   = get_order(domain->flush.end - domain->flush.start);<br>
++	mask    = (0x1000ULL << order) - 1;<br>
++	address = ((domain->flush.start & ~mask) | (mask >> 1)) & ~0xfffULL;<br>
+<br>
+<br>
+If you need to flush for instance the region between 0x1000-0x5000, this<br>
+version would use the address|mask of 0x1000 (16KB page). The version I<br>
+sent regards the alignment, and since the range is not aligned would use<br>
+address|mask of 0x3000 (32KB page).<br>
+<br>
+IIUC, IOVA allocations today are aligned in such way, but at least in<br>
+the past (looking on 3.19 for the matter), it was not like always like<br>
+that, which can explain the problems.<br>
+<br>
+Thoughts?

@@ -1,0 +1,157 @@
+dma_map_sg() either returns a positive number indicating the number<br>
+of entries mapped or zero indicating that resources were not available<br>
+to create the mapping. When zero is returned, it is always safe to retry<br>
+the mapping later once resources have been freed.<br>
+<br>
+Once P2PDMA pages are mixed into the SGL there may be pages that may<br>
+never be successfully mapped with a given device because that device may<br>
+not actually be able to access those pages. Thus, multiple error<br>
+conditions will need to be distinguished to determine weather a retry<br>
+is safe.<br>
+<br>
+Introduce dma_map_sg_p2pdma[_attrs]() with a different calling<br>
+convention from dma_map_sg(). The function will return a positive<br>
+integer on success or a negative errno on failure.<br>
+<br>
+ENOMEM will be used to indicate a resource failure and EREMOTEIO to<br>
+indicate that a P2PDMA page is not mappable.<br>
+<br>
+The __DMA_ATTR_PCI_P2PDMA attribute is introduced to inform the lower<br>
+level implementations that P2PDMA pages are allowed and to warn if a<br>
+caller introduces them into the regular dma_map_sg() interface.<br>
+<br>
+Signed-off-by: Logan Gunthorpe <logang@xxxxxxxxxxxx><br>
+---<br>
+ include/linux/dma-mapping.h | 15 +++++++++++<br>
+ kernel/dma/mapping.c        | 52 ++++++++++++++++++++++++++++++++-----<br>
+ 2 files changed, 61 insertions(+), 6 deletions(-)<br>
+<br>
+diff --git a/include/linux/dma-mapping.h b/include/linux/dma-mapping.h<br>
+index 2a984cb4d1e0..50b8f586cf59 100644<br>
+--- a/include/linux/dma-mapping.h<br>
++++ b/include/linux/dma-mapping.h<br>
+@@ -60,6 +60,12 @@<br>
+  * at least read-only at lesser-privileged levels).<br>
+  */<br>
+ #define DMA_ATTR_PRIVILEGED		(1UL << 9)<br>
++/*<br>
++ * __DMA_ATTR_PCI_P2PDMA: This should not be used directly, use<br>
++ * dma_map_sg_p2pdma() instead. Used internally to indicate that the<br>
++ * caller is using the dma_map_sg_p2pdma() interface.<br>
++ */<br>
++#define __DMA_ATTR_PCI_P2PDMA		(1UL << 10)<br>
+ <br>
+ /*<br>
+  * A dma_addr_t can hold any valid DMA or bus address for the platform.  It can<br>
+@@ -107,6 +113,8 @@ void dma_unmap_page_attrs(struct device *dev, dma_addr_t addr, size_t size,<br>
+ 		enum dma_data_direction dir, unsigned long attrs);<br>
+ int dma_map_sg_attrs(struct device *dev, struct scatterlist *sg, int nents,<br>
+ 		enum dma_data_direction dir, unsigned long attrs);<br>
++int dma_map_sg_p2pdma_attrs(struct device *dev, struct scatterlist *sg,<br>
++		int nents, enum dma_data_direction dir, unsigned long attrs);<br>
+ void dma_unmap_sg_attrs(struct device *dev, struct scatterlist *sg,<br>
+ 				      int nents, enum dma_data_direction dir,<br>
+ 				      unsigned long attrs);<br>
+@@ -160,6 +168,12 @@ static inline int dma_map_sg_attrs(struct device *dev, struct scatterlist *sg,<br>
+ {<br>
+ 	return 0;<br>
+ }<br>
++static inline int dma_map_sg_p2pdma_attrs(struct device *dev,<br>
++		struct scatterlist *sg, int nents, enum dma_data_direction dir,<br>
++		unsigned long attrs)<br>
++{<br>
++	return 0;<br>
++}<br>
+ static inline void dma_unmap_sg_attrs(struct device *dev,<br>
+ 		struct scatterlist *sg, int nents, enum dma_data_direction dir,<br>
+ 		unsigned long attrs)<br>
+@@ -392,6 +406,7 @@ static inline void dma_sync_sgtable_for_device(struct device *dev,<br>
+ #define dma_map_single(d, a, s, r) dma_map_single_attrs(d, a, s, r, 0)<br>
+ #define dma_unmap_single(d, a, s, r) dma_unmap_single_attrs(d, a, s, r, 0)<br>
+ #define dma_map_sg(d, s, n, r) dma_map_sg_attrs(d, s, n, r, 0)<br>
++#define dma_map_sg_p2pdma(d, s, n, r) dma_map_sg_p2pdma_attrs(d, s, n, r, 0)<br>
+ #define dma_unmap_sg(d, s, n, r) dma_unmap_sg_attrs(d, s, n, r, 0)<br>
+ #define dma_map_page(d, p, o, s, r) dma_map_page_attrs(d, p, o, s, r, 0)<br>
+ #define dma_unmap_page(d, a, s, r) dma_unmap_page_attrs(d, a, s, r, 0)<br>
+diff --git a/kernel/dma/mapping.c b/kernel/dma/mapping.c<br>
+index b6a633679933..923089c4267b 100644<br>
+--- a/kernel/dma/mapping.c<br>
++++ b/kernel/dma/mapping.c<br>
+@@ -177,12 +177,8 @@ void dma_unmap_page_attrs(struct device *dev, dma_addr_t addr, size_t size,<br>
+ }<br>
+ EXPORT_SYMBOL(dma_unmap_page_attrs);<br>
+ <br>
+-/*<br>
+- * dma_maps_sg_attrs returns 0 on error and > 0 on success.<br>
+- * It should never return a value < 0.<br>
+- */<br>
+-int dma_map_sg_attrs(struct device *dev, struct scatterlist *sg, int nents,<br>
+-		enum dma_data_direction dir, unsigned long attrs)<br>
++static int __dma_map_sg_attrs(struct device *dev, struct scatterlist *sg,<br>
++		int nents, enum dma_data_direction dir, unsigned long attrs)<br>
+ {<br>
+ 	const struct dma_map_ops *ops = get_dma_ops(dev);<br>
+ 	int ents;<br>
+@@ -197,6 +193,20 @@ int dma_map_sg_attrs(struct device *dev, struct scatterlist *sg, int nents,<br>
+ 		ents = dma_direct_map_sg(dev, sg, nents, dir, attrs);<br>
+ 	else<br>
+ 		ents = ops->map_sg(dev, sg, nents, dir, attrs);<br>
++<br>
++	return ents;<br>
++}<br>
++<br>
++/*<br>
++ * dma_maps_sg_attrs returns 0 on error and > 0 on success.<br>
++ * It should never return a value < 0.<br>
++ */<br>
++int dma_map_sg_attrs(struct device *dev, struct scatterlist *sg, int nents,<br>
++		enum dma_data_direction dir, unsigned long attrs)<br>
++{<br>
++	int ents;<br>
++<br>
++	ents = __dma_map_sg_attrs(dev, sg, nents, dir, attrs);<br>
+ 	BUG_ON(ents < 0);<br>
+ 	debug_dma_map_sg(dev, sg, nents, ents, dir);<br>
+ <br>
+@@ -204,6 +214,36 @@ int dma_map_sg_attrs(struct device *dev, struct scatterlist *sg, int nents,<br>
+ }<br>
+ EXPORT_SYMBOL(dma_map_sg_attrs);<br>
+ <br>
++/*<br>
++ * like dma_map_sg_attrs, but returns a negative errno on error (and > 0<br>
++ * on success). This function must be used if PCI P2PDMA pages might<br>
++ * be in the scatterlist.<br>
++ *<br>
++ * On error this function may return:<br>
++ *    -ENOMEM indicating that there was not enough resources available and<br>
++ *      the transfer may be retried later<br>
++ *    -EREMOTEIO indicating that P2PDMA pages were included but cannot<br>
++ *      be mapped by the specified device, retries will always fail<br>
++ *<br>
++ * The scatterlist should be unmapped with the regular dma_unmap_sg[_attrs]().<br>
++ */<br>
++int dma_map_sg_p2pdma_attrs(struct device *dev, struct scatterlist *sg,<br>
++		int nents, enum dma_data_direction dir, unsigned long attrs)<br>
++{<br>
++	int ents;<br>
++<br>
++	ents = __dma_map_sg_attrs(dev, sg, nents, dir,<br>
++				  attrs | __DMA_ATTR_PCI_P2PDMA);<br>
++	if (!ents)<br>
++		ents = -ENOMEM;<br>
++<br>
++	if (ents > 0)<br>
++		debug_dma_map_sg(dev, sg, nents, ents, dir);<br>
++<br>
++	return ents;<br>
++}<br>
++EXPORT_SYMBOL_GPL(dma_map_sg_p2pdma_attrs);<br>
++<br>
+ void dma_unmap_sg_attrs(struct device *dev, struct scatterlist *sg,<br>
+ 				      int nents, enum dma_data_direction dir,<br>
+ 				      unsigned long attrs)<br>
+-- <br>
+2.20.1<br>
+<br>
+<br>
+

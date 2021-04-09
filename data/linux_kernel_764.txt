@@ -1,0 +1,37 @@
+Hi all,<br>
+<br>
+Today's linux-next merge of the akpm-current tree got a conflict in:<br>
+<br>
+  Makefile<br>
+<br>
+between commit:<br>
+<br>
+  2f8864dbe668 ("kbuild: move module strip/compression code into scripts/Makefile.modinst")<br>
+<br>
+from the kbuild tree and commit:<br>
+<br>
+  7b35c1a01c2e ("init: add support for zstd compressed modules")<br>
+<br>
+from the akpm-current tree.<br>
+<br>
+Also commit<br>
+<br>
+  ee2305118fc3 ("kbuild: add support for zstd compressed modules")<br>
+<br>
+from the kbuild tree seems to do the same as the akpm-current commit<br>
+above, so I just effectively reverted the akpm-current commit.<br>
+<br>
+I fixed it up (see above) and can carry the fix as necessary. This<br>
+is now fixed as far as linux-next is concerned, but any non trivial<br>
+conflicts should be mentioned to your upstream maintainer when your tree<br>
+is submitted for merging.  You may also want to consider cooperating<br>
+with the maintainer of the conflicting tree to minimise any particularly<br>
+complex conflicts.<br>
+<br>
+-- <br>
+Cheers,<br>
+Stephen Rothwell<br>
+<p><strong>Attachment:
+<a href="00397/pgpkXhtCruxq4.pgp" ><tt>pgpkXhtCruxq4.pgp</tt></a></strong><br>
+<em>Description:</em> OpenPGP digital signature</p>
+

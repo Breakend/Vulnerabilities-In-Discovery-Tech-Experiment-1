@@ -1,0 +1,35 @@
+Wu XiangCheng <bobwxc@xxxxxxxx> writes:<br>
+<br>
+><i> Remove Harry Wei and <xiyoulinuxkernelgroup@xxxxxxxxxxxxxxxx> from</i><br>
+><i> MAINTAINERS Chinese Translation.</i><br>
+><i></i><br>
+><i> According to git logs, Harry Wei (aka WeiWei Jia)</i><br>
+><i> * last submitted at 2012-05-07</i><br>
+><i> commit a9e73211fb0f ("Fix a mistake sentence in the file 'Documentation/zh_CN/magic-number.txt'")</i><br>
+><i> * last Reviewed-by at 2016-02-16</i><br>
+><i> commit 45c73ea7a785 ("Documentation: Chinese translation of arm64/silicon-errata.txt")</i><br>
+><i> * last Signed-off-by at 2019-03-13 (pick by Alex Shi)</i><br>
+><i> commit 95dcdb6e125f ("docs/zh_CN: rename magic-numbers as rst doc")</i><br>
+><i></i><br>
+><i> According to mail list archives, Harry Wei</i><br>
+><i> * last replied at 2016-02-15</i><br>
+><i> <<a  rel="nofollow" href="https://lore.kernel.org/lkml/CAD+1EGPFdoD7HHZYfEWVvmesXXG27n=6KmEZ8=B6nrvb+oaLZA@xxxxxxxxxxxxxx/">https://lore.kernel.org/lkml/CAD+1EGPFdoD7HHZYfEWVvmesXXG27n=6KmEZ8=B6nrvb+oaLZA@xxxxxxxxxxxxxx/</a>></i><br>
+><i> * last appeared at 2018-05-12</i><br>
+><i> <<a  rel="nofollow" href="https://lore.kernel.org/lkml/CA+scX6kYH8Y9_f1PLcMHG-MD9bhXgd4gGpkJanjzvwwj9L=aOQ@xxxxxxxxxxxxxx/">https://lore.kernel.org/lkml/CA+scX6kYH8Y9_f1PLcMHG-MD9bhXgd4gGpkJanjzvwwj9L=aOQ@xxxxxxxxxxxxxx/</a>></i><br>
+><i></i><br>
+><i> He/She did not maintain zh_CN translations for a long time.</i><br>
+><i> <xiyoulinuxkernelgroup@xxxxxxxxxxxxxxxx> is a maillist for Linux group of</i><br>
+><i> Xi'an University of Posts and Telecommunications, not special for zh_CN</i><br>
+><i> translation work.</i><br>
+><i></i><br>
+><i> Anyway, many thanks him/her and Xiyou for their contributions to the early</i><br>
+><i> Chinese translation work!</i><br>
+><i></i><br>
+><i> Signed-off-by: Wu XiangCheng <bobwxc@xxxxxxxx></i><br>
+<br>
+I've applied this, thanks.<br>
+<br>
+jon<br>
+<br>
+<br>
+

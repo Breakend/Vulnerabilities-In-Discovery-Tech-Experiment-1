@@ -1,0 +1,27 @@
+On Thu, Mar 25, 2021 at 05:02:35PM -0700, Tony Luck wrote:<br>
+...<br>
+><i> Expected worst case is two machine checks before moving on (e.g. one user</i><br>
+><i> access with page faults disabled, then a repeat to the same addrsss with</i><br>
+><i> page faults enabled). Just in case there is some code that loops forever</i><br>
+><i> enforce a limit of 10.</i><br>
+><i> </i><br>
+><i> Signed-off-by: Tony Luck <tony.luck@xxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  arch/x86/kernel/cpu/mce/core.c | 40 ++++++++++++++++++++++++++--------</i><br>
+><i>  include/linux/sched.h          |  1 +</i><br>
+><i>  2 files changed, 32 insertions(+), 9 deletions(-)</i><br>
+<br>
+What I'm still unclear on, does this new version address that<br>
+"mysterious" hang or panic which the validation team triggered or you<br>
+haven't checked yet?<br>
+<br>
+Thx.<br>
+<br>
+-- <br>
+Regards/Gruss,<br>
+    Boris.<br>
+<br>
+<a  rel="nofollow" href="https://people.kernel.org/tglx/notes-about-netiquette">https://people.kernel.org/tglx/notes-about-netiquette</a><br>
+<br>
+<br>
+

@@ -1,0 +1,62 @@
+On Wed, Apr 07, 2021 at 11:50:02PM +0000, Tian, Kevin wrote:<br>
+><i> > From: Jason Gunthorpe <jgg@xxxxxxxxxx></i><br>
+><i> > Sent: Wednesday, April 7, 2021 8:21 PM</i><br>
+><i> > </i><br>
+><i> > On Wed, Apr 07, 2021 at 02:08:33AM +0000, Tian, Kevin wrote:</i><br>
+><i> > </i><br>
+><i> > > > Because if you don't then we enter insane world where a PASID is being</i><br>
+><i> > > > created under /dev/ioasid but its translation path flows through setup</i><br>
+><i> > > > done by VFIO and the whole user API becomes an incomprehensible</i><br>
+><i> > mess.</i><br>
+><i> > > ></i><br>
+><i> > > > How will you even associate the PASID with the other translation??</i><br>
+><i> > ></i><br>
+><i> > > PASID is attached to a specific iommu domain (created by VFIO/VDPA),</i><br>
+><i> > which</i><br>
+><i> > > has GPA->HPA mappings already configured. If we view that mapping as an</i><br>
+><i> > > attribute of the iommu domain, it's reasonable to have the userspace-</i><br>
+><i> > bound</i><br>
+><i> > > pgtable through /dev/ioasid to nest on it.</i><br>
+><i> > </i><br>
+><i> > A user controlled page table should absolutely not be an attribute of</i><br>
+><i> > a hidden kernel object, nor should two parts of the kernel silently</i><br>
+><i> > connect to each other via a hidden internal objects like this.</i><br>
+><i> > </i><br>
+><i> > Security is important - the kind of connection must use some explicit</i><br>
+><i> > FD authorization to access shared objects, not be made implicit!</i><br>
+><i> > </i><br>
+><i> > IMHO this direction is a dead end for this reason.</i><br>
+><i> > </i><br>
+><i> </i><br>
+><i> Could you elaborate what exact security problem is brought with this </i><br>
+><i> approach? Isn't ALLOW_PASID the authorization interface for the</i><br>
+><i> connection?</i><br>
+<br>
+If the kernel objects don't come out of FDs then no.<br>
+<br>
+><i> Is it really the only practice in Linux that any new feature has to be</i><br>
+><i> blocked as long as a refactoring work is identified? </i><br>
+<br>
+The practice is to define uAPIs that make sense and have a good chance<br>
+to be supported over a long time period, as the software evolves, not<br>
+to hacky hacky a gaint uAPI mess just to get some feature out the<br>
+door. <br>
+<br>
+This proposal as it was oringial shown is exactly the kind of hacky<br>
+hacky uapi nobody wants to see. Tunneling an IOMMU uapi through a<br>
+whole bunch of other FDs is completely nutz.<br>
+<br>
+Intel should basically be investing most of its time building a robust<br>
+and well designed uAPI here, and don't complain that the community is<br>
+not doing Intel's job for free.<br>
+<br>
+><i> Don't people accept any balance between enabling new features and</i><br>
+><i> completing refactoring work through a staging approach, as long as</i><br>
+><i> we don't introduce an uAPI specifically for the staging purpose? ☹</i><br>
+<br>
+Since this is all uapi I don't see it as applicable here.<br>
+<br>
+Jason<br>
+<br>
+<br>
+

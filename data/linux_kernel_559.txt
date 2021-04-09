@@ -1,0 +1,15 @@
+Hi René,<br>
+<br>
+On Thu, Apr 8, 2021 at 10:02 PM René van Dorst <opensource@xxxxxxxxxx> wrote:<br>
+><i></i><br>
+><i> Tested on Ubiquiti ER-X-SFP (MT7621) with 1 external phy which uses irq=POLL.</i><br>
+><i></i><br>
+<br>
+I wonder if the external PHY's IRQ can be registered in the devicetree.<br>
+Change MT7530_NUM_PHYS to 6, and add the following to ER-X-SFP dts PHY node:<br>
+<br>
+interrupt-parent = <&switch0>;<br>
+interrupts = <5>;<br>
+<br>
+<br>
+

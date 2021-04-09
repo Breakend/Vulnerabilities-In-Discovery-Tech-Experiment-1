@@ -1,0 +1,44 @@
+><i> From: Wang Wensheng <wangwensheng4@xxxxxxxxxx></i><br>
+><i> Sent: Thursday, April 8, 2021 2:32 PM</i><br>
+><i> </i><br>
+><i> Fix to return a negative error code from the error handling case instead of 0,</i><br>
+><i> as done elsewhere in this function.</i><br>
+><i> </i><br>
+><i> Fixes: 82af6d19d8d9 ("RDMA/qedr: Fix synchronization methods and</i><br>
+><i> memory leaks in qedr")</i><br>
+><i> Reported-by: Hulk Robot <hulkci@xxxxxxxxxx></i><br>
+><i> Signed-off-by: Wang Wensheng <wangwensheng4@xxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  drivers/infiniband/hw/qedr/qedr_iw_cm.c | 4 +++-</i><br>
+><i>  1 file changed, 3 insertions(+), 1 deletion(-)</i><br>
+><i> </i><br>
+><i> diff --git a/drivers/infiniband/hw/qedr/qedr_iw_cm.c</i><br>
+><i> b/drivers/infiniband/hw/qedr/qedr_iw_cm.c</i><br>
+><i> index c4bc587..1715fbe 100644</i><br>
+><i> --- a/drivers/infiniband/hw/qedr/qedr_iw_cm.c</i><br>
+><i> +++ b/drivers/infiniband/hw/qedr/qedr_iw_cm.c</i><br>
+><i> @@ -636,8 +636,10 @@ int qedr_iw_connect(struct iw_cm_id *cm_id, struct</i><br>
+><i> iw_cm_conn_param *conn_param)</i><br>
+><i>  	memcpy(in_params.local_mac_addr, dev->ndev->dev_addr,</i><br>
+><i> ETH_ALEN);</i><br>
+><i> </i><br>
+><i>  	if (test_and_set_bit(QEDR_IWARP_CM_WAIT_FOR_CONNECT,</i><br>
+><i> -			     &qp->iwarp_cm_flags))</i><br>
+><i> +			     &qp->iwarp_cm_flags)) {</i><br>
+><i> +		rc = -ENODEV;</i><br>
+><i>  		goto err; /* QP already being destroyed */</i><br>
+><i> +	}</i><br>
+><i> </i><br>
+><i>  	rc = dev->ops->iwarp_connect(dev->rdma_ctx, &in_params,</i><br>
+><i> &out_params);</i><br>
+><i>  	if (rc) {</i><br>
+><i> --</i><br>
+><i> 2.9.4</i><br>
+<br>
+Thanks, <br>
+<br>
+Acked-by: Michal Kalderon <michal.kalderon@xxxxxxxxxxx><br>
+<br>
+<br>
+<br>
+

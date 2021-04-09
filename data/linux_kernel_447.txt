@@ -1,0 +1,268 @@
+From: SeongJae Park <sjpark@xxxxxxxxx><br>
+<br>
+In some use cases, users would want to run multiple monitoring context.<br>
+For example, if a user wants a high precision monitoring and dedicating<br>
+multiple CPUs for the job is ok, because DAMON creates one monitoring<br>
+thread per one context, the user can split the monitoring target regions<br>
+into multiple small regions and create one context for each region.  Or,<br>
+someone might want to simultaneously monitor different address spaces,<br>
+e.g., both virtual address space and physical address space.<br>
+<br>
+The DAMON's API allows such usage, but 'damon-dbgfs' does not.<br>
+Therefore, only kernel space DAMON users can do multiple contexts<br>
+monitoring.<br>
+<br>
+This commit allows the user space DAMON users to use multiple contexts<br>
+monitoring by introducing two new 'damon-dbgfs' debugfs files,<br>
+'mk_context' and 'rm_context'.  Users can create a new monitoring<br>
+context by writing the desired name of the new context to 'mk_context'.<br>
+Then, a new directory with the name and having the files for setting of<br>
+the context ('attrs', 'target_ids' and 'record') will be created under<br>
+the debugfs directory.  Writing the name of the context to remove to<br>
+'rm_context' will remove the related context and directory.<br>
+<br>
+Signed-off-by: SeongJae Park <sjpark@xxxxxxxxx><br>
+---<br>
+ mm/damon/dbgfs.c | 203 ++++++++++++++++++++++++++++++++++++++++++++++-<br>
+ 1 file changed, 201 insertions(+), 2 deletions(-)<br>
+<br>
+diff --git a/mm/damon/dbgfs.c b/mm/damon/dbgfs.c<br>
+index b20c1e7742ce..66ac7e18b1df 100644<br>
+--- a/mm/damon/dbgfs.c<br>
++++ b/mm/damon/dbgfs.c<br>
+@@ -18,6 +18,7 @@<br>
+ static struct damon_ctx **dbgfs_ctxs;<br>
+ static int dbgfs_nr_ctxs;<br>
+ static struct dentry **dbgfs_dirs;<br>
++static DEFINE_MUTEX(damon_dbgfs_lock);<br>
+ <br>
+ /*<br>
+  * Returns non-empty string on success, negarive error code otherwise.<br>
+@@ -316,6 +317,192 @@ static struct damon_ctx *dbgfs_new_ctx(void)<br>
+ 	return ctx;<br>
+ }<br>
+ <br>
++static void dbgfs_destroy_ctx(struct damon_ctx *ctx)<br>
++{<br>
++	damon_destroy_ctx(ctx);<br>
++}<br>
++<br>
++/*<br>
++ * Make a context of @name and create a debugfs directory for it.<br>
++ *<br>
++ * This function should be called while holding damon_dbgfs_lock.<br>
++ *<br>
++ * Returns 0 on success, negative error code otherwise.<br>
++ */<br>
++static int dbgfs_mk_context(char *name)<br>
++{<br>
++	struct dentry *root, **new_dirs, *new_dir;<br>
++	struct damon_ctx **new_ctxs, *new_ctx;<br>
++	int err;<br>
++<br>
++	if (damon_nr_running_ctxs())<br>
++		return -EBUSY;<br>
++<br>
++	new_ctxs = krealloc(dbgfs_ctxs, sizeof(*dbgfs_ctxs) *<br>
++			(dbgfs_nr_ctxs + 1), GFP_KERNEL);<br>
++	if (!new_ctxs)<br>
++		return -ENOMEM;<br>
++<br>
++	new_dirs = krealloc(dbgfs_dirs, sizeof(*dbgfs_dirs) *<br>
++			(dbgfs_nr_ctxs + 1), GFP_KERNEL);<br>
++	if (!new_dirs) {<br>
++		kfree(new_ctxs);<br>
++		return -ENOMEM;<br>
++	}<br>
++<br>
++	dbgfs_ctxs = new_ctxs;<br>
++	dbgfs_dirs = new_dirs;<br>
++<br>
++	root = dbgfs_dirs[0];<br>
++	if (!root)<br>
++		return -ENOENT;<br>
++<br>
++	new_dir = debugfs_create_dir(name, root);<br>
++	dbgfs_dirs[dbgfs_nr_ctxs] = new_dir;<br>
++<br>
++	new_ctx = dbgfs_new_ctx();<br>
++	if (!new_ctx) {<br>
++		debugfs_remove(new_dir);<br>
++		dbgfs_dirs[dbgfs_nr_ctxs] = NULL;<br>
++		return -ENOMEM;<br>
++	}<br>
++	dbgfs_ctxs[dbgfs_nr_ctxs] = new_ctx;<br>
++<br>
++	err = dbgfs_fill_ctx_dir(dbgfs_dirs[dbgfs_nr_ctxs],<br>
++			dbgfs_ctxs[dbgfs_nr_ctxs]);<br>
++	if (err)<br>
++		return err;<br>
++<br>
++	dbgfs_nr_ctxs++;<br>
++	return 0;<br>
++}<br>
++<br>
++static ssize_t dbgfs_mk_context_write(struct file *file,<br>
++		const char __user *buf, size_t count, loff_t *ppos)<br>
++{<br>
++	char *kbuf;<br>
++	char *ctx_name;<br>
++	ssize_t ret = count;<br>
++	int err;<br>
++<br>
++	kbuf = user_input_str(buf, count, ppos);<br>
++	if (IS_ERR(kbuf))<br>
++		return PTR_ERR(kbuf);<br>
++	ctx_name = kmalloc(count + 1, GFP_KERNEL);<br>
++	if (!ctx_name) {<br>
++		kfree(kbuf);<br>
++		return -ENOMEM;<br>
++	}<br>
++<br>
++	/* Trim white space */<br>
++	if (sscanf(kbuf, "%s", ctx_name) != 1) {<br>
++		ret = -EINVAL;<br>
++		goto out;<br>
++	}<br>
++<br>
++	mutex_lock(&damon_dbgfs_lock);<br>
++	err = dbgfs_mk_context(ctx_name);<br>
++	if (err)<br>
++		ret = err;<br>
++	mutex_unlock(&damon_dbgfs_lock);<br>
++<br>
++out:<br>
++	kfree(kbuf);<br>
++	kfree(ctx_name);<br>
++	return ret;<br>
++}<br>
++<br>
++/*<br>
++ * Remove a context of @name and its debugfs directory.<br>
++ *<br>
++ * This function should be called while holding damon_dbgfs_lock.<br>
++ *<br>
++ * Return 0 on success, negative error code otherwise.<br>
++ */<br>
++static int dbgfs_rm_context(char *name)<br>
++{<br>
++	struct dentry *root, *dir, **new_dirs;<br>
++	struct damon_ctx **new_ctxs;<br>
++	int i, j;<br>
++<br>
++	if (damon_nr_running_ctxs())<br>
++		return -EBUSY;<br>
++<br>
++	root = dbgfs_dirs[0];<br>
++	if (!root)<br>
++		return -ENOENT;<br>
++<br>
++	dir = debugfs_lookup(name, root);<br>
++	if (!dir)<br>
++		return -ENOENT;<br>
++<br>
++	new_dirs = kmalloc_array(dbgfs_nr_ctxs - 1, sizeof(*dbgfs_dirs),<br>
++			GFP_KERNEL);<br>
++	if (!new_dirs)<br>
++		return -ENOMEM;<br>
++<br>
++	new_ctxs = kmalloc_array(dbgfs_nr_ctxs - 1, sizeof(*dbgfs_ctxs),<br>
++			GFP_KERNEL);<br>
++	if (!new_ctxs) {<br>
++		kfree(new_dirs);<br>
++		return -ENOMEM;<br>
++	}<br>
++<br>
++	for (i = 0, j = 0; i < dbgfs_nr_ctxs; i++) {<br>
++		if (dbgfs_dirs[i] == dir) {<br>
++			debugfs_remove(dbgfs_dirs[i]);<br>
++			dbgfs_destroy_ctx(dbgfs_ctxs[i]);<br>
++			continue;<br>
++		}<br>
++		new_dirs[j] = dbgfs_dirs[i];<br>
++		new_ctxs[j++] = dbgfs_ctxs[i];<br>
++	}<br>
++<br>
++	kfree(dbgfs_dirs);<br>
++	kfree(dbgfs_ctxs);<br>
++<br>
++	dbgfs_dirs = new_dirs;<br>
++	dbgfs_ctxs = new_ctxs;<br>
++	dbgfs_nr_ctxs--;<br>
++<br>
++	return 0;<br>
++}<br>
++<br>
++static ssize_t dbgfs_rm_context_write(struct file *file,<br>
++		const char __user *buf, size_t count, loff_t *ppos)<br>
++{<br>
++	char *kbuf;<br>
++	ssize_t ret = count;<br>
++	int err;<br>
++	char *ctx_name;<br>
++<br>
++	kbuf = user_input_str(buf, count, ppos);<br>
++	if (IS_ERR(kbuf))<br>
++		return PTR_ERR(kbuf);<br>
++	ctx_name = kmalloc(count + 1, GFP_KERNEL);<br>
++	if (!ctx_name) {<br>
++		kfree(kbuf);<br>
++		return -ENOMEM;<br>
++	}<br>
++<br>
++	/* Trim white space */<br>
++	if (sscanf(kbuf, "%s", ctx_name) != 1) {<br>
++		ret = -EINVAL;<br>
++		goto out;<br>
++	}<br>
++<br>
++	mutex_lock(&damon_dbgfs_lock);<br>
++	err = dbgfs_rm_context(ctx_name);<br>
++	if (err)<br>
++		ret = err;<br>
++	mutex_unlock(&damon_dbgfs_lock);<br>
++<br>
++out:<br>
++	kfree(kbuf);<br>
++	kfree(ctx_name);<br>
++	return ret;<br>
++}<br>
++<br>
+ static ssize_t dbgfs_monitor_on_read(struct file *file,<br>
+ 		char __user *buf, size_t count, loff_t *ppos)<br>
+ {<br>
+@@ -358,6 +545,16 @@ static ssize_t dbgfs_monitor_on_write(struct file *file,<br>
+ 	return ret;<br>
+ }<br>
+ <br>
++static const struct file_operations mk_contexts_fops = {<br>
++	.owner = THIS_MODULE,<br>
++	.write = dbgfs_mk_context_write,<br>
++};<br>
++<br>
++static const struct file_operations rm_contexts_fops = {<br>
++	.owner = THIS_MODULE,<br>
++	.write = dbgfs_rm_context_write,<br>
++};<br>
++<br>
+ static const struct file_operations monitor_on_fops = {<br>
+ 	.owner = THIS_MODULE,<br>
+ 	.read = dbgfs_monitor_on_read,<br>
+@@ -367,8 +564,10 @@ static const struct file_operations monitor_on_fops = {<br>
+ static int __init __damon_dbgfs_init(void)<br>
+ {<br>
+ 	struct dentry *dbgfs_root;<br>
+-	const char * const file_names[] = {"monitor_on"};<br>
+-	const struct file_operations *fops[] = {&monitor_on_fops};<br>
++	const char * const file_names[] = {"mk_contexts", "rm_contexts",<br>
++		"monitor_on"};<br>
++	const struct file_operations *fops[] = {&mk_contexts_fops,<br>
++		&rm_contexts_fops, &monitor_on_fops};<br>
+ 	int i;<br>
+ <br>
+ 	dbgfs_root = debugfs_create_dir("damon", NULL);<br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+

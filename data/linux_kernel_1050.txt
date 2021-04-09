@@ -1,0 +1,45 @@
+Hi Mauro<br>
+<br>
+On Thu, Apr 08, 2021 at 09:40:03AM +0200, Mauro Carvalho Chehab wrote:<br>
+><i> As warned by sparse:</i><br>
+><i></i><br>
+><i> 	drivers/media/i2c/rdacm21.c:348:62: warning: cast truncates bits from constant value (300a becomes a)</i><br>
+><i></i><br>
+><i> the intention of the code is to get just the lowest 8 bits.</i><br>
+><i> So, instead of using a typecast, use a bit and logic.</i><br>
+><i></i><br>
+><i> Signed-off-by: Mauro Carvalho Chehab <mchehab+huawei@xxxxxxxxxx></i><br>
+<br>
+Please see<br>
+<a  rel="nofollow" href="https://patchwork.linuxtv.org/project/linux-media/patch/20210319164148.199192-11-jacopo+renesas@xxxxxxxxxx/">https://patchwork.linuxtv.org/project/linux-media/patch/20210319164148.199192-11-jacopo+renesas@xxxxxxxxxx/</a><br>
+<br>
+Whatever gets in first it's fine, so you can add my<br>
+Acked-by: Jacopo Mondi <jacopo@xxxxxxxxxx><br>
+to this one too<br>
+<br>
+Thanks<br>
+  j<br>
+<br>
+><i> ---</i><br>
+><i>  drivers/media/i2c/rdacm21.c | 2 +-</i><br>
+><i>  1 file changed, 1 insertion(+), 1 deletion(-)</i><br>
+><i></i><br>
+><i> diff --git a/drivers/media/i2c/rdacm21.c b/drivers/media/i2c/rdacm21.c</i><br>
+><i> index dcc21515e5a4..179d107f494c 100644</i><br>
+><i> --- a/drivers/media/i2c/rdacm21.c</i><br>
+><i> +++ b/drivers/media/i2c/rdacm21.c</i><br>
+><i> @@ -345,7 +345,7 @@ static int ov10640_initialize(struct rdacm21_device *dev)</i><br>
+><i>  	/* Read OV10640 ID to test communications. */</i><br>
+><i>  	ov490_write_reg(dev, OV490_SCCB_SLAVE0_DIR, OV490_SCCB_SLAVE_READ);</i><br>
+><i>  	ov490_write_reg(dev, OV490_SCCB_SLAVE0_ADDR_HIGH, OV10640_CHIP_ID >> 8);</i><br>
+><i> -	ov490_write_reg(dev, OV490_SCCB_SLAVE0_ADDR_LOW, (u8)OV10640_CHIP_ID);</i><br>
+><i> +	ov490_write_reg(dev, OV490_SCCB_SLAVE0_ADDR_LOW, OV10640_CHIP_ID & 0xff);</i><br>
+><i></i><br>
+><i>  	/* Trigger SCCB slave transaction and give it some time to complete. */</i><br>
+><i>  	ov490_write_reg(dev, OV490_HOST_CMD, OV490_HOST_CMD_TRIGGER);</i><br>
+><i> --</i><br>
+><i> 2.30.2</i><br>
+><i></i><br>
+<br>
+<br>
+

@@ -1,0 +1,79 @@
+On Thu, Apr 8, 2021 at 8:02 PM Daniel Lezcano <daniel.lezcano@xxxxxxxxxx> wrote:<br>
+><i></i><br>
+><i> On 08/04/2021 19:24, Rafael J. Wysocki wrote:</i><br>
+><i> > On Thu, Apr 8, 2021 at 5:10 PM Daniel Lezcano <daniel.lezcano@xxxxxxxxxx> wrote:</i><br>
+><i> >></i><br>
+><i> >></i><br>
+><i> >> Hi Rafael,</i><br>
+><i> >></i><br>
+><i> >> please consider pulling the following change for cpuidle on ARM for</i><br>
+><i> >> v5.13-rc1</i><br>
+><i> >></i><br>
+><i> >> Thanks</i><br>
+><i> >></i><br>
+><i> >>   -- Daniel</i><br>
+><i> >></i><br>
+><i> >></i><br>
+><i> >> The following changes since commit dde8740bd9b505c58ec8b2277d5d55c6951b7e42:</i><br>
+><i> >></i><br>
+><i> >>   Merge branch 'acpi-processor-fixes' into linux-next (2021-04-07</i><br>
+><i> >> 19:02:56 +0200)</i><br>
+><i> ></i><br>
+><i> > Can you please rebase this on 5.12-rc6?  My linux-next branch is</i><br>
+><i> > re-merged on a regular basis.</i><br>
+><i> ></i><br>
+><i> > Generally speaking, if you want me to pull from a branch, please make</i><br>
+><i> > sure that this branch is based on a commit present in the Linus' tree,</i><br>
+><i> > preferably one of the commits tagged as -rc or a specific merge.</i><br>
+><i> ></i><br>
+><i></i><br>
+><i> Sure, here is the pull request based on v5.12-rc6 with the signed tag</i><br>
+><i> cpuidle-v5.13-rc1</i><br>
+<br>
+Pulled, thanks!<br>
+<br>
+<br>
+><i> The following changes since commit e49d033bddf5b565044e2abe4241353959bc9120:</i><br>
+><i></i><br>
+><i>   Linux 5.12-rc6 (2021-04-04 14:15:36 -0700)</i><br>
+><i></i><br>
+><i> are available in the Git repository at:</i><br>
+><i></i><br>
+><i>   <a  rel="nofollow" href="https://git.linaro.org/people/daniel.lezcano/linux">https://git.linaro.org/people/daniel.lezcano/linux</a> tags/cpuidle-v5.13-rc1</i><br>
+><i></i><br>
+><i> for you to fetch changes up to 498ba2a8a2756694b6f3888857426dbc8a5e6b6c:</i><br>
+><i></i><br>
+><i>   cpuidle: Fix ARM_QCOM_SPM_CPUIDLE configuration (2021-04-08 19:54:14</i><br>
+><i> +0200)</i><br>
+><i></i><br>
+><i> ----------------------------------------------------------------</i><br>
+><i> - Fix the C7 state on the tegra114 by setting the L2-no-flush flag</i><br>
+><i>   unconditionally (Dmitry Osipenko)</i><br>
+><i></i><br>
+><i> - Remove the do_idle firmware call as it is not supported by the ATF</i><br>
+><i>   on tegra SoC (Dmitry Osipenko)</i><br>
+><i></i><br>
+><i> - Add a missing dependency on CONFIG_MMU to prevent linkage error (He</i><br>
+><i>   Ying)</i><br>
+><i></i><br>
+><i> ----------------------------------------------------------------</i><br>
+><i> Dmitry Osipenko (2):</i><br>
+><i>       cpuidle: tegra: Fix C7 idling state on Tegra114</i><br>
+><i>       cpuidle: tegra: Remove do_idle firmware call</i><br>
+><i></i><br>
+><i> He Ying (1):</i><br>
+><i>       cpuidle: Fix ARM_QCOM_SPM_CPUIDLE configuration</i><br>
+><i></i><br>
+><i>  drivers/cpuidle/Kconfig.arm     |  2 +-</i><br>
+><i>  drivers/cpuidle/cpuidle-tegra.c | 19 ++++---------------</i><br>
+><i>  2 files changed, 5 insertions(+), 16 deletions(-)</i><br>
+><i></i><br>
+><i> --</i><br>
+><i> <<a  rel="nofollow" href="http://www.linaro.org/">http://www.linaro.org/</a>> Linaro.org │ Open source software for ARM SoCs</i><br>
+><i></i><br>
+><i> Follow Linaro:  <<a  rel="nofollow" href="http://www.facebook.com/pages/Linaro">http://www.facebook.com/pages/Linaro</a>> Facebook |</i><br>
+><i> <<a  rel="nofollow" href="http://twitter.com/#!/linaroorg">http://twitter.com/#!/linaroorg</a>> Twitter |</i><br>
+><i> <<a  rel="nofollow" href="http://www.linaro.org/linaro-blog/">http://www.linaro.org/linaro-blog/</a>> Blog</i><br>
+<br>
+<br>
+

@@ -1,0 +1,15 @@
+Hi Satya,<br>
+<br>
+On Wed, Apr 07, 2021 at 08:59:39PM +0530, skakit@xxxxxxxxxxxxxx wrote:<br>
+><i> Gentle Reminder!</i><br>
+<br>
+Sorry, please address Rob's comments on the bindings, the driver code<br>
+looks OK to me.<br>
+<br>
+Thanks.<br>
+<br>
+-- <br>
+Dmitry<br>
+<br>
+<br>
+

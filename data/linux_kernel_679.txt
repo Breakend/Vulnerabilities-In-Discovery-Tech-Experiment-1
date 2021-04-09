@@ -1,0 +1,16 @@
+This is a couple of patches adding optional brcm,ccode-map bindings for<br>
+brcmfmac driver to parse country code map from DT.<br>
+<br>
+Shawn Guo (2):<br>
+  dt-binding: bcm43xx-fmac: add optional brcm,ccode-map<br>
+  brcmfmac: support parse country code map from DT<br>
+<br>
+ .../net/wireless/brcm,bcm43xx-fmac.txt        |  7 +++<br>
+ .../wireless/broadcom/brcm80211/brcmfmac/of.c | 53 +++++++++++++++++++<br>
+ 2 files changed, 60 insertions(+)<br>
+<br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+

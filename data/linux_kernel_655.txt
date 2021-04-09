@@ -1,0 +1,140 @@
+Extend the get_cpuid_test.c selftest to include the KVM_GET_EMULATED_CPUID<br>
+ioctl. Since the behavior and functionality is similar to<br>
+KVM_GET_SUPPORTED_CPUID, we only check additionally:<br>
+<br>
+1) checks for corner case in the nent field of the struct kvm_cpuid2.<br>
+2) sets and gets it as cpuid from the guest VM<br>
+<br>
+Signed-off-by: Emanuele Giuseppe Esposito <eesposit@xxxxxxxxxx><br>
+---<br>
+ .../selftests/kvm/x86_64/get_cpuid_test.c     | 90 ++++++++++++++++++-<br>
+ 1 file changed, 88 insertions(+), 2 deletions(-)<br>
+<br>
+diff --git a/tools/testing/selftests/kvm/x86_64/get_cpuid_test.c b/tools/testing/selftests/kvm/x86_64/get_cpuid_test.c<br>
+index 9b78e8889638..b9f0fba1b0ea 100644<br>
+--- a/tools/testing/selftests/kvm/x86_64/get_cpuid_test.c<br>
++++ b/tools/testing/selftests/kvm/x86_64/get_cpuid_test.c<br>
+@@ -13,6 +13,7 @@<br>
+ #include "processor.h"<br>
+ <br>
+ #define VCPU_ID 0<br>
++#define MAX_NENT 1000<br>
+ <br>
+ /* CPUIDs known to differ */<br>
+ struct {<br>
+@@ -137,7 +138,8 @@ static void run_vcpu(struct kvm_vm *vm, uint32_t vcpuid, int stage)<br>
+ 	}<br>
+ }<br>
+ <br>
+-struct kvm_cpuid2 *vcpu_alloc_cpuid(struct kvm_vm *vm, vm_vaddr_t *p_gva, struct kvm_cpuid2 *cpuid)<br>
++static struct kvm_cpuid2 *vcpu_alloc_cpuid(struct kvm_vm *vm, vm_vaddr_t *p_gva,<br>
++					struct kvm_cpuid2 *cpuid)<br>
+ {<br>
+ 	int size = sizeof(*cpuid) + cpuid->nent * sizeof(cpuid->entries[0]);<br>
+ 	vm_vaddr_t gva = vm_vaddr_alloc(vm, size,<br>
+@@ -150,9 +152,84 @@ struct kvm_cpuid2 *vcpu_alloc_cpuid(struct kvm_vm *vm, vm_vaddr_t *p_gva, struct<br>
+ 	return guest_cpuids;<br>
+ }<br>
+ <br>
++static struct kvm_cpuid2 *alloc_custom_kvm_cpuid2(int nent)<br>
++{<br>
++	struct kvm_cpuid2 *cpuid;<br>
++	size_t size;<br>
++<br>
++	size = sizeof(*cpuid);<br>
++	size += nent * sizeof(struct kvm_cpuid_entry2);<br>
++	cpuid = calloc(1, size);<br>
++	if (!cpuid) {<br>
++		perror("malloc");<br>
++		abort();<br>
++	}<br>
++<br>
++	cpuid->nent = nent;<br>
++<br>
++	return cpuid;<br>
++}<br>
++<br>
++static void clean_entries_kvm_cpuid2(struct kvm_cpuid2 *cpuid)<br>
++{<br>
++	size_t size;<br>
++	int old_nent = cpuid->nent;<br>
++<br>
++	size = sizeof(*cpuid);<br>
++	size += MAX_NENT * sizeof(struct kvm_cpuid_entry2);<br>
++	memset(cpuid, 0, size);<br>
++	cpuid->nent = old_nent;<br>
++}<br>
++<br>
++static void test_emulated_entries(struct kvm_vm *vm)<br>
++{<br>
++	int res, right_nent;<br>
++	struct kvm_cpuid2 *cpuid;<br>
++<br>
++	cpuid = alloc_custom_kvm_cpuid2(MAX_NENT);<br>
++<br>
++	/* 0 nent, return E2BIG */<br>
++	cpuid->nent = 0;<br>
++	res = _kvm_ioctl(vm, KVM_GET_EMULATED_CPUID, cpuid);<br>
++	TEST_ASSERT(res == -1 && errno == E2BIG, "nent=0 should fail as E2BIG");<br>
++	clean_entries_kvm_cpuid2(cpuid);<br>
++<br>
++	/* high nent, set the entries and adjust */<br>
++	cpuid->nent = MAX_NENT;<br>
++	res = _kvm_ioctl(vm, KVM_GET_EMULATED_CPUID, cpuid);<br>
++	TEST_ASSERT(res == 0, "nent > actual nent should not fail");<br>
++	right_nent = cpuid->nent;<br>
++	clean_entries_kvm_cpuid2(cpuid);<br>
++<br>
++	/* high nent, set the entries and adjust */<br>
++	cpuid->nent++;<br>
++	res = _kvm_ioctl(vm, KVM_GET_EMULATED_CPUID, cpuid);<br>
++	TEST_ASSERT(res == 0, "nent > actual nent should not fail");<br>
++	TEST_ASSERT(right_nent == cpuid->nent, "nent should be always the same");<br>
++	clean_entries_kvm_cpuid2(cpuid);<br>
++<br>
++	/* low nent, return E2BIG */<br>
++	if (right_nent > 1) {<br>
++		cpuid->nent = 1;<br>
++		res = _kvm_ioctl(vm, KVM_GET_EMULATED_CPUID, cpuid);<br>
++		TEST_ASSERT(res == -1 && errno == E2BIG, "nent=1 should fail");<br>
++		clean_entries_kvm_cpuid2(cpuid);<br>
++	}<br>
++<br>
++	/* exact nent */<br>
++	cpuid->nent = right_nent;<br>
++	res = _kvm_ioctl(vm, KVM_GET_EMULATED_CPUID, cpuid);<br>
++	TEST_ASSERT(res == 0, "nent == actual nent should not fail");<br>
++	TEST_ASSERT(cpuid->nent == right_nent,<br>
++		"KVM_GET_EMULATED_CPUID should be invaried when nent is exact");<br>
++	clean_entries_kvm_cpuid2(cpuid);<br>
++<br>
++	free(cpuid);<br>
++}<br>
++<br>
+ int main(void)<br>
+ {<br>
+-	struct kvm_cpuid2 *supp_cpuid, *cpuid2;<br>
++	struct kvm_cpuid2 *supp_cpuid, *emul_cpuid, *cpuid2;<br>
+ 	vm_vaddr_t cpuid_gva;<br>
+ 	struct kvm_vm *vm;<br>
+ 	int stage;<br>
+@@ -171,5 +248,14 @@ int main(void)<br>
+ 	for (stage = 0; stage < 3; stage++)<br>
+ 		run_vcpu(vm, VCPU_ID, stage);<br>
+ <br>
++	if (kvm_check_cap(KVM_CAP_EXT_EMUL_CPUID)) {<br>
++		emul_cpuid = kvm_get_emulated_cpuid();<br>
++		vcpu_set_cpuid(vm, VCPU_ID, emul_cpuid);<br>
++		cpuid2 = vcpu_get_cpuid(vm, VCPU_ID);<br>
++<br>
++		test_emulated_entries(vm);<br>
++		compare_cpuids(emul_cpuid, cpuid2);<br>
++	}<br>
++<br>
+ 	kvm_vm_free(vm);<br>
+ }<br>
+-- <br>
+2.30.2<br>
+<br>
+<br>
+

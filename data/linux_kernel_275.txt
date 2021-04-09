@@ -1,0 +1,32 @@
+We need to print a message to the kernel log in case we encounter<br>
+an unknown error in the f/w boot to help the user understand what<br>
+happened.<br>
+<br>
+Signed-off-by: Oded Gabbay <ogabbay@xxxxxxxxxx><br>
+---<br>
+ drivers/misc/habanalabs/common/firmware_if.c | 6 +++++-<br>
+ 1 file changed, 5 insertions(+), 1 deletion(-)<br>
+<br>
+diff --git a/drivers/misc/habanalabs/common/firmware_if.c b/drivers/misc/habanalabs/common/firmware_if.c<br>
+index 652571d3b8e6..4c096b6132b5 100644<br>
+--- a/drivers/misc/habanalabs/common/firmware_if.c<br>
++++ b/drivers/misc/habanalabs/common/firmware_if.c<br>
+@@ -351,8 +351,12 @@ static int fw_read_errors(struct hl_device *hdev, u32 boot_err0_reg,<br>
+ 		dev_dbg(hdev->dev, "Device security status %#x\n",<br>
+ 				security_val);<br>
+ <br>
+-	if (err_val & ~CPU_BOOT_ERR0_ENABLED)<br>
++	if (err_val & ~CPU_BOOT_ERR0_ENABLED) {<br>
++		dev_err(hdev->dev,<br>
++			"Device boot error - unknown error 0x%08x\n",<br>
++			err_val);<br>
+ 		return -EIO;<br>
++	}<br>
+ <br>
+ 	return 0;<br>
+ }<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

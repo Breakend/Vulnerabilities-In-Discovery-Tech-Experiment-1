@@ -1,0 +1,15 @@
+Hi all,<br>
+<br>
+Commit<br>
+<br>
+  11cccec79c60 ("genirq: Add IRQF_NO_AUTOEN for request_irq/nmi()")<br>
+<br>
+is missing a Signed-off-by from its committer.<br>
+<br>
+-- <br>
+Cheers,<br>
+Stephen Rothwell<br>
+<p><strong>Attachment:
+<a href="00535/pgp94BKvWf31k.pgp" ><tt>pgp94BKvWf31k.pgp</tt></a></strong><br>
+<em>Description:</em> OpenPGP digital signature</p>
+

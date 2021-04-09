@@ -1,0 +1,48 @@
+Christophe Leroy <christophe.leroy@xxxxxxxxxx> writes:<br>
+<br>
+><i> flush_coherent_icache() can use any valid address as mentionned</i><br>
+><i> by the comment.</i><br>
+><i></i><br>
+><i> Use PAGE_OFFSET as base address. This allows removing the</i><br>
+><i> user access stuff.</i><br>
+><i></i><br>
+><i> Signed-off-by: Christophe Leroy <christophe.leroy@xxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  arch/powerpc/mm/mem.c | 13 +++++--------</i><br>
+><i>  1 file changed, 5 insertions(+), 8 deletions(-)</i><br>
+><i></i><br>
+><i> diff --git a/arch/powerpc/mm/mem.c b/arch/powerpc/mm/mem.c</i><br>
+><i> index ce6c81ce4362..19f807b87697 100644</i><br>
+><i> --- a/arch/powerpc/mm/mem.c</i><br>
+><i> +++ b/arch/powerpc/mm/mem.c</i><br>
+><i> @@ -342,10 +342,9 @@ void free_initmem(void)</i><br>
+><i>  </i><br>
+><i>  /**</i><br>
+><i>   * flush_coherent_icache() - if a CPU has a coherent icache, flush it</i><br>
+><i> - * @addr: The base address to use (can be any valid address, the whole cache will be flushed)</i><br>
+><i>   * Return true if the cache was flushed, false otherwise</i><br>
+><i>   */</i><br>
+><i> -static inline bool flush_coherent_icache(unsigned long addr)</i><br>
+><i> +static inline bool flush_coherent_icache(void)</i><br>
+><i>  {</i><br>
+><i>  	/*</i><br>
+><i>  	 * For a snooping icache, we still need a dummy icbi to purge all the</i><br>
+><i> @@ -355,9 +354,7 @@ static inline bool flush_coherent_icache(unsigned long addr)</i><br>
+><i>  	 */</i><br>
+><i>  	if (cpu_has_feature(CPU_FTR_COHERENT_ICACHE)) {</i><br>
+><i>  		mb(); /* sync */</i><br>
+><i> -		allow_read_from_user((const void __user *)addr, L1_CACHE_BYTES);</i><br>
+><i> -		icbi((void *)addr);</i><br>
+><i> -		prevent_read_from_user((const void __user *)addr, L1_CACHE_BYTES);</i><br>
+><i> +		icbi((void *)PAGE_OFFSET);</i><br>
+><i>  		mb(); /* sync */</i><br>
+><i>  		isync();</i><br>
+><i>  		return true;</i><br>
+<br>
+do we need that followup sync? Usermanual suggest sync; icbi(any address);<br>
+isync sequence. <br>
+<br>
+-aneesh<br>
+<br>
+<br>
+

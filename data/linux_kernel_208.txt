@@ -1,0 +1,29 @@
+On 4/8/21 11:14 AM, Paolo Bonzini wrote:<br>
+><i> On 08/04/21 18:04, Tom Lendacky wrote:</i><br>
+><i>>>>> +       if (!err || !sev_es_guest(vcpu->kvm) ||</i><br>
+><i>>>>> !WARN_ON_ONCE(svm->ghcb))</i><br>
+><i>>>> This should be WARN_ON_ONCE(!svm->ghcb), otherwise you'll get the right</i><br>
+><i>>>> result, but get a stack trace immediately.</i><br>
+><i>>> Doh, yep.</i><br>
+><i>> Actually, because of the "or's", this needs to be:</i><br>
+><i>></i><br>
+><i>> if (!err || !sev_es_guest(vcpu->kvm) || (sev_es_guest(vcpu->kvm) &&</i><br>
+><i>> WARN_ON_ONCE(!svm->ghcb)))</i><br>
+><i> </i><br>
+><i> No, || cuts the right-hand side if the left-hand side is true.  So:</i><br>
+><i> </i><br>
+><i> - if err == 0, the rest is not evaluated</i><br>
+><i> </i><br>
+><i> - if !sev_es_guest(vcpu->kvm), WARN_ON_ONCE(!svm->ghcb) is not evaluated</i><br>
+<br>
+That's what I was doing in my head, but I guess I need more coffee... :)<br>
+<br>
+Thanks,<br>
+Tom<br>
+<br>
+><i> </i><br>
+><i> Paolo</i><br>
+><i> </i><br>
+<br>
+<br>
+

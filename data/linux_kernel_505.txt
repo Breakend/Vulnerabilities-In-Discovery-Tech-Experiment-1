@@ -1,0 +1,116 @@
+We will use percpu-refcount to serialize against concurrent swapoff. This<br>
+patch adds the percpu_ref support for later fixup.<br>
+<br>
+Signed-off-by: Miaohe Lin <linmiaohe@xxxxxxxxxx><br>
+---<br>
+ include/linux/swap.h |  2 ++<br>
+ mm/swapfile.c        | 25 ++++++++++++++++++++++---<br>
+ 2 files changed, 24 insertions(+), 3 deletions(-)<br>
+<br>
+diff --git a/include/linux/swap.h b/include/linux/swap.h<br>
+index 144727041e78..849ba5265c11 100644<br>
+--- a/include/linux/swap.h<br>
++++ b/include/linux/swap.h<br>
+@@ -240,6 +240,7 @@ struct swap_cluster_list {<br>
+  * The in-memory structure used to track swap areas.<br>
+  */<br>
+ struct swap_info_struct {<br>
++	struct percpu_ref users;	/* serialization against concurrent swapoff */<br>
+ 	unsigned long	flags;		/* SWP_USED etc: see above */<br>
+ 	signed short	prio;		/* swap priority of this type */<br>
+ 	struct plist_node list;		/* entry in swap_active_head */<br>
+@@ -260,6 +261,7 @@ struct swap_info_struct {<br>
+ 	struct block_device *bdev;	/* swap device or bdev of swap file */<br>
+ 	struct file *swap_file;		/* seldom referenced */<br>
+ 	unsigned int old_block_size;	/* seldom referenced */<br>
++	struct completion comp;		/* seldom referenced */<br>
+ #ifdef CONFIG_FRONTSWAP<br>
+ 	unsigned long *frontswap_map;	/* frontswap in-use, one bit per page */<br>
+ 	atomic_t frontswap_pages;	/* frontswap pages in-use counter */<br>
+diff --git a/mm/swapfile.c b/mm/swapfile.c<br>
+index 149e77454e3c..724173cd7d0c 100644<br>
+--- a/mm/swapfile.c<br>
++++ b/mm/swapfile.c<br>
+@@ -39,6 +39,7 @@<br>
+ #include <linux/export.h><br>
+ #include <linux/swap_slots.h><br>
+ #include <linux/sort.h><br>
++#include <linux/completion.h><br>
+ <br>
+ #include <asm/tlbflush.h><br>
+ #include <linux/swapops.h><br>
+@@ -511,6 +512,15 @@ static void swap_discard_work(struct work_struct *work)<br>
+ 	spin_unlock(&si->lock);<br>
+ }<br>
+ <br>
++static void swap_users_ref_free(struct percpu_ref *ref)<br>
++{<br>
++	struct swap_info_struct *si;<br>
++<br>
++	si = container_of(ref, struct swap_info_struct, users);<br>
++	complete(&si->comp);<br>
++	percpu_ref_exit(&si->users);<br>
++}<br>
++<br>
+ static void alloc_cluster(struct swap_info_struct *si, unsigned long idx)<br>
+ {<br>
+ 	struct swap_cluster_info *ci = si->cluster_info;<br>
+@@ -2500,7 +2510,7 @@ static void enable_swap_info(struct swap_info_struct *p, int prio,<br>
+ 	 * Guarantee swap_map, cluster_info, etc. fields are valid<br>
+ 	 * between get/put_swap_device() if SWP_VALID bit is set<br>
+ 	 */<br>
+-	synchronize_rcu();<br>
++	percpu_ref_reinit(&p->users);<br>
+ 	spin_lock(&swap_lock);<br>
+ 	spin_lock(&p->lock);<br>
+ 	_enable_swap_info(p);<br>
+@@ -2621,11 +2631,13 @@ SYSCALL_DEFINE1(swapoff, const char __user *, specialfile)<br>
+ 	p->flags &= ~SWP_VALID;		/* mark swap device as invalid */<br>
+ 	spin_unlock(&p->lock);<br>
+ 	spin_unlock(&swap_lock);<br>
++<br>
++	percpu_ref_kill(&p->users);<br>
+ 	/*<br>
+ 	 * wait for swap operations protected by get/put_swap_device()<br>
+ 	 * to complete<br>
+ 	 */<br>
+-	synchronize_rcu();<br>
++	wait_for_completion(&p->comp);<br>
+ <br>
+ 	flush_work(&p->discard_work);<br>
+ <br>
+@@ -3132,7 +3144,7 @@ static bool swap_discardable(struct swap_info_struct *si)<br>
+ SYSCALL_DEFINE2(swapon, const char __user *, specialfile, int, swap_flags)<br>
+ {<br>
+ 	struct swap_info_struct *p;<br>
+-	struct filename *name;<br>
++	struct filename *name = NULL;<br>
+ 	struct file *swap_file = NULL;<br>
+ 	struct address_space *mapping;<br>
+ 	int prio;<br>
+@@ -3163,6 +3175,12 @@ SYSCALL_DEFINE2(swapon, const char __user *, specialfile, int, swap_flags)<br>
+ <br>
+ 	INIT_WORK(&p->discard_work, swap_discard_work);<br>
+ <br>
++	init_completion(&p->comp);<br>
++	error = percpu_ref_init(&p->users, swap_users_ref_free,<br>
++				PERCPU_REF_INIT_DEAD, GFP_KERNEL);<br>
++	if (unlikely(error))<br>
++		goto bad_swap;<br>
++<br>
+ 	name = getname(specialfile);<br>
+ 	if (IS_ERR(name)) {<br>
+ 		error = PTR_ERR(name);<br>
+@@ -3356,6 +3374,7 @@ SYSCALL_DEFINE2(swapon, const char __user *, specialfile, int, swap_flags)<br>
+ bad_swap_unlock_inode:<br>
+ 	inode_unlock(inode);<br>
+ bad_swap:<br>
++	percpu_ref_exit(&p->users);<br>
+ 	free_percpu(p->percpu_cluster);<br>
+ 	p->percpu_cluster = NULL;<br>
+ 	free_percpu(p->cluster_next_cpu);<br>
+-- <br>
+2.19.1<br>
+<br>
+<br>
+

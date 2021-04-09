@@ -1,0 +1,169 @@
+Hi Suzuki,<br>
+<br>
+On 4/5/21 5:42 PM, Suzuki K Poulose wrote:<br>
+><i> At the moment, we check the availability of SPE on the given</i><br>
+><i> CPU (i.e, SPE is implemented and is allowed at the host) during</i><br>
+><i> every guest entry. This can be optimized a bit by moving the</i><br>
+><i> check to vcpu_load time and recording the availability of the</i><br>
+><i> feature on the current CPU via a new flag. This will also be useful</i><br>
+><i> for adding the TRBE support.</i><br>
+><i></i><br>
+><i> Cc: Marc Zyngier <maz@xxxxxxxxxx></i><br>
+><i> Cc: Will Deacon <will@xxxxxxxxxx></i><br>
+><i> Cc: Alexandru Elisei <Alexandru.Elisei@xxxxxxx></i><br>
+><i> Cc: James Morse <james.morse@xxxxxxx></i><br>
+><i> Signed-off-by: Suzuki K Poulose <suzuki.poulose@xxxxxxx></i><br>
+><i> ---</i><br>
+><i>  arch/arm64/include/asm/kvm_host.h  |  5 +++++</i><br>
+><i>  arch/arm64/kvm/arm.c               |  2 ++</i><br>
+><i>  arch/arm64/kvm/debug.c             | 23 +++++++++++++++++++++++</i><br>
+><i>  arch/arm64/kvm/hyp/nvhe/debug-sr.c | 22 +++++++++-------------</i><br>
+><i>  4 files changed, 39 insertions(+), 13 deletions(-)</i><br>
+><i></i><br>
+><i> diff --git a/arch/arm64/include/asm/kvm_host.h b/arch/arm64/include/asm/kvm_host.h</i><br>
+><i> index 3d10e6527f7d..acc2b45dd433 100644</i><br>
+><i> --- a/arch/arm64/include/asm/kvm_host.h</i><br>
+><i> +++ b/arch/arm64/include/asm/kvm_host.h</i><br>
+><i> @@ -400,6 +400,7 @@ struct kvm_vcpu_arch {</i><br>
+><i>  #define KVM_ARM64_GUEST_HAS_PTRAUTH	(1 << 7) /* PTRAUTH exposed to guest */</i><br>
+><i>  #define KVM_ARM64_PENDING_EXCEPTION	(1 << 8) /* Exception pending */</i><br>
+><i>  #define KVM_ARM64_EXCEPT_MASK		(7 << 9) /* Target EL/MODE */</i><br>
+><i> +#define KVM_ARM64_DEBUG_STATE_SAVE_SPE	(1 << 12) /* Save SPE context if active  */</i><br>
+<br>
+Would you consider renaming the flag to something more generic, like<br>
+KVM_ARM64_CPU_HAS_SPE or KVM_ARM64_HOST_HAS_SPE (or something else that you<br>
+fancy)? I'm thinking that it might be possible for the flag to be used for<br>
+something else in the future.<br>
+<br>
+Also, the comment is somewhat misleading, the flag tells KVM that the physical CPU<br>
+has FEAT_SPE, not that the host is actually using SPE. That check is done in the<br>
+world switch code.<br>
+<br>
+><i>  </i><br>
+><i>  /*</i><br>
+><i>   * When KVM_ARM64_PENDING_EXCEPTION is set, KVM_ARM64_EXCEPT_MASK can</i><br>
+><i> @@ -734,6 +735,10 @@ static inline bool kvm_pmu_counter_deferred(struct perf_event_attr *attr)</i><br>
+><i>  	return (!has_vhe() && attr->exclude_host);</i><br>
+><i>  }</i><br>
+><i>  </i><br>
+><i> +/* Flags for host debug state */</i><br>
+><i> +void kvm_arch_vcpu_load_debug_state_flags(struct kvm_vcpu *vcpu);</i><br>
+><i> +void kvm_arch_vcpu_put_debug_state_flags(struct kvm_vcpu *vcpu);</i><br>
+><i> +</i><br>
+><i>  #ifdef CONFIG_KVM /* Avoid conflicts with core headers if CONFIG_KVM=n */</i><br>
+><i>  static inline int kvm_arch_vcpu_run_pid_change(struct kvm_vcpu *vcpu)</i><br>
+><i>  {</i><br>
+><i> diff --git a/arch/arm64/kvm/arm.c b/arch/arm64/kvm/arm.c</i><br>
+><i> index 7f06ba76698d..954752208509 100644</i><br>
+><i> --- a/arch/arm64/kvm/arm.c</i><br>
+><i> +++ b/arch/arm64/kvm/arm.c</i><br>
+><i> @@ -416,10 +416,12 @@ void kvm_arch_vcpu_load(struct kvm_vcpu *vcpu, int cpu)</i><br>
+><i>  </i><br>
+><i>  	if (vcpu_has_ptrauth(vcpu))</i><br>
+><i>  		vcpu_ptrauth_disable(vcpu);</i><br>
+><i> +	kvm_arch_vcpu_load_debug_state_flags(vcpu);</i><br>
+><i>  }</i><br>
+><i>  </i><br>
+><i>  void kvm_arch_vcpu_put(struct kvm_vcpu *vcpu)</i><br>
+><i>  {</i><br>
+><i> +	kvm_arch_vcpu_put_debug_state_flags(vcpu);</i><br>
+><i>  	kvm_arch_vcpu_put_fp(vcpu);</i><br>
+><i>  	if (has_vhe())</i><br>
+><i>  		kvm_vcpu_put_sysregs_vhe(vcpu);</i><br>
+<br>
+This looks like the correct approach to me. kvm_arch_vcpu_{load,put} are called<br>
+when the VCPU is moved around to another physical CPU, so it makes sense to have<br>
+the checks here.<br>
+<br>
+><i> diff --git a/arch/arm64/kvm/debug.c b/arch/arm64/kvm/debug.c</i><br>
+><i> index dbc890511631..b6d2c33ad1df 100644</i><br>
+><i> --- a/arch/arm64/kvm/debug.c</i><br>
+><i> +++ b/arch/arm64/kvm/debug.c</i><br>
+><i> @@ -231,3 +231,26 @@ void kvm_arm_clear_debug(struct kvm_vcpu *vcpu)</i><br>
+><i>  		}</i><br>
+><i>  	}</i><br>
+><i>  }</i><br>
+><i> +</i><br>
+><i> +void kvm_arch_vcpu_load_debug_state_flags(struct kvm_vcpu *vcpu)</i><br>
+><i> +{</i><br>
+><i> +	u64 dfr0;</i><br>
+><i> +</i><br>
+><i> +	/* For VHE, there is nothing to do */</i><br>
+><i> +	if (has_vhe())</i><br>
+><i> +		return;</i><br>
+><i> +</i><br>
+><i> +	dfr0 = read_sysreg(id_aa64dfr0_el1);</i><br>
+><i> +	/*</i><br>
+><i> +	 * If SPE is present on this CPU and is available at current EL,</i><br>
+><i> +	 * we may need to check if the host state needs to be saved.</i><br>
+><i> +	 */</i><br>
+><i> +	if (cpuid_feature_extract_unsigned_field(dfr0, ID_AA64DFR0_PMSVER_SHIFT) &&</i><br>
+><i> +	    !(read_sysreg_s(SYS_PMBIDR_EL1) & BIT(SYS_PMBIDR_EL1_P_SHIFT)))</i><br>
+><i> +		vcpu->arch.flags |= KVM_ARM64_DEBUG_STATE_SAVE_SPE;</i><br>
+><i> +}</i><br>
+<br>
+This also looks correct, and it matches the equivalent checks that were removed<br>
+from __debug_save_spe().<br>
+<br>
+><i> +</i><br>
+><i> +void kvm_arch_vcpu_put_debug_state_flags(struct kvm_vcpu *vcpu)</i><br>
+><i> +{</i><br>
+><i> +	vcpu->arch.flags &= ~KVM_ARM64_DEBUG_STATE_SAVE_SPE;</i><br>
+><i> +}</i><br>
+><i> diff --git a/arch/arm64/kvm/hyp/nvhe/debug-sr.c b/arch/arm64/kvm/hyp/nvhe/debug-sr.c</i><br>
+><i> index f401724f12ef..e6ee9b7faec6 100644</i><br>
+><i> --- a/arch/arm64/kvm/hyp/nvhe/debug-sr.c</i><br>
+><i> +++ b/arch/arm64/kvm/hyp/nvhe/debug-sr.c</i><br>
+><i> @@ -21,17 +21,11 @@ static void __debug_save_spe(u64 *pmscr_el1)</i><br>
+><i>  	/* Clear pmscr in case of early return */</i><br>
+><i>  	*pmscr_el1 = 0;</i><br>
+><i>  </i><br>
+><i> -	/* SPE present on this CPU? */</i><br>
+><i> -	if (!cpuid_feature_extract_unsigned_field(read_sysreg(id_aa64dfr0_el1),</i><br>
+><i> -						  ID_AA64DFR0_PMSVER_SHIFT))</i><br>
+><i> -		return;</i><br>
+><i> -</i><br>
+><i> -	/* Yes; is it owned by EL3? */</i><br>
+><i> -	reg = read_sysreg_s(SYS_PMBIDR_EL1);</i><br>
+><i> -	if (reg & BIT(SYS_PMBIDR_EL1_P_SHIFT))</i><br>
+><i> -		return;</i><br>
+><i> -</i><br>
+><i> -	/* No; is the host actually using the thing? */</i><br>
+><i> +	/*</i><br>
+><i> +	 * At this point, we know that this CPU implements</i><br>
+<br>
+Nitpick: the line length looks suspiciously short here.<br>
+<br>
+Thanks,<br>
+<br>
+Alex<br>
+<br>
+><i> +	 * SPE and is available to the host.</i><br>
+><i> +	 * Check if the host is actually using it ?</i><br>
+><i> +	 */</i><br>
+><i>  	reg = read_sysreg_s(SYS_PMBLIMITR_EL1);</i><br>
+><i>  	if (!(reg & BIT(SYS_PMBLIMITR_EL1_E_SHIFT)))</i><br>
+><i>  		return;</i><br>
+><i> @@ -61,7 +55,8 @@ static void __debug_restore_spe(u64 pmscr_el1)</i><br>
+><i>  void __debug_save_host_buffers_nvhe(struct kvm_vcpu *vcpu)</i><br>
+><i>  {</i><br>
+><i>  	/* Disable and flush SPE data generation */</i><br>
+><i> -	__debug_save_spe(&vcpu->arch.host_debug_state.pmscr_el1);</i><br>
+><i> +	if (vcpu->arch.flags & KVM_ARM64_DEBUG_STATE_SAVE_SPE)</i><br>
+><i> +		__debug_save_spe(&vcpu->arch.host_debug_state.pmscr_el1);</i><br>
+><i>  }</i><br>
+><i>  </i><br>
+><i>  void __debug_switch_to_guest(struct kvm_vcpu *vcpu)</i><br>
+><i> @@ -71,7 +66,8 @@ void __debug_switch_to_guest(struct kvm_vcpu *vcpu)</i><br>
+><i>  </i><br>
+><i>  void __debug_restore_host_buffers_nvhe(struct kvm_vcpu *vcpu)</i><br>
+><i>  {</i><br>
+><i> -	__debug_restore_spe(vcpu->arch.host_debug_state.pmscr_el1);</i><br>
+><i> +	if (vcpu->arch.flags & KVM_ARM64_DEBUG_STATE_SAVE_SPE)</i><br>
+><i> +		__debug_restore_spe(vcpu->arch.host_debug_state.pmscr_el1);</i><br>
+><i>  }</i><br>
+><i>  </i><br>
+><i>  void __debug_switch_to_host(struct kvm_vcpu *vcpu)</i><br>
+<br>
+<br>
+

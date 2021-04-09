@@ -1,0 +1,72 @@
+On Thu, Apr 08, 2021 at 10:33:12AM +0200, Sergei Krainov wrote:<br>
+><i> Remove unused variable from rtl871x_mlme.c.</i><br>
+><i> </i><br>
+><i> No side effects can be seen locally or in r8712_find_network()</i><br>
+><i> </i><br>
+><i> Signed-off-by: Sergei Krainov <sergei.krainov.lkd@xxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  drivers/staging/rtl8712/rtl871x_mlme.c | 9 +--------</i><br>
+><i>  1 file changed, 1 insertion(+), 8 deletions(-)</i><br>
+><i> </i><br>
+><i> diff --git a/drivers/staging/rtl8712/rtl871x_mlme.c b/drivers/staging/rtl8712/rtl871x_mlme.c</i><br>
+><i> index 8a97307fbbd6..4f41e321ea63 100644</i><br>
+><i> --- a/drivers/staging/rtl8712/rtl871x_mlme.c</i><br>
+><i> +++ b/drivers/staging/rtl8712/rtl871x_mlme.c</i><br>
+><i> @@ -656,7 +656,7 @@ void r8712_joinbss_event_callback(struct _adapter *adapter, u8 *pbuf)</i><br>
+><i>  	struct sta_priv	*pstapriv = &adapter->stapriv;</i><br>
+><i>  	struct mlme_priv	*pmlmepriv = &adapter->mlmepriv;</i><br>
+><i>  	struct wlan_network	*cur_network = &pmlmepriv->cur_network;</i><br>
+><i> -	struct wlan_network	*pcur_wlan = NULL, *ptarget_wlan = NULL;</i><br>
+><i> +	struct wlan_network	*ptarget_wlan = NULL;</i><br>
+><i>  	unsigned int		the_same_macaddr = false;</i><br>
+><i>  	struct wlan_network *pnetwork;</i><br>
+><i>  </i><br>
+><i> @@ -721,13 +721,6 @@ void r8712_joinbss_event_callback(struct _adapter *adapter, u8 *pbuf)</i><br>
+><i>  					    scanned_queue,</i><br>
+><i>  					    cur_network->network.MacAddress);</i><br>
+><i>  				} else {</i><br>
+><i> -					pcur_wlan =</i><br>
+><i> -					     r8712_find_network(&pmlmepriv-></i><br>
+><i> -					     scanned_queue,</i><br>
+><i> -					     cur_network->network.MacAddress);</i><br>
+><i> -					if (pcur_wlan)</i><br>
+><i> -						pcur_wlan->fixed = false;</i><br>
+><i> -</i><br>
+><i>  					pcur_sta = r8712_get_stainfo(pstapriv,</i><br>
+><i>  					     cur_network->network.MacAddress);</i><br>
+><i>  					spin_lock_irqsave(&pstapriv-></i><br>
+><i> -- </i><br>
+><i> 2.25.1</i><br>
+><i> </i><br>
+><i> </i><br>
+<br>
+Hi,<br>
+<br>
+This is the friendly patch-bot of Greg Kroah-Hartman.  You have sent him<br>
+a patch that has triggered this response.  He used to manually respond<br>
+to these common problems, but in order to save his sanity (he kept<br>
+writing the same thing over and over, yet to different people), I was<br>
+created.  Hopefully you will not take offence and will fix the problem<br>
+in your patch and resubmit it so that it can be accepted into the Linux<br>
+kernel tree.<br>
+<br>
+You are receiving this message because of the following common error(s)<br>
+as indicated below:<br>
+<br>
+- This looks like a new version of a previously submitted patch, but you<br>
+  did not list below the --- line any changes from the previous version.<br>
+  Please read the section entitled "The canonical patch format" in the<br>
+  kernel file, Documentation/SubmittingPatches for what needs to be done<br>
+  here to properly describe this.<br>
+<br>
+If you wish to discuss this problem further, or you have questions about<br>
+how to resolve this issue, please feel free to respond to this email and<br>
+Greg will reply once he has dug out from the pending patches received<br>
+from other developers.<br>
+<br>
+thanks,<br>
+<br>
+greg k-h's patch email bot<br>
+<br>
+<br>
+

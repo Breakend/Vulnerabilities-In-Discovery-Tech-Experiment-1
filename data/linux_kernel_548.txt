@@ -1,0 +1,147 @@
+There are a number of functions and #defines in include/linux/tty.h that<br>
+do not belong there as they are private to the tty core code.<br>
+<br>
+Create an initial drivers/tty/tty.h file and copy the odd "tty logging"<br>
+macros into it to seed the file with some initial things that we know<br>
+nothing outside of the tty core should be calling.<br>
+<br>
+Cc: Tetsuo Handa <penguin-kernel@xxxxxxxxxxxxxxxxxxx><br>
+Cc: Jiri Slaby <jirislaby@xxxxxxxxxx><br>
+Signed-off-by: Greg Kroah-Hartman <gregkh@xxxxxxxxxxxxxxxxxxx><br>
+---<br>
+ drivers/tty/n_tty.c       |  1 +<br>
+ drivers/tty/pty.c         |  1 +<br>
+ drivers/tty/tty.h         | 21 +++++++++++++++++++++<br>
+ drivers/tty/tty_io.c      |  1 +<br>
+ drivers/tty/tty_jobctrl.c |  1 +<br>
+ drivers/tty/tty_ldisc.c   |  1 +<br>
+ drivers/tty/tty_port.c    |  1 +<br>
+ include/linux/tty.h       | 12 ------------<br>
+ 8 files changed, 27 insertions(+), 12 deletions(-)<br>
+ create mode 100644 drivers/tty/tty.h<br>
+<br>
+diff --git a/drivers/tty/n_tty.c b/drivers/tty/n_tty.c<br>
+index 87ec15dbe10d..ff1b3154ba0c 100644<br>
+--- a/drivers/tty/n_tty.c<br>
++++ b/drivers/tty/n_tty.c<br>
+@@ -49,6 +49,7 @@<br>
+ #include <linux/module.h><br>
+ #include <linux/ratelimit.h><br>
+ #include <linux/vmalloc.h><br>
++#include "tty.h"<br>
+ <br>
+ /*<br>
+  * Until this number of characters is queued in the xmit buffer, select will<br>
+diff --git a/drivers/tty/pty.c b/drivers/tty/pty.c<br>
+index 5e2374580e27..6c90d3fd2d51 100644<br>
+--- a/drivers/tty/pty.c<br>
++++ b/drivers/tty/pty.c<br>
+@@ -29,6 +29,7 @@<br>
+ #include <linux/file.h><br>
+ #include <linux/ioctl.h><br>
+ #include <linux/compat.h><br>
++#include "tty.h"<br>
+ <br>
+ #undef TTY_DEBUG_HANGUP<br>
+ #ifdef TTY_DEBUG_HANGUP<br>
+diff --git a/drivers/tty/tty.h b/drivers/tty/tty.h<br>
+new file mode 100644<br>
+index 000000000000..f4cd20261e91<br>
+--- /dev/null<br>
++++ b/drivers/tty/tty.h<br>
+@@ -0,0 +1,21 @@<br>
++/* SPDX-License-Identifier: GPL-2.0 */<br>
++/*<br>
++ * TTY core internal functions<br>
++ */<br>
++<br>
++#ifndef _TTY_INTERNAL_H<br>
++#define _TTY_INTERNAL_H<br>
++<br>
++#define tty_msg(fn, tty, f, ...) \<br>
++	fn("%s %s: " f, tty_driver_name(tty), tty_name(tty), ##__VA_ARGS__)<br>
++<br>
++#define tty_debug(tty, f, ...)	tty_msg(pr_debug, tty, f, ##__VA_ARGS__)<br>
++#define tty_info(tty, f, ...)	tty_msg(pr_info, tty, f, ##__VA_ARGS__)<br>
++#define tty_notice(tty, f, ...)	tty_msg(pr_notice, tty, f, ##__VA_ARGS__)<br>
++#define tty_warn(tty, f, ...)	tty_msg(pr_warn, tty, f, ##__VA_ARGS__)<br>
++#define tty_err(tty, f, ...)	tty_msg(pr_err, tty, f, ##__VA_ARGS__)<br>
++<br>
++#define tty_info_ratelimited(tty, f, ...) \<br>
++		tty_msg(pr_info_ratelimited, tty, f, ##__VA_ARGS__)<br>
++<br>
++#endif<br>
+diff --git a/drivers/tty/tty_io.c b/drivers/tty/tty_io.c<br>
+index 391bada4cedb..c95f72085cdb 100644<br>
+--- a/drivers/tty/tty_io.c<br>
++++ b/drivers/tty/tty_io.c<br>
+@@ -108,6 +108,7 @@<br>
+ <br>
+ #include <linux/kmod.h><br>
+ #include <linux/nsproxy.h><br>
++#include "tty.h"<br>
+ <br>
+ #undef TTY_DEBUG_HANGUP<br>
+ #ifdef TTY_DEBUG_HANGUP<br>
+diff --git a/drivers/tty/tty_jobctrl.c b/drivers/tty/tty_jobctrl.c<br>
+index 4b751b9285ad..0728730d38d1 100644<br>
+--- a/drivers/tty/tty_jobctrl.c<br>
++++ b/drivers/tty/tty_jobctrl.c<br>
+@@ -11,6 +11,7 @@<br>
+ #include <linux/tty.h><br>
+ #include <linux/fcntl.h><br>
+ #include <linux/uaccess.h><br>
++#include "tty.h"<br>
+ <br>
+ static int is_ignored(int sig)<br>
+ {<br>
+diff --git a/drivers/tty/tty_ldisc.c b/drivers/tty/tty_ldisc.c<br>
+index 1ba74d6f5e5c..2e8da820c303 100644<br>
+--- a/drivers/tty/tty_ldisc.c<br>
++++ b/drivers/tty/tty_ldisc.c<br>
+@@ -19,6 +19,7 @@<br>
+ #include <linux/seq_file.h><br>
+ #include <linux/uaccess.h><br>
+ #include <linux/ratelimit.h><br>
++#include "tty.h"<br>
+ <br>
+ #undef LDISC_DEBUG_HANGUP<br>
+ <br>
+diff --git a/drivers/tty/tty_port.c b/drivers/tty/tty_port.c<br>
+index 346d20f4a486..303c198fbf5c 100644<br>
+--- a/drivers/tty/tty_port.c<br>
++++ b/drivers/tty/tty_port.c<br>
+@@ -18,6 +18,7 @@<br>
+ #include <linux/delay.h><br>
+ #include <linux/module.h><br>
+ #include <linux/serdev.h><br>
++#include "tty.h"<br>
+ <br>
+ static int tty_port_default_receive_buf(struct tty_port *port,<br>
+ 					const unsigned char *p,<br>
+diff --git a/include/linux/tty.h b/include/linux/tty.h<br>
+index 95fc2f100f12..fd8308a1f37e 100644<br>
+--- a/include/linux/tty.h<br>
++++ b/include/linux/tty.h<br>
+@@ -772,16 +772,4 @@ static inline void proc_tty_register_driver(struct tty_driver *d) {}<br>
+ static inline void proc_tty_unregister_driver(struct tty_driver *d) {}<br>
+ #endif<br>
+ <br>
+-#define tty_msg(fn, tty, f, ...) \<br>
+-	fn("%s %s: " f, tty_driver_name(tty), tty_name(tty), ##__VA_ARGS__)<br>
+-<br>
+-#define tty_debug(tty, f, ...)	tty_msg(pr_debug, tty, f, ##__VA_ARGS__)<br>
+-#define tty_info(tty, f, ...)	tty_msg(pr_info, tty, f, ##__VA_ARGS__)<br>
+-#define tty_notice(tty, f, ...)	tty_msg(pr_notice, tty, f, ##__VA_ARGS__)<br>
+-#define tty_warn(tty, f, ...)	tty_msg(pr_warn, tty, f, ##__VA_ARGS__)<br>
+-#define tty_err(tty, f, ...)	tty_msg(pr_err, tty, f, ##__VA_ARGS__)<br>
+-<br>
+-#define tty_info_ratelimited(tty, f, ...) \<br>
+-		tty_msg(pr_info_ratelimited, tty, f, ##__VA_ARGS__)<br>
+-<br>
+ #endif<br>
+-- <br>
+2.31.1<br>
+<br>
+<br>
+

@@ -1,0 +1,64 @@
+Disable CFI checking for functions that switch to linear mapping and<br>
+make an indirect call to a physical address, since the compiler only<br>
+understands virtual addresses and the CFI check for such indirect calls<br>
+would always fail.<br>
+<br>
+Signed-off-by: Sami Tolvanen <samitolvanen@xxxxxxxxxx><br>
+Reviewed-by: Kees Cook <keescook@xxxxxxxxxxxx><br>
+Tested-by: Nathan Chancellor <nathan@xxxxxxxxxx><br>
+---<br>
+ arch/arm64/include/asm/mmu_context.h | 2 +-<br>
+ arch/arm64/kernel/cpu-reset.h        | 8 ++++----<br>
+ arch/arm64/kernel/cpufeature.c       | 2 +-<br>
+ 3 files changed, 6 insertions(+), 6 deletions(-)<br>
+<br>
+diff --git a/arch/arm64/include/asm/mmu_context.h b/arch/arm64/include/asm/mmu_context.h<br>
+index 386b96400a57..d3cef9133539 100644<br>
+--- a/arch/arm64/include/asm/mmu_context.h<br>
++++ b/arch/arm64/include/asm/mmu_context.h<br>
+@@ -119,7 +119,7 @@ static inline void cpu_install_idmap(void)<br>
+  * Atomically replaces the active TTBR1_EL1 PGD with a new VA-compatible PGD,<br>
+  * avoiding the possibility of conflicting TLB entries being allocated.<br>
+  */<br>
+-static inline void cpu_replace_ttbr1(pgd_t *pgdp)<br>
++static inline void __nocfi cpu_replace_ttbr1(pgd_t *pgdp)<br>
+ {<br>
+ 	typedef void (ttbr_replace_func)(phys_addr_t);<br>
+ 	extern ttbr_replace_func idmap_cpu_replace_ttbr1;<br>
+diff --git a/arch/arm64/kernel/cpu-reset.h b/arch/arm64/kernel/cpu-reset.h<br>
+index f3adc574f969..9a7b1262ef17 100644<br>
+--- a/arch/arm64/kernel/cpu-reset.h<br>
++++ b/arch/arm64/kernel/cpu-reset.h<br>
+@@ -13,10 +13,10 @@<br>
+ void __cpu_soft_restart(unsigned long el2_switch, unsigned long entry,<br>
+ 	unsigned long arg0, unsigned long arg1, unsigned long arg2);<br>
+ <br>
+-static inline void __noreturn cpu_soft_restart(unsigned long entry,<br>
+-					       unsigned long arg0,<br>
+-					       unsigned long arg1,<br>
+-					       unsigned long arg2)<br>
++static inline void __noreturn __nocfi cpu_soft_restart(unsigned long entry,<br>
++						       unsigned long arg0,<br>
++						       unsigned long arg1,<br>
++						       unsigned long arg2)<br>
+ {<br>
+ 	typeof(__cpu_soft_restart) *restart;<br>
+ <br>
+diff --git a/arch/arm64/kernel/cpufeature.c b/arch/arm64/kernel/cpufeature.c<br>
+index 0b2e0d7b13ec..c2f94a5206e0 100644<br>
+--- a/arch/arm64/kernel/cpufeature.c<br>
++++ b/arch/arm64/kernel/cpufeature.c<br>
+@@ -1445,7 +1445,7 @@ static bool unmap_kernel_at_el0(const struct arm64_cpu_capabilities *entry,<br>
+ }<br>
+ <br>
+ #ifdef CONFIG_UNMAP_KERNEL_AT_EL0<br>
+-static void<br>
++static void __nocfi<br>
+ kpti_install_ng_mappings(const struct arm64_cpu_capabilities *__unused)<br>
+ {<br>
+ 	typedef void (kpti_remap_fn)(int, int, phys_addr_t);<br>
+-- <br>
+2.31.1.295.g9ea45b61b8-goog<br>
+<br>
+<br>
+

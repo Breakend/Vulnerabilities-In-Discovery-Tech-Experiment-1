@@ -1,0 +1,144 @@
+On Thu, Apr 08, 2021 at 10:44:58AM +0530, Anshuman Khandual wrote:<br>
+><i> </i><br>
+><i> On 4/7/21 10:56 PM, Mike Rapoport wrote:</i><br>
+><i> > From: Mike Rapoport <rppt@xxxxxxxxxxxxx></i><br>
+><i> > </i><br>
+><i> > The intended semantics of pfn_valid() is to verify whether there is a</i><br>
+><i> > struct page for the pfn in question and nothing else.</i><br>
+><i> </i><br>
+><i> Should there be a comment affirming this semantics interpretation, above the</i><br>
+><i> generic pfn_valid() in include/linux/mmzone.h ?</i><br>
+<br>
+Yeah, that would have been helpful :)<br>
+ <br>
+><i> > </i><br>
+><i> > Yet, on arm64 it is used to distinguish memory areas that are mapped in the</i><br>
+><i> > linear map vs those that require ioremap() to access them.</i><br>
+><i> > </i><br>
+><i> > Introduce a dedicated pfn_is_memory() to perform such check and use it</i><br>
+><i> > where appropriate.</i><br>
+><i> > </i><br>
+><i> > Signed-off-by: Mike Rapoport <rppt@xxxxxxxxxxxxx></i><br>
+><i> > ---</i><br>
+><i> >  arch/arm64/include/asm/memory.h | 2 +-</i><br>
+><i> >  arch/arm64/include/asm/page.h   | 1 +</i><br>
+><i> >  arch/arm64/kvm/mmu.c            | 2 +-</i><br>
+><i> >  arch/arm64/mm/init.c            | 6 ++++++</i><br>
+><i> >  arch/arm64/mm/ioremap.c         | 4 ++--</i><br>
+><i> >  arch/arm64/mm/mmu.c             | 2 +-</i><br>
+><i> >  6 files changed, 12 insertions(+), 5 deletions(-)</i><br>
+><i> > </i><br>
+><i> > diff --git a/arch/arm64/include/asm/memory.h b/arch/arm64/include/asm/memory.h</i><br>
+><i> > index 0aabc3be9a75..7e77fdf71b9d 100644</i><br>
+><i> > --- a/arch/arm64/include/asm/memory.h</i><br>
+><i> > +++ b/arch/arm64/include/asm/memory.h</i><br>
+><i> > @@ -351,7 +351,7 @@ static inline void *phys_to_virt(phys_addr_t x)</i><br>
+><i> >  </i><br>
+><i> >  #define virt_addr_valid(addr)	({					\</i><br>
+><i> >  	__typeof__(addr) __addr = __tag_reset(addr);			\</i><br>
+><i> > -	__is_lm_address(__addr) && pfn_valid(virt_to_pfn(__addr));	\</i><br>
+><i> > +	__is_lm_address(__addr) && pfn_is_memory(virt_to_pfn(__addr));	\</i><br>
+><i> >  })</i><br>
+><i> >  </i><br>
+><i> >  void dump_mem_limit(void);</i><br>
+><i> > diff --git a/arch/arm64/include/asm/page.h b/arch/arm64/include/asm/page.h</i><br>
+><i> > index 012cffc574e8..32b485bcc6ff 100644</i><br>
+><i> > --- a/arch/arm64/include/asm/page.h</i><br>
+><i> > +++ b/arch/arm64/include/asm/page.h</i><br>
+><i> > @@ -38,6 +38,7 @@ void copy_highpage(struct page *to, struct page *from);</i><br>
+><i> >  typedef struct page *pgtable_t;</i><br>
+><i> >  </i><br>
+><i> >  extern int pfn_valid(unsigned long);</i><br>
+><i> > +extern int pfn_is_memory(unsigned long);</i><br>
+><i> >  </i><br>
+><i> >  #include <asm/memory.h></i><br>
+><i> >  </i><br>
+><i> > diff --git a/arch/arm64/kvm/mmu.c b/arch/arm64/kvm/mmu.c</i><br>
+><i> > index 8711894db8c2..ad2ea65a3937 100644</i><br>
+><i> > --- a/arch/arm64/kvm/mmu.c</i><br>
+><i> > +++ b/arch/arm64/kvm/mmu.c</i><br>
+><i> > @@ -85,7 +85,7 @@ void kvm_flush_remote_tlbs(struct kvm *kvm)</i><br>
+><i> >  </i><br>
+><i> >  static bool kvm_is_device_pfn(unsigned long pfn)</i><br>
+><i> >  {</i><br>
+><i> > -	return !pfn_valid(pfn);</i><br>
+><i> > +	return !pfn_is_memory(pfn);</i><br>
+><i> >  }</i><br>
+><i> >  </i><br>
+><i> >  /*</i><br>
+><i> > diff --git a/arch/arm64/mm/init.c b/arch/arm64/mm/init.c</i><br>
+><i> > index 3685e12aba9b..258b1905ed4a 100644</i><br>
+><i> > --- a/arch/arm64/mm/init.c</i><br>
+><i> > +++ b/arch/arm64/mm/init.c</i><br>
+><i> > @@ -258,6 +258,12 @@ int pfn_valid(unsigned long pfn)</i><br>
+><i> >  }</i><br>
+><i> >  EXPORT_SYMBOL(pfn_valid);</i><br>
+><i> >  </i><br>
+><i> > +int pfn_is_memory(unsigned long pfn)</i><br>
+><i> > +{</i><br>
+><i> > +	return memblock_is_map_memory(PFN_PHYS(pfn));</i><br>
+><i> > +}</i><br>
+><i> > +EXPORT_SYMBOL(pfn_is_memory);> +</i><br>
+><i> </i><br>
+><i> Should not this be generic though ? There is nothing platform or arm64</i><br>
+><i> specific in here.</i><br>
+<br>
+As NOMAP itself is quite ARM specific, this check is currently only<br>
+relevant for arm64 and maybe arm32.<br>
+But probably having an EXPORT_SYMBOL wrapper for memblock_is_map_memory(),<br>
+say in memblock does make sense for all architectures that have<br>
+KEEP_MEMBLOCK.<br>
+<br>
+><i> Wondering as pfn_is_memory() just indicates that the</i><br>
+><i> pfn is linear mapped, should not it be renamed as pfn_is_linear_memory()</i><br>
+><i> instead ? Regardless, it's fine either way.</i><br>
+<br>
+Yeah, I agree that naming could be better here. I think that for a generic name<br>
+we'd need pfn_is_directly_mapped() so that it can be used on x86 ;-)<br>
+ <br>
+><i> >  static phys_addr_t memory_limit = PHYS_ADDR_MAX;</i><br>
+><i> >  </i><br>
+><i> >  /*</i><br>
+><i> > diff --git a/arch/arm64/mm/ioremap.c b/arch/arm64/mm/ioremap.c</i><br>
+><i> > index b5e83c46b23e..82a369b22ef5 100644</i><br>
+><i> > --- a/arch/arm64/mm/ioremap.c</i><br>
+><i> > +++ b/arch/arm64/mm/ioremap.c</i><br>
+><i> > @@ -43,7 +43,7 @@ static void __iomem *__ioremap_caller(phys_addr_t phys_addr, size_t size,</i><br>
+><i> >  	/*</i><br>
+><i> >  	 * Don't allow RAM to be mapped.</i><br>
+><i> >  	 */</i><br>
+><i> > -	if (WARN_ON(pfn_valid(__phys_to_pfn(phys_addr))))</i><br>
+><i> > +	if (WARN_ON(pfn_is_memory(__phys_to_pfn(phys_addr))))</i><br>
+><i> >  		return NULL;</i><br>
+><i> >  </i><br>
+><i> >  	area = get_vm_area_caller(size, VM_IOREMAP, caller);</i><br>
+><i> > @@ -84,7 +84,7 @@ EXPORT_SYMBOL(iounmap);</i><br>
+><i> >  void __iomem *ioremap_cache(phys_addr_t phys_addr, size_t size)</i><br>
+><i> >  {</i><br>
+><i> >  	/* For normal memory we already have a cacheable mapping. */</i><br>
+><i> > -	if (pfn_valid(__phys_to_pfn(phys_addr)))</i><br>
+><i> > +	if (pfn_is_memory(__phys_to_pfn(phys_addr)))</i><br>
+><i> >  		return (void __iomem *)__phys_to_virt(phys_addr);</i><br>
+><i> >  </i><br>
+><i> >  	return __ioremap_caller(phys_addr, size, __pgprot(PROT_NORMAL),</i><br>
+><i> > diff --git a/arch/arm64/mm/mmu.c b/arch/arm64/mm/mmu.c</i><br>
+><i> > index 5d9550fdb9cf..038d20fe163f 100644</i><br>
+><i> > --- a/arch/arm64/mm/mmu.c</i><br>
+><i> > +++ b/arch/arm64/mm/mmu.c</i><br>
+><i> > @@ -81,7 +81,7 @@ void set_swapper_pgd(pgd_t *pgdp, pgd_t pgd)</i><br>
+><i> >  pgprot_t phys_mem_access_prot(struct file *file, unsigned long pfn,</i><br>
+><i> >  			      unsigned long size, pgprot_t vma_prot)</i><br>
+><i> >  {</i><br>
+><i> > -	if (!pfn_valid(pfn))</i><br>
+><i> > +	if (!pfn_is_memory(pfn))</i><br>
+><i> >  		return pgprot_noncached(vma_prot);</i><br>
+><i> >  	else if (file->f_flags & O_SYNC)</i><br>
+><i> >  		return pgprot_writecombine(vma_prot);</i><br>
+><i> > </i><br>
+<br>
+-- <br>
+Sincerely yours,<br>
+Mike.<br>
+<br>
+<br>
+

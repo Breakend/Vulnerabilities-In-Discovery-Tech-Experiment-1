@@ -1,0 +1,48 @@
+Hi,<br>
+<br>
+On Tue, Apr 06, 2021 at 01:41:24AM +0200, Maximilian Luz wrote:<br>
+><i> This series provides battery and AC drivers for Microsoft Surface</i><br>
+><i> devices, where this information is provided via an embedded controller</i><br>
+><i> (the Surface System Aggregator Module, SSAM) instead of the usual ACPI</i><br>
+><i> interface.</i><br>
+><i> </i><br>
+><i> Specifically, 7th generation Surface devices, i.e. Surface Pro 7,</i><br>
+><i> Surface Book 3, Surface Laptop 3, as well as the Surface Laptop Go use</i><br>
+><i> this new interface.</i><br>
+><i> </i><br>
+><i> Note: This series depends on the</i><br>
+><i> </i><br>
+><i>     platform/surface: Add Surface Aggregator device registry</i><br>
+><i> </i><br>
+><i> series. More specifically patch</i><br>
+><i> </i><br>
+><i>     platform/surface: Set up Surface Aggregator device registry</i><br>
+><i> </i><br>
+><i> The full series has been merged into the for-next branch of the</i><br>
+><i> platform-drivers-x86 tree and is available as immutable tag at</i><br>
+><i> </i><br>
+><i>   git://git.kernel.org/pub/scm/linux/kernel/git/pdx86/platform-drivers-x86.git tags/platform-drivers-x86-surface-aggregator-v5.13-1</i><br>
+><i> </i><br>
+><i> Maximilian Luz (2):</i><br>
+><i>   power: supply: Add battery driver for Surface Aggregator Module</i><br>
+><i>   power: supply: Add AC driver for Surface Aggregator Module</i><br>
+><i> </i><br>
+><i>  .../ABI/testing/sysfs-class-power-surface     |  15 +</i><br>
+><i>  MAINTAINERS                                   |   8 +</i><br>
+><i>  drivers/power/supply/Kconfig                  |  32 +</i><br>
+><i>  drivers/power/supply/Makefile                 |   2 +</i><br>
+><i>  drivers/power/supply/surface_battery.c        | 865 ++++++++++++++++++</i><br>
+><i>  drivers/power/supply/surface_charger.c        | 282 ++++++</i><br>
+><i>  6 files changed, 1204 insertions(+)</i><br>
+><i>  create mode 100644 Documentation/ABI/testing/sysfs-class-power-surface</i><br>
+><i>  create mode 100644 drivers/power/supply/surface_battery.c</i><br>
+><i>  create mode 100644 drivers/power/supply/surface_charger.c</i><br>
+<br>
+Thanks, queued to power-supply's for-next branch using referenced<br>
+immutable tag.<br>
+<br>
+-- Sebastian<br>
+<p><strong>Attachment:
+<a href="00571/signature.asc" ><tt>signature.asc</tt></a></strong><br>
+<em>Description:</em> PGP signature</p>
+

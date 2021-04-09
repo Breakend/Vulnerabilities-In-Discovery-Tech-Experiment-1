@@ -1,0 +1,20 @@
+
+On 08/04/21 17:28, Wei Liu wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em"><blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+Although the Hyper-v TLFS mentions that a guest cannot use this feature<br>
+unless the hypervisor advertises support for it, some hypercalls which<br>
+we plan on upstreaming in future uses them anyway.<br>
+</blockquote>
+<br>
+No, please don't do this. Check the feature bit(s) before you issue<br>
+hypercalls which rely on the extended interface.<br>
+</blockquote>
+<br>
+Perhaps Siddharth should clarify this, but I read it as Hyper-V being 
+buggy and using XMM arguments unconditionally.
+<br>
+<br>
+Paolo<br>
+<br>
+<br>
+

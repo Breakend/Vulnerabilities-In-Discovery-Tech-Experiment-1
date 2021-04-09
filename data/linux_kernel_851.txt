@@ -1,0 +1,50 @@
+On Wed, Apr 07, 2021 at 04:36:54PM -0300, Jason Gunthorpe wrote:<br>
+><i> On Wed, Apr 07, 2021 at 08:43:50PM +0200, Jean-Philippe Brucker wrote:</i><br>
+><i> </i><br>
+><i> > * Get a container handle out of /dev/ioasid (or /dev/iommu, really.)</i><br>
+><i> >   No operation available since we don't know what the device and IOMMU</i><br>
+><i> >   capabilities are.</i><br>
+><i> ></i><br>
+><i> > * Attach the handle to a VF. With VFIO that would be</i><br>
+><i> >   VFIO_GROUP_SET_CONTAINER. That causes the kernel to associate an IOMMU</i><br>
+><i> >   with the handle, and decide which operations are available.</i><br>
+><i> </i><br>
+><i> Right, this is basically the point, - the VFIO container (/dev/vfio)</i><br>
+><i> and the /dev/ioasid we are talking about have a core of</i><br>
+><i> similarity. ioasid is the generalized, modernized, and cross-subsystem</i><br>
+><i> version of the same idea. Instead of calling it "vfio container" we</i><br>
+><i> call it something that evokes the idea of controlling the iommu.</i><br>
+><i> </i><br>
+><i> The issue is to seperate /dev/vfio generic functionality from vfio and</i><br>
+><i> share it with every subsystem.</i><br>
+><i> </i><br>
+><i> It may be that /dev/vfio and /dev/ioasid end up sharing a lot of code,</i><br>
+><i> with a different IOCTL interface around it. The vfio_iommu_driver_ops</i><br>
+><i> is not particularly VFIOy.</i><br>
+><i> </i><br>
+><i> Creating /dev/ioasid may primarily start as a code reorganization</i><br>
+><i> exercise.</i><br>
+><i> </i><br>
+><i> > * With a map/unmap vIOMMU (or shadow mappings), a single translation level</i><br>
+><i> >   is supported. With a nesting vIOMMU, we're populating the level-2</i><br>
+><i> >   translation (some day maybe by binding the KVM page tables, but</i><br>
+><i> >   currently with map/unmap ioctl).</i><br>
+><i> > </i><br>
+><i> >   Single-level translation needs single VF per container. </i><br>
+><i> </i><br>
+><i> Really? Why?</i><br>
+<br>
+The vIOMMU is started in bypass, so the device can do DMA to the GPA space<br>
+until the guest configures the vIOMMU, at which point each VF is either<br>
+kept in bypass or gets new DMA mappings, which requires the host to tear<br>
+down the bypass mappings and set up the guest mappings on a per-VF basis<br>
+(I'm not considering nesting translation in the host kernel for this,<br>
+because it's not supported by all pIOMMUs and is expensive in terms of TLB<br>
+and pinned memory). So keeping a single VF per container is simpler, but<br>
+there are certainly other programming models possible.<br>
+<br>
+Thanks,<br>
+Jean<br>
+<br>
+<br>
+

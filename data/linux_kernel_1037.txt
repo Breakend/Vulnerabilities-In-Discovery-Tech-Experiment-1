@@ -1,0 +1,26 @@
+Hi Christian, thanks for taking a look.<br>
+<br>
+On Thu, Apr 08, 2021 at 09:51:17AM +0200, Christian Brauner wrote:<br>
+><i> On Wed, Apr 07, 2021 at 02:46:10PM -0700, Daniel Xu wrote:</i><br>
+><i> > There currently does not exist a way to answer the question: "What is in</i><br>
+><i> > the page cache?". There are various heuristics and counters but nothing</i><br>
+><i> > that can tell you anything like:</i><br>
+><i> > </i><br>
+><i> >   * 3M from /home/dxu/foo.txt</i><br>
+><i> >   * 5K from ...</i><br>
+><i> >   * etc.</i><br>
+><i> > </i><br>
+><i> > The answer to the question is particularly useful in the stacked</i><br>
+><i> > container world. Stacked containers implies multiple containers are run</i><br>
+><i> > on the same physical host. Memory is precious resource on some (if not</i><br>
+><i> </i><br>
+><i> Just to clarify: what are "stacked containers"? Do you mean nested</i><br>
+><i> containers, i.e. containers running within containers?</i><br>
+<br>
+I mean multiple containers running side by side on the same host.<br>
+<br>
+Thanks,<br>
+Daniel<br>
+<br>
+<br>
+

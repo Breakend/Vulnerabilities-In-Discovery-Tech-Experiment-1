@@ -1,0 +1,47 @@
+On Wed, 07 Apr 2021, Benjamin Tissoires wrote:<br>
+<br>
+><i> On Fri, Mar 26, 2021 at 3:35 PM Lee Jones <lee.jones@xxxxxxxxxx> wrote:</i><br>
+><i> ></i><br>
+><i> > Fixes the following W=1 kernel build warning(s):</i><br>
+><i> ></i><br>
+><i> >  drivers/hid/usbhid/usbkbd.c:66: warning: bad line:                 should be on</i><br>
+><i> ></i><br>
+><i> > Cc: Jiri Kosina <jikos@xxxxxxxxxx></i><br>
+><i> > Cc: Benjamin Tissoires <benjamin.tissoires@xxxxxxxxxx></i><br>
+><i> > Cc: message to <vojtech@xxxxxx></i><br>
+><i> > Cc: linux-usb@xxxxxxxxxxxxxxx</i><br>
+><i> > Cc: linux-input@xxxxxxxxxxxxxxx</i><br>
+><i> > Signed-off-by: Lee Jones <lee.jones@xxxxxxxxxx></i><br>
+><i> > ---</i><br>
+><i> >  drivers/hid/usbhid/usbkbd.c | 2 +-</i><br>
+><i> >  1 file changed, 1 insertion(+), 1 deletion(-)</i><br>
+><i> ></i><br>
+><i> > diff --git a/drivers/hid/usbhid/usbkbd.c b/drivers/hid/usbhid/usbkbd.c</i><br>
+><i> > index d5b7a696a68c5..d0c640be8a885 100644</i><br>
+><i> > --- a/drivers/hid/usbhid/usbkbd.c</i><br>
+><i> > +++ b/drivers/hid/usbhid/usbkbd.c</i><br>
+><i> > @@ -63,7 +63,7 @@ static const unsigned char usb_kbd_keycode[256] = {</i><br>
+><i> >   *             new key is pressed or a key that was pressed is released.</i><br>
+><i> >   * @led:       URB for sending LEDs (e.g. numlock, ...)</i><br>
+><i> >   * @newleds:   data that will be sent with the @led URB representing which LEDs</i><br>
+><i> > -               should be on</i><br>
+><i> > + *             should be on</i><br>
+><i> </i><br>
+><i> nitpick: checkpatch complains about spaces before tabs here.</i><br>
+><i> </i><br>
+><i> I amended locally and will push the fixed version.</i><br>
+<br>
+Those are usually highlighted in my editor.<br>
+<br>
+I wonder how I missed them.<br>
+<br>
+Thanks for cleaning it up though.<br>
+<br>
+-- <br>
+Lee Jones [李琼斯]<br>
+Senior Technical Lead - Developer Services<br>
+Linaro.org │ Open source software for Arm SoCs<br>
+Follow Linaro: Facebook | Twitter | Blog<br>
+<br>
+<br>
+

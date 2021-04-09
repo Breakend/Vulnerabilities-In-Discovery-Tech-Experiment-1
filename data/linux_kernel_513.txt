@@ -1,0 +1,92 @@
+As the name shows, it checks if strings are equal in case insensitive<br>
+manner.<br>
+<br>
+For example, drivers/infiniband/ulp/rtrs/rtrs-clt-sysfs.c uses<br>
+strncasecmp to check that the input via sysfs is "mi". But it would<br>
+work even-if the input is "min-wrongcommand".<br>
+<br>
+I found some more cases using strncasecmp to check the entire string<br>
+such as rtrs-clt-sysfs.c does. drivers/pnp/interface.c checks<br>
+"disable" command with strncasecmp but it would also work if the<br>
+command is "disable-wrong".<br>
+<br>
+Signed-off-by: Gioh Kim <gi-oh.kim@xxxxxxxxx><br>
+---<br>
+ include/linux/string.h |  1 +<br>
+ lib/string.c           | 36 ++++++++++++++++++++++++++++--------<br>
+ 2 files changed, 29 insertions(+), 8 deletions(-)<br>
+<br>
+diff --git a/include/linux/string.h b/include/linux/string.h<br>
+index 4fcfb56abcf5..36d00ff8013e 100644<br>
+--- a/include/linux/string.h<br>
++++ b/include/linux/string.h<br>
+@@ -184,6 +184,7 @@ extern char **argv_split(gfp_t gfp, const char *str, int *argcp);<br>
+ extern void argv_free(char **argv);<br>
+ <br>
+ extern bool sysfs_streq(const char *s1, const char *s2);<br>
++extern bool sysfs_streqcase(const char *s1, const char *s2);<br>
+ extern int kstrtobool(const char *s, bool *res);<br>
+ static inline int strtobool(const char *s, bool *res)<br>
+ {<br>
+diff --git a/lib/string.c b/lib/string.c<br>
+index 7548eb715ddb..d0fb02efd5da 100644<br>
+--- a/lib/string.c<br>
++++ b/lib/string.c<br>
+@@ -687,6 +687,17 @@ char *strsep(char **s, const char *ct)<br>
+ EXPORT_SYMBOL(strsep);<br>
+ #endif<br>
+ <br>
++static inline bool __streq_terminal(const char *s1, const char *s2)<br>
++{<br>
++	if (*s1 == *s2)<br>
++		return true;<br>
++	if (!*s1 && *s2 == '\n' && !s2[1])<br>
++		return true;<br>
++	if (*s1 == '\n' && !s1[1] && !*s2)<br>
++		return true;<br>
++	return false;<br>
++}<br>
++<br>
+ /**<br>
+  * sysfs_streq - return true if strings are equal, modulo trailing newline<br>
+  * @s1: one string<br>
+@@ -703,17 +714,26 @@ bool sysfs_streq(const char *s1, const char *s2)<br>
+ 		s1++;<br>
+ 		s2++;<br>
+ 	}<br>
+-<br>
+-	if (*s1 == *s2)<br>
+-		return true;<br>
+-	if (!*s1 && *s2 == '\n' && !s2[1])<br>
+-		return true;<br>
+-	if (*s1 == '\n' && !s1[1] && !*s2)<br>
+-		return true;<br>
+-	return false;<br>
++	return __streq_terminal(s1, s2);<br>
+ }<br>
+ EXPORT_SYMBOL(sysfs_streq);<br>
+ <br>
++/**<br>
++ * sysfs_streqcase - same to sysfs_streq and case insensitive<br>
++ * @s1: one string<br>
++ * @s2: another string<br>
++ *<br>
++ */<br>
++bool sysfs_streqcase(const char *s1, const char *s2)<br>
++{<br>
++	while (*s1 && tolower(*s1) == tolower(*s2)) {<br>
++		s1++;<br>
++		s2++;<br>
++	}<br>
++	return __streq_terminal(s1, s2);<br>
++}<br>
++EXPORT_SYMBOL(sysfs_streqcase);<br>
++<br>
+ /**<br>
+  * match_string - matches given string in an array<br>
+  * @array:	array of strings<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

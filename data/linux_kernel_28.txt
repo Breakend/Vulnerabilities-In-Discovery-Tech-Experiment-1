@@ -1,0 +1,25 @@
+
+On 4/6/21 7:52 PM, Stafford Horne wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+<br>
+For OpenRISC I did ack the patch to convert to<br>
+CONFIG_ARCH_USE_QUEUED_SPINLOCKS_XCHG32=y.  But I think you are right, the<br>
+generic code in xchg_tail and the xchg16 emulation code in produced by OpenRISC<br>
+using xchg32 would produce very similar code.  I have not compared instructions,<br>
+but it does seem like duplicate functionality.<br>
+<br>
+Why doesn't RISC-V add the xchg16 emulation code similar to OpenRISC?  For<br>
+OpenRISC we added xchg16 and xchg8 emulation code to enable qspinlocks.  So<br>
+one thought is with CONFIG_ARCH_USE_QUEUED_SPINLOCKS_XCHG32=y, can we remove our<br>
+xchg16/xchg8 emulation code?<br>
+</blockquote>
+<br>
+For the record, the latest qspinlock code doesn't use xchg8 anymore. It 
+still need xchg16, though.
+<br>
+<br>
+Cheers,<br>
+Longman<br>
+<br>
+<br>
+

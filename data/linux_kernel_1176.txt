@@ -1,0 +1,26 @@
+The snd_soc_dai_ops structures is only stored in the ops field of a<br>
+snd_soc_dai_driver structure, so make the snd_soc_dai_ops structure<br>
+const to allow the compiler to put it in read-only memory.<br>
+<br>
+Reported-by: Hulk Robot <hulkci@xxxxxxxxxx><br>
+Signed-off-by: Ye Bin <yebin10@xxxxxxxxxx><br>
+---<br>
+ sound/soc/codecs/rt715-sdca.c | 2 +-<br>
+ 1 file changed, 1 insertion(+), 1 deletion(-)<br>
+<br>
+diff --git a/sound/soc/codecs/rt715-sdca.c b/sound/soc/codecs/rt715-sdca.c<br>
+index 20528afbdc57..7db76c19e048 100644<br>
+--- a/sound/soc/codecs/rt715-sdca.c<br>
++++ b/sound/soc/codecs/rt715-sdca.c<br>
+@@ -935,7 +935,7 @@ static int rt715_sdca_pcm_hw_free(struct snd_pcm_substream *substream,<br>
+ #define RT715_FORMATS (SNDRV_PCM_FMTBIT_S16_LE | SNDRV_PCM_FMTBIT_S20_3LE | \<br>
+ 			SNDRV_PCM_FMTBIT_S24_LE | SNDRV_PCM_FMTBIT_S8)<br>
+ <br>
+-static struct snd_soc_dai_ops rt715_sdca_ops = {<br>
++static const struct snd_soc_dai_ops rt715_sdca_ops = {<br>
+ 	.hw_params	= rt715_sdca_pcm_hw_params,<br>
+ 	.hw_free	= rt715_sdca_pcm_hw_free,<br>
+ 	.set_sdw_stream	= rt715_sdca_set_sdw_stream,<br>
+<br>
+<br>
+

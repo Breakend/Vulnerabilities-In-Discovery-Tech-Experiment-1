@@ -1,0 +1,106 @@
+On 4/7/21 10:25 PM, Arnaldo Carvalho de Melo wrote:<br>
+><i> Em Wed, Apr 07, 2021 at 04:30:46PM -0300, Arnaldo Carvalho de Melo escreveu:</i><br>
+><i>> Em Fri, Feb 26, 2021 at 10:24:00AM +0100, Martin Liška escreveu:</i><br>
+><i>>> On 2/23/21 8:47 PM, Arnaldo Carvalho de Melo wrote:</i><br>
+><i>>> Sure. But I think the current format provides quite broken visual layout:</i><br>
+><i>>></i><br>
+><i>>>       0.00 :   405ef1: inc    %r15</i><br>
+><i>>>       0.01 :   405ef4: vfmadd213sd 0x2b9b3(%rip),%xmm0,%xmm3        # 4318b0 <_IO_stdin_used+0x8b0></i><br>
+><i>>>    eff.c:1811    0.67 :   405efd: vfmadd213sd 0x2b9b2(%rip),%xmm0,%xmm3        # 4318b8 <_IO_stdin_used+0x8b8></i><br>
+><i>>>           :            TA + tmpsd * (TB +</i><br>
+><i>>></i><br>
+><i>>> vs.</i><br>
+><i>>></i><br>
+><i>>>       0.00 :   405ef1: inc    %r15</i><br>
+><i>>>       0.01 :   405ef4: vfmadd213sd 0x2b9b3(%rip),%xmm0,%xmm3        # 4318b0 <_IO_stdin_used+0x8b0></i><br>
+><i>>>       0.67 :   405efd: vfmadd213sd 0x2b9b2(%rip),%xmm0,%xmm3        # 4318b8 <_IO_stdin_used+0x8b8> // eff.c:1811</i><br>
+><i>>>            : 1810   TA + tmpsd * (TB +</i><br>
+><i>>></i><br>
+><i>>> I bet also the current users of --stdio mode would benefit from it.</i><br>
+><i>>> What do you think?</i><br>
+><i>  </i><br>
+><i>> Agreed, I tried applying but it bitrotted, it seems :-\</i><br>
+><i> </i><br>
+><i> I refreshed it, please check.</i><br>
+<br>
+Thanks! I've just tested the patch on top of acme/perf/core and it works as was planned.<br>
+I'm attaching 2 perf annotate snippets (perf annotate --stdio -l --stdio-color=always) before<br>
+and after the revision:<br>
+<br>
+<a  rel="nofollow" href="https://splichal.eu/tmp/perf-before.html">https://splichal.eu/tmp/perf-before.html</a><br>
+<a  rel="nofollow" href="https://splichal.eu/tmp/perf-after.html">https://splichal.eu/tmp/perf-after.html</a><br>
+<br>
+I hope it nicely describes that it's an improvement.<br>
+<br>
+Cheers,<br>
+Martin<br>
+<br>
+><i> </i><br>
+><i> - Arnaldo</i><br>
+><i> </i><br>
+><i> diff --git a/tools/perf/util/annotate.c b/tools/perf/util/annotate.c</i><br>
+><i> index 18eee25b4976bea8..abe1499a91645375 100644</i><br>
+><i> --- a/tools/perf/util/annotate.c</i><br>
+><i> +++ b/tools/perf/util/annotate.c</i><br>
+><i> @@ -1368,7 +1368,6 @@ annotation_line__print(struct annotation_line *al, struct symbol *sym, u64 start</i><br>
+><i>  {</i><br>
+><i>  	struct disasm_line *dl = container_of(al, struct disasm_line, al);</i><br>
+><i>  	static const char *prev_line;</i><br>
+><i> -	static const char *prev_color;</i><br>
+><i>  </i><br>
+><i>  	if (al->offset != -1) {</i><br>
+><i>  		double max_percent = 0.0;</i><br>
+><i> @@ -1407,20 +1406,6 @@ annotation_line__print(struct annotation_line *al, struct symbol *sym, u64 start</i><br>
+><i>  </i><br>
+><i>  		color = get_percent_color(max_percent);</i><br>
+><i>  </i><br>
+><i> -		/*</i><br>
+><i> -		 * Also color the filename and line if needed, with</i><br>
+><i> -		 * the same color than the percentage. Don't print it</i><br>
+><i> -		 * twice for close colored addr with the same filename:line</i><br>
+><i> -		 */</i><br>
+><i> -		if (al->path) {</i><br>
+><i> -			if (!prev_line || strcmp(prev_line, al->path)</i><br>
+><i> -				       || color != prev_color) {</i><br>
+><i> -				color_fprintf(stdout, color, " %s", al->path);</i><br>
+><i> -				prev_line = al->path;</i><br>
+><i> -				prev_color = color;</i><br>
+><i> -			}</i><br>
+><i> -		}</i><br>
+><i> -</i><br>
+><i>  		for (i = 0; i < nr_percent; i++) {</i><br>
+><i>  			struct annotation_data *data = &al->data[i];</i><br>
+><i>  			double percent;</i><br>
+><i> @@ -1441,6 +1426,19 @@ annotation_line__print(struct annotation_line *al, struct symbol *sym, u64 start</i><br>
+><i>  		printf(" : ");</i><br>
+><i>  </i><br>
+><i>  		disasm_line__print(dl, start, addr_fmt_width);</i><br>
+><i> +</i><br>
+><i> +		/*</i><br>
+><i> +		 * Also color the filename and line if needed, with</i><br>
+><i> +		 * the same color than the percentage. Don't print it</i><br>
+><i> +		 * twice for close colored addr with the same filename:line</i><br>
+><i> +		 */</i><br>
+><i> +		if (al->path) {</i><br>
+><i> +			if (!prev_line || strcmp(prev_line, al->path)) {</i><br>
+><i> +				color_fprintf(stdout, color, " // %s", al->path);</i><br>
+><i> +				prev_line = al->path;</i><br>
+><i> +			}</i><br>
+><i> +		}</i><br>
+><i> +</i><br>
+><i>  		printf("\n");</i><br>
+><i>  	} else if (max_lines && printed >= max_lines)</i><br>
+><i>  		return 1;</i><br>
+><i> @@ -1456,7 +1454,7 @@ annotation_line__print(struct annotation_line *al, struct symbol *sym, u64 start</i><br>
+><i>  		if (!*al->line)</i><br>
+><i>  			printf(" %*s:\n", width, " ");</i><br>
+><i>  		else</i><br>
+><i> -			printf(" %*s:     %*s %s\n", width, " ", addr_fmt_width, " ", al->line);</i><br>
+><i> +			printf(" %*s: %-*d %s\n", width, " ", addr_fmt_width, al->line_nr, al->line);</i><br>
+><i>  	}</i><br>
+><i>  </i><br>
+><i>  	return 0;</i><br>
+><i> </i><br>
+<br>
+<br>
+

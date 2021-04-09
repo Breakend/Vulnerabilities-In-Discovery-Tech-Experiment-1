@@ -1,0 +1,18 @@
+Quoting Jessica Yu (2021-04-08 05:05:33)<br>
+><i> +++ Stephen Boyd [30/03/21 20:05 -0700]:</i><br>
+><i> >+/**</i><br>
+><i> >+ * init_vmlinux_build_id - Get the running kernel's build ID</i><br>
+><i> >+ *</i><br>
+><i> >+ * Return: Running kernel's build ID</i><br>
+><i> >+ */</i><br>
+><i> </i><br>
+><i> Hm, init_vmlinux_build_id() doesn't return anything, so this comment is</i><br>
+><i> not accurate - maybe "Get the running kernel's build ID and store it in</i><br>
+><i> vmlinux_build_id"?</i><br>
+><i> </i><br>
+><i> >+void __init init_vmlinux_build_id(void)</i><br>
+<br>
+Thanks! I've fixed it for the next round.<br>
+<br>
+<br>
+

@@ -1,0 +1,150 @@
+On Wed, 7 Apr 2021 15:26:20 -0700<br>
+Ben Widawsky <ben.widawsky@xxxxxxxxx> wrote:<br>
+<br>
+><i> Add a new function specifically for mapping the register blocks and</i><br>
+><i> offsets within. The new function can be used more generically for other</i><br>
+><i> register block identifiers.</i><br>
+><i> </i><br>
+><i> No functional change is meant to be introduced in this patch with the</i><br>
+><i> exception of a dev_err printed when the device register block isn't</i><br>
+><i> found.</i><br>
+><i> </i><br>
+><i> Signed-off-by: Ben Widawsky <ben.widawsky@xxxxxxxxx></i><br>
+Agreed, this seems to be a noop refactor to me.<br>
+<br>
+Reviewed-by: Jonathan Cameron <Jonathan.Cameron@xxxxxxxxxx><br>
+<br>
+><i> ---</i><br>
+><i>  drivers/cxl/mem.c | 64 +++++++++++++++++++++++++++++------------------</i><br>
+><i>  1 file changed, 40 insertions(+), 24 deletions(-)</i><br>
+><i> </i><br>
+><i> diff --git a/drivers/cxl/mem.c b/drivers/cxl/mem.c</i><br>
+><i> index 99534260034e..520edaf233d4 100644</i><br>
+><i> --- a/drivers/cxl/mem.c</i><br>
+><i> +++ b/drivers/cxl/mem.c</i><br>
+><i> @@ -925,22 +925,40 @@ static int cxl_mem_setup_mailbox(struct cxl_mem *cxlm)</i><br>
+><i>  	return 0;</i><br>
+><i>  }</i><br>
+><i>  </i><br>
+><i> -static struct cxl_mem *cxl_mem_create(struct pci_dev *pdev, u32 reg_lo,</i><br>
+><i> -				      u32 reg_hi)</i><br>
+><i> +static struct cxl_mem *cxl_mem_create(struct pci_dev *pdev)</i><br>
+><i>  {</i><br>
+><i>  	struct device *dev = &pdev->dev;</i><br>
+><i>  	struct cxl_mem *cxlm;</i><br>
+><i> -	void __iomem *regs;</i><br>
+><i> -	u64 offset;</i><br>
+><i> -	u8 bar;</i><br>
+><i> -	int rc;</i><br>
+><i>  </i><br>
+><i>  	cxlm = devm_kzalloc(dev, sizeof(*cxlm), GFP_KERNEL);</i><br>
+><i>  	if (!cxlm) {</i><br>
+><i>  		dev_err(dev, "No memory available\n");</i><br>
+><i> -		return NULL;</i><br>
+><i> +		return ERR_PTR(-ENOMEM);</i><br>
+><i> +	}</i><br>
+><i> +</i><br>
+><i> +	mutex_init(&cxlm->mbox_mutex);</i><br>
+><i> +	cxlm->pdev = pdev;</i><br>
+><i> +	cxlm->enabled_cmds =</i><br>
+><i> +		devm_kmalloc_array(dev, BITS_TO_LONGS(cxl_cmd_count),</i><br>
+><i> +				   sizeof(unsigned long),</i><br>
+><i> +				   GFP_KERNEL | __GFP_ZERO);</i><br>
+><i> +	if (!cxlm->enabled_cmds) {</i><br>
+><i> +		dev_err(dev, "No memory available for bitmap\n");</i><br>
+><i> +		return ERR_PTR(-ENOMEM);</i><br>
+><i>  	}</i><br>
+><i>  </i><br>
+><i> +	return cxlm;</i><br>
+><i> +}</i><br>
+><i> +</i><br>
+><i> +static int cxl_mem_map_regblock(struct cxl_mem *cxlm, u32 reg_lo, u32 reg_hi)</i><br>
+><i> +{</i><br>
+><i> +	struct pci_dev *pdev = cxlm->pdev;</i><br>
+><i> +	struct device *dev = &pdev->dev;</i><br>
+><i> +	void __iomem *regs;</i><br>
+><i> +	u64 offset;</i><br>
+><i> +	u8 bar;</i><br>
+><i> +	int rc;</i><br>
+><i> +</i><br>
+><i>  	offset = ((u64)reg_hi << 32) | FIELD_GET(CXL_REGLOC_ADDR_MASK, reg_lo);</i><br>
+><i>  	bar = FIELD_GET(CXL_REGLOC_BIR_MASK, reg_lo);</i><br>
+><i>  </i><br>
+><i> @@ -948,30 +966,20 @@ static struct cxl_mem *cxl_mem_create(struct pci_dev *pdev, u32 reg_lo,</i><br>
+><i>  	if (pci_resource_len(pdev, bar) < offset) {</i><br>
+><i>  		dev_err(dev, "BAR%d: %pr: too small (offset: %#llx)\n", bar,</i><br>
+><i>  			&pdev->resource[bar], (unsigned long long)offset);</i><br>
+><i> -		return NULL;</i><br>
+><i> +		return -ENXIO;</i><br>
+><i>  	}</i><br>
+><i>  </i><br>
+><i>  	rc = pcim_iomap_regions(pdev, BIT(bar), pci_name(pdev));</i><br>
+><i>  	if (rc) {</i><br>
+><i>  		dev_err(dev, "failed to map registers\n");</i><br>
+><i> -		return NULL;</i><br>
+><i> +		return rc;</i><br>
+><i>  	}</i><br>
+><i>  	regs = pcim_iomap_table(pdev)[bar];</i><br>
+><i>  </i><br>
+><i> -	mutex_init(&cxlm->mbox_mutex);</i><br>
+><i> -	cxlm->pdev = pdev;</i><br>
+><i>  	cxlm->base = regs + offset;</i><br>
+><i> -	cxlm->enabled_cmds =</i><br>
+><i> -		devm_kmalloc_array(dev, BITS_TO_LONGS(cxl_cmd_count),</i><br>
+><i> -				   sizeof(unsigned long),</i><br>
+><i> -				   GFP_KERNEL | __GFP_ZERO);</i><br>
+><i> -	if (!cxlm->enabled_cmds) {</i><br>
+><i> -		dev_err(dev, "No memory available for bitmap\n");</i><br>
+><i> -		return NULL;</i><br>
+><i> -	}</i><br>
+><i>  </i><br>
+><i>  	dev_dbg(dev, "Mapped CXL Memory Device resource\n");</i><br>
+><i> -	return cxlm;</i><br>
+><i> +	return 0;</i><br>
+><i>  }</i><br>
+><i>  </i><br>
+><i>  static int cxl_mem_dvsec(struct pci_dev *pdev, int dvsec)</i><br>
+><i> @@ -1403,14 +1411,18 @@ static int cxl_mem_identify(struct cxl_mem *cxlm)</i><br>
+><i>  static int cxl_mem_probe(struct pci_dev *pdev, const struct pci_device_id *id)</i><br>
+><i>  {</i><br>
+><i>  	struct device *dev = &pdev->dev;</i><br>
+><i> -	struct cxl_mem *cxlm = NULL;</i><br>
+><i>  	u32 regloc_size, regblocks;</i><br>
+><i> +	struct cxl_mem *cxlm;</i><br>
+><i>  	int rc, regloc, i;</i><br>
+><i>  </i><br>
+><i>  	rc = pcim_enable_device(pdev);</i><br>
+><i>  	if (rc)</i><br>
+><i>  		return rc;</i><br>
+><i>  </i><br>
+><i> +	cxlm = cxl_mem_create(pdev);</i><br>
+><i> +	if (IS_ERR(cxlm))</i><br>
+><i> +		return PTR_ERR(cxlm);</i><br>
+><i> +</i><br>
+><i>  	regloc = cxl_mem_dvsec(pdev, PCI_DVSEC_ID_CXL_REGLOC_OFFSET);</i><br>
+><i>  	if (!regloc) {</i><br>
+><i>  		dev_err(dev, "register location dvsec not found\n");</i><br>
+><i> @@ -1435,13 +1447,17 @@ static int cxl_mem_probe(struct pci_dev *pdev, const struct pci_device_id *id)</i><br>
+><i>  		reg_type = FIELD_GET(CXL_REGLOC_RBI_MASK, reg_lo);</i><br>
+><i>  </i><br>
+><i>  		if (reg_type == CXL_REGLOC_RBI_MEMDEV) {</i><br>
+><i> -			cxlm = cxl_mem_create(pdev, reg_lo, reg_hi);</i><br>
+><i> +			rc = cxl_mem_map_regblock(cxlm, reg_lo, reg_hi);</i><br>
+><i> +			if (rc)</i><br>
+><i> +				return rc;</i><br>
+><i>  			break;</i><br>
+><i>  		}</i><br>
+><i>  	}</i><br>
+><i>  </i><br>
+><i> -	if (!cxlm)</i><br>
+><i> -		return -ENODEV;</i><br>
+><i> +	if (i == regblocks) {</i><br>
+><i> +		dev_err(dev, "Missing register locator for device registers\n");</i><br>
+><i> +		return -ENXIO;</i><br>
+><i> +	}</i><br>
+><i>  </i><br>
+><i>  	rc = cxl_mem_setup_regs(cxlm);</i><br>
+><i>  	if (rc)</i><br>
+<br>
+<br>
+

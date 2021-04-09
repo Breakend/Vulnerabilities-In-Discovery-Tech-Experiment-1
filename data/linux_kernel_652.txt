@@ -1,0 +1,37 @@
+On Thu, 08 Apr 2021 12:44:00 +0100,<br>
+Stephen Rothwell <sfr@xxxxxxxxxxxxxxxx> wrote:<br>
+><i> </i><br>
+><i> [1  <text/plain; US-ASCII (quoted-printable)>]</i><br>
+><i> Hi all,</i><br>
+><i> </i><br>
+><i> After merging the kvm-arm tree, today's linux-next build (htmldocs)</i><br>
+><i> produced this warning:</i><br>
+><i> </i><br>
+><i> /home/sfr/next/next/Documentation/virt/kvm/arm/ptp_kvm.rst:19: WARNING: Malformed table.</i><br>
+><i> Text in column margin in table line 5.</i><br>
+><i> </i><br>
+><i> =============    ==========    ==========</i><br>
+><i> Function ID:     (uint32)      0x86000001</i><br>
+><i> Arguments:       (uint32)      KVM_PTP_VIRT_COUNTER(0)</i><br>
+><i>                                KVM_PTP_PHYS_COUNTER(1)</i><br>
+><i> Return Values:   (int32)       NOT_SUPPORTED(-1) on error, or</i><br>
+><i>                  (uint32)      Upper 32 bits of wall clock time (r0)</i><br>
+><i>                  (uint32)      Lower 32 bits of wall clock time (r1)</i><br>
+><i>                  (uint32)      Upper 32 bits of counter (r2)</i><br>
+><i>                  (uint32)      Lower 32 bits of counter (r3)</i><br>
+><i> Endianness:                    No Restrictions.</i><br>
+><i> =============    ==========    ==========</i><br>
+><i> </i><br>
+><i> Introduced by commit</i><br>
+><i> </i><br>
+><i>   3bf725699bf6 ("KVM: arm64: Add support for the KVM PTP service")</i><br>
+<br>
+Now fixed, thanks.<br>
+<br>
+	M.<br>
+<br>
+-- <br>
+Without deviation from the norm, progress is not possible.<br>
+<br>
+<br>
+

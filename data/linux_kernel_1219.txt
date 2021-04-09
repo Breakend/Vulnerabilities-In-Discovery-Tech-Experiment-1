@@ -1,0 +1,35 @@
+><i> On Wed, Apr 07, 2021 at 02:54:00PM +0800, Dinghao Liu wrote:</i><br>
+><i> </i><br>
+><i> > -	pm_runtime_set_active(&client->dev);</i><br>
+><i> > -	pm_runtime_set_autosuspend_delay(&client->dev, 1000);</i><br>
+><i> > -	pm_runtime_use_autosuspend(&client->dev);</i><br>
+><i> > -	pm_runtime_enable(&client->dev);</i><br>
+><i> > -	pm_runtime_mark_last_busy(&client->dev);</i><br>
+><i> > -	pm_runtime_put_sync_autosuspend(&client->dev);</i><br>
+><i> > -</i><br>
+><i> >  	dev_set_drvdata(&client->dev, data);</i><br>
+><i> >  </i><br>
+><i> >  	ret = devm_snd_soc_register_component(&client->dev,</i><br>
+><i> > @@ -733,6 +726,13 @@ static int tas2552_probe(struct i2c_client *client,</i><br>
+><i> >  	if (ret < 0)</i><br>
+><i> >  		dev_err(&client->dev, "Failed to register component: %d\n", ret);</i><br>
+><i> >  </i><br>
+><i> > +	pm_runtime_set_active(&client->dev);</i><br>
+><i> > +	pm_runtime_set_autosuspend_delay(&client->dev, 1000);</i><br>
+><i> > +	pm_runtime_use_autosuspend(&client->dev);</i><br>
+><i> </i><br>
+><i> It's not clear to me that just moving the operations after the</i><br>
+><i> registration is a good fix - once the component is registered we could</i><br>
+><i> start trying to do runtime PM operations with it which AFAIR won't count</i><br>
+><i> references and so on properly if runtime PM isn't enabled so if we later</i><br>
+><i> enable runtime PM we might have the rest of the code in a confused state</i><br>
+><i> about what's going on.</i><br>
+<br>
+Thanks for your advice. I checked the use of devm_snd_soc_register_component() <br>
+in the kernel and found sometimes runtime PM is enabled before registration <br>
+and sometimes after registration. To be on the safe side, I will send a new<br>
+patch to fix this in error handling path.<br>
+<br>
+Regards,<br>
+Dinghao<br>
+

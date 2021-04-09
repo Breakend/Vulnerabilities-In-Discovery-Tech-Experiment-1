@@ -1,0 +1,45 @@
+On Thu, Apr 08, 2021 at 09:04:17PM +0800, liulongfang wrote:<br>
+><i> On 2021/4/8 17:22, Greg KH Wrote:</i><br>
+><i> > On Thu, Apr 08, 2021 at 05:11:12PM +0800, Longfang Liu wrote:</i><br>
+><i> >> Some types of EHCI controllers do not have SBRN registers.</i><br>
+><i> >> By comparing the white list, the operation of reading the SBRN</i><br>
+><i> >> registers is skipped.</i><br>
+><i> >></i><br>
+><i> >> Subsequent EHCI controller types without SBRN registers can be</i><br>
+><i> >> directly added to the white list.</i><br>
+><i> >></i><br>
+><i> >> The current patch does not affect the drive function.</i><br>
+><i> >></i><br>
+><i> >> Signed-off-by: Longfang Liu <liulongfang@xxxxxxxxxx></i><br>
+><i> >> ---</i><br>
+><i> >>  drivers/usb/host/ehci-pci.c | 27 +++++++++++++++++++++++----</i><br>
+><i> >>  1 file changed, 23 insertions(+), 4 deletions(-)</i><br>
+><i> >></i><br>
+><i> >> diff --git a/drivers/usb/host/ehci-pci.c b/drivers/usb/host/ehci-pci.c</i><br>
+><i> >> index 3c3820a..6a30afa 100644</i><br>
+><i> >> --- a/drivers/usb/host/ehci-pci.c</i><br>
+><i> >> +++ b/drivers/usb/host/ehci-pci.c</i><br>
+><i> >> @@ -47,6 +47,28 @@ static inline bool is_bypassed_id(struct pci_dev *pdev)</i><br>
+><i> >>  	return !!pci_match_id(bypass_pci_id_table, pdev);</i><br>
+><i> >>  }</i><br>
+><i> >>  </i><br>
+><i> >> +static const struct usb_nosbrn_whitelist_entry {</i><br>
+><i> >> +	unsigned short vendor;</i><br>
+><i> >> +	unsigned short device;</i><br>
+><i> > </i><br>
+><i> > u16 here please.</i><br>
+><i> > </i><br>
+><i> >> +} usb_nosbrn_whitelist[] = {</i><br>
+><i> >> +	/* STMICRO ConneXT has no sbrn register */</i><br>
+><i> >> +	{PCI_VENDOR_ID_STMICRO, PCI_DEVICE_ID_STMICRO_USB_HOST},</i><br>
+><i> >> +	{}</i><br>
+><i> > </i><br>
+><i> > trailing , please.</i><br>
+><i> > </i><br>
+><i> </i><br>
+><i> Is it necessary to add "," at the end here?</i><br>
+<br>
+Yes please.<br>
+<br>
+<br>
+

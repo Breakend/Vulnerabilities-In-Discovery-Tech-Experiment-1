@@ -1,0 +1,70 @@
+Add interconnect nodes for the providers in SDX55 platform.<br>
+<br>
+Signed-off-by: Manivannan Sadhasivam <manivannan.sadhasivam@xxxxxxxxxx><br>
+---<br>
+ arch/arm/boot/dts/qcom-sdx55.dtsi | 33 +++++++++++++++++++++++++++++++<br>
+ 1 file changed, 33 insertions(+)<br>
+<br>
+diff --git a/arch/arm/boot/dts/qcom-sdx55.dtsi b/arch/arm/boot/dts/qcom-sdx55.dtsi<br>
+index daf34f24a5d3..3372e076f9bd 100644<br>
+--- a/arch/arm/boot/dts/qcom-sdx55.dtsi<br>
++++ b/arch/arm/boot/dts/qcom-sdx55.dtsi<br>
+@@ -8,6 +8,7 @@<br>
+ <br>
+ #include <dt-bindings/clock/qcom,gcc-sdx55.h><br>
+ #include <dt-bindings/clock/qcom,rpmh.h><br>
++#include <dt-bindings/interconnect/qcom,sdx55.h><br>
+ #include <dt-bindings/interrupt-controller/arm-gic.h><br>
+ #include <dt-bindings/power/qcom-rpmpd.h><br>
+ #include <dt-bindings/soc/qcom,rpmh-rsc.h><br>
+@@ -253,6 +254,34 @@ usb_ssphy: phy@ff6200 {<br>
+ 			};<br>
+ 		};<br>
+ <br>
++		mc_virt: interconnect@1100000 {<br>
++			compatible = "qcom,sdx55-mc-virt";<br>
++			reg = <0x01100000 0x400000>;<br>
++			#interconnect-cells = <1>;<br>
++			qcom,bcm-voters = <&apps_bcm_voter>;<br>
++		};<br>
++<br>
++		mem_noc: interconnect@9680000 {<br>
++			compatible = "qcom,sdx55-mem-noc";<br>
++			reg = <0x09680000 0x40000>;<br>
++			#interconnect-cells = <1>;<br>
++			qcom,bcm-voters = <&apps_bcm_voter>;<br>
++		};<br>
++<br>
++		system_noc: interconnect@162c000 {<br>
++			compatible = "qcom,sdx55-system-noc";<br>
++			reg = <0x0162c000 0x31200>;<br>
++			#interconnect-cells = <1>;<br>
++			qcom,bcm-voters = <&apps_bcm_voter>;<br>
++		};<br>
++<br>
++		ipa_virt: interconnect@1e00000 {<br>
++			compatible = "qcom,sdx55-ipa-virt";<br>
++			reg = <0x01e00000 0x100000>;<br>
++			#interconnect-cells = <1>;<br>
++			qcom,bcm-voters = <&apps_bcm_voter>;<br>
++		};<br>
++<br>
+ 		qpic_bam: dma-controller@1b04000 {<br>
+ 			compatible = "qcom,bam-v1.7.0";<br>
+ 			reg = <0x01b04000 0x1c000>;<br>
+@@ -589,6 +618,10 @@ rpmhpd_opp_turbo_l1: opp10 {<br>
+ 					};<br>
+ 				};<br>
+ 			};<br>
++<br>
++			apps_bcm_voter: bcm_voter {<br>
++				compatible = "qcom,bcm-voter";<br>
++			};<br>
+ 		};<br>
+ 	};<br>
+ <br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

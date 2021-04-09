@@ -1,0 +1,30 @@
+In case of if not ext4_fc_add_tlv branch, an error return code is missing.<br>
+<br>
+Fixes: aa75f4d3daae ("ext4: main fast-commit commit path")<br>
+Reported-by: Hulk Robot <hulkci@xxxxxxxxxx><br>
+Signed-off-by: Xu Yihang <xuyihang@xxxxxxxxxx><br>
+---<br>
+ fs/ext4/fast_commit.c | 4 +++-<br>
+ 1 file changed, 3 insertions(+), 1 deletion(-)<br>
+<br>
+diff --git a/fs/ext4/fast_commit.c b/fs/ext4/fast_commit.c<br>
+index 7541d0b5d706..312273ed8a9f 100644<br>
+--- a/fs/ext4/fast_commit.c<br>
++++ b/fs/ext4/fast_commit.c<br>
+@@ -1088,8 +1088,10 @@ static int ext4_fc_perform_commit(journal_t *journal)<br>
+ 		head.fc_tid = cpu_to_le32(<br>
+ 			sbi->s_journal->j_running_transaction->t_tid);<br>
+ 		if (!ext4_fc_add_tlv(sb, EXT4_FC_TAG_HEAD, sizeof(head),<br>
+-			(u8 *)&head, &crc))<br>
++			(u8 *)&head, &crc)) {<br>
++			ret = -ENOSPC;<br>
+ 			goto out;<br>
++		}<br>
+ 	}<br>
+ <br>
+ 	spin_lock(&sbi->s_fc_lock);<br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+

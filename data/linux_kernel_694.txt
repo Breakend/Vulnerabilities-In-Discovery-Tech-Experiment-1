@@ -1,0 +1,58 @@
+From: Andy Shevchenko <andriy.shevchenko@xxxxxxxxxxxxxxx><br>
+<br>
+Use generic i2c_freq_mode_string() helper to print chosen bus speed.<br>
+<br>
+Acked-by: Jarkko Nikula <jarkko.nikula@xxxxxxxxxxxxxxx><br>
+Signed-off-by: Andy Shevchenko <andriy.shevchenko@xxxxxxxxxxxxxxx><br>
+Signed-off-by: Yicong Yang <yangyicong@xxxxxxxxxxxxx><br>
+---<br>
+ drivers/i2c/busses/i2c-designware-master.c | 20 ++++----------------<br>
+ 1 file changed, 4 insertions(+), 16 deletions(-)<br>
+<br>
+diff --git a/drivers/i2c/busses/i2c-designware-master.c b/drivers/i2c/busses/i2c-designware-master.c<br>
+index dd27b9d..b64c4c8 100644<br>
+--- a/drivers/i2c/busses/i2c-designware-master.c<br>
++++ b/drivers/i2c/busses/i2c-designware-master.c<br>
+@@ -35,10 +35,10 @@ static void i2c_dw_configure_fifo_master(struct dw_i2c_dev *dev)<br>
+ <br>
+ static int i2c_dw_set_timings_master(struct dw_i2c_dev *dev)<br>
+ {<br>
+-	const char *mode_str, *fp_str = "";<br>
+ 	u32 comp_param1;<br>
+ 	u32 sda_falling_time, scl_falling_time;<br>
+ 	struct i2c_timings *t = &dev->timings;<br>
++	const char *fp_str = "";<br>
+ 	u32 ic_clk;<br>
+ 	int ret;<br>
+ <br>
+@@ -153,22 +153,10 @@ static int i2c_dw_set_timings_master(struct dw_i2c_dev *dev)<br>
+ <br>
+ 	ret = i2c_dw_set_sda_hold(dev);<br>
+ 	if (ret)<br>
+-		goto out;<br>
+-<br>
+-	switch (dev->master_cfg & DW_IC_CON_SPEED_MASK) {<br>
+-	case DW_IC_CON_SPEED_STD:<br>
+-		mode_str = "Standard Mode";<br>
+-		break;<br>
+-	case DW_IC_CON_SPEED_HIGH:<br>
+-		mode_str = "High Speed Mode";<br>
+-		break;<br>
+-	default:<br>
+-		mode_str = "Fast Mode";<br>
+-	}<br>
+-	dev_dbg(dev->dev, "Bus speed: %s%s\n", mode_str, fp_str);<br>
++		return ret;<br>
+ <br>
+-out:<br>
+-	return ret;<br>
++	dev_dbg(dev->dev, "Bus speed: %s\n", i2c_freq_mode_string(t->bus_freq_hz));<br>
++	return 0;<br>
+ }<br>
+ <br>
+ /**<br>
+-- <br>
+2.8.1<br>
+<br>
+<br>
+

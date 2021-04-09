@@ -1,0 +1,86 @@
+On Wed, Apr 7, 2021 at 11:32 PM Nathan Chancellor <nathan@xxxxxxxxxx> wrote:<br>
+><i></i><br>
+><i> All of the CPPC sysfs show functions are called via indirect call in</i><br>
+><i> kobj_attr_show(), where they should be of type</i><br>
+><i></i><br>
+><i> ssize_t (*show)(struct kobject *kobj, struct kobj_attribute *attr, char *buf);</i><br>
+><i></i><br>
+><i> because that is the type of the ->show() member in</i><br>
+><i> 'struct kobj_attribute' but they are actually of type</i><br>
+><i></i><br>
+><i> ssize_t (*show)(struct kobject *kobj, struct attribute *attr, char *buf);</i><br>
+><i></i><br>
+><i> because of the ->show() member in 'struct cppc_attr', resulting in a</i><br>
+><i> Control Flow Integrity violation [1].</i><br>
+><i></i><br>
+><i> $ cat /sys/devices/system/cpu/cpu0/acpi_cppc/highest_perf</i><br>
+><i> 3400</i><br>
+><i></i><br>
+><i> $ dmesg | grep "CFI failure"</i><br>
+><i> [  175.970559] CFI failure (target: show_highest_perf+0x0/0x8):</i><br>
+><i></i><br>
+><i> As far as I can tell, the only different between 'struct cppc_attr' and</i><br>
+><i> 'struct kobj_attribute' aside from the type of the attr parameter is the</i><br>
+><i> type of the count parameter in the ->store() member (ssize_t vs.</i><br>
+><i> size_t), which does not actually matter because all of these nodes are</i><br>
+><i> read-only.</i><br>
+><i></i><br>
+><i> Eliminate 'struct cppc_attr' in favor of 'struct kobj_attribute' to fix</i><br>
+><i> the violation.</i><br>
+><i></i><br>
+><i> [1]: <a  rel="nofollow" href="https://lore.kernel.org/r/20210401233216.2540591-1-samitolvanen@xxxxxxxxxx/">https://lore.kernel.org/r/20210401233216.2540591-1-samitolvanen@xxxxxxxxxx/</a></i><br>
+><i></i><br>
+><i> Fixes: 158c998ea44b ("ACPI / CPPC: add sysfs support to compute delivered performance")</i><br>
+><i> Link: <a  rel="nofollow" href="https://github.com/ClangBuiltLinux/linux/issues/1343">https://github.com/ClangBuiltLinux/linux/issues/1343</a></i><br>
+><i> Signed-off-by: Nathan Chancellor <nathan@xxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  drivers/acpi/cppc_acpi.c | 14 +++-----------</i><br>
+><i>  1 file changed, 3 insertions(+), 11 deletions(-)</i><br>
+><i></i><br>
+><i> diff --git a/drivers/acpi/cppc_acpi.c b/drivers/acpi/cppc_acpi.c</i><br>
+><i> index 69057fcd2c04..a5e6fd0bafa1 100644</i><br>
+><i> --- a/drivers/acpi/cppc_acpi.c</i><br>
+><i> +++ b/drivers/acpi/cppc_acpi.c</i><br>
+><i> @@ -119,23 +119,15 @@ static DEFINE_PER_CPU(struct cpc_desc *, cpc_desc_ptr);</i><br>
+><i>   */</i><br>
+><i>  #define NUM_RETRIES 500ULL</i><br>
+><i></i><br>
+><i> -struct cppc_attr {</i><br>
+><i> -       struct attribute attr;</i><br>
+><i> -       ssize_t (*show)(struct kobject *kobj,</i><br>
+><i> -                       struct attribute *attr, char *buf);</i><br>
+><i> -       ssize_t (*store)(struct kobject *kobj,</i><br>
+><i> -                       struct attribute *attr, const char *c, ssize_t count);</i><br>
+><i> -};</i><br>
+><i> -</i><br>
+><i>  #define define_one_cppc_ro(_name)              \</i><br>
+><i> -static struct cppc_attr _name =                        \</i><br>
+><i> +static struct kobj_attribute _name =           \</i><br>
+><i>  __ATTR(_name, 0444, show_##_name, NULL)</i><br>
+><i></i><br>
+><i>  #define to_cpc_desc(a) container_of(a, struct cpc_desc, kobj)</i><br>
+><i></i><br>
+><i>  #define show_cppc_data(access_fn, struct_name, member_name)            \</i><br>
+><i>         static ssize_t show_##member_name(struct kobject *kobj,         \</i><br>
+><i> -                                       struct attribute *attr, char *buf) \</i><br>
+><i> +                               struct kobj_attribute *attr, char *buf) \</i><br>
+><i>         {                                                               \</i><br>
+><i>                 struct cpc_desc *cpc_ptr = to_cpc_desc(kobj);           \</i><br>
+><i>                 struct struct_name st_name = {0};                       \</i><br>
+><i> @@ -161,7 +153,7 @@ show_cppc_data(cppc_get_perf_ctrs, cppc_perf_fb_ctrs, reference_perf);</i><br>
+><i>  show_cppc_data(cppc_get_perf_ctrs, cppc_perf_fb_ctrs, wraparound_time);</i><br>
+><i></i><br>
+><i>  static ssize_t show_feedback_ctrs(struct kobject *kobj,</i><br>
+><i> -               struct attribute *attr, char *buf)</i><br>
+><i> +               struct kobj_attribute *attr, char *buf)</i><br>
+><i>  {</i><br>
+><i>         struct cpc_desc *cpc_ptr = to_cpc_desc(kobj);</i><br>
+><i>         struct cppc_perf_fb_ctrs fb_ctrs = {0};</i><br>
+><i></i><br>
+><i> base-commit: 454859c552da78b0f587205d308401922b56863e</i><br>
+><i> --</i><br>
+<br>
+Applied as 5.13 material, thanks!<br>
+<br>
+<br>
+

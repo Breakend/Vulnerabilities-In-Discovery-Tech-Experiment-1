@@ -1,0 +1,280 @@
+Use blk_mq_unique_tag() to generate requestIDs for StorVSC, avoiding<br>
+all issues with allocating enough entries in the VMbus requestor.<br>
+<br>
+Suggested-by: Michael Kelley <mikelley@xxxxxxxxxxxxx><br>
+Signed-off-by: Andrea Parri (Microsoft) <parri.andrea@xxxxxxxxx><br>
+---<br>
+ drivers/hv/channel.c              | 14 +++---<br>
+ drivers/hv/ring_buffer.c          | 12 ++---<br>
+ drivers/net/hyperv/netvsc.c       |  8 ++--<br>
+ drivers/net/hyperv/rndis_filter.c |  2 +<br>
+ drivers/scsi/storvsc_drv.c        | 73 ++++++++++++++++++++++++++-----<br>
+ include/linux/hyperv.h            | 13 +++++-<br>
+ 6 files changed, 92 insertions(+), 30 deletions(-)<br>
+<br>
+diff --git a/drivers/hv/channel.c b/drivers/hv/channel.c<br>
+index db30be8f9ccea..f78e02ace51e8 100644<br>
+--- a/drivers/hv/channel.c<br>
++++ b/drivers/hv/channel.c<br>
+@@ -1121,15 +1121,14 @@ EXPORT_SYMBOL_GPL(vmbus_recvpacket_raw);<br>
+  * vmbus_next_request_id - Returns a new request id. It is also<br>
+  * the index at which the guest memory address is stored.<br>
+  * Uses a spin lock to avoid race conditions.<br>
+- * @rqstor: Pointer to the requestor struct<br>
++ * @channel: Pointer to the VMbus channel struct<br>
+  * @rqst_add: Guest memory address to be stored in the array<br>
+  */<br>
+-u64 vmbus_next_request_id(struct vmbus_requestor *rqstor, u64 rqst_addr)<br>
++u64 vmbus_next_request_id(struct vmbus_channel *channel, u64 rqst_addr)<br>
+ {<br>
++	struct vmbus_requestor *rqstor = &channel->requestor;<br>
+ 	unsigned long flags;<br>
+ 	u64 current_id;<br>
+-	const struct vmbus_channel *channel =<br>
+-		container_of(rqstor, const struct vmbus_channel, requestor);<br>
+ <br>
+ 	/* Check rqstor has been initialized */<br>
+ 	if (!channel->rqstor_size)<br>
+@@ -1163,16 +1162,15 @@ EXPORT_SYMBOL_GPL(vmbus_next_request_id);<br>
+ /*<br>
+  * vmbus_request_addr - Returns the memory address stored at @trans_id<br>
+  * in @rqstor. Uses a spin lock to avoid race conditions.<br>
+- * @rqstor: Pointer to the requestor struct<br>
++ * @channel: Pointer to the VMbus channel struct<br>
+  * @trans_id: Request id sent back from Hyper-V. Becomes the requestor's<br>
+  * next request id.<br>
+  */<br>
+-u64 vmbus_request_addr(struct vmbus_requestor *rqstor, u64 trans_id)<br>
++u64 vmbus_request_addr(struct vmbus_channel *channel, u64 trans_id)<br>
+ {<br>
++	struct vmbus_requestor *rqstor = &channel->requestor;<br>
+ 	unsigned long flags;<br>
+ 	u64 req_addr;<br>
+-	const struct vmbus_channel *channel =<br>
+-		container_of(rqstor, const struct vmbus_channel, requestor);<br>
+ <br>
+ 	/* Check rqstor has been initialized */<br>
+ 	if (!channel->rqstor_size)<br>
+diff --git a/drivers/hv/ring_buffer.c b/drivers/hv/ring_buffer.c<br>
+index ecd82ebfd5bc4..46d8e038e4ee1 100644<br>
+--- a/drivers/hv/ring_buffer.c<br>
++++ b/drivers/hv/ring_buffer.c<br>
+@@ -310,10 +310,12 @@ int hv_ringbuffer_write(struct vmbus_channel *channel,<br>
+ 	 */<br>
+ <br>
+ 	if (desc->flags == VMBUS_DATA_PACKET_FLAG_COMPLETION_REQUESTED) {<br>
+-		rqst_id = vmbus_next_request_id(&channel->requestor, requestid);<br>
+-		if (rqst_id == VMBUS_RQST_ERROR) {<br>
+-			spin_unlock_irqrestore(&outring_info->ring_lock, flags);<br>
+-			return -EAGAIN;<br>
++		if (channel->next_request_id_callback != NULL) {<br>
++			rqst_id = channel->next_request_id_callback(channel, requestid);<br>
++			if (rqst_id == VMBUS_RQST_ERROR) {<br>
++				spin_unlock_irqrestore(&outring_info->ring_lock, flags);<br>
++				return -EAGAIN;<br>
++			}<br>
+ 		}<br>
+ 	}<br>
+ 	desc = hv_get_ring_buffer(outring_info) + old_write;<br>
+@@ -341,7 +343,7 @@ int hv_ringbuffer_write(struct vmbus_channel *channel,<br>
+ 	if (channel->rescind) {<br>
+ 		if (rqst_id != VMBUS_NO_RQSTOR) {<br>
+ 			/* Reclaim request ID to avoid leak of IDs */<br>
+-			vmbus_request_addr(&channel->requestor, rqst_id);<br>
++			channel->request_addr_callback(channel, rqst_id);<br>
+ 		}<br>
+ 		return -ENODEV;<br>
+ 	}<br>
+diff --git a/drivers/net/hyperv/netvsc.c b/drivers/net/hyperv/netvsc.c<br>
+index c64cc7639c39c..1a221ce2d6fdc 100644<br>
+--- a/drivers/net/hyperv/netvsc.c<br>
++++ b/drivers/net/hyperv/netvsc.c<br>
+@@ -730,7 +730,7 @@ static void netvsc_send_tx_complete(struct net_device *ndev,<br>
+ 	int queue_sends;<br>
+ 	u64 cmd_rqst;<br>
+ <br>
+-	cmd_rqst = vmbus_request_addr(&channel->requestor, (u64)desc->trans_id);<br>
++	cmd_rqst = channel->request_addr_callback(channel, (u64)desc->trans_id);<br>
+ 	if (cmd_rqst == VMBUS_RQST_ERROR) {<br>
+ 		netdev_err(ndev, "Incorrect transaction id\n");<br>
+ 		return;<br>
+@@ -790,8 +790,8 @@ static void netvsc_send_completion(struct net_device *ndev,<br>
+ <br>
+ 	/* First check if this is a VMBUS completion without data payload */<br>
+ 	if (!msglen) {<br>
+-		cmd_rqst = vmbus_request_addr(&incoming_channel->requestor,<br>
+-					      (u64)desc->trans_id);<br>
++		cmd_rqst = incoming_channel->request_addr_callback(incoming_channel,<br>
++								   (u64)desc->trans_id);<br>
+ 		if (cmd_rqst == VMBUS_RQST_ERROR) {<br>
+ 			netdev_err(ndev, "Invalid transaction id\n");<br>
+ 			return;<br>
+@@ -1602,6 +1602,8 @@ struct netvsc_device *netvsc_device_add(struct hv_device *device,<br>
+ 		       netvsc_poll, NAPI_POLL_WEIGHT);<br>
+ <br>
+ 	/* Open the channel */<br>
++	device->channel->next_request_id_callback = vmbus_next_request_id;<br>
++	device->channel->request_addr_callback = vmbus_request_addr;<br>
+ 	device->channel->rqstor_size = netvsc_rqstor_size(netvsc_ring_bytes);<br>
+ 	ret = vmbus_open(device->channel, netvsc_ring_bytes,<br>
+ 			 netvsc_ring_bytes,  NULL, 0,<br>
+diff --git a/drivers/net/hyperv/rndis_filter.c b/drivers/net/hyperv/rndis_filter.c<br>
+index 123cc9d25f5ed..ebf34bf3f9075 100644<br>
+--- a/drivers/net/hyperv/rndis_filter.c<br>
++++ b/drivers/net/hyperv/rndis_filter.c<br>
+@@ -1259,6 +1259,8 @@ static void netvsc_sc_open(struct vmbus_channel *new_sc)<br>
+ 	/* Set the channel before opening.*/<br>
+ 	nvchan->channel = new_sc;<br>
+ <br>
++	new_sc->next_request_id_callback = vmbus_next_request_id;<br>
++	new_sc->request_addr_callback = vmbus_request_addr;<br>
+ 	new_sc->rqstor_size = netvsc_rqstor_size(netvsc_ring_bytes);<br>
+ 	ret = vmbus_open(new_sc, netvsc_ring_bytes,<br>
+ 			 netvsc_ring_bytes, NULL, 0,<br>
+diff --git a/drivers/scsi/storvsc_drv.c b/drivers/scsi/storvsc_drv.c<br>
+index 6bc5453cea8a7..1c05fabc06b04 100644<br>
+--- a/drivers/scsi/storvsc_drv.c<br>
++++ b/drivers/scsi/storvsc_drv.c<br>
+@@ -684,6 +684,62 @@ static void storvsc_change_target_cpu(struct vmbus_channel *channel, u32 old,<br>
+ 	spin_unlock_irqrestore(&stor_device->lock, flags);<br>
+ }<br>
+ <br>
++u64 storvsc_next_request_id(struct vmbus_channel *channel, u64 rqst_addr)<br>
++{<br>
++	struct storvsc_cmd_request *request =<br>
++		(struct storvsc_cmd_request *)(unsigned long)rqst_addr;<br>
++	struct storvsc_device *stor_device;<br>
++	struct hv_device *device;<br>
++<br>
++	device = (channel->primary_channel != NULL) ?<br>
++		channel->primary_channel->device_obj : channel->device_obj;<br>
++	if (device == NULL)<br>
++		return VMBUS_RQST_ERROR;<br>
++<br>
++	stor_device = get_out_stor_device(device);<br>
++	if (stor_device == NULL)<br>
++		return VMBUS_RQST_ERROR;<br>
++<br>
++	if (request == &stor_device->init_request)<br>
++		return VMBUS_RQST_INIT;<br>
++	if (request == &stor_device->reset_request)<br>
++		return VMBUS_RQST_RESET;<br>
++<br>
++	return blk_mq_unique_tag(request->cmd->request);<br>
++}<br>
++<br>
++u64 storvsc_request_addr(struct vmbus_channel *channel, u64 rqst_id)<br>
++{<br>
++	struct storvsc_cmd_request *request;<br>
++	struct storvsc_device *stor_device;<br>
++	struct hv_device *device;<br>
++	struct Scsi_Host *shost;<br>
++	struct scsi_cmnd *scmnd;<br>
++<br>
++	device = (channel->primary_channel != NULL) ?<br>
++		channel->primary_channel->device_obj : channel->device_obj;<br>
++	if (device == NULL)<br>
++		return VMBUS_RQST_ERROR;<br>
++<br>
++	stor_device = get_out_stor_device(device);<br>
++	if (stor_device == NULL)<br>
++		return VMBUS_RQST_ERROR;<br>
++<br>
++	if (rqst_id == VMBUS_RQST_INIT)<br>
++		return (unsigned long)&stor_device->init_request;<br>
++	if (rqst_id == VMBUS_RQST_RESET)<br>
++		return (unsigned long)&stor_device->reset_request;<br>
++<br>
++	shost = stor_device->host;<br>
++<br>
++	scmnd = scsi_host_find_tag(shost, rqst_id);<br>
++	if (scmnd == NULL)<br>
++		return VMBUS_RQST_ERROR;<br>
++<br>
++	request = (struct storvsc_cmd_request *)(unsigned long)scsi_cmd_priv(scmnd);<br>
++	return (unsigned long)request;<br>
++}<br>
++<br>
+ static void handle_sc_creation(struct vmbus_channel *new_sc)<br>
+ {<br>
+ 	struct hv_device *device = new_sc->primary_channel->device_obj;<br>
+@@ -698,11 +754,8 @@ static void handle_sc_creation(struct vmbus_channel *new_sc)<br>
+ <br>
+ 	memset(&props, 0, sizeof(struct vmstorage_channel_properties));<br>
+ <br>
+-	/*<br>
+-	 * The size of vmbus_requestor is an upper bound on the number of requests<br>
+-	 * that can be in-progress at any one time across all channels.<br>
+-	 */<br>
+-	new_sc->rqstor_size = scsi_driver.can_queue;<br>
++	new_sc->next_request_id_callback = storvsc_next_request_id;<br>
++	new_sc->request_addr_callback = storvsc_request_addr;<br>
+ <br>
+ 	ret = vmbus_open(new_sc,<br>
+ 			 storvsc_ringbuffer_size,<br>
+@@ -1255,8 +1308,7 @@ static void storvsc_on_channel_callback(void *context)<br>
+ 		struct storvsc_cmd_request *request;<br>
+ 		u64 cmd_rqst;<br>
+ <br>
+-		cmd_rqst = vmbus_request_addr(&channel->requestor,<br>
+-					      desc->trans_id);<br>
++		cmd_rqst = channel->request_addr_callback(channel, desc->trans_id);<br>
+ 		if (cmd_rqst == VMBUS_RQST_ERROR) {<br>
+ 			dev_err(&device->device,<br>
+ 				"Incorrect transaction id\n");<br>
+@@ -1290,11 +1342,8 @@ static int storvsc_connect_to_vsp(struct hv_device *device, u32 ring_size,<br>
+ <br>
+ 	memset(&props, 0, sizeof(struct vmstorage_channel_properties));<br>
+ <br>
+-	/*<br>
+-	 * The size of vmbus_requestor is an upper bound on the number of requests<br>
+-	 * that can be in-progress at any one time across all channels.<br>
+-	 */<br>
+-	device->channel->rqstor_size = scsi_driver.can_queue;<br>
++	device->channel->next_request_id_callback = storvsc_next_request_id;<br>
++	device->channel->request_addr_callback = storvsc_request_addr;<br>
+ <br>
+ 	ret = vmbus_open(device->channel,<br>
+ 			 ring_size,<br>
+diff --git a/include/linux/hyperv.h b/include/linux/hyperv.h<br>
+index 2c18c8e768efe..5692ffa60e022 100644<br>
+--- a/include/linux/hyperv.h<br>
++++ b/include/linux/hyperv.h<br>
+@@ -779,7 +779,11 @@ struct vmbus_requestor {<br>
+ <br>
+ #define VMBUS_NO_RQSTOR U64_MAX<br>
+ #define VMBUS_RQST_ERROR (U64_MAX - 1)<br>
++/* NetVSC-specific */<br>
+ #define VMBUS_RQST_ID_NO_RESPONSE (U64_MAX - 2)<br>
++/* StorVSC-specific */<br>
++#define VMBUS_RQST_INIT (U64_MAX - 2)<br>
++#define VMBUS_RQST_RESET (U64_MAX - 3)<br>
+ <br>
+ struct vmbus_device {<br>
+ 	u16  dev_type;<br>
+@@ -1007,13 +1011,18 @@ struct vmbus_channel {<br>
+ 	u32 fuzz_testing_interrupt_delay;<br>
+ 	u32 fuzz_testing_message_delay;<br>
+ <br>
++	/* callback to generate a request ID from a request address */<br>
++	u64 (*next_request_id_callback)(struct vmbus_channel *channel, u64 rqst_addr);<br>
++	/* callback to retrieve a request address from a request ID */<br>
++	u64 (*request_addr_callback)(struct vmbus_channel *channel, u64 rqst_id);<br>
++<br>
+ 	/* request/transaction ids for VMBus */<br>
+ 	struct vmbus_requestor requestor;<br>
+ 	u32 rqstor_size;<br>
+ };<br>
+ <br>
+-u64 vmbus_next_request_id(struct vmbus_requestor *rqstor, u64 rqst_addr);<br>
+-u64 vmbus_request_addr(struct vmbus_requestor *rqstor, u64 trans_id);<br>
++u64 vmbus_next_request_id(struct vmbus_channel *channel, u64 rqst_addr);<br>
++u64 vmbus_request_addr(struct vmbus_channel *channel, u64 trans_id);<br>
+ <br>
+ static inline bool is_hvsock_channel(const struct vmbus_channel *c)<br>
+ {<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

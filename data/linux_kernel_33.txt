@@ -1,0 +1,129 @@
+On Wed, Apr 07, 2021 at 04:35:34PM -0700, Andrii Nakryiko wrote:<br>
+><i> On Wed, Apr 7, 2021 at 4:24 PM Rustam Kovhaev <rkovhaev@xxxxxxxxx> wrote:</i><br>
+><i> ></i><br>
+><i> > On Mon, Mar 01, 2021 at 09:43:00PM +0100, Dmitry Vyukov wrote:</i><br>
+><i> > > On Mon, Mar 1, 2021 at 9:39 PM Rustam Kovhaev <rkovhaev@xxxxxxxxx> wrote:</i><br>
+><i> > > ></i><br>
+><i> > > > On Mon, Mar 01, 2021 at 08:05:42PM +0100, Dmitry Vyukov wrote:</i><br>
+><i> > > > > On Mon, Mar 1, 2021 at 5:21 PM Rustam Kovhaev <rkovhaev@xxxxxxxxx> wrote:</i><br>
+><i> > > > > ></i><br>
+><i> > > > > > On Wed, Dec 09, 2020 at 10:58:10PM -0800, syzbot wrote:</i><br>
+><i> > > > > > > syzbot has found a reproducer for the following issue on:</i><br>
+><i> > > > > > ></i><br>
+><i> > > > > > > HEAD commit:    a68a0262 mm/madvise: remove racy mm ownership check</i><br>
+><i> > > > > > > git tree:       upstream</i><br>
+><i> > > > > > > console output: <a  rel="nofollow" href="https://syzkaller.appspot.com/x/log.txt?x=11facf17500000">https://syzkaller.appspot.com/x/log.txt?x=11facf17500000</a></i><br>
+><i> > > > > > > kernel config:  <a  rel="nofollow" href="https://syzkaller.appspot.com/x/.config?x=4305fa9ea70c7a9f">https://syzkaller.appspot.com/x/.config?x=4305fa9ea70c7a9f</a></i><br>
+><i> > > > > > > dashboard link: <a  rel="nofollow" href="https://syzkaller.appspot.com/bug?extid=f3694595248708227d35">https://syzkaller.appspot.com/bug?extid=f3694595248708227d35</a></i><br>
+><i> > > > > > > compiler:       gcc (GCC) 10.1.0-syz 20200507</i><br>
+><i> > > > > > > syz repro:      <a  rel="nofollow" href="https://syzkaller.appspot.com/x/repro.syz?x=159a9613500000">https://syzkaller.appspot.com/x/repro.syz?x=159a9613500000</a></i><br>
+><i> > > > > > > C reproducer:   <a  rel="nofollow" href="https://syzkaller.appspot.com/x/repro.c?x=11bf7123500000">https://syzkaller.appspot.com/x/repro.c?x=11bf7123500000</a></i><br>
+><i> > > > > > ></i><br>
+><i> > > > > > > IMPORTANT: if you fix the issue, please add the following tag to the commit:</i><br>
+><i> > > > > > > Reported-by: syzbot+f3694595248708227d35@xxxxxxxxxxxxxxxxxxxxxxxxx</i><br>
+><i> > > > > > ></i><br>
+><i> > > > > > > Debian GNU/Linux 9 syzkaller ttyS0</i><br>
+><i> > > > > > > Warning: Permanently added '10.128.0.9' (ECDSA) to the list of known hosts.</i><br>
+><i> > > > > > > executing program</i><br>
+><i> > > > > > > executing program</i><br>
+><i> > > > > > > executing program</i><br>
+><i> > > > > > > BUG: memory leak</i><br>
+><i> > > > > > > unreferenced object 0xffff88810efccc80 (size 64):</i><br>
+><i> > > > > > >   comm "syz-executor334", pid 8460, jiffies 4294945724 (age 13.850s)</i><br>
+><i> > > > > > >   hex dump (first 32 bytes):</i><br>
+><i> > > > > > >     c0 cb 14 04 00 ea ff ff c0 c2 11 04 00 ea ff ff  ................</i><br>
+><i> > > > > > >     c0 56 3f 04 00 ea ff ff 40 18 38 04 00 ea ff ff  .V?.....@.8.....</i><br>
+><i> > > > > > >   backtrace:</i><br>
+><i> > > > > > >     [<0000000036ae98a7>] kmalloc_node include/linux/slab.h:575 [inline]</i><br>
+><i> > > > > > >     [<0000000036ae98a7>] bpf_ringbuf_area_alloc kernel/bpf/ringbuf.c:94 [inline]</i><br>
+><i> > > > > > >     [<0000000036ae98a7>] bpf_ringbuf_alloc kernel/bpf/ringbuf.c:135 [inline]</i><br>
+><i> > > > > > >     [<0000000036ae98a7>] ringbuf_map_alloc kernel/bpf/ringbuf.c:183 [inline]</i><br>
+><i> > > > > > >     [<0000000036ae98a7>] ringbuf_map_alloc+0x1be/0x410 kernel/bpf/ringbuf.c:150</i><br>
+><i> > > > > > >     [<00000000d2cb93ae>] find_and_alloc_map kernel/bpf/syscall.c:122 [inline]</i><br>
+><i> > > > > > >     [<00000000d2cb93ae>] map_create kernel/bpf/syscall.c:825 [inline]</i><br>
+><i> > > > > > >     [<00000000d2cb93ae>] __do_sys_bpf+0x7d0/0x30a0 kernel/bpf/syscall.c:4381</i><br>
+><i> > > > > > >     [<000000008feaf393>] do_syscall_64+0x2d/0x70 arch/x86/entry/common.c:46</i><br>
+><i> > > > > > >     [<00000000e1f53cfd>] entry_SYSCALL_64_after_hwframe+0x44/0xa9</i><br>
+><i> > > > > > ></i><br>
+><i> > > > > > ></i><br>
+><i> > > > > ></i><br>
+><i> > > > > > i am pretty sure that this one is a false positive</i><br>
+><i> > > > > > the problem with reproducer is that it does not terminate all of the</i><br>
+><i> > > > > > child processes that it spawns</i><br>
+><i> > > > > ></i><br>
+><i> > > > > > i confirmed that it is a false positive by tracing __fput() and</i><br>
+><i> > > > > > bpf_map_release(), i ran reproducer, got kmemleak report, then i</i><br>
+><i> > > > > > manually killed those running leftover processes from reproducer and</i><br>
+><i> > > > > > then both functions were executed and memory was freed</i><br>
+><i> > > > > ></i><br>
+><i> > > > > > i am marking this one as:</i><br>
+><i> > > > > > #syz invalid</i><br>
+><i> > > > ></i><br>
+><i> > > > > Hi Rustam,</i><br>
+><i> > > > ></i><br>
+><i> > > > > Thanks for looking into this.</i><br>
+><i> > > > ></i><br>
+><i> > > > > I wonder how/where are these objects referenced? If they are not</i><br>
+><i> > > > > leaked and referenced somewhere, KMEMLEAK should not report them as</i><br>
+><i> > > > > leaks.</i><br>
+><i> > > > > So even if this is a false positive for BPF, this is a true positive</i><br>
+><i> > > > > bug and something to fix for KMEMLEAK ;)</i><br>
+><i> > > > > And syzbot will probably re-create this bug report soon as this still</i><br>
+><i> > > > > happens and is not a one-off thing.</i><br>
+><i> > > ></i><br>
+><i> > > > hi Dmitry, i haven't thought of it this way, but i guess you are right,</i><br>
+><i> > > > it is a kmemleak bug, ideally kmemleak should be aware that there are</i><br>
+><i> > > > still running processes holding references to bpf fd/anonymous inodes</i><br>
+><i> > > > which in their turn hold references to allocated bpf maps</i><br>
+><i> > ></i><br>
+><i> > > KMEMLEAK scans whole memory, so if there are pointers to the object</i><br>
+><i> > > anywhere in memory, KMEMLEAK should not report them as leaked. Running</i><br>
+><i> > > processes have no direct effect on KMEMLEAK logic.</i><br>
+><i> > > So the question is: where are these pointers to these objects? If we</i><br>
+><i> > > answer this, we can check how/why KMEMLEAK misses them. Are they</i><br>
+><i> > > mangled in some way?</i><br>
+><i> > thank you for your comments, they make sense, and indeed, the pointer</i><br>
+><i> > gets vmaped.</i><br>
+><i> > i should have looked into this sooner, becaused syzbot did trigger the</i><br>
+><i> > issue again, and Andrii had to look into the same bug, sorry about that.</i><br>
+><i> </i><br>
+><i> No worries! I actually forgot about this thread :) Let's leave the</i><br>
+><i> link to my today's investigation ([0]) just for completeness.</i><br>
+><i> </i><br>
+><i>   [0] <a  rel="nofollow" href="https://lore.kernel.org/bpf/CAEf4BzYk+dqs+jwu6VKXP-RttcTEGFe+ySTGWT9CRNkagDiJVA@xxxxxxxxxxxxxx/">https://lore.kernel.org/bpf/CAEf4BzYk+dqs+jwu6VKXP-RttcTEGFe+ySTGWT9CRNkagDiJVA@xxxxxxxxxxxxxx/</a></i><br>
+><i> </i><br>
+><i> > if i am understanding this correctly here is what the fix should be:</i><br>
+><i> > ---</i><br>
+><i> >  kernel/bpf/ringbuf.c | 2 ++</i><br>
+><i> >  1 file changed, 2 insertions(+)</i><br>
+><i> ></i><br>
+><i> > diff --git a/kernel/bpf/ringbuf.c b/kernel/bpf/ringbuf.c</i><br>
+><i> > index f25b719ac786..30400e74abe2 100644</i><br>
+><i> > --- a/kernel/bpf/ringbuf.c</i><br>
+><i> > +++ b/kernel/bpf/ringbuf.c</i><br>
+><i> > @@ -8,6 +8,7 @@</i><br>
+><i> >  #include <linux/vmalloc.h></i><br>
+><i> >  #include <linux/wait.h></i><br>
+><i> >  #include <linux/poll.h></i><br>
+><i> > +#include <linux/kmemleak.h></i><br>
+><i> >  #include <uapi/linux/btf.h></i><br>
+><i> ></i><br>
+><i> >  #define RINGBUF_CREATE_FLAG_MASK (BPF_F_NUMA_NODE)</i><br>
+><i> > @@ -105,6 +106,7 @@ static struct bpf_ringbuf *bpf_ringbuf_area_alloc(size_t data_sz, int numa_node)</i><br>
+><i> >         rb = vmap(pages, nr_meta_pages + 2 * nr_data_pages,</i><br>
+><i> >                   VM_ALLOC | VM_USERMAP, PAGE_KERNEL);</i><br>
+><i> >         if (rb) {</i><br>
+><i> > +               kmemleak_not_leak((void *) pages);</i><br>
+><i> </i><br>
+><i> If that makes kmemleak happy, I have no problems with this. But maybe</i><br>
+><i> leave some comment explaining why this is needed at all?</i><br>
+><i> </i><br>
+><i> And for my understanding, how vmap changes anything? Those pages are</i><br>
+><i> still referenced from rb, which is referenced from some struct file in</i><br>
+><i> the system. Sorry if that's a naive question.</i><br>
+><i> </i><br>
+valid question, it does look like kmemleak should be scanning<br>
+vmalloc()/vmap() memory, i will research this further<br>
+<br>
+<br>
+

@@ -1,0 +1,270 @@
+Some errors are found like below when run checkpatch.pl<br>
+<br>
+ERROR: space prohibited before that ',' (ctx:WxW)<br>
++int pm8001_mpi_general_event(struct pm8001_hba_info *pm8001_ha , void *piomb);<br>
+<br>
+It all about white space, so fix them.<br>
+<br>
+Signed-off-by: Jianqin Xie <xiejianqin@xxxxxxxxxxxxx><br>
+Signed-off-by: Luo Jiaxing <luojiaxing@xxxxxxxxxx><br>
+---<br>
+ drivers/scsi/pm8001/pm8001_ctl.c | 20 +++++++++-----------<br>
+ drivers/scsi/pm8001/pm8001_ctl.h |  5 +++++<br>
+ drivers/scsi/pm8001/pm8001_hwi.c | 14 +++++++-------<br>
+ drivers/scsi/pm8001/pm8001_sas.c | 20 ++++++++++----------<br>
+ drivers/scsi/pm8001/pm8001_sas.h |  2 +-<br>
+ drivers/scsi/pm8001/pm80xx_hwi.c | 14 +++++++-------<br>
+ 6 files changed, 39 insertions(+), 36 deletions(-)<br>
+<br>
+diff --git a/drivers/scsi/pm8001/pm8001_ctl.c b/drivers/scsi/pm8001/pm8001_ctl.c<br>
+index 12035ba..90b816f 100644<br>
+--- a/drivers/scsi/pm8001/pm8001_ctl.c<br>
++++ b/drivers/scsi/pm8001/pm8001_ctl.c<br>
+@@ -369,24 +369,22 @@ static ssize_t pm8001_ctl_aap_log_show(struct device *cdev,<br>
+ 	struct Scsi_Host *shost = class_to_shost(cdev);<br>
+ 	struct sas_ha_struct *sha = SHOST_TO_SAS_HA(shost);<br>
+ 	struct pm8001_hba_info *pm8001_ha = sha->lldd_ha;<br>
++	u8 *ptr = (u8 *)pm8001_ha->memoryMap.region[AAP1].virt_ptr;<br>
+ 	int i;<br>
+-#define AAP1_MEMMAP(r, c) \<br>
+-	(*(u32 *)((u8*)pm8001_ha->memoryMap.region[AAP1].virt_ptr + (r) * 32 \<br>
+-	+ (c)))<br>
+ <br>
+ 	char *str = buf;<br>
+ 	int max = 2;<br>
+ 	for (i = 0; i < max; i++) {<br>
+ 		str += sprintf(str, "0x%08x 0x%08x 0x%08x 0x%08x 0x%08x 0x%08x"<br>
+ 			       "0x%08x 0x%08x\n",<br>
+-			       AAP1_MEMMAP(i, 0),<br>
+-			       AAP1_MEMMAP(i, 4),<br>
+-			       AAP1_MEMMAP(i, 8),<br>
+-			       AAP1_MEMMAP(i, 12),<br>
+-			       AAP1_MEMMAP(i, 16),<br>
+-			       AAP1_MEMMAP(i, 20),<br>
+-			       AAP1_MEMMAP(i, 24),<br>
+-			       AAP1_MEMMAP(i, 28));<br>
++			       pm8001_ctl_aap1_memmap(ptr, i, 0),<br>
++			       pm8001_ctl_aap1_memmap(ptr, i, 4),<br>
++			       pm8001_ctl_aap1_memmap(ptr, i, 8),<br>
++			       pm8001_ctl_aap1_memmap(ptr, i, 12),<br>
++			       pm8001_ctl_aap1_memmap(ptr, i, 16),<br>
++			       pm8001_ctl_aap1_memmap(ptr, i, 20),<br>
++			       pm8001_ctl_aap1_memmap(ptr, i, 24),<br>
++			       pm8001_ctl_aap1_memmap(ptr, i, 28));<br>
+ 	}<br>
+ <br>
+ 	return str - buf;<br>
+diff --git a/drivers/scsi/pm8001/pm8001_ctl.h b/drivers/scsi/pm8001/pm8001_ctl.h<br>
+index d0d43a2..4743f0d 100644<br>
+--- a/drivers/scsi/pm8001/pm8001_ctl.h<br>
++++ b/drivers/scsi/pm8001/pm8001_ctl.h<br>
+@@ -59,5 +59,10 @@<br>
+ #define SYSFS_OFFSET                    1024<br>
+ #define PM80XX_IB_OB_QUEUE_SIZE         (32 * 1024)<br>
+ #define PM8001_IB_OB_QUEUE_SIZE         (16 * 1024)<br>
++<br>
++static inline u32 pm8001_ctl_aap1_memmap(u8 *ptr, int idx, int off)<br>
++{<br>
++	return *(u32 *)(ptr + idx * 32 + off);<br>
++}<br>
+ #endif /* PM8001_CTL_H_INCLUDED */<br>
+ <br>
+diff --git a/drivers/scsi/pm8001/pm8001_hwi.c b/drivers/scsi/pm8001/pm8001_hwi.c<br>
+index 49bf2f7..6887fa3 100644<br>
+--- a/drivers/scsi/pm8001/pm8001_hwi.c<br>
++++ b/drivers/scsi/pm8001/pm8001_hwi.c<br>
+@@ -1826,7 +1826,7 @@ static void pm8001_send_read_log(struct pm8001_hba_info *pm8001_ha,<br>
+  * that the task has been finished.<br>
+  */<br>
+ static void<br>
+-mpi_ssp_completion(struct pm8001_hba_info *pm8001_ha , void *piomb)<br>
++mpi_ssp_completion(struct pm8001_hba_info *pm8001_ha, void *piomb)<br>
+ {<br>
+ 	struct sas_task *t;<br>
+ 	struct pm8001_ccb_info *ccb;<br>
+@@ -2058,7 +2058,7 @@ mpi_ssp_completion(struct pm8001_hba_info *pm8001_ha , void *piomb)<br>
+ }<br>
+ <br>
+ /*See the comments for mpi_ssp_completion */<br>
+-static void mpi_ssp_event(struct pm8001_hba_info *pm8001_ha , void *piomb)<br>
++static void mpi_ssp_event(struct pm8001_hba_info *pm8001_ha, void *piomb)<br>
+ {<br>
+ 	struct sas_task *t;<br>
+ 	unsigned long flags;<br>
+@@ -2294,9 +2294,9 @@ mpi_sata_completion(struct pm8001_hba_info *pm8001_ha, void *piomb)<br>
+ 		(status != IO_UNDERFLOW)) {<br>
+ 		if (!((t->dev->parent) &&<br>
+ 			(dev_is_expander(t->dev->parent->dev_type)))) {<br>
+-			for (i = 0 , j = 4; j <= 7 && i <= 3; i++ , j++)<br>
++			for (i = 0, j = 4; j <= 7 && i <= 3; i++, j++)<br>
+ 				sata_addr_low[i] = pm8001_ha->sas_addr[j];<br>
+-			for (i = 0 , j = 0; j <= 3 && i <= 3; i++ , j++)<br>
++			for (i = 0, j = 0; j <= 3 && i <= 3; i++, j++)<br>
+ 				sata_addr_hi[i] = pm8001_ha->sas_addr[j];<br>
+ 			memcpy(&temp_sata_addr_low, sata_addr_low,<br>
+ 				sizeof(sata_addr_low));<br>
+@@ -2625,7 +2625,7 @@ mpi_sata_completion(struct pm8001_hba_info *pm8001_ha, void *piomb)<br>
+ }<br>
+ <br>
+ /*See the comments for mpi_ssp_completion */<br>
+-static void mpi_sata_event(struct pm8001_hba_info *pm8001_ha , void *piomb)<br>
++static void mpi_sata_event(struct pm8001_hba_info *pm8001_ha, void *piomb)<br>
+ {<br>
+ 	struct sas_task *t;<br>
+ 	struct task_status_struct *ts;<br>
+@@ -3602,7 +3602,7 @@ int pm8001_mpi_fw_flash_update_resp(struct pm8001_hba_info *pm8001_ha,<br>
+ 	return 0;<br>
+ }<br>
+ <br>
+-int pm8001_mpi_general_event(struct pm8001_hba_info *pm8001_ha , void *piomb)<br>
++int pm8001_mpi_general_event(struct pm8001_hba_info *pm8001_ha, void *piomb)<br>
+ {<br>
+ 	u32 status;<br>
+ 	int i;<br>
+@@ -3685,7 +3685,7 @@ int pm8001_mpi_task_abort_resp(struct pm8001_hba_info *pm8001_ha, void *piomb)<br>
+  * @pm8001_ha: our hba card information<br>
+  * @piomb: IO message buffer<br>
+  */<br>
+-static int mpi_hw_event(struct pm8001_hba_info *pm8001_ha, void* piomb)<br>
++static int mpi_hw_event(struct pm8001_hba_info *pm8001_ha, void *piomb)<br>
+ {<br>
+ 	unsigned long flags;<br>
+ 	struct hw_event_resp *pPayload =<br>
+diff --git a/drivers/scsi/pm8001/pm8001_sas.c b/drivers/scsi/pm8001/pm8001_sas.c<br>
+index a98d449..43b77ac 100644<br>
+--- a/drivers/scsi/pm8001/pm8001_sas.c<br>
++++ b/drivers/scsi/pm8001/pm8001_sas.c<br>
+@@ -877,8 +877,8 @@ static void pm8001_dev_gone_notify(struct domain_device *dev)<br>
+ 			   pm8001_dev->device_id, pm8001_dev->dev_type);<br>
+ 		if (atomic_read(&pm8001_dev->running_req)) {<br>
+ 			spin_unlock_irqrestore(&pm8001_ha->lock, flags);<br>
+-			pm8001_exec_internal_task_abort(pm8001_ha, pm8001_dev ,<br>
+-				dev, 1, 0);<br>
++			pm8001_exec_internal_task_abort(pm8001_ha, pm8001_dev,<br>
++							dev, 1, 0);<br>
+ 			while (atomic_read(&pm8001_dev->running_req))<br>
+ 				msleep(20);<br>
+ 			spin_lock_irqsave(&pm8001_ha->lock, flags);<br>
+@@ -1013,8 +1013,8 @@ int pm8001_I_T_nexus_reset(struct domain_device *dev)<br>
+ 			goto out;<br>
+ 		}<br>
+ 		msleep(2000);<br>
+-		rc = pm8001_exec_internal_task_abort(pm8001_ha, pm8001_dev ,<br>
+-			dev, 1, 0);<br>
++		rc = pm8001_exec_internal_task_abort(pm8001_ha, pm8001_dev,<br>
++						     dev, 1, 0);<br>
+ 		if (rc) {<br>
+ 			pm8001_dbg(pm8001_ha, EH, "task abort failed %x\n"<br>
+ 				   "with rc %d\n", pm8001_dev->device_id, rc);<br>
+@@ -1059,8 +1059,8 @@ int pm8001_I_T_nexus_event_handler(struct domain_device *dev)<br>
+ 			goto out;<br>
+ 		}<br>
+ 		/* send internal ssp/sata/smp abort command to FW */<br>
+-		rc = pm8001_exec_internal_task_abort(pm8001_ha, pm8001_dev ,<br>
+-							dev, 1, 0);<br>
++		rc = pm8001_exec_internal_task_abort(pm8001_ha, pm8001_dev,<br>
++						     dev, 1, 0);<br>
+ 		msleep(100);<br>
+ <br>
+ 		/* deregister the target device */<br>
+@@ -1075,8 +1075,8 @@ int pm8001_I_T_nexus_event_handler(struct domain_device *dev)<br>
+ 		wait_for_completion(&completion_setstate);<br>
+ 	} else {<br>
+ 		/* send internal ssp/sata/smp abort command to FW */<br>
+-		rc = pm8001_exec_internal_task_abort(pm8001_ha, pm8001_dev ,<br>
+-							dev, 1, 0);<br>
++		rc = pm8001_exec_internal_task_abort(pm8001_ha, pm8001_dev,<br>
++						     dev, 1, 0);<br>
+ 		msleep(100);<br>
+ <br>
+ 		/* deregister the target device */<br>
+@@ -1104,8 +1104,8 @@ int pm8001_lu_reset(struct domain_device *dev, u8 *lun)<br>
+ 	DECLARE_COMPLETION_ONSTACK(completion_setstate);<br>
+ 	if (dev_is_sata(dev)) {<br>
+ 		struct sas_phy *phy = sas_get_local_phy(dev);<br>
+-		rc = pm8001_exec_internal_task_abort(pm8001_ha, pm8001_dev ,<br>
+-			dev, 1, 0);<br>
++		rc = pm8001_exec_internal_task_abort(pm8001_ha, pm8001_dev,<br>
++						     dev, 1, 0);<br>
+ 		rc = sas_phy_reset(phy, 1);<br>
+ 		sas_put_local_phy(phy);<br>
+ 		pm8001_dev->setds_completion = &completion_setstate;<br>
+diff --git a/drivers/scsi/pm8001/pm8001_sas.h b/drivers/scsi/pm8001/pm8001_sas.h<br>
+index 039ed91..e7f693a 100644<br>
+--- a/drivers/scsi/pm8001/pm8001_sas.h<br>
++++ b/drivers/scsi/pm8001/pm8001_sas.h<br>
+@@ -705,7 +705,7 @@ int pm8001_mpi_reg_resp(struct pm8001_hba_info *pm8001_ha, void *piomb);<br>
+ int pm8001_mpi_dereg_resp(struct pm8001_hba_info *pm8001_ha, void *piomb);<br>
+ int pm8001_mpi_fw_flash_update_resp(struct pm8001_hba_info *pm8001_ha,<br>
+ 							void *piomb);<br>
+-int pm8001_mpi_general_event(struct pm8001_hba_info *pm8001_ha , void *piomb);<br>
++int pm8001_mpi_general_event(struct pm8001_hba_info *pm8001_ha, void *piomb);<br>
+ int pm8001_mpi_task_abort_resp(struct pm8001_hba_info *pm8001_ha, void *piomb);<br>
+ struct sas_task *pm8001_alloc_task(void);<br>
+ void pm8001_task_done(struct sas_task *task);<br>
+diff --git a/drivers/scsi/pm8001/pm80xx_hwi.c b/drivers/scsi/pm8001/pm80xx_hwi.c<br>
+index 8431556..5e02446 100644<br>
+--- a/drivers/scsi/pm8001/pm80xx_hwi.c<br>
++++ b/drivers/scsi/pm8001/pm80xx_hwi.c<br>
+@@ -90,7 +90,7 @@ ssize_t pm80xx_get_fatal_dump(struct device *cdev,<br>
+ 	struct sas_ha_struct *sha = SHOST_TO_SAS_HA(shost);<br>
+ 	struct pm8001_hba_info *pm8001_ha = sha->lldd_ha;<br>
+ 	void __iomem *fatal_table_address = pm8001_ha->fatal_tbl_addr;<br>
+-	u32 accum_len , reg_val, index, *temp;<br>
++	u32 accum_len, reg_val, index, *temp;<br>
+ 	u32 status = 1;<br>
+ 	unsigned long start;<br>
+ 	u8 *direct_data;<br>
+@@ -1904,7 +1904,7 @@ static void pm80xx_send_read_log(struct pm8001_hba_info *pm8001_ha,<br>
+  * that the task has been finished.<br>
+  */<br>
+ static void<br>
+-mpi_ssp_completion(struct pm8001_hba_info *pm8001_ha , void *piomb)<br>
++mpi_ssp_completion(struct pm8001_hba_info *pm8001_ha, void *piomb)<br>
+ {<br>
+ 	struct sas_task *t;<br>
+ 	struct pm8001_ccb_info *ccb;<br>
+@@ -2194,7 +2194,7 @@ mpi_ssp_completion(struct pm8001_hba_info *pm8001_ha , void *piomb)<br>
+ }<br>
+ <br>
+ /*See the comments for mpi_ssp_completion */<br>
+-static void mpi_ssp_event(struct pm8001_hba_info *pm8001_ha , void *piomb)<br>
++static void mpi_ssp_event(struct pm8001_hba_info *pm8001_ha, void *piomb)<br>
+ {<br>
+ 	struct sas_task *t;<br>
+ 	unsigned long flags;<br>
+@@ -2444,9 +2444,9 @@ mpi_sata_completion(struct pm8001_hba_info *pm8001_ha, void *piomb)<br>
+ 		(status != IO_UNDERFLOW)) {<br>
+ 		if (!((t->dev->parent) &&<br>
+ 			(dev_is_expander(t->dev->parent->dev_type)))) {<br>
+-			for (i = 0 , j = 4; i <= 3 && j <= 7; i++ , j++)<br>
++			for (i = 0, j = 4; i <= 3 && j <= 7; i++, j++)<br>
+ 				sata_addr_low[i] = pm8001_ha->sas_addr[j];<br>
+-			for (i = 0 , j = 0; i <= 3 && j <= 3; i++ , j++)<br>
++			for (i = 0, j = 0; i <= 3 && j <= 3; i++, j++)<br>
+ 				sata_addr_hi[i] = pm8001_ha->sas_addr[j];<br>
+ 			memcpy(&temp_sata_addr_low, sata_addr_low,<br>
+ 				sizeof(sata_addr_low));<br>
+@@ -2788,7 +2788,7 @@ mpi_sata_completion(struct pm8001_hba_info *pm8001_ha, void *piomb)<br>
+ }<br>
+ <br>
+ /*See the comments for mpi_ssp_completion */<br>
+-static void mpi_sata_event(struct pm8001_hba_info *pm8001_ha , void *piomb)<br>
++static void mpi_sata_event(struct pm8001_hba_info *pm8001_ha, void *piomb)<br>
+ {<br>
+ 	struct sas_task *t;<br>
+ 	struct task_status_struct *ts;<br>
+@@ -4918,7 +4918,7 @@ static void mpi_set_phy_profile_req(struct pm8001_hba_info *pm8001_ha,<br>
+ 				    u32 operation, u32 phyid,<br>
+ 				    u32 length, u32 *buf)<br>
+ {<br>
+-	u32 tag , i, j = 0;<br>
++	u32 tag, i, j = 0;<br>
+ 	int rc;<br>
+ 	struct set_phy_profile_req payload;<br>
+ 	struct inbound_queue_table *circularQ;<br>
+-- <br>
+2.7.4<br>
+<br>
+<br>
+

@@ -1,0 +1,56 @@
+Change occured to occurred in kernel/power/autosleep.c.<br>
+Change consiting to consisting in kernel/power/snapshot.c.<br>
+Change avaiable to available in kernel/power/swap.c.<br>
+No functionality changed.<br>
+<br>
+Signed-off-by: Lu Jialin <lujialin4@xxxxxxxxxx><br>
+---<br>
+ kernel/power/autosleep.c | 2 +-<br>
+ kernel/power/snapshot.c  | 2 +-<br>
+ kernel/power/swap.c      | 2 +-<br>
+ 3 files changed, 3 insertions(+), 3 deletions(-)<br>
+<br>
+diff --git a/kernel/power/autosleep.c b/kernel/power/autosleep.c<br>
+index 9af5a50d3489..b29c8aca7486 100644<br>
+--- a/kernel/power/autosleep.c<br>
++++ b/kernel/power/autosleep.c<br>
+@@ -54,7 +54,7 @@ static void try_to_suspend(struct work_struct *work)<br>
+ 		goto out;<br>
+ <br>
+ 	/*<br>
+-	 * If the wakeup occured for an unknown reason, wait to prevent the<br>
++	 * If the wakeup occurred for an unknown reason, wait to prevent the<br>
+ 	 * system from trying to suspend and waking up in a tight loop.<br>
+ 	 */<br>
+ 	if (final_count == initial_count)<br>
+diff --git a/kernel/power/snapshot.c b/kernel/power/snapshot.c<br>
+index 64b7aab9aee4..27cb4e7086b7 100644<br>
+--- a/kernel/power/snapshot.c<br>
++++ b/kernel/power/snapshot.c<br>
+@@ -329,7 +329,7 @@ static void *chain_alloc(struct chain_allocator *ca, unsigned int size)<br>
+ /**<br>
+  * Data types related to memory bitmaps.<br>
+  *<br>
+- * Memory bitmap is a structure consiting of many linked lists of<br>
++ * Memory bitmap is a structure consisting of many linked lists of<br>
+  * objects.  The main list's elements are of type struct zone_bitmap<br>
+  * and each of them corresonds to one zone.  For each zone bitmap<br>
+  * object there is a list of objects of type struct bm_block that<br>
+diff --git a/kernel/power/swap.c b/kernel/power/swap.c<br>
+index 72e33054a2e1..bea3cb8afa11 100644<br>
+--- a/kernel/power/swap.c<br>
++++ b/kernel/power/swap.c<br>
+@@ -884,7 +884,7 @@ static int save_image_lzo(struct swap_map_handle *handle,<br>
+  *	enough_swap - Make sure we have enough swap to save the image.<br>
+  *<br>
+  *	Returns TRUE or FALSE after checking the total amount of swap<br>
+- *	space avaiable from the resume partition.<br>
++ *	space available from the resume partition.<br>
+  */<br>
+ <br>
+ static int enough_swap(unsigned int nr_pages)<br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+

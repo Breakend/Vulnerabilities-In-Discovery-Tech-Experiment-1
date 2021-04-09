@@ -1,0 +1,40 @@
+Some error paths in atomisp_open will execute PM runtime<br>
+decrement and unregister hmm pool even before we increase<br>
+the PM refcount and registration. Fix this by adjusting<br>
+jump labels on error.<br>
+<br>
+Signed-off-by: Dinghao Liu <dinghao.liu@xxxxxxxxxx><br>
+---<br>
+ drivers/staging/media/atomisp/pci/atomisp_fops.c | 5 +++--<br>
+ 1 file changed, 3 insertions(+), 2 deletions(-)<br>
+<br>
+diff --git a/drivers/staging/media/atomisp/pci/atomisp_fops.c b/drivers/staging/media/atomisp/pci/atomisp_fops.c<br>
+index 453bb6913550..8f552d6f1f19 100644<br>
+--- a/drivers/staging/media/atomisp/pci/atomisp_fops.c<br>
++++ b/drivers/staging/media/atomisp/pci/atomisp_fops.c<br>
+@@ -837,7 +837,7 @@ static int atomisp_open(struct file *file)<br>
+ 	ret = pm_runtime_get_sync(vdev->v4l2_dev->dev);<br>
+ 	if (ret < 0) {<br>
+ 		dev_err(isp->dev, "Failed to power on device\n");<br>
+-		goto error;<br>
++		goto pm_error;<br>
+ 	}<br>
+ <br>
+ 	if (dypool_enable) {<br>
+@@ -878,9 +878,10 @@ static int atomisp_open(struct file *file)<br>
+ <br>
+ css_error:<br>
+ 	atomisp_css_uninit(isp);<br>
+-error:<br>
+ 	hmm_pool_unregister(HMM_POOL_TYPE_DYNAMIC);<br>
++pm_error:<br>
+ 	pm_runtime_put(vdev->v4l2_dev->dev);<br>
++error:<br>
+ 	rt_mutex_unlock(&isp->mutex);<br>
+ 	return ret;<br>
+ }<br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+

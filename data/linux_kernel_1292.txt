@@ -1,0 +1,86 @@
+Currently, only hibernate sets custom ttbr0 with safe idmaped function.<br>
+Kexec, is also going to be using this functinality when relocation code<br>
+is going to be idmapped.<br>
+<br>
+Move the setup seqeuence to a dedicated cpu_install_ttbr0() for custom<br>
+ttbr0.<br>
+<br>
+Suggested-by: James Morse <james.morse@xxxxxxx><br>
+Signed-off-by: Pavel Tatashin <pasha.tatashin@xxxxxxxxxx><br>
+---<br>
+ arch/arm64/include/asm/mmu_context.h | 24 ++++++++++++++++++++++++<br>
+ arch/arm64/kernel/hibernate.c        | 21 +--------------------<br>
+ 2 files changed, 25 insertions(+), 20 deletions(-)<br>
+<br>
+diff --git a/arch/arm64/include/asm/mmu_context.h b/arch/arm64/include/asm/mmu_context.h<br>
+index bd02e99b1a4c..f64d0d5e1b1f 100644<br>
+--- a/arch/arm64/include/asm/mmu_context.h<br>
++++ b/arch/arm64/include/asm/mmu_context.h<br>
+@@ -115,6 +115,30 @@ static inline void cpu_install_idmap(void)<br>
+ 	cpu_switch_mm(lm_alias(idmap_pg_dir), &init_mm);<br>
+ }<br>
+ <br>
++/*<br>
++ * Load our new page tables. A strict BBM approach requires that we ensure that<br>
++ * TLBs are free of any entries that may overlap with the global mappings we are<br>
++ * about to install.<br>
++ *<br>
++ * For a real hibernate/resume/kexec cycle TTBR0 currently points to a zero<br>
++ * page, but TLBs may contain stale ASID-tagged entries (e.g. for EFI runtime<br>
++ * services), while for a userspace-driven test_resume cycle it points to<br>
++ * userspace page tables (and we must point it at a zero page ourselves).<br>
++ *<br>
++ * We change T0SZ as part of installing the idmap. This is undone by<br>
++ * cpu_uninstall_idmap() in __cpu_suspend_exit().<br>
++ */<br>
++static inline void cpu_install_ttbr0(phys_addr_t ttbr0, unsigned long t0sz)<br>
++{<br>
++	cpu_set_reserved_ttbr0();<br>
++	local_flush_tlb_all();<br>
++	__cpu_set_tcr_t0sz(t0sz);<br>
++<br>
++	/* avoid cpu_switch_mm() and its SW-PAN and CNP interactions */<br>
++	write_sysreg(ttbr0, ttbr0_el1);<br>
++	isb();<br>
++}<br>
++<br>
+ /*<br>
+  * Atomically replaces the active TTBR1_EL1 PGD with a new VA-compatible PGD,<br>
+  * avoiding the possibility of conflicting TLB entries being allocated.<br>
+diff --git a/arch/arm64/kernel/hibernate.c b/arch/arm64/kernel/hibernate.c<br>
+index 0b8bad8bb6eb..ded5115bcb63 100644<br>
+--- a/arch/arm64/kernel/hibernate.c<br>
++++ b/arch/arm64/kernel/hibernate.c<br>
+@@ -206,26 +206,7 @@ static int create_safe_exec_page(void *src_start, size_t length,<br>
+ 	if (rc)<br>
+ 		return rc;<br>
+ <br>
+-	/*<br>
+-	 * Load our new page tables. A strict BBM approach requires that we<br>
+-	 * ensure that TLBs are free of any entries that may overlap with the<br>
+-	 * global mappings we are about to install.<br>
+-	 *<br>
+-	 * For a real hibernate/resume cycle TTBR0 currently points to a zero<br>
+-	 * page, but TLBs may contain stale ASID-tagged entries (e.g. for EFI<br>
+-	 * runtime services), while for a userspace-driven test_resume cycle it<br>
+-	 * points to userspace page tables (and we must point it at a zero page<br>
+-	 * ourselves).<br>
+-	 *<br>
+-	 * We change T0SZ as part of installing the idmap. This is undone by<br>
+-	 * cpu_uninstall_idmap() in __cpu_suspend_exit().<br>
+-	 */<br>
+-	cpu_set_reserved_ttbr0();<br>
+-	local_flush_tlb_all();<br>
+-	__cpu_set_tcr_t0sz(t0sz);<br>
+-	write_sysreg(trans_ttbr0, ttbr0_el1);<br>
+-	isb();<br>
+-<br>
++	cpu_install_ttbr0(trans_ttbr0, t0sz);<br>
+ 	*phys_dst_addr = virt_to_phys(page);<br>
+ <br>
+ 	return 0;<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

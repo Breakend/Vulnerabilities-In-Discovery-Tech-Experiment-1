@@ -1,0 +1,15 @@
+Zheng Zengkai <zhengzengkai@xxxxxxxxxx> wrote:<br>
+<br>
+><i>  static int afs_dir_set_page_dirty(struct page *page)</i><br>
+><i>  {</i><br>
+><i>  	BUG(); /* This should never happen. */</i><br>
+><i> +	return 0;</i><br>
+><i>  }</i><br>
+<br>
+That shouldn't be necessary.  BUG() should be marked as 'no return' to the<br>
+compiler.  What arch and compiler are you using?<br>
+<br>
+David<br>
+<br>
+<br>
+

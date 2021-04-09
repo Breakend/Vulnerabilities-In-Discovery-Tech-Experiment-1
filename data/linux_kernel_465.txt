@@ -1,0 +1,80 @@
+Add code for touch-alloc.<br>
+And Change read memory to write memory to avoid use the zero-page for<br>
+reads in do_anonymous_page.<br>
+<br>
+Signed-off-by: Hui Zhu <teawater@xxxxxxxxx><br>
+---<br>
+ usemem.c | 34 ++++++++++++++++++++++------------<br>
+ 1 file changed, 22 insertions(+), 12 deletions(-)<br>
+<br>
+diff --git a/usemem.c b/usemem.c<br>
+index e2c46ec..5b90aae 100644<br>
+--- a/usemem.c<br>
++++ b/usemem.c<br>
+@@ -329,6 +329,18 @@ void detach(void)<br>
+ 	}<br>
+ }<br>
+ <br>
++unsigned long do_access(unsigned long *p, unsigned long idx, int read)<br>
++{<br>
++	volatile unsigned long *vp = p;<br>
++<br>
++	if (read)<br>
++		return vp[idx];	/* read data */<br>
++	else {<br>
++		vp[idx] = idx;	/* write data */<br>
++		return 0;<br>
++	}<br>
++}<br>
++<br>
+ unsigned long * allocate(unsigned long bytes)<br>
+ {<br>
+ 	unsigned long *p;<br>
+@@ -355,6 +367,14 @@ unsigned long * allocate(unsigned long bytes)<br>
+ 		p = (unsigned long *)ALIGN((unsigned long)p, pagesize - 1);<br>
+ 	}<br>
+ <br>
++	if (opt_touch_alloc) {<br>
++		unsigned long i;<br>
++		unsigned long m = bytes / sizeof(*p);<br>
++<br>
++		for (i = 0; i < m; i += 1)<br>
++			do_access(p, i, 0);<br>
++	}<br>
++<br>
+ 	return p;<br>
+ }<br>
+ <br>
+@@ -436,18 +456,6 @@ void shm_unlock(int seg_id)<br>
+ 	shmctl(seg_id, SHM_UNLOCK, NULL);<br>
+ }<br>
+ <br>
+-unsigned long do_access(unsigned long *p, unsigned long idx, int read)<br>
+-{<br>
+-	volatile unsigned long *vp = p;<br>
+-<br>
+-	if (read)<br>
+-		return vp[idx];	/* read data */<br>
+-	else {<br>
+-		vp[idx] = idx;	/* write data */<br>
+-		return 0;<br>
+-	}<br>
+-}<br>
+-<br>
+ #define NSEC_PER_SEC  (1UL * 1000 * 1000 * 1000)<br>
+ <br>
+ long nsec_sub(long nsec1, long nsec2)<br>
+@@ -953,6 +961,8 @@ int main(int argc, char *argv[])<br>
+ 				opt_punch_holes = 1;<br>
+ 			} else if (strcmp(opts[opt_index].name, "init-time") == 0) {<br>
+ 				opt_init_time = 1;<br>
++			} else if (strcmp(opts[opt_index].name, "touch-alloc") == 0) {<br>
++				opt_touch_alloc = 1;<br>
+ 			} else<br>
+ 				usage(1);<br>
+ 			break;<br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+

@@ -1,0 +1,59 @@
+On Mon, Mar 29, 2021 at 10:31:01AM -0300, Jason Gunthorpe wrote:<br>
+><i> On Tue, Mar 16, 2021 at 04:33:03PM +0100, Daniel Vetter wrote:</i><br>
+><i> > Both kvm (in bd2fae8da794 ("KVM: do not assume PTE is writable after</i><br>
+><i> > follow_pfn")) and vfio (in 07956b6269d3 ("vfio/type1: Use</i><br>
+><i> > follow_pte()")) have lost their callsites of follow_pfn(). All the</i><br>
+><i> > other ones have been switched over to unsafe_follow_pfn because they</i><br>
+><i> > cannot be fixed without breaking userspace api.</i><br>
+><i> > </i><br>
+><i> > Argueably the vfio code is still racy, but that's kinda a bigger</i><br>
+><i> </i><br>
+><i> vfio and kvm</i><br>
+<br>
+Hm I thought kvm is non-racy due to the mmu notifier catch races?<br>
+<br>
+><i> </i><br>
+><i> > picture. But since it does leak the pte beyond where it drops the pt</i><br>
+><i> > lock, without anything else like an mmu notifier guaranteeing</i><br>
+><i> > coherence, the problem is at least clearly visible in the vfio code.</i><br>
+><i> > So good enough with me.</i><br>
+><i> > </i><br>
+><i> > I've decided to keep the explanation that after dropping the pt lock</i><br>
+><i> > you must have an mmu notifier if you keep using the pte somehow by</i><br>
+><i> > adjusting it and moving it into the kerneldoc for the new follow_pte()</i><br>
+><i> > function.</i><br>
+><i> > </i><br>
+><i> > Cc: 3pvd@xxxxxxxxxx</i><br>
+><i> > Cc: Jann Horn <jannh@xxxxxxxxxx></i><br>
+><i> > Cc: Paolo Bonzini <pbonzini@xxxxxxxxxx></i><br>
+><i> > Cc: Jason Gunthorpe <jgg@xxxxxxxxxx></i><br>
+><i> > Cc: Cornelia Huck <cohuck@xxxxxxxxxx></i><br>
+><i> > Cc: Peter Xu <peterx@xxxxxxxxxx></i><br>
+><i> > Cc: Alex Williamson <alex.williamson@xxxxxxxxxx></i><br>
+><i> > Cc: linux-mm@xxxxxxxxx</i><br>
+><i> > Cc: linux-arm-kernel@xxxxxxxxxxxxxxxxxxx</i><br>
+><i> > Cc: linux-samsung-soc@xxxxxxxxxxxxxxx</i><br>
+><i> > Cc: linux-media@xxxxxxxxxxxxxxx</i><br>
+><i> > Cc: kvm@xxxxxxxxxxxxxxx</i><br>
+><i> > Signed-off-by: Daniel Vetter <daniel.vetter@xxxxxxxxx></i><br>
+><i> > --- </i><br>
+><i> >  include/linux/mm.h |  2 --</i><br>
+><i> >  mm/memory.c        | 26 +++++---------------------</i><br>
+><i> >  mm/nommu.c         | 13 +------------</i><br>
+><i> >  3 files changed, 6 insertions(+), 35 deletions(-)</i><br>
+><i> </i><br>
+><i> Reviewed-by: Jason Gunthorpe <jgg@xxxxxxxxxx></i><br>
+<br>
+Thanks for your r-b tags, I'll add them.<br>
+-Daniel<br>
+<br>
+><i> </i><br>
+><i> Jason</i><br>
+<br>
+-- <br>
+Daniel Vetter<br>
+Software Engineer, Intel Corporation<br>
+<a  rel="nofollow" href="http://blog.ffwll.ch">http://blog.ffwll.ch</a><br>
+<br>
+<br>
+

@@ -1,0 +1,38 @@
+Adds Partial Power Down exiting flow when set port feature<br>
+reset is received in suspended state.<br>
+<br>
+Signed-off-by: Artur Petrosyan <Arthur.Petrosyan@xxxxxxxxxxxx><br>
+---<br>
+ Changes in v3:<br>
+ - None<br>
+ Changes in v2:<br>
+ - None<br>
+<br>
+ drivers/usb/dwc2/hcd.c | 9 +++++++++<br>
+ 1 file changed, 9 insertions(+)<br>
+<br>
+diff --git a/drivers/usb/dwc2/hcd.c b/drivers/usb/dwc2/hcd.c<br>
+index 720354df014b..7c7496719152 100644<br>
+--- a/drivers/usb/dwc2/hcd.c<br>
++++ b/drivers/usb/dwc2/hcd.c<br>
+@@ -3694,6 +3694,15 @@ static int dwc2_hcd_hub_control(struct dwc2_hsotg *hsotg, u16 typereq,<br>
+ 			if (hsotg->params.power_down == DWC2_POWER_DOWN_PARAM_HIBERNATION &&<br>
+ 			    hsotg->hibernated)<br>
+ 				dwc2_exit_hibernation(hsotg, 0, 1, 1);<br>
++<br>
++			if (hsotg->in_ppd) {<br>
++				retval = dwc2_exit_partial_power_down(hsotg, 1,<br>
++								      true);<br>
++				if (retval)<br>
++					dev_err(hsotg->dev,<br>
++						"exit partial_power_down failed\n");<br>
++			}<br>
++<br>
+ 			hprt0 = dwc2_read_hprt0(hsotg);<br>
+ 			dev_dbg(hsotg->dev,<br>
+ 				"SetPortFeature - USB_PORT_FEAT_RESET\n");<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

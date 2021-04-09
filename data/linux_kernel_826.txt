@@ -1,0 +1,43 @@
+According to programming guide in host mode, port<br>
+power must be turned on in session request<br>
+interrupt handlers.<br>
+<br>
+Cc: <stable@xxxxxxxxxxxxxxx><br>
+Fixes: 21795c826a45 ("usb: dwc2: exit hibernation on session request")<br>
+Signed-off-by: Artur Petrosyan <Arthur.Petrosyan@xxxxxxxxxxxx><br>
+Acked-by: Minas Harutyunyan <Minas.Harutyunyan@xxxxxxxxxxxx><br>
+---<br>
+ drivers/usb/dwc2/core_intr.c | 8 ++++++++<br>
+ 1 file changed, 8 insertions(+)<br>
+<br>
+diff --git a/drivers/usb/dwc2/core_intr.c b/drivers/usb/dwc2/core_intr.c<br>
+index 0a7f9330907f..8c0152b514be 100644<br>
+--- a/drivers/usb/dwc2/core_intr.c<br>
++++ b/drivers/usb/dwc2/core_intr.c<br>
+@@ -307,6 +307,7 @@ static void dwc2_handle_conn_id_status_change_intr(struct dwc2_hsotg *hsotg)<br>
+ static void dwc2_handle_session_req_intr(struct dwc2_hsotg *hsotg)<br>
+ {<br>
+ 	int ret;<br>
++	u32 hprt0;<br>
+ <br>
+ 	/* Clear interrupt */<br>
+ 	dwc2_writel(hsotg, GINTSTS_SESSREQINT, GINTSTS);<br>
+@@ -328,6 +329,13 @@ static void dwc2_handle_session_req_intr(struct dwc2_hsotg *hsotg)<br>
+ 		 * established<br>
+ 		 */<br>
+ 		dwc2_hsotg_disconnect(hsotg);<br>
++	} else {<br>
++		/* Turn on the port power bit. */<br>
++		hprt0 = dwc2_read_hprt0(hsotg);<br>
++		hprt0 |= HPRT0_PWR;<br>
++		dwc2_writel(hsotg, hprt0, HPRT0);<br>
++		/* Connect hcd after port power is set. */<br>
++		dwc2_hcd_connect(hsotg);<br>
+ 	}<br>
+ }<br>
+ <br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

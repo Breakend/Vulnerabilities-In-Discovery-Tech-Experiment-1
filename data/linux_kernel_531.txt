@@ -1,0 +1,77 @@
+The functions tty_audit_add_data() and tty_audit_tiocsti() are local to<br>
+the tty core code, and do not need to be in a "kernel-wide" header file<br>
+so move them to drivers/tty/tty.h<br>
+<br>
+Cc: Jiri Slaby <jirislaby@xxxxxxxxxx><br>
+Signed-off-by: Greg Kroah-Hartman <gregkh@xxxxxxxxxxxxxxxxxxx><br>
+---<br>
+ drivers/tty/tty.h       | 14 ++++++++++++++<br>
+ drivers/tty/tty_audit.c |  1 +<br>
+ include/linux/tty.h     | 10 ----------<br>
+ 3 files changed, 15 insertions(+), 10 deletions(-)<br>
+<br>
+diff --git a/drivers/tty/tty.h b/drivers/tty/tty.h<br>
+index e9cb918348cf..a8a7abe5d635 100644<br>
+--- a/drivers/tty/tty.h<br>
++++ b/drivers/tty/tty.h<br>
+@@ -6,4 +6,18 @@<br>
+ #ifndef _TTY_INTERNAL_H<br>
+ #define _TTY_INTERNAL_H<br>
+ <br>
++/* tty_audit.c */<br>
++#ifdef CONFIG_AUDIT<br>
++void tty_audit_add_data(struct tty_struct *tty, const void *data, size_t size);<br>
++void tty_audit_tiocsti(struct tty_struct *tty, char ch);<br>
++#else<br>
++static inline void tty_audit_add_data(struct tty_struct *tty, const void *data,<br>
++				      size_t size)<br>
++{<br>
++}<br>
++static inline void tty_audit_tiocsti(struct tty_struct *tty, char ch)<br>
++{<br>
++}<br>
++#endif<br>
++<br>
+ #endif<br>
+diff --git a/drivers/tty/tty_audit.c b/drivers/tty/tty_audit.c<br>
+index 32898aabcd06..ca7afd7b2716 100644<br>
+--- a/drivers/tty/tty_audit.c<br>
++++ b/drivers/tty/tty_audit.c<br>
+@@ -10,6 +10,7 @@<br>
+ #include <linux/audit.h><br>
+ #include <linux/slab.h><br>
+ #include <linux/tty.h><br>
++#include "tty.h"<br>
+ <br>
+ struct tty_audit_buf {<br>
+ 	struct mutex mutex;	/* Protects all data below */<br>
+diff --git a/include/linux/tty.h b/include/linux/tty.h<br>
+index fd8308a1f37e..981ee31c58e1 100644<br>
+--- a/include/linux/tty.h<br>
++++ b/include/linux/tty.h<br>
+@@ -717,20 +717,10 @@ static inline void n_tty_init(void) { }<br>
+ <br>
+ /* tty_audit.c */<br>
+ #ifdef CONFIG_AUDIT<br>
+-extern void tty_audit_add_data(struct tty_struct *tty, const void *data,<br>
+-			       size_t size);<br>
+ extern void tty_audit_exit(void);<br>
+ extern void tty_audit_fork(struct signal_struct *sig);<br>
+-extern void tty_audit_tiocsti(struct tty_struct *tty, char ch);<br>
+ extern int tty_audit_push(void);<br>
+ #else<br>
+-static inline void tty_audit_add_data(struct tty_struct *tty, const void *data,<br>
+-				      size_t size)<br>
+-{<br>
+-}<br>
+-static inline void tty_audit_tiocsti(struct tty_struct *tty, char ch)<br>
+-{<br>
+-}<br>
+ static inline void tty_audit_exit(void)<br>
+ {<br>
+ }<br>
+-- <br>
+2.31.1<br>
+<br>
+<br>
+

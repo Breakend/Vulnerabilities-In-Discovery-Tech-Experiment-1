@@ -1,0 +1,77 @@
+From: SeongJae Park <sjpark@xxxxxxxxx><br>
+<br>
+For CPU usage accounting, knowing pid of the monitoring thread could be<br>
+helpful.  For example, users could use cpuaccount cgroups with the pid.<br>
+<br>
+This commit therefore exports the pid of currently running monitoring<br>
+thread to the user space via 'kdamond_pid' file in the debugfs<br>
+directory.<br>
+<br>
+Signed-off-by: SeongJae Park <sjpark@xxxxxxxxx><br>
+---<br>
+ mm/damon/dbgfs.c | 38 ++++++++++++++++++++++++++++++++++++--<br>
+ 1 file changed, 36 insertions(+), 2 deletions(-)<br>
+<br>
+diff --git a/mm/damon/dbgfs.c b/mm/damon/dbgfs.c<br>
+index 9af844faffd4..b20c1e7742ce 100644<br>
+--- a/mm/damon/dbgfs.c<br>
++++ b/mm/damon/dbgfs.c<br>
+@@ -237,6 +237,32 @@ static ssize_t dbgfs_target_ids_write(struct file *file,<br>
+ 	return ret;<br>
+ }<br>
+ <br>
++static ssize_t dbgfs_kdamond_pid_read(struct file *file,<br>
++		char __user *buf, size_t count, loff_t *ppos)<br>
++{<br>
++	struct damon_ctx *ctx = file->private_data;<br>
++	char *kbuf;<br>
++	ssize_t len;<br>
++<br>
++	kbuf = kmalloc(count, GFP_KERNEL);<br>
++	if (!kbuf)<br>
++		return -ENOMEM;<br>
++<br>
++	mutex_lock(&ctx->kdamond_lock);<br>
++	if (ctx->kdamond)<br>
++		len = scnprintf(kbuf, count, "%d\n", ctx->kdamond->pid);<br>
++	else<br>
++		len = scnprintf(kbuf, count, "none\n");<br>
++	mutex_unlock(&ctx->kdamond_lock);<br>
++	if (!len)<br>
++		goto out;<br>
++	len = simple_read_from_buffer(buf, count, ppos, kbuf, len);<br>
++<br>
++out:<br>
++	kfree(kbuf);<br>
++	return len;<br>
++}<br>
++<br>
+ static int damon_dbgfs_open(struct inode *inode, struct file *file)<br>
+ {<br>
+ 	file->private_data = inode->i_private;<br>
+@@ -258,10 +284,18 @@ static const struct file_operations target_ids_fops = {<br>
+ 	.write = dbgfs_target_ids_write,<br>
+ };<br>
+ <br>
++static const struct file_operations kdamond_pid_fops = {<br>
++	.owner = THIS_MODULE,<br>
++	.open = damon_dbgfs_open,<br>
++	.read = dbgfs_kdamond_pid_read,<br>
++};<br>
++<br>
+ static int dbgfs_fill_ctx_dir(struct dentry *dir, struct damon_ctx *ctx)<br>
+ {<br>
+-	const char * const file_names[] = {"attrs", "target_ids"};<br>
+-	const struct file_operations *fops[] = {&attrs_fops, &target_ids_fops};<br>
++	const char * const file_names[] = {"attrs", "target_ids",<br>
++		"kdamond_pid"};<br>
++	const struct file_operations *fops[] = {&attrs_fops, &target_ids_fops,<br>
++		&kdamond_pid_fops};<br>
+ 	int i;<br>
+ <br>
+ 	for (i = 0; i < ARRAY_SIZE(file_names); i++)<br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+

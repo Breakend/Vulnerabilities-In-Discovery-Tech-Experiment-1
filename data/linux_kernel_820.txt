@@ -1,0 +1,155 @@
+Fixes the implementation of exiting from partial power down<br>
+power saving mode when PC is resumed.<br>
+<br>
+Added port connection status checking which prevents exiting from<br>
+Partial Power Down mode from _dwc2_hcd_resume() if not in Partial<br>
+Power Down mode.<br>
+<br>
+Rearranged the implementation to get rid of many "if"<br>
+statements.<br>
+<br>
+NOTE: Switch case statement is used for hibernation partial<br>
+power down and clock gating mode determination. In this patch<br>
+only Partial Power Down is implemented the Hibernation and<br>
+clock gating implementations are planned to be added.<br>
+<br>
+Cc: <stable@xxxxxxxxxxxxxxx><br>
+Fixes: 6f6d70597c15 ("usb: dwc2: bus suspend/resume for hosts with DWC2_POWER_DOWN_PARAM_NONE")<br>
+Signed-off-by: Artur Petrosyan <Arthur.Petrosyan@xxxxxxxxxxxx><br>
+---<br>
+ Changes in v3:<br>
+ - None<br>
+ Changes in v2:<br>
+ - None<br>
+<br>
+ drivers/usb/dwc2/hcd.c | 90 +++++++++++++++++++++---------------------<br>
+ 1 file changed, 46 insertions(+), 44 deletions(-)<br>
+<br>
+diff --git a/drivers/usb/dwc2/hcd.c b/drivers/usb/dwc2/hcd.c<br>
+index 34030bafdff4..f096006df96f 100644<br>
+--- a/drivers/usb/dwc2/hcd.c<br>
++++ b/drivers/usb/dwc2/hcd.c<br>
+@@ -4427,7 +4427,7 @@ static int _dwc2_hcd_resume(struct usb_hcd *hcd)<br>
+ {<br>
+ 	struct dwc2_hsotg *hsotg = dwc2_hcd_to_hsotg(hcd);<br>
+ 	unsigned long flags;<br>
+-	u32 pcgctl;<br>
++	u32 hprt0;<br>
+ 	int ret = 0;<br>
+ <br>
+ 	spin_lock_irqsave(&hsotg->lock, flags);<br>
+@@ -4438,11 +4438,40 @@ static int _dwc2_hcd_resume(struct usb_hcd *hcd)<br>
+ 	if (hsotg->lx_state != DWC2_L2)<br>
+ 		goto unlock;<br>
+ <br>
+-	if (hsotg->params.power_down > DWC2_POWER_DOWN_PARAM_PARTIAL) {<br>
++	hprt0 = dwc2_read_hprt0(hsotg);<br>
++<br>
++	/*<br>
++	 * Added port connection status checking which prevents exiting from<br>
++	 * Partial Power Down mode from _dwc2_hcd_resume() if not in Partial<br>
++	 * Power Down mode.<br>
++	 */<br>
++	if (hprt0 & HPRT0_CONNSTS) {<br>
++		hsotg->lx_state = DWC2_L0;<br>
++		goto unlock;<br>
++	}<br>
++<br>
++	switch (hsotg->params.power_down) {<br>
++	case DWC2_POWER_DOWN_PARAM_PARTIAL:<br>
++		ret = dwc2_exit_partial_power_down(hsotg, 0, true);<br>
++		if (ret)<br>
++			dev_err(hsotg->dev,<br>
++				"exit partial_power_down failed\n");<br>
++		/*<br>
++		 * Set HW accessible bit before powering on the controller<br>
++		 * since an interrupt may rise.<br>
++		 */<br>
++		set_bit(HCD_FLAG_HW_ACCESSIBLE, &hcd->flags);<br>
++		break;<br>
++	case DWC2_POWER_DOWN_PARAM_HIBERNATION:<br>
++	case DWC2_POWER_DOWN_PARAM_NONE:<br>
++	default:<br>
+ 		hsotg->lx_state = DWC2_L0;<br>
+ 		goto unlock;<br>
+ 	}<br>
+ <br>
++	/* Change Root port status, as port status change occurred after resume.*/<br>
++	hsotg->flags.b.port_suspend_change = 1;<br>
++<br>
+ 	/*<br>
+ 	 * Enable power if not already done.<br>
+ 	 * This must not be spinlocked since duration<br>
+@@ -4454,52 +4483,25 @@ static int _dwc2_hcd_resume(struct usb_hcd *hcd)<br>
+ 		spin_lock_irqsave(&hsotg->lock, flags);<br>
+ 	}<br>
+ <br>
+-	if (hsotg->params.power_down == DWC2_POWER_DOWN_PARAM_PARTIAL) {<br>
+-		/*<br>
+-		 * Set HW accessible bit before powering on the controller<br>
+-		 * since an interrupt may rise.<br>
+-		 */<br>
+-		set_bit(HCD_FLAG_HW_ACCESSIBLE, &hcd->flags);<br>
+-<br>
+-<br>
+-		/* Exit partial_power_down */<br>
+-		ret = dwc2_exit_partial_power_down(hsotg, 0, true);<br>
+-		if (ret && (ret != -ENOTSUPP))<br>
+-			dev_err(hsotg->dev, "exit partial_power_down failed\n");<br>
+-	} else {<br>
+-		pcgctl = readl(hsotg->regs + PCGCTL);<br>
+-		pcgctl &= ~PCGCTL_STOPPCLK;<br>
+-		writel(pcgctl, hsotg->regs + PCGCTL);<br>
+-	}<br>
+-<br>
+-	hsotg->lx_state = DWC2_L0;<br>
+-<br>
++	/* Enable external vbus supply after resuming the port. */<br>
+ 	spin_unlock_irqrestore(&hsotg->lock, flags);<br>
++	dwc2_vbus_supply_init(hsotg);<br>
+ <br>
+-	if (hsotg->bus_suspended) {<br>
+-		spin_lock_irqsave(&hsotg->lock, flags);<br>
+-		hsotg->flags.b.port_suspend_change = 1;<br>
+-		spin_unlock_irqrestore(&hsotg->lock, flags);<br>
+-		dwc2_port_resume(hsotg);<br>
+-	} else {<br>
+-		if (hsotg->params.power_down == DWC2_POWER_DOWN_PARAM_PARTIAL) {<br>
+-			dwc2_vbus_supply_init(hsotg);<br>
+-<br>
+-			/* Wait for controller to correctly update D+/D- level */<br>
+-			usleep_range(3000, 5000);<br>
+-		}<br>
++	/* Wait for controller to correctly update D+/D- level */<br>
++	usleep_range(3000, 5000);<br>
++	spin_lock_irqsave(&hsotg->lock, flags);<br>
+ <br>
+-		/*<br>
+-		 * Clear Port Enable and Port Status changes.<br>
+-		 * Enable Port Power.<br>
+-		 */<br>
+-		dwc2_writel(hsotg, HPRT0_PWR | HPRT0_CONNDET |<br>
+-				HPRT0_ENACHG, HPRT0);<br>
+-		/* Wait for controller to detect Port Connect */<br>
+-		usleep_range(5000, 7000);<br>
+-	}<br>
++	/*<br>
++	 * Clear Port Enable and Port Status changes.<br>
++	 * Enable Port Power.<br>
++	 */<br>
++	dwc2_writel(hsotg, HPRT0_PWR | HPRT0_CONNDET |<br>
++			HPRT0_ENACHG, HPRT0);<br>
+ <br>
+-	return ret;<br>
++	/* Wait for controller to detect Port Connect */<br>
++	spin_unlock_irqrestore(&hsotg->lock, flags);<br>
++	usleep_range(5000, 7000);<br>
++	spin_lock_irqsave(&hsotg->lock, flags);<br>
+ unlock:<br>
+ 	spin_unlock_irqrestore(&hsotg->lock, flags);<br>
+ <br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

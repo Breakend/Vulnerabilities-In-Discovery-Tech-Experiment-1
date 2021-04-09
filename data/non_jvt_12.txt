@@ -1,0 +1,81 @@
+[whatwg] <video> element proposal
+
+    This message: [ Message body ] [ Respond ] [ More options ]
+    Related messages: [ Next message ] [ Previous message ] [ Next in thread ] [ Replies ]
+
+From: Thomas Davies <Thomas.Davies@bbc.co.uk>
+Date: Thu, 22 Mar 2007 12:28:59 -0000
+Message-ID: <BBB34680589FAB43A29226457DB7297E020B6254@bbcxue217.national.core.bbc.co.uk>
+
+Hi
+
+Having been pointed at this discussion by Christian, I thought I'd let
+you know a bit more about where Dirac is as a royalty-free open source
+codec. We're certainly very keen for Dirac to be considered as one of
+the supported video formats.
+
+Dirac has been in development for 4 years. In compression terms it's
+about twice as efficient as MPEG2, competitive with H264 and VC-1 and
+substantially more efficient than Theora. The Dirac sourceforge site
+contains a full specification of the system which is very nearly
+complete. A subset of this, relating to professional profiles for TV
+production, has already been proposed to the SMPTE for standardisation
+as VC-2. Assuming that there are no roadblocks in this process, we
+intend to submit the rest of the Dirac system as VC-3 (or whatever
+number they're up to) towards the end of the year. So this time next
+year, there is a good chance that Dirac will be an international,
+royalty-free SMPTE standard.
+
+When we started Dirac, our intention was that the Dirac software on the
+website could be developed to build a real-time system. However, it
+proved difficult to make a system that could be a reference codec for
+testing the specification/draft standard and which had real-time
+optimisations. So in conjunction with Fluendo, we started the
+Schrodinger project (http://schrodinger.sf.net) which is a real-time,
+multi-platform implementation of Dirac being developed in parallel with
+the Dirac software. This isn't quite finished yet, but we will have a
+compliant alpha release in the next month or two. It will be alpha
+because although it will do real-time encoding and decoding in software,
+it won't compress all that well. The Dirac site software is being
+maintained as a reference and demonstrator system. 
+
+Our aim then is to do a beta release of Schrodinger by the autumn using
+all the encoder optimisations in Dirac, so by the end of the year we
+should be "there" in terms of having a really good, efficient real-time
+encoder and decoder. Third parties can start designing implementations
+when the spec is finalised at version 1.0 in only a couple of weeks from
+now. 
+
+We have been developing Dirac hardware as well. Hardware for the
+professional applications will be on sale in a very few weeks, and we're
+developing a prototype hardware HDTV encoder too.
+
+
+Thomas 
+
+
+http://www.bbc.co.uk/
+This e-mail (and any attachments) is confidential and may contain personal views which are not the views of the BBC unless specifically stated.
+If you have received it in error, please delete it from your system.
+Do not use, copy or disclose the information in any way nor act in reliance on it and notify the sender immediately.
+Please note that the BBC monitors e-mails sent or received.
+Further communication will signify your consent to this.
+					
+-------------- next part --------------
+An HTML attachment was scrubbed...
+URL: <http://lists.whatwg.org/pipermail/whatwg-whatwg.org/attachments/20070322/492b9e85/attachment.htm>
+
+Received on Thursday, 22 March 2007 05:28:59 UTC
+
+    This message: [ Message body ]
+    Next message: Gareth Hay: "[whatwg] Apple Proposal for Timed Media Elements"
+    Previous message: ddailey: "[whatwg] <video>, <object>, Timed Media Elements"
+    Next in thread: Gareth Hay: "[whatwg] <video> element proposal"
+    Reply: Gareth Hay: "[whatwg] <video> element proposal"
+    Reply: Håkon Wium Lie: "[whatwg] <video> element proposal"
+
+    Mail actions: [ respond to this message ] [ mail a new topic ]
+    Contemporary messages sorted: [ by date ] [ by thread ] [ by subject ] [ by author ]
+    Help: [ How to use the archives ] [ Search in the archives ] 
+
+

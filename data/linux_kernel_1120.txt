@@ -1,0 +1,215 @@
+On Wed, Mar 10, 2021 at 02:30:55PM -0700, Jeffrey Hugo wrote:<br>
+><i> When parsing the structures in the shared memory, there are values which</i><br>
+><i> come from the remote device.  For example, a transfer completion event</i><br>
+><i> will have a pointer to the tre in the relevant channel's transfer ring.</i><br>
+><i> As another example, event ring elements may specify a channel in which</i><br>
+><i> the event occurred, however the specified channel value may not be valid</i><br>
+><i> as no channel is defined at that index even though the index may be less</i><br>
+><i> than the maximum allowed index.  Such values should be considered to be</i><br>
+><i> untrusted, and validated before use.  If we blindly use such values, we</i><br>
+><i> may access invalid data or crash if the values are corrupted.</i><br>
+><i> </i><br>
+><i> If validation fails, drop the relevant event.</i><br>
+><i> </i><br>
+><i> Signed-off-by: Jeffrey Hugo <jhugo@xxxxxxxxxxxxxx></i><br>
+<br>
+Applied to mhi-next!<br>
+<br>
+Thanks,<br>
+Mani<br>
+<br>
+><i> ---</i><br>
+><i> </i><br>
+><i> v3: Add the channel validation example to commit text</i><br>
+><i> v2: Fix subject</i><br>
+><i> </i><br>
+><i>  drivers/bus/mhi/core/main.c | 81 +++++++++++++++++++++++++++++++++++++++++----</i><br>
+><i>  1 file changed, 74 insertions(+), 7 deletions(-)</i><br>
+><i> </i><br>
+><i> diff --git a/drivers/bus/mhi/core/main.c b/drivers/bus/mhi/core/main.c</i><br>
+><i> index a7811fb..6c0e05d 100644</i><br>
+><i> --- a/drivers/bus/mhi/core/main.c</i><br>
+><i> +++ b/drivers/bus/mhi/core/main.c</i><br>
+><i> @@ -242,6 +242,11 @@ static void mhi_del_ring_element(struct mhi_controller *mhi_cntrl,</i><br>
+><i>  	smp_wmb();</i><br>
+><i>  }</i><br>
+><i>  </i><br>
+><i> +static bool is_valid_ring_ptr(struct mhi_ring *ring, dma_addr_t addr)</i><br>
+><i> +{</i><br>
+><i> +	return addr >= ring->iommu_base && addr < ring->iommu_base + ring->len;</i><br>
+><i> +}</i><br>
+><i> +</i><br>
+><i>  int mhi_destroy_device(struct device *dev, void *data)</i><br>
+><i>  {</i><br>
+><i>  	struct mhi_chan *ul_chan, *dl_chan;</i><br>
+><i> @@ -404,7 +409,16 @@ irqreturn_t mhi_irq_handler(int irq_number, void *dev)</i><br>
+><i>  	struct mhi_event_ctxt *er_ctxt =</i><br>
+><i>  		&mhi_cntrl->mhi_ctxt->er_ctxt[mhi_event->er_index];</i><br>
+><i>  	struct mhi_ring *ev_ring = &mhi_event->ring;</i><br>
+><i> -	void *dev_rp = mhi_to_virtual(ev_ring, er_ctxt->rp);</i><br>
+><i> +	dma_addr_t ptr = er_ctxt->rp;</i><br>
+><i> +	void *dev_rp;</i><br>
+><i> +</i><br>
+><i> +	if (!is_valid_ring_ptr(ev_ring, ptr)) {</i><br>
+><i> +		dev_err(&mhi_cntrl->mhi_dev->dev,</i><br>
+><i> +			"Event ring rp points outside of the event ring\n");</i><br>
+><i> +		return IRQ_HANDLED;</i><br>
+><i> +	}</i><br>
+><i> +</i><br>
+><i> +	dev_rp = mhi_to_virtual(ev_ring, ptr);</i><br>
+><i>  </i><br>
+><i>  	/* Only proceed if event ring has pending events */</i><br>
+><i>  	if (ev_ring->rp == dev_rp)</i><br>
+><i> @@ -560,6 +574,11 @@ static int parse_xfer_event(struct mhi_controller *mhi_cntrl,</i><br>
+><i>  		struct mhi_buf_info *buf_info;</i><br>
+><i>  		u16 xfer_len;</i><br>
+><i>  </i><br>
+><i> +		if (!is_valid_ring_ptr(tre_ring, ptr)) {</i><br>
+><i> +			dev_err(&mhi_cntrl->mhi_dev->dev,</i><br>
+><i> +				"Event element points outside of the tre ring\n");</i><br>
+><i> +			break;</i><br>
+><i> +		}</i><br>
+><i>  		/* Get the TRB this event points to */</i><br>
+><i>  		ev_tre = mhi_to_virtual(tre_ring, ptr);</i><br>
+><i>  </i><br>
+><i> @@ -719,6 +738,12 @@ static void mhi_process_cmd_completion(struct mhi_controller *mhi_cntrl,</i><br>
+><i>  	struct mhi_chan *mhi_chan;</i><br>
+><i>  	u32 chan;</i><br>
+><i>  </i><br>
+><i> +	if (!is_valid_ring_ptr(mhi_ring, ptr)) {</i><br>
+><i> +		dev_err(&mhi_cntrl->mhi_dev->dev,</i><br>
+><i> +			"Event element points outside of the cmd ring\n");</i><br>
+><i> +		return;</i><br>
+><i> +	}</i><br>
+><i> +</i><br>
+><i>  	cmd_pkt = mhi_to_virtual(mhi_ring, ptr);</i><br>
+><i>  </i><br>
+><i>  	chan = MHI_TRE_GET_CMD_CHID(cmd_pkt);</i><br>
+><i> @@ -743,6 +768,7 @@ int mhi_process_ctrl_ev_ring(struct mhi_controller *mhi_cntrl,</i><br>
+><i>  	struct device *dev = &mhi_cntrl->mhi_dev->dev;</i><br>
+><i>  	u32 chan;</i><br>
+><i>  	int count = 0;</i><br>
+><i> +	dma_addr_t ptr = er_ctxt->rp;</i><br>
+><i>  </i><br>
+><i>  	/*</i><br>
+><i>  	 * This is a quick check to avoid unnecessary event processing</i><br>
+><i> @@ -752,7 +778,13 @@ int mhi_process_ctrl_ev_ring(struct mhi_controller *mhi_cntrl,</i><br>
+><i>  	if (unlikely(MHI_EVENT_ACCESS_INVALID(mhi_cntrl->pm_state)))</i><br>
+><i>  		return -EIO;</i><br>
+><i>  </i><br>
+><i> -	dev_rp = mhi_to_virtual(ev_ring, er_ctxt->rp);</i><br>
+><i> +	if (!is_valid_ring_ptr(ev_ring, ptr)) {</i><br>
+><i> +		dev_err(&mhi_cntrl->mhi_dev->dev,</i><br>
+><i> +			"Event ring rp points outside of the event ring\n");</i><br>
+><i> +		return -EIO;</i><br>
+><i> +	}</i><br>
+><i> +</i><br>
+><i> +	dev_rp = mhi_to_virtual(ev_ring, ptr);</i><br>
+><i>  	local_rp = ev_ring->rp;</i><br>
+><i>  </i><br>
+><i>  	while (dev_rp != local_rp) {</i><br>
+><i> @@ -858,6 +890,8 @@ int mhi_process_ctrl_ev_ring(struct mhi_controller *mhi_cntrl,</i><br>
+><i>  			 */</i><br>
+><i>  			if (chan < mhi_cntrl->max_chan) {</i><br>
+><i>  				mhi_chan = &mhi_cntrl->mhi_chan[chan];</i><br>
+><i> +				if (!mhi_chan->configured)</i><br>
+><i> +					break;</i><br>
+><i>  				parse_xfer_event(mhi_cntrl, local_rp, mhi_chan);</i><br>
+><i>  				event_quota--;</i><br>
+><i>  			}</i><br>
+><i> @@ -869,7 +903,15 @@ int mhi_process_ctrl_ev_ring(struct mhi_controller *mhi_cntrl,</i><br>
+><i>  </i><br>
+><i>  		mhi_recycle_ev_ring_element(mhi_cntrl, ev_ring);</i><br>
+><i>  		local_rp = ev_ring->rp;</i><br>
+><i> -		dev_rp = mhi_to_virtual(ev_ring, er_ctxt->rp);</i><br>
+><i> +</i><br>
+><i> +		ptr = er_ctxt->rp;</i><br>
+><i> +		if (!is_valid_ring_ptr(ev_ring, ptr)) {</i><br>
+><i> +			dev_err(&mhi_cntrl->mhi_dev->dev,</i><br>
+><i> +				"Event ring rp points outside of the event ring\n");</i><br>
+><i> +			return -EIO;</i><br>
+><i> +		}</i><br>
+><i> +</i><br>
+><i> +		dev_rp = mhi_to_virtual(ev_ring, ptr);</i><br>
+><i>  		count++;</i><br>
+><i>  	}</i><br>
+><i>  </i><br>
+><i> @@ -892,11 +934,18 @@ int mhi_process_data_event_ring(struct mhi_controller *mhi_cntrl,</i><br>
+><i>  	int count = 0;</i><br>
+><i>  	u32 chan;</i><br>
+><i>  	struct mhi_chan *mhi_chan;</i><br>
+><i> +	dma_addr_t ptr = er_ctxt->rp;</i><br>
+><i>  </i><br>
+><i>  	if (unlikely(MHI_EVENT_ACCESS_INVALID(mhi_cntrl->pm_state)))</i><br>
+><i>  		return -EIO;</i><br>
+><i>  </i><br>
+><i> -	dev_rp = mhi_to_virtual(ev_ring, er_ctxt->rp);</i><br>
+><i> +	if (!is_valid_ring_ptr(ev_ring, ptr)) {</i><br>
+><i> +		dev_err(&mhi_cntrl->mhi_dev->dev,</i><br>
+><i> +			"Event ring rp points outside of the event ring\n");</i><br>
+><i> +		return -EIO;</i><br>
+><i> +	}</i><br>
+><i> +</i><br>
+><i> +	dev_rp = mhi_to_virtual(ev_ring, ptr);</i><br>
+><i>  	local_rp = ev_ring->rp;</i><br>
+><i>  </i><br>
+><i>  	while (dev_rp != local_rp && event_quota > 0) {</i><br>
+><i> @@ -910,7 +959,8 @@ int mhi_process_data_event_ring(struct mhi_controller *mhi_cntrl,</i><br>
+><i>  		 * Only process the event ring elements whose channel</i><br>
+><i>  		 * ID is within the maximum supported range.</i><br>
+><i>  		 */</i><br>
+><i> -		if (chan < mhi_cntrl->max_chan) {</i><br>
+><i> +		if (chan < mhi_cntrl->max_chan &&</i><br>
+><i> +		    mhi_cntrl->mhi_chan[chan].configured) {</i><br>
+><i>  			mhi_chan = &mhi_cntrl->mhi_chan[chan];</i><br>
+><i>  </i><br>
+><i>  			if (likely(type == MHI_PKT_TYPE_TX_EVENT)) {</i><br>
+><i> @@ -924,7 +974,15 @@ int mhi_process_data_event_ring(struct mhi_controller *mhi_cntrl,</i><br>
+><i>  </i><br>
+><i>  		mhi_recycle_ev_ring_element(mhi_cntrl, ev_ring);</i><br>
+><i>  		local_rp = ev_ring->rp;</i><br>
+><i> -		dev_rp = mhi_to_virtual(ev_ring, er_ctxt->rp);</i><br>
+><i> +</i><br>
+><i> +		ptr = er_ctxt->rp;</i><br>
+><i> +		if (!is_valid_ring_ptr(ev_ring, ptr)) {</i><br>
+><i> +			dev_err(&mhi_cntrl->mhi_dev->dev,</i><br>
+><i> +				"Event ring rp points outside of the event ring\n");</i><br>
+><i> +			return -EIO;</i><br>
+><i> +		}</i><br>
+><i> +</i><br>
+><i> +		dev_rp = mhi_to_virtual(ev_ring, ptr);</i><br>
+><i>  		count++;</i><br>
+><i>  	}</i><br>
+><i>  	read_lock_bh(&mhi_cntrl->pm_lock);</i><br>
+><i> @@ -1385,6 +1443,7 @@ static void mhi_mark_stale_events(struct mhi_controller *mhi_cntrl,</i><br>
+><i>  	struct mhi_ring *ev_ring;</i><br>
+><i>  	struct device *dev = &mhi_cntrl->mhi_dev->dev;</i><br>
+><i>  	unsigned long flags;</i><br>
+><i> +	dma_addr_t ptr;</i><br>
+><i>  </i><br>
+><i>  	dev_dbg(dev, "Marking all events for chan: %d as stale\n", chan);</i><br>
+><i>  </i><br>
+><i> @@ -1392,7 +1451,15 @@ static void mhi_mark_stale_events(struct mhi_controller *mhi_cntrl,</i><br>
+><i>  </i><br>
+><i>  	/* mark all stale events related to channel as STALE event */</i><br>
+><i>  	spin_lock_irqsave(&mhi_event->lock, flags);</i><br>
+><i> -	dev_rp = mhi_to_virtual(ev_ring, er_ctxt->rp);</i><br>
+><i> +</i><br>
+><i> +	ptr = er_ctxt->rp;</i><br>
+><i> +	if (!is_valid_ring_ptr(ev_ring, ptr)) {</i><br>
+><i> +		dev_err(&mhi_cntrl->mhi_dev->dev,</i><br>
+><i> +			"Event ring rp points outside of the event ring\n");</i><br>
+><i> +		dev_rp = ev_ring->rp;</i><br>
+><i> +	} else {</i><br>
+><i> +		dev_rp = mhi_to_virtual(ev_ring, ptr);</i><br>
+><i> +	}</i><br>
+><i>  </i><br>
+><i>  	local_rp = ev_ring->rp;</i><br>
+><i>  	while (dev_rp != local_rp) {</i><br>
+><i> -- </i><br>
+><i> Qualcomm Technologies, Inc. is a member of the</i><br>
+><i> Code Aurora Forum, a Linux Foundation Collaborative Project.</i><br>
+><i> </i><br>
+<br>
+<br>
+

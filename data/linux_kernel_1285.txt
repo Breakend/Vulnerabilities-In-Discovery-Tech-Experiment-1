@@ -1,0 +1,104 @@
+In case of kdump or when segments are already in place the relocation<br>
+is not needed, therefore the setup of relocation function and call to<br>
+it can be skipped.<br>
+<br>
+Signed-off-by: Pavel Tatashin <pasha.tatashin@xxxxxxxxxx><br>
+Suggested-by: James Morse <james.morse@xxxxxxx><br>
+---<br>
+ arch/arm64/kernel/machine_kexec.c   | 34 ++++++++++++++++++-----------<br>
+ arch/arm64/kernel/relocate_kernel.S |  3 ---<br>
+ 2 files changed, 21 insertions(+), 16 deletions(-)<br>
+<br>
+diff --git a/arch/arm64/kernel/machine_kexec.c b/arch/arm64/kernel/machine_kexec.c<br>
+index 3a034bc25709..b150b65f0b84 100644<br>
+--- a/arch/arm64/kernel/machine_kexec.c<br>
++++ b/arch/arm64/kernel/machine_kexec.c<br>
+@@ -139,21 +139,23 @@ int machine_kexec_post_load(struct kimage *kimage)<br>
+ {<br>
+ 	void *reloc_code = page_to_virt(kimage->control_code_page);<br>
+ <br>
+-	/* If in place flush new kernel image, else flush lists and buffers */<br>
+-	if (kimage->head & IND_DONE)<br>
++	/* If in place, relocation is not used, only flush next kernel */<br>
++	if (kimage->head & IND_DONE) {<br>
+ 		kexec_segment_flush(kimage);<br>
+-	else<br>
+-		kexec_list_flush(kimage);<br>
++		kexec_image_info(kimage);<br>
++		return 0;<br>
++	}<br>
+ <br>
+ 	memcpy(reloc_code, arm64_relocate_new_kernel,<br>
+ 	       arm64_relocate_new_kernel_size);<br>
+ 	kimage->arch.kern_reloc = __pa(reloc_code);<br>
+-	kexec_image_info(kimage);<br>
+ <br>
+ 	/* Flush the reloc_code in preparation for its execution. */<br>
+ 	__flush_dcache_area(reloc_code, arm64_relocate_new_kernel_size);<br>
+ 	flush_icache_range((uintptr_t)reloc_code, (uintptr_t)reloc_code +<br>
+ 			   arm64_relocate_new_kernel_size);<br>
++	kexec_list_flush(kimage);<br>
++	kexec_image_info(kimage);<br>
+ <br>
+ 	return 0;<br>
+ }<br>
+@@ -180,19 +182,25 @@ void machine_kexec(struct kimage *kimage)<br>
+ 	local_daif_mask();<br>
+ <br>
+ 	/*<br>
+-	 * cpu_soft_restart will shutdown the MMU, disable data caches, then<br>
+-	 * transfer control to the kern_reloc which contains a copy of<br>
+-	 * the arm64_relocate_new_kernel routine.  arm64_relocate_new_kernel<br>
+-	 * uses physical addressing to relocate the new image to its final<br>
+-	 * position and transfers control to the image entry point when the<br>
+-	 * relocation is complete.<br>
++	 * Both restart and cpu_soft_restart will shutdown the MMU, disable data<br>
++	 * caches. However, restart will start new kernel or purgatory directly,<br>
++	 * cpu_soft_restart will transfer control to arm64_relocate_new_kernel<br>
+ 	 * In kexec case, kimage->start points to purgatory assuming that<br>
+ 	 * kernel entry and dtb address are embedded in purgatory by<br>
+ 	 * userspace (kexec-tools).<br>
+ 	 * In kexec_file case, the kernel starts directly without purgatory.<br>
+ 	 */<br>
+-	cpu_soft_restart(kimage->arch.kern_reloc, kimage->head, kimage->start,<br>
+-			 kimage->arch.dtb_mem);<br>
++	if (kimage->head & IND_DONE) {<br>
++		typeof(__cpu_soft_restart) *restart;<br>
++<br>
++		cpu_install_idmap();<br>
++		restart = (void *)__pa_symbol(__cpu_soft_restart);<br>
++		restart(is_hyp_callable(), kimage->start, kimage->arch.dtb_mem,<br>
++			0, 0);<br>
++	} else {<br>
++		cpu_soft_restart(kimage->arch.kern_reloc, kimage->head,<br>
++				 kimage->start, kimage->arch.dtb_mem);<br>
++	}<br>
+ <br>
+ 	BUG(); /* Should never get here. */<br>
+ }<br>
+diff --git a/arch/arm64/kernel/relocate_kernel.S b/arch/arm64/kernel/relocate_kernel.S<br>
+index b78ea5de97a4..8058fabe0a76 100644<br>
+--- a/arch/arm64/kernel/relocate_kernel.S<br>
++++ b/arch/arm64/kernel/relocate_kernel.S<br>
+@@ -32,8 +32,6 @@ SYM_CODE_START(arm64_relocate_new_kernel)<br>
+ 	mov	x16, x0				/* x16 = kimage_head */<br>
+ 	mov	x14, xzr			/* x14 = entry ptr */<br>
+ 	mov	x13, xzr			/* x13 = copy dest */<br>
+-	/* Check if the new image needs relocation. */<br>
+-	tbnz	x16, IND_DONE_BIT, .Ldone<br>
+ 	raw_dcache_line_size x15, x1		/* x15 = dcache line size */<br>
+ .Lloop:<br>
+ 	and	x12, x16, PAGE_MASK		/* x12 = addr */<br>
+@@ -65,7 +63,6 @@ SYM_CODE_START(arm64_relocate_new_kernel)<br>
+ .Lnext:<br>
+ 	ldr	x16, [x14], #8			/* entry = *ptr++ */<br>
+ 	tbz	x16, IND_DONE_BIT, .Lloop	/* while (!(entry & DONE)) */<br>
+-.Ldone:<br>
+ 	/* wait for writes from copy_page to finish */<br>
+ 	dsb	nsh<br>
+ 	ic	iallu<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

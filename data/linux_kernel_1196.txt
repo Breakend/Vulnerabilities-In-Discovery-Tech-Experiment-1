@@ -1,0 +1,90 @@
+On Thu, Apr 08, 2021 at 03:37:53AM +0200, Thomas Gleixner wrote:<br>
+><i> Greg,</i><br>
+><i> </i><br>
+><i> On Fri, Apr 02 2021 at 09:54, Greg KH wrote:</i><br>
+><i> > On Thu, Apr 01, 2021 at 11:59:25PM +0000, Luis Chamberlain wrote:</i><br>
+><i> >> As for the syfs deadlock possible with drivers, this fixes it in a generic way:</i><br>
+><i> >> </i><br>
+><i> >> commit fac43d8025727a74f80a183cc5eb74ed902a5d14</i><br>
+><i> >> Author: Luis Chamberlain <mcgrof@xxxxxxxxxx></i><br>
+><i> >> Date:   Sat Mar 27 14:58:15 2021 +0000</i><br>
+><i> >> </i><br>
+><i> >>     sysfs: add optional module_owner to attribute</i><br>
+><i> >>     </i><br>
+><i> >>     This is needed as otherwise the owner of the attribute</i><br>
+><i> >>     or group read/store might have a shared lock used on driver removal,</i><br>
+><i> >>     and deadlock if we race with driver removal.</i><br>
+><i> >>     </i><br>
+><i> >>     Signed-off-by: Luis Chamberlain <mcgrof@xxxxxxxxxx></i><br>
+><i> ></i><br>
+><i> > No, please no.  Module removal is a "best effort", if the system dies</i><br>
+><i> > when it happens, that's on you.  I am not willing to expend extra energy</i><br>
+><i> > and maintance of core things like sysfs for stuff like this that does</i><br>
+><i> > not matter in any system other than a developer's box.</i><br>
+><i> ></i><br>
+><i> > Lock data, not code please.  Trying to tie data structure's lifespans</i><br>
+><i> > to the lifespan of code is a tangled mess, and one that I do not want to</i><br>
+><i> > add to in any form.</i><br>
+><i> ></i><br>
+><i> > sorry,</i><br>
+><i> </i><br>
+><i> Sorry, but you are fundamentaly off track here. This has absolutely</i><br>
+><i> nothing to do with module removal.</i><br>
+><i> </i><br>
+><i> The point is that module removal is the reverse operation of module</i><br>
+><i> insertion. So far so good.</i><br>
+><i> </i><br>
+><i> But module insertion can fail. So if you have nested functionalities</i><br>
+><i> which hang off or are enabled by moduled insertion then any fail in that</i><br>
+><i> sequence has to be able to roll back and clean up properly no matter</i><br>
+><i> what.</i><br>
+><i> </i><br>
+><i> Which it turn makes modules removal a reverse operation of module</i><br>
+><i> insertion.</i><br>
+><i> </i><br>
+><i> If you think otherwise, then please provide a proper plan how nested</i><br>
+><i> operations like sysfs - not to talk about more complex things like multi</i><br>
+><i> instance discovery which can happen inside a module insertion sequence</i><br>
+><i> can be properly rolled back.</i><br>
+><i> </i><br>
+><i> Just declaring that rmmod is evil does not cut it. rmmod is the least of</i><br>
+><i> the problems. If that fails, then a lot of rollback, failure handling</i><br>
+><i> mechanisms are missing in the setup path already.</i><br>
+><i> </i><br>
+><i> Anything which cannot cleanly rollback no matter whether the fail or</i><br>
+><i> rollback request happens at insertion time or later is broken by design.</i><br>
+><i> </i><br>
+><i> So either you declare module removal as disfunctional or you stop making</i><br>
+><i> up semantically ill defined and therefore useless claims about it.</i><br>
+><i> </i><br>
+><i> Your argument in:</i><br>
+><i> </i><br>
+><i>  <a  rel="nofollow" href="https://lore.kernel.org/linux-block/YGbNpLKXfWpy0ZZa@xxxxxxxxx/">https://lore.kernel.org/linux-block/YGbNpLKXfWpy0ZZa@xxxxxxxxx/</a></i><br>
+><i> </i><br>
+><i>  "Lock data, not code please.  Trying to tie data structure's lifespans</i><br>
+><i>   to the lifespan of code is a tangled mess, and one that I do not want to</i><br>
+><i>   add to in any form"</i><br>
+><i> </i><br>
+><i> is just useless blurb because the fundamental purpose of discovery code</i><br>
+><i> is to create the data structures which are tied to the code which is</i><br>
+><i> associated to it.</i><br>
+><i> </i><br>
+><i> Please stop this 'module removal' is not supported nonsense unless you</i><br>
+><i> can prove a complete indepenence of module init/discovery code to</i><br>
+><i> subsequent discovered entities depending on it.</i><br>
+<br>
+Ok, but to be fair, trying to add the crazy hacks that were being<br>
+proposed to sysfs for something that is obviously not a code path that<br>
+can be taken by a normal user or operation is just not going to fly.<br>
+<br>
+Removing a module from a system has always been "let's try it and see!"<br>
+type of operation for a very long time.  While we try our best, doing<br>
+horrible hacks for this rare type of thing are generally not considered<br>
+a good idea which is why I said that.<br>
+<br>
+thanks,<br>
+<br>
+greg k-h<br>
+<br>
+<br>
+

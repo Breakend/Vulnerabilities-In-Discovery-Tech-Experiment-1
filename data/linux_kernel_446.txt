@@ -1,0 +1,95 @@
+From: SeongJae Park <sjpark@xxxxxxxxx><br>
+<br>
+This commit adds a tracepoint for DAMON.  It traces the monitoring<br>
+results of each region for each aggregation interval.  Using this, DAMON<br>
+can easily integrated with tracepoints supporting tools such as perf.<br>
+<br>
+Signed-off-by: SeongJae Park <sjpark@xxxxxxxxx><br>
+Reviewed-by: Leonard Foerster <foersleo@xxxxxxxxx><br>
+Reviewed-by: Steven Rostedt (VMware) <rostedt@xxxxxxxxxxx><br>
+---<br>
+ include/trace/events/damon.h | 43 ++++++++++++++++++++++++++++++++++++<br>
+ mm/damon/core.c              |  7 +++++-<br>
+ 2 files changed, 49 insertions(+), 1 deletion(-)<br>
+ create mode 100644 include/trace/events/damon.h<br>
+<br>
+diff --git a/include/trace/events/damon.h b/include/trace/events/damon.h<br>
+new file mode 100644<br>
+index 000000000000..2f422f4f1fb9<br>
+--- /dev/null<br>
++++ b/include/trace/events/damon.h<br>
+@@ -0,0 +1,43 @@<br>
++/* SPDX-License-Identifier: GPL-2.0 */<br>
++#undef TRACE_SYSTEM<br>
++#define TRACE_SYSTEM damon<br>
++<br>
++#if !defined(_TRACE_DAMON_H) || defined(TRACE_HEADER_MULTI_READ)<br>
++#define _TRACE_DAMON_H<br>
++<br>
++#include <linux/damon.h><br>
++#include <linux/types.h><br>
++#include <linux/tracepoint.h><br>
++<br>
++TRACE_EVENT(damon_aggregated,<br>
++<br>
++	TP_PROTO(struct damon_target *t, struct damon_region *r,<br>
++		unsigned int nr_regions),<br>
++<br>
++	TP_ARGS(t, r, nr_regions),<br>
++<br>
++	TP_STRUCT__entry(<br>
++		__field(unsigned long, target_id)<br>
++		__field(unsigned int, nr_regions)<br>
++		__field(unsigned long, start)<br>
++		__field(unsigned long, end)<br>
++		__field(unsigned int, nr_accesses)<br>
++	),<br>
++<br>
++	TP_fast_assign(<br>
++		__entry->target_id = t->id;<br>
++		__entry->nr_regions = nr_regions;<br>
++		__entry->start = r->ar.start;<br>
++		__entry->end = r->ar.end;<br>
++		__entry->nr_accesses = r->nr_accesses;<br>
++	),<br>
++<br>
++	TP_printk("target_id=%lu nr_regions=%u %lu-%lu: %u",<br>
++			__entry->target_id, __entry->nr_regions,<br>
++			__entry->start, __entry->end, __entry->nr_accesses)<br>
++);<br>
++<br>
++#endif /* _TRACE_DAMON_H */<br>
++<br>
++/* This part must be outside protection */<br>
++#include <trace/define_trace.h><br>
+diff --git a/mm/damon/core.c b/mm/damon/core.c<br>
+index b36b6bdd94e2..912112662d0c 100644<br>
+--- a/mm/damon/core.c<br>
++++ b/mm/damon/core.c<br>
+@@ -13,6 +13,9 @@<br>
+ #include <linux/random.h><br>
+ #include <linux/slab.h><br>
+ <br>
++#define CREATE_TRACE_POINTS<br>
++#include <trace/events/damon.h><br>
++<br>
+ /* Get a random number in [l, r) */<br>
+ #define damon_rand(l, r) (l + prandom_u32_max(r - l))<br>
+ <br>
+@@ -388,8 +391,10 @@ static void kdamond_reset_aggregated(struct damon_ctx *c)<br>
+ 	damon_for_each_target(t, c) {<br>
+ 		struct damon_region *r;<br>
+ <br>
+-		damon_for_each_region(r, t)<br>
++		damon_for_each_region(r, t) {<br>
++			trace_damon_aggregated(t, r, damon_nr_regions(t));<br>
+ 			r->nr_accesses = 0;<br>
++		}<br>
+ 	}<br>
+ }<br>
+ <br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+

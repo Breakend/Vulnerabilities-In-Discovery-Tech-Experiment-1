@@ -1,0 +1,26 @@
+The snd_soc_dai_ops structures is only stored in the ops field of a<br>
+snd_soc_dai_driver structure, so make the snd_soc_dai_ops structure<br>
+const to allow the compiler to put it in read-only memory.<br>
+<br>
+Reported-by: Hulk Robot <hulkci@xxxxxxxxxx><br>
+Signed-off-by: Ye Bin <yebin10@xxxxxxxxxx><br>
+---<br>
+ sound/soc/codecs/tas2764.c | 2 +-<br>
+ 1 file changed, 1 insertion(+), 1 deletion(-)<br>
+<br>
+diff --git a/sound/soc/codecs/tas2764.c b/sound/soc/codecs/tas2764.c<br>
+index 8ff4d9e8d568..9265af41c235 100644<br>
+--- a/sound/soc/codecs/tas2764.c<br>
++++ b/sound/soc/codecs/tas2764.c<br>
+@@ -457,7 +457,7 @@ static int tas2764_set_dai_tdm_slot(struct snd_soc_dai *dai,<br>
+ 	return 0;<br>
+ }<br>
+ <br>
+-static struct snd_soc_dai_ops tas2764_dai_ops = {<br>
++static const struct snd_soc_dai_ops tas2764_dai_ops = {<br>
+ 	.mute_stream = tas2764_mute,<br>
+ 	.hw_params  = tas2764_hw_params,<br>
+ 	.set_fmt    = tas2764_set_fmt,<br>
+<br>
+<br>
+

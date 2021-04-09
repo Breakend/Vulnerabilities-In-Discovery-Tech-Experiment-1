@@ -1,0 +1,22 @@
+><i> +#define put_user(x, ptr)						\</i><br>
+><i> +({									\</i><br>
+><i> +	__typeof__(*(ptr)) __user *__p = (ptr);				\</i><br>
+><i> +									\</i><br>
+><i> +	might_fault();							\</i><br>
+><i> +	access_ok(__p, sizeof(*__p)) ?					\</i><br>
+><i> +		__put_user((x), __p) :					\</i><br>
+><i> +		-EFAULT;						\</i><br>
+<br>
+Why not merge this into a single line, which seems a little more<br>
+readable:<br>
+<br>
+	access_ok(__p, sizeof(*__p)) ? __put_user((x), __p) : -EFAULT;	\<br>
+<br>
+Same for the get_user side.<br>
+<br>
+Otherwise looks great:<br>
+<br>
+Reviewed-by: Christoph Hellwig <hch@xxxxxx><br>
+<br>
+<br>
+

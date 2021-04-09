@@ -1,0 +1,61 @@
+Forgot the fixes line.<br>
+<br>
+* Liam Howlett <liam.howlett@xxxxxxxxxx> [210407 16:00]:<br>
+><i> When the superuser flushes the entire cache, the mmap_read_lock() is not</i><br>
+><i> taken, but mmap_read_unlock() is called.  Add the missing</i><br>
+><i> mmap_read_lock() call.</i><br>
+><i> </i><br>
+><i> Signed-off-by: Liam R. Howlett <Liam.Howlett@xxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  arch/m68k/kernel/sys_m68k.c | 2 ++</i><br>
+><i>  1 file changed, 2 insertions(+)</i><br>
+><i> </i><br>
+><i> diff --git a/arch/m68k/kernel/sys_m68k.c b/arch/m68k/kernel/sys_m68k.c</i><br>
+><i> index 1c235d8f53f3..f55bdcb8e4f1 100644</i><br>
+><i> --- a/arch/m68k/kernel/sys_m68k.c</i><br>
+><i> +++ b/arch/m68k/kernel/sys_m68k.c</i><br>
+><i> @@ -388,6 +388,8 @@ sys_cacheflush (unsigned long addr, int scope, int cache, unsigned long len)</i><br>
+><i>  		ret = -EPERM;</i><br>
+><i>  		if (!capable(CAP_SYS_ADMIN))</i><br>
+><i>  			goto out;</i><br>
+><i> +</i><br>
+><i> +		mmap_read_lock(current->mm);</i><br>
+><i>  	} else {</i><br>
+><i>  		struct vm_area_struct *vma;</i><br>
+><i>  </i><br>
+><i> -- </i><br>
+><i> 2.30.0</i><br>
+From aeee71b15f54426f02f41a4408afbd0b5acab7ec Mon Sep 17 00:00:00 2001<br>
+From: "Liam R. Howlett" <Liam.Howlett@xxxxxxxxxx><br>
+Date: Wed, 7 Apr 2021 11:39:06 -0400<br>
+Subject: [PATCH] arch/m68k/kernel/sys_m68k: Add missing mmap_read_lock() to<br>
+ sys_cacheflush()<br>
+<br>
+When the superuser flushes the entire cache, the mmap_read_lock() is not<br>
+taken, but mmap_read_unlock() is called.  Add the missing<br>
+mmap_read_lock() call.<br>
+<br>
+Fixes: cd2567b6850b (m68k: call find_vma with the mmap_sem held in<br>
+sys_cacheflush())<br>
+Signed-off-by: Liam R. Howlett <Liam.Howlett@xxxxxxxxxx><br>
+---<br>
+ arch/m68k/kernel/sys_m68k.c | 2 ++<br>
+ 1 file changed, 2 insertions(+)<br>
+<br>
+diff --git a/arch/m68k/kernel/sys_m68k.c b/arch/m68k/kernel/sys_m68k.c<br>
+index 1c235d8f53f3..f55bdcb8e4f1 100644<br>
+--- a/arch/m68k/kernel/sys_m68k.c<br>
++++ b/arch/m68k/kernel/sys_m68k.c<br>
+@@ -388,6 +388,8 @@ sys_cacheflush (unsigned long addr, int scope, int cache, unsigned long len)<br>
+ 		ret = -EPERM;<br>
+ 		if (!capable(CAP_SYS_ADMIN))<br>
+ 			goto out;<br>
++<br>
++		mmap_read_lock(current->mm);<br>
+ 	} else {<br>
+ 		struct vm_area_struct *vma;<br>
+ <br>
+-- <br>
+2.30.0<br>
+<br>
+

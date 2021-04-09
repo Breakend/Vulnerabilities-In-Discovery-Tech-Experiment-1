@@ -1,0 +1,48 @@
+On Thu, Apr 8, 2021 at 2:50 PM Linus Walleij <linus.walleij@xxxxxxxxxx> wrote:<br>
+><i></i><br>
+><i> On Thu, Apr 8, 2021 at 2:01 PM David Hildenbrand <david@xxxxxxxxxx> wrote:</i><br>
+><i></i><br>
+><i> > > This is something you could do using a hidden helper symbol like</i><br>
+><i> > ></i><br>
+><i> > > config DRMA_ASPEED_GFX</i><br>
+><i> > >         bool "Aspeed display driver"</i><br>
+><i> > >         select DRM_WANT_CMA</i><br>
+><i> > ></i><br>
+><i> > > config DRM_WANT_CMA</i><br>
+><i> > >         bool</i><br>
+><i> > >         help</i><br>
+><i> > >            Select this from any driver that benefits from CMA being enabled</i><br>
+><i> > ></i><br>
+><i> > > config DMA_CMA</i><br>
+><i> > >         bool "Use CMA helpers for DRM"</i><br>
+><i> > >         default DRM_WANT_CMA</i><br>
+><i> > ></i><br>
+><i> > >           Arnd</i><br>
+><i> > ></i><br>
+><i> ></i><br>
+><i> > That's precisely what I had first, with an additional "WANT_CMA" --  but</i><br>
+><i> > looking at the number of such existing options (I was able to spot 1 !)</i><br>
+><i></i><br>
+><i> If you do this it probably makes sense to fix a few other drivers</i><br>
+><i> Kconfig in the process. It's not just a problem with your driver.</i><br>
+><i> "my" drivers:</i><br>
+><i></i><br>
+><i> drivers/gpu/drm/mcde/Kconfig</i><br>
+><i> drivers/gpu/drm/pl111/Kconfig</i><br>
+><i> drivers/gpu/drm/tve200/Kconfig</i><br>
+><i></i><br>
+><i> certainly needs this as well, and pretty much anything that is</i><br>
+><i> selecting DRM_KMS_CMA_HELPER or</i><br>
+><i> DRM_GEM_CMA_HELPER "wants" DMA_CMA.</i><br>
+<br>
+Are there any that don't select either of the helpers and<br>
+still want CMA? If not, it would be easy to just add<br>
+<br>
+   default  DRM_KMS_CMA_HELPER || DRM_GEM_CMA_HELPER<br>
+<br>
+and skipt the extra symbol.<br>
+<br>
+        Arnd<br>
+<br>
+<br>
+

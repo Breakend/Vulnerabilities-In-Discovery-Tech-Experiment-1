@@ -1,0 +1,398 @@
+Hi,<br>
+<br>
+Thanks for your review.<br>
+<br>
+On Wed, Apr 07, 2021 at 09:27:34AM -0500, Rob Herring wrote:<br>
+><i> On Wed, Apr 07, 2021 at 12:18:38PM +0900, Nobuhiro Iwamatsu wrote:</i><br>
+><i> > Add support to PCIe RC controller on Toshiba Visconti ARM SoCs.</i><br>
+><i> > PCIe controller is based of Synopsys DesignWare PCIe core.</i><br>
+><i> > </i><br>
+><i> > Signed-off-by: Yuji Ishikawa <yuji2.ishikawa@xxxxxxxxxxxxx></i><br>
+><i> > Signed-off-by: Nobuhiro Iwamatsu <nobuhiro1.iwamatsu@xxxxxxxxxxxxx></i><br>
+><i> > ---</i><br>
+><i> >  drivers/pci/controller/dwc/Kconfig         |  10 +</i><br>
+><i> >  drivers/pci/controller/dwc/Makefile        |   1 +</i><br>
+><i> >  drivers/pci/controller/dwc/pcie-visconti.c | 358 +++++++++++++++++++++</i><br>
+><i> >  3 files changed, 369 insertions(+)</i><br>
+><i> >  create mode 100644 drivers/pci/controller/dwc/pcie-visconti.c</i><br>
+><i> > </i><br>
+><i> > diff --git a/drivers/pci/controller/dwc/Kconfig b/drivers/pci/controller/dwc/Kconfig</i><br>
+><i> > index b9aaa84452c4..ae125d7cf375 100644</i><br>
+><i> > --- a/drivers/pci/controller/dwc/Kconfig</i><br>
+><i> > +++ b/drivers/pci/controller/dwc/Kconfig</i><br>
+><i> > @@ -286,6 +286,16 @@ config PCIE_TEGRA194_EP</i><br>
+><i> >  	  in order to enable device-specific features PCIE_TEGRA194_EP must be</i><br>
+><i> >  	  selected. This uses the DesignWare core.</i><br>
+><i> >  </i><br>
+><i> > +config PCIE_VISCONTI</i><br>
+><i> > +	bool "Toshiba VISCONTI PCIe controllers"</i><br>
+><i> > +	depends on ARCH_VISCONTI || COMPILE_TEST</i><br>
+><i> > +	depends on OF && HAS_IOMEM</i><br>
+><i> </i><br>
+><i> Is this line really needed? Seems we have a mixture on other drivers.</i><br>
+<br>
+hmm, thanks. I will remove this.<br>
+<br>
+><i> </i><br>
+><i> > +	depends on PCI_MSI_IRQ_DOMAIN</i><br>
+><i> > +	select PCIE_DW_HOST</i><br>
+><i> > +	help</i><br>
+><i> > +	  Say Y here if you want PCIe controller support on Toshiba Visconti SoC.</i><br>
+><i> > +	  This driver supports TMPV77xx.</i><br>
+><i> > +</i><br>
+><i> >  config PCIE_UNIPHIER</i><br>
+><i> >  	bool "Socionext UniPhier PCIe host controllers"</i><br>
+><i> >  	depends on ARCH_UNIPHIER || COMPILE_TEST</i><br>
+><i> > diff --git a/drivers/pci/controller/dwc/Makefile b/drivers/pci/controller/dwc/Makefile</i><br>
+><i> > index ba7c42f6df6f..46ac5d49dc75 100644</i><br>
+><i> > --- a/drivers/pci/controller/dwc/Makefile</i><br>
+><i> > +++ b/drivers/pci/controller/dwc/Makefile</i><br>
+><i> > @@ -20,6 +20,7 @@ obj-$(CONFIG_PCI_MESON) += pci-meson.o</i><br>
+><i> >  obj-$(CONFIG_PCIE_TEGRA194) += pcie-tegra194.o</i><br>
+><i> >  obj-$(CONFIG_PCIE_UNIPHIER) += pcie-uniphier.o</i><br>
+><i> >  obj-$(CONFIG_PCIE_UNIPHIER_EP) += pcie-uniphier-ep.o</i><br>
+><i> > +obj-$(CONFIG_PCIE_VISCONTI) += pcie-visconti.o</i><br>
+><i> >  </i><br>
+><i> >  # The following drivers are for devices that use the generic ACPI</i><br>
+><i> >  # pci_root.c driver but don't support standard ECAM config access.</i><br>
+><i> > diff --git a/drivers/pci/controller/dwc/pcie-visconti.c b/drivers/pci/controller/dwc/pcie-visconti.c</i><br>
+><i> > new file mode 100644</i><br>
+><i> > index 000000000000..e24f83df41b8</i><br>
+><i> > --- /dev/null</i><br>
+><i> > +++ b/drivers/pci/controller/dwc/pcie-visconti.c</i><br>
+><i> > @@ -0,0 +1,358 @@</i><br>
+><i> > +// SPDX-License-Identifier: GPL-2.0</i><br>
+><i> > +/*</i><br>
+><i> > + * DWC PCIe RC driver for Toshiba Visconti ARM SoC</i><br>
+><i> > + *</i><br>
+><i> > + * Copyright (C) 2019, 2020 Toshiba Electronic Device & Storage Corporation</i><br>
+><i> > + * Copyright (C) 2020, TOSHIBA CORPORATION</i><br>
+><i> > + *</i><br>
+><i> > + * Nobuhiro Iwamatsu <nobuhiro1.iwamatsu@xxxxxxxxxxxxx></i><br>
+><i> > + *</i><br>
+><i> > + */</i><br>
+><i> > +</i><br>
+><i> > +#include <linux/clk.h></i><br>
+><i> > +#include <linux/delay.h></i><br>
+><i> > +#include <linux/gpio.h></i><br>
+><i> > +#include <linux/interrupt.h></i><br>
+><i> > +#include <linux/init.h></i><br>
+><i> > +#include <linux/iopoll.h></i><br>
+><i> > +#include <linux/kernel.h></i><br>
+><i> > +#include <linux/of_platform.h></i><br>
+><i> > +#include <linux/pci.h></i><br>
+><i> > +#include <linux/platform_device.h></i><br>
+><i> > +#include <linux/resource.h></i><br>
+><i> > +#include <linux/types.h></i><br>
+><i> > +</i><br>
+><i> > +#include "pcie-designware.h"</i><br>
+><i> > +#include "../../pci.h"</i><br>
+><i> > +</i><br>
+><i> > +struct visconti_pcie {</i><br>
+><i> > +	struct dw_pcie *pci;</i><br>
+><i> </i><br>
+><i> Embed this rather than a pointer. 1 less alloc.</i><br>
+<br>
+I see. I will change .<br>
+<br>
+><i> </i><br>
+><i> > +	void __iomem *ulreg_base;</i><br>
+><i> > +	void __iomem *smu_base;</i><br>
+><i> > +	void __iomem *mpu_base;</i><br>
+><i> > +	struct clk *refclk;</i><br>
+><i> > +	struct clk *sysclk;</i><br>
+><i> > +	struct clk *auxclk;</i><br>
+><i> > +};</i><br>
+><i> > +</i><br>
+><i> > +#define PCIE_UL_REG_S_PCIE_MODE		0x00F4</i><br>
+><i> > +#define  PCIE_UL_REG_S_PCIE_MODE_EP	0x00</i><br>
+><i> > +#define  PCIE_UL_REG_S_PCIE_MODE_RC	0x04</i><br>
+><i> > +</i><br>
+><i> > +#define PCIE_UL_REG_S_PERSTN_CTRL	0x00F8</i><br>
+><i> > +#define  PCIE_UL_IOM_PCIE_PERSTN_I_EN	BIT(3)</i><br>
+><i> > +#define  PCIE_UL_DIRECT_PERSTN_EN	BIT(2)</i><br>
+><i> > +#define  PCIE_UL_PERSTN_OUT		BIT(1)</i><br>
+><i> > +#define  PCIE_UL_DIRECT_PERSTN		BIT(0)</i><br>
+><i> > +</i><br>
+><i> > +#define PCIE_UL_REG_S_PHY_INIT_02	0x0104</i><br>
+><i> > +#define  PCIE_UL_PHY0_SRAM_EXT_LD_DONE	BIT(0)</i><br>
+><i> > +</i><br>
+><i> > +#define PCIE_UL_REG_S_PHY_INIT_03	0x0108</i><br>
+><i> > +#define  PCIE_UL_PHY0_SRAM_INIT_DONE	BIT(0)</i><br>
+><i> > +</i><br>
+><i> > +#define PCIE_UL_REG_S_INT_EVENT_MASK1	0x0138</i><br>
+><i> > +#define  PCIE_UL_CFG_PME_INT		BIT(0)</i><br>
+><i> > +#define  PCIE_UL_CFG_LINK_EQ_REQ_INT	BIT(1)</i><br>
+><i> > +#define  PCIE_UL_EDMA_INT0		BIT(2)</i><br>
+><i> > +#define  PCIE_UL_EDMA_INT1		BIT(3)</i><br>
+><i> > +#define  PCIE_UL_EDMA_INT2		BIT(4)</i><br>
+><i> > +#define  PCIE_UL_EDMA_INT3		BIT(5)</i><br>
+><i> > +#define  PCIE_UL_S_INT_EVENT_MASK1_ALL  (PCIE_UL_CFG_PME_INT | PCIE_UL_CFG_LINK_EQ_REQ_INT | \</i><br>
+><i> > +					 PCIE_UL_EDMA_INT0 | PCIE_UL_EDMA_INT1 | \</i><br>
+><i> > +					 PCIE_UL_EDMA_INT2 | PCIE_UL_EDMA_INT3)</i><br>
+><i> > +</i><br>
+><i> > +#define PCIE_UL_REG_S_SB_MON		0x0198</i><br>
+><i> > +#define PCIE_UL_REG_S_SIG_MON		0x019C</i><br>
+><i> > +#define  PCIE_UL_CORE_RST_N_MON		BIT(0)</i><br>
+><i> > +</i><br>
+><i> > +#define PCIE_UL_REG_V_SII_DBG_00	0x0844</i><br>
+><i> > +#define PCIE_UL_REG_V_SII_GEN_CTRL_01	0x0860</i><br>
+><i> > +#define  PCIE_UL_APP_LTSSM_ENABLE	BIT(0)</i><br>
+><i> > +</i><br>
+><i> > +#define PCIE_UL_REG_V_PHY_ST_00		0x0864</i><br>
+><i> > +#define  PCIE_UL_SMLH_LINK_UP		BIT(0)</i><br>
+><i> > +</i><br>
+><i> > +#define PCIE_UL_REG_V_PHY_ST_02		0x0868</i><br>
+><i> > +#define  PCIE_UL_S_DETECT_ACT		0x01</i><br>
+><i> > +#define  PCIE_UL_S_L0			0x11</i><br>
+><i> > +</i><br>
+><i> > +#define PISMU_CKON_PCIE			0x0038</i><br>
+><i> > +#define  PISMU_CKON_PCIE_AUX_CLK	BIT(1)</i><br>
+><i> > +#define  PISMU_CKON_PCIE_MSTR_ACLK	BIT(0)</i><br>
+><i> > +</i><br>
+><i> > +#define PISMU_RSOFF_PCIE		0x0538</i><br>
+><i> > +#define  PISMU_RSOFF_PCIE_ULREG_RST_N	BIT(1)</i><br>
+><i> > +#define  PISMU_RSOFF_PCIE_PWR_UP_RST_N	BIT(0)</i><br>
+><i> > +</i><br>
+><i> > +#define PCIE_MPU_REG_MP_EN		0x0</i><br>
+><i> > +#define  MPU_MP_EN_DISABLE		BIT(0)</i><br>
+><i> > +</i><br>
+><i> > +#define PCIE_BUS_OFFSET			0x40000000</i><br>
+><i> > +</i><br>
+><i> > +/* Access registers in PCIe ulreg */</i><br>
+><i> > +static inline void visconti_ulreg_writel(struct visconti_pcie *pcie, u32 val, u32 reg)</i><br>
+><i> > +{</i><br>
+><i> > +	writel(val, pcie->ulreg_base + reg);</i><br>
+><i> </i><br>
+><i> Do these need ordering WRT DMA? If not, use _relaxed variant.</i><br>
+<br>
+This and others does not required WRT DMA. I will change to use _relaxed functions.<br>
+<br>
+><i> </i><br>
+><i> > +}</i><br>
+><i> > +</i><br>
+><i> > +/* Access registers in PCIe smu */</i><br>
+><i> > +static inline void visconti_smu_writel(struct visconti_pcie *pcie, u32 val, u32 reg)</i><br>
+><i> > +{</i><br>
+><i> > +	writel(val, pcie->smu_base + reg);</i><br>
+><i> > +}</i><br>
+><i> > +</i><br>
+><i> > +/* Access registers in PCIe mpu */</i><br>
+><i> > +static inline void visconti_mpu_writel(struct visconti_pcie *pcie, u32 val, u32 reg)</i><br>
+><i> > +{</i><br>
+><i> > +	writel(val, pcie->mpu_base + reg);</i><br>
+><i> > +}</i><br>
+><i> > +</i><br>
+><i> > +static inline u32 visconti_mpu_readl(struct visconti_pcie *pcie, u32 reg)</i><br>
+><i> > +{</i><br>
+><i> > +	return readl(pcie->mpu_base + reg);</i><br>
+><i> > +}</i><br>
+><i> > +</i><br>
+><i> > +static int visconti_pcie_check_link_status(struct visconti_pcie *pcie)</i><br>
+><i> > +{</i><br>
+><i> > +	int err;</i><br>
+><i> > +	u32 val;</i><br>
+><i> > +</i><br>
+><i> > +	/* wait for linkup of phy link layer */</i><br>
+><i> > +	err = readl_poll_timeout(pcie->ulreg_base + PCIE_UL_REG_V_PHY_ST_00, val,</i><br>
+><i> > +				 (val & PCIE_UL_SMLH_LINK_UP), 1000, 10000);</i><br>
+><i> > +	if (err)</i><br>
+><i> > +		return err;</i><br>
+><i> > +</i><br>
+><i> > +	/* wait for linkup of data link layer */</i><br>
+><i> > +	err = readl_poll_timeout(pcie->ulreg_base + PCIE_UL_REG_V_PHY_ST_02, val,</i><br>
+><i> > +				 (val & PCIE_UL_S_DETECT_ACT), 1000, 10000);</i><br>
+><i> > +	if (err)</i><br>
+><i> > +		return err;</i><br>
+><i> > +</i><br>
+><i> > +	/* wait for LTSSM Status */</i><br>
+><i> > +	return readl_poll_timeout(pcie->ulreg_base + PCIE_UL_REG_V_PHY_ST_02, val,</i><br>
+><i> > +				  (val & PCIE_UL_S_L0), 1000, 10000);</i><br>
+><i> > +}</i><br>
+><i> > +</i><br>
+><i> > +static int visconti_pcie_establish_link(struct pcie_port *pp)</i><br>
+><i> > +{</i><br>
+><i> > +	int ret;</i><br>
+><i> > +	u32 val;</i><br>
+><i> > +	struct dw_pcie *pci = to_dw_pcie_from_pp(pp);</i><br>
+><i> > +	struct visconti_pcie *pcie = dev_get_drvdata(pci->dev);</i><br>
+><i> > +</i><br>
+><i> > +	visconti_ulreg_writel(pcie, PCIE_UL_APP_LTSSM_ENABLE, PCIE_UL_REG_V_SII_GEN_CTRL_01);</i><br>
+><i> > +</i><br>
+><i> > +	ret = visconti_pcie_check_link_status(pcie);</i><br>
+><i> > +	if (ret < 0) {</i><br>
+><i> > +		dev_info(pci->dev, "Link failure\n");</i><br>
+><i> > +		return ret;</i><br>
+><i> > +	}</i><br>
+><i> > +</i><br>
+><i> > +	val = visconti_mpu_readl(pcie, PCIE_MPU_REG_MP_EN);</i><br>
+><i> > +	visconti_mpu_writel(pcie, val & ~MPU_MP_EN_DISABLE, PCIE_MPU_REG_MP_EN);</i><br>
+><i> > +</i><br>
+><i> > +	visconti_ulreg_writel(pcie, PCIE_UL_S_INT_EVENT_MASK1_ALL, PCIE_UL_REG_S_INT_EVENT_MASK1);</i><br>
+><i> </i><br>
+><i> Seems like all this should be a phy driver.</i><br>
+><i> </i><br>
+<br>
+I see. I will consider if it can be replaced with a phy driver.<br>
+<br>
+<br>
+><i> > +</i><br>
+><i> > +	return 0;</i><br>
+><i> > +}</i><br>
+><i> > +</i><br>
+><i> > +static int visconti_pcie_host_init(struct pcie_port *pp)</i><br>
+><i> > +{</i><br>
+><i> > +	int ret;</i><br>
+><i> > +	struct dw_pcie *pci = to_dw_pcie_from_pp(pp);</i><br>
+><i> > +</i><br>
+><i> > +	dw_pcie_setup_rc(pp);</i><br>
+><i> </i><br>
+><i> > +	ret = visconti_pcie_establish_link(pp);</i><br>
+><i> > +	if (ret < 0)</i><br>
+><i> > +		return ret;</i><br>
+><i> > +</i><br>
+><i> > +	dw_pcie_wait_for_link(pci);</i><br>
+><i> </i><br>
+><i> The DWC core code does link handling now.</i><br>
+><i> </i><br>
+<br>
+OK, I will check this.<br>
+<br>
+><i> > +</i><br>
+><i> > +	return 0;</i><br>
+><i> > +}</i><br>
+><i> > +</i><br>
+><i> > +static const struct dw_pcie_host_ops visconti_pcie_host_ops = {</i><br>
+><i> > +	.host_init = visconti_pcie_host_init,</i><br>
+><i> > +};</i><br>
+><i> > +</i><br>
+><i> > +static u64 visconti_pcie_cpu_addr_fixup(struct dw_pcie *pci, u64 pci_addr)</i><br>
+><i> > +{</i><br>
+><i> > +	return pci_addr - PCIE_BUS_OFFSET;</i><br>
+><i> > +}</i><br>
+><i> > +</i><br>
+><i> > +static const struct dw_pcie_ops dw_pcie_ops = {</i><br>
+><i> > +	.cpu_addr_fixup = visconti_pcie_cpu_addr_fixup,</i><br>
+><i> > +};</i><br>
+><i> > +</i><br>
+><i> > +static int visconti_get_resources(struct platform_device *pdev,</i><br>
+><i> > +				  struct visconti_pcie *pcie)</i><br>
+><i> > +{</i><br>
+><i> > +	struct device *dev = &pdev->dev;</i><br>
+><i> > +</i><br>
+><i> > +	pcie->pci->dbi_base = devm_platform_ioremap_resource_byname(pdev, "dbi");</i><br>
+><i> > +	if (IS_ERR(pcie->pci->dbi_base))</i><br>
+><i> > +		return PTR_ERR(pcie->pci->dbi_base);</i><br>
+><i> </i><br>
+><i> The DWC core handles this now.</i><br>
+<br>
+OK, I will drop this.<br>
+<br>
+><i> </i><br>
+><i> > +</i><br>
+><i> > +	pcie->ulreg_base = devm_platform_ioremap_resource_byname(pdev, "ulreg");</i><br>
+><i> > +	if (IS_ERR(pcie->ulreg_base))</i><br>
+><i> > +		return PTR_ERR(pcie->ulreg_base);</i><br>
+><i> > +</i><br>
+><i> > +	pcie->smu_base = devm_platform_ioremap_resource_byname(pdev, "smu");</i><br>
+><i> > +	if (IS_ERR(pcie->smu_base))</i><br>
+><i> > +		return PTR_ERR(pcie->smu_base);</i><br>
+><i> > +</i><br>
+><i> > +	pcie->mpu_base = devm_platform_ioremap_resource_byname(pdev, "mpu");</i><br>
+><i> > +	if (IS_ERR(pcie->mpu_base))</i><br>
+><i> > +		return PTR_ERR(pcie->mpu_base);</i><br>
+><i> > +</i><br>
+><i> > +	pcie->refclk = devm_clk_get(dev, "pcie_refclk");</i><br>
+><i> > +	if (IS_ERR(pcie->refclk)) {</i><br>
+><i> > +		dev_err(dev, "Failed to get refclk clock: %ld\n", PTR_ERR(pcie->refclk));</i><br>
+><i> > +		return PTR_ERR(pcie->refclk);</i><br>
+><i> > +	}</i><br>
+><i> > +</i><br>
+><i> > +	pcie->sysclk = devm_clk_get(dev, "sysclk");</i><br>
+><i> > +	if (IS_ERR(pcie->sysclk)) {</i><br>
+><i> > +		dev_err(dev, "Failed to get sysclk clock: %ld\n", PTR_ERR(pcie->sysclk));</i><br>
+><i> > +		return PTR_ERR(pcie->sysclk);</i><br>
+><i> > +	}</i><br>
+><i> > +</i><br>
+><i> > +	pcie->auxclk = devm_clk_get(dev, "auxclk");</i><br>
+><i> > +	if (IS_ERR(pcie->auxclk)) {</i><br>
+><i> > +		dev_err(dev, "Failed to get auxclk clock: %ld\n", PTR_ERR(pcie->auxclk));</i><br>
+><i> > +		return PTR_ERR(pcie->auxclk);</i><br>
+><i> > +	}</i><br>
+><i> > +</i><br>
+><i> > +	return 0;</i><br>
+><i> > +}</i><br>
+><i> > +</i><br>
+><i> > +static int visconti_device_turnon(struct visconti_pcie *pcie)</i><br>
+><i> > +{</i><br>
+><i> > +	int err;</i><br>
+><i> > +	u32 val;</i><br>
+><i> > +</i><br>
+><i> > +	visconti_smu_writel(pcie, PISMU_CKON_PCIE_AUX_CLK | PISMU_CKON_PCIE_MSTR_ACLK,</i><br>
+><i> > +			    PISMU_CKON_PCIE);</i><br>
+><i> </i><br>
+><i> Clock control? Should be a clock provider then.</i><br>
+><i> </i><br>
+<br>
+Visconti does not have clock driver yet, I'm also developping a driver for this,<br>
+but it's still in the process. I plan to replace it with a clock driver later.<br>
+And I should have written this in the commit message.<br>
+<br>
+<br>
+><i> > +	ndelay(250);</i><br>
+><i> > +</i><br>
+><i> > +	visconti_smu_writel(pcie, PISMU_RSOFF_PCIE_ULREG_RST_N, PISMU_RSOFF_PCIE);</i><br>
+><i> > +</i><br>
+><i> > +	visconti_ulreg_writel(pcie, PCIE_UL_REG_S_PCIE_MODE_RC, PCIE_UL_REG_S_PCIE_MODE);</i><br>
+><i> > +</i><br>
+><i> > +	val = PCIE_UL_IOM_PCIE_PERSTN_I_EN | PCIE_UL_DIRECT_PERSTN_EN | PCIE_UL_DIRECT_PERSTN;</i><br>
+><i> > +	visconti_ulreg_writel(pcie, val, PCIE_UL_REG_S_PERSTN_CTRL);</i><br>
+><i> > +	udelay(100);</i><br>
+><i> > +</i><br>
+><i> > +	val |= PCIE_UL_PERSTN_OUT;</i><br>
+><i> > +	visconti_ulreg_writel(pcie, val, PCIE_UL_REG_S_PERSTN_CTRL);</i><br>
+><i> > +	udelay(100);</i><br>
+><i> > +</i><br>
+><i> > +	visconti_smu_writel(pcie, PISMU_RSOFF_PCIE_PWR_UP_RST_N, PISMU_RSOFF_PCIE);</i><br>
+><i> > +</i><br>
+><i> > +	err = readl_poll_timeout(pcie->ulreg_base + PCIE_UL_REG_S_PHY_INIT_03, val,</i><br>
+><i> > +				 (val & PCIE_UL_PHY0_SRAM_INIT_DONE), 100, 1000);</i><br>
+><i> > +	if (err)</i><br>
+><i> > +		return err;</i><br>
+><i> > +</i><br>
+><i> > +	visconti_ulreg_writel(pcie, PCIE_UL_PHY0_SRAM_EXT_LD_DONE, PCIE_UL_REG_S_PHY_INIT_02);</i><br>
+><i> > +</i><br>
+><i> > +	return readl_poll_timeout(pcie->ulreg_base + PCIE_UL_REG_S_SIG_MON, val,</i><br>
+><i> > +				 (val & PCIE_UL_CORE_RST_N_MON), 100, 1000);</i><br>
+><i> > +}</i><br>
+><i> > +</i><br>
+><i> > +static int visconti_add_pcie_port(struct visconti_pcie *pcie, struct platform_device *pdev)</i><br>
+><i> > +{</i><br>
+><i> > +	struct dw_pcie *pci = pcie->pci;</i><br>
+><i> > +	struct pcie_port *pp = &pci->pp;</i><br>
+><i> > +	struct device *dev = &pdev->dev;</i><br>
+><i> > +	int ret;</i><br>
+><i> > +</i><br>
+><i> > +	pp->irq = platform_get_irq_byname(pdev, "intr");</i><br>
+><i> > +	if (pp->irq < 0) {</i><br>
+><i> > +		dev_err(dev, "interrupt intr is missing");</i><br>
+><i> > +		return pp->irq;</i><br>
+><i> > +	}</i><br>
+><i> > +</i><br>
+><i> > +	if (IS_ENABLED(CONFIG_PCI_MSI)) {</i><br>
+><i> > +		pp->msi_irq = platform_get_irq_byname(pdev, "msi");</i><br>
+><i> > +		if (pp->msi_irq < 0) {</i><br>
+><i> > +			dev_err(dev, "interrupt msi is missing");</i><br>
+><i> > +			return pp->msi_irq;</i><br>
+><i> > +		}</i><br>
+><i> > +	}</i><br>
+><i> </i><br>
+><i> DWC core handles this now.</i><br>
+<br>
+OK, I will drop this.<br>
+<br>
+Best regards,<br>
+  Nobuhiro<br>
+<br>
+<br>
+

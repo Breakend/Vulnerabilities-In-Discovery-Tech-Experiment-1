@@ -1,0 +1,36 @@
+On Fri, Apr 02, 2021 at 06:26:40PM +0300, Kirill A. Shutemov wrote:<br>
+><i> Provide basic helpers, KVM_FEATURE, CPUID flag and a hypercall.</i><br>
+><i> </i><br>
+><i> Host side doesn't provide the feature yet, so it is a dead code for now.</i><br>
+><i> </i><br>
+><i> Signed-off-by: Kirill A. Shutemov <kirill.shutemov@xxxxxxxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  arch/x86/include/asm/cpufeatures.h   |  1 +</i><br>
+><i>  arch/x86/include/asm/kvm_para.h      |  5 +++++</i><br>
+><i>  arch/x86/include/uapi/asm/kvm_para.h |  3 ++-</i><br>
+><i>  arch/x86/kernel/kvm.c                | 18 ++++++++++++++++++</i><br>
+><i>  include/uapi/linux/kvm_para.h        |  3 ++-</i><br>
+><i>  5 files changed, 28 insertions(+), 2 deletions(-)</i><br>
+><i> </i><br>
+><i> diff --git a/arch/x86/include/asm/cpufeatures.h b/arch/x86/include/asm/cpufeatures.h</i><br>
+><i> index 84b887825f12..5b6f23e6edc4 100644</i><br>
+><i> --- a/arch/x86/include/asm/cpufeatures.h</i><br>
+><i> +++ b/arch/x86/include/asm/cpufeatures.h</i><br>
+><i> @@ -238,6 +238,7 @@</i><br>
+><i>  #define X86_FEATURE_VMW_VMMCALL		( 8*32+19) /* "" VMware prefers VMMCALL hypercall instruction */</i><br>
+><i>  #define X86_FEATURE_SEV_ES		( 8*32+20) /* AMD Secure Encrypted Virtualization - Encrypted State */</i><br>
+><i>  #define X86_FEATURE_VM_PAGE_FLUSH	( 8*32+21) /* "" VM Page Flush MSR is supported */</i><br>
+><i> +#define X86_FEATURE_KVM_MEM_PROTECTED	( 8*32+22) /* KVM memory protection extenstion */</i><br>
+										    ^^^^^^^^^^<br>
+What's that feature bit for?<br>
+<br>
+Also, use a spellchecker pls: "extenstion".<br>
+<br>
+-- <br>
+Regards/Gruss,<br>
+    Boris.<br>
+<br>
+<a  rel="nofollow" href="https://people.kernel.org/tglx/notes-about-netiquette">https://people.kernel.org/tglx/notes-about-netiquette</a><br>
+<br>
+<br>
+

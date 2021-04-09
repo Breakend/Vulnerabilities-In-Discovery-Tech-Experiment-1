@@ -1,0 +1,13 @@
+><i> </i><br>
+><i> But what does that have to do with the misc device?</i><br>
+><i> </i><br>
+<br>
+Hi Greg, MFD driver is the start of everything. Once MFD driver is loading, it will spawn 2 devices,  <br>
+one is for phc driver, which is under /driver/ptp and the other one is for this misc driver.  <br>
+Both PHC and misc drivers are operating on the same device. <br>
+They are both calling exported functions from mfd drivers to access the device through i2c/spi <br>
+and the register definitions are located in include/Linux/mfd/idt8a340_reg.h or idt82p33_reg.h<br>
+depending on which device was found by mfd driver through device tree node.<br>
+<br>
+<br>
+

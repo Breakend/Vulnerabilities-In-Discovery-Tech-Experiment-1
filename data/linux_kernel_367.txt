@@ -1,0 +1,265 @@
+Move out helpers from rsa-pkcs1pad.c which will be shared across<br>
+rsa-*pad implementations.<br>
+<br>
+Signed-off-by: Varad Gautam <varad.gautam@xxxxxxxx><br>
+---<br>
+ crypto/Makefile                      |  1 +<br>
+ crypto/rsa-common.c                  | 76 ++++++++++++++++++++++<br>
+ crypto/rsa-pkcs1pad.c                | 97 +---------------------------<br>
+ include/crypto/internal/rsa-common.h | 37 +++++++++++<br>
+ 4 files changed, 115 insertions(+), 96 deletions(-)<br>
+ create mode 100644 crypto/rsa-common.c<br>
+ create mode 100644 include/crypto/internal/rsa-common.h<br>
+<br>
+diff --git a/crypto/Makefile b/crypto/Makefile<br>
+index cf23affb16780..57a85b2b3429b 100644<br>
+--- a/crypto/Makefile<br>
++++ b/crypto/Makefile<br>
+@@ -39,6 +39,7 @@ rsa_generic-y := rsapubkey.asn1.o<br>
+ rsa_generic-y += rsaprivkey.asn1.o<br>
+ rsa_generic-y += rsa.o<br>
+ rsa_generic-y += rsa_helper.o<br>
++rsa_generic-y += rsa-common.o<br>
+ rsa_generic-y += rsa-pkcs1pad.o<br>
+ obj-$(CONFIG_CRYPTO_RSA) += rsa_generic.o<br>
+ <br>
+diff --git a/crypto/rsa-common.c b/crypto/rsa-common.c<br>
+new file mode 100644<br>
+index 0000000000000..60073c56e3748<br>
+--- /dev/null<br>
++++ b/crypto/rsa-common.c<br>
+@@ -0,0 +1,76 @@<br>
++// SPDX-License-Identifier: GPL-2.0-or-later<br>
++/*<br>
++ * Copyright (c) 2015  Intel Corporation<br>
++ * Copyright (C) 2021 SUSE<br>
++ *<br>
++ */<br>
++<br>
++#include <crypto/internal/rsa-common.h><br>
++<br>
++/*<br>
++ * Hash algorithm OIDs plus ASN.1 DER wrappings [RFC4880 sec 5.2.2].<br>
++ */<br>
++static const u8 rsa_digest_info_md5[] = {<br>
++	0x30, 0x20, 0x30, 0x0c, 0x06, 0x08,<br>
++	0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x02, 0x05, /* OID */<br>
++	0x05, 0x00, 0x04, 0x10<br>
++};<br>
++<br>
++static const u8 rsa_digest_info_sha1[] = {<br>
++	0x30, 0x21, 0x30, 0x09, 0x06, 0x05,<br>
++	0x2b, 0x0e, 0x03, 0x02, 0x1a,<br>
++	0x05, 0x00, 0x04, 0x14<br>
++};<br>
++<br>
++static const u8 rsa_digest_info_rmd160[] = {<br>
++	0x30, 0x21, 0x30, 0x09, 0x06, 0x05,<br>
++	0x2b, 0x24, 0x03, 0x02, 0x01,<br>
++	0x05, 0x00, 0x04, 0x14<br>
++};<br>
++<br>
++static const u8 rsa_digest_info_sha224[] = {<br>
++	0x30, 0x2d, 0x30, 0x0d, 0x06, 0x09,<br>
++	0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x04,<br>
++	0x05, 0x00, 0x04, 0x1c<br>
++};<br>
++<br>
++static const u8 rsa_digest_info_sha256[] = {<br>
++	0x30, 0x31, 0x30, 0x0d, 0x06, 0x09,<br>
++	0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x01,<br>
++	0x05, 0x00, 0x04, 0x20<br>
++};<br>
++<br>
++static const u8 rsa_digest_info_sha384[] = {<br>
++	0x30, 0x41, 0x30, 0x0d, 0x06, 0x09,<br>
++	0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x02,<br>
++	0x05, 0x00, 0x04, 0x30<br>
++};<br>
++<br>
++static const u8 rsa_digest_info_sha512[] = {<br>
++	0x30, 0x51, 0x30, 0x0d, 0x06, 0x09,<br>
++	0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x03,<br>
++	0x05, 0x00, 0x04, 0x40<br>
++};<br>
++<br>
++static const struct rsa_asn1_template rsa_asn1_templates[] = {<br>
++#define _(X) { #X, rsa_digest_info_##X, sizeof(rsa_digest_info_##X) }<br>
++	_(md5),<br>
++	_(sha1),<br>
++	_(rmd160),<br>
++	_(sha256),<br>
++	_(sha384),<br>
++	_(sha512),<br>
++	_(sha224),<br>
++	{ NULL }<br>
++#undef _<br>
++};<br>
++<br>
++const struct rsa_asn1_template *rsa_lookup_asn1(const char *name)<br>
++{<br>
++	const struct rsa_asn1_template *p;<br>
++<br>
++	for (p = rsa_asn1_templates; p->name; p++)<br>
++		if (strcmp(name, p->name) == 0)<br>
++			return p;<br>
++	return NULL;<br>
++}<br>
+diff --git a/crypto/rsa-pkcs1pad.c b/crypto/rsa-pkcs1pad.c<br>
+index e76fc98a537a4..ffb7220b3d10a 100644<br>
+--- a/crypto/rsa-pkcs1pad.c<br>
++++ b/crypto/rsa-pkcs1pad.c<br>
+@@ -5,104 +5,9 @@<br>
+  * Copyright (c) 2015  Intel Corporation<br>
+  */<br>
+ <br>
+-#include <crypto/algapi.h><br>
+-#include <crypto/akcipher.h><br>
+-#include <crypto/internal/akcipher.h><br>
+-#include <crypto/internal/rsa.h><br>
+-#include <linux/err.h><br>
+-#include <linux/init.h><br>
+-#include <linux/kernel.h><br>
++#include <crypto/internal/rsa-common.h><br>
+ #include <linux/module.h><br>
+ #include <linux/random.h><br>
+-#include <linux/scatterlist.h><br>
+-<br>
+-/*<br>
+- * Hash algorithm OIDs plus ASN.1 DER wrappings [RFC4880 sec 5.2.2].<br>
+- */<br>
+-static const u8 rsa_digest_info_md5[] = {<br>
+-	0x30, 0x20, 0x30, 0x0c, 0x06, 0x08,<br>
+-	0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x02, 0x05, /* OID */<br>
+-	0x05, 0x00, 0x04, 0x10<br>
+-};<br>
+-<br>
+-static const u8 rsa_digest_info_sha1[] = {<br>
+-	0x30, 0x21, 0x30, 0x09, 0x06, 0x05,<br>
+-	0x2b, 0x0e, 0x03, 0x02, 0x1a,<br>
+-	0x05, 0x00, 0x04, 0x14<br>
+-};<br>
+-<br>
+-static const u8 rsa_digest_info_rmd160[] = {<br>
+-	0x30, 0x21, 0x30, 0x09, 0x06, 0x05,<br>
+-	0x2b, 0x24, 0x03, 0x02, 0x01,<br>
+-	0x05, 0x00, 0x04, 0x14<br>
+-};<br>
+-<br>
+-static const u8 rsa_digest_info_sha224[] = {<br>
+-	0x30, 0x2d, 0x30, 0x0d, 0x06, 0x09,<br>
+-	0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x04,<br>
+-	0x05, 0x00, 0x04, 0x1c<br>
+-};<br>
+-<br>
+-static const u8 rsa_digest_info_sha256[] = {<br>
+-	0x30, 0x31, 0x30, 0x0d, 0x06, 0x09,<br>
+-	0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x01,<br>
+-	0x05, 0x00, 0x04, 0x20<br>
+-};<br>
+-<br>
+-static const u8 rsa_digest_info_sha384[] = {<br>
+-	0x30, 0x41, 0x30, 0x0d, 0x06, 0x09,<br>
+-	0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x02,<br>
+-	0x05, 0x00, 0x04, 0x30<br>
+-};<br>
+-<br>
+-static const u8 rsa_digest_info_sha512[] = {<br>
+-	0x30, 0x51, 0x30, 0x0d, 0x06, 0x09,<br>
+-	0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x03,<br>
+-	0x05, 0x00, 0x04, 0x40<br>
+-};<br>
+-<br>
+-static const struct rsa_asn1_template {<br>
+-	const char	*name;<br>
+-	const u8	*data;<br>
+-	size_t		size;<br>
+-} rsa_asn1_templates[] = {<br>
+-#define _(X) { #X, rsa_digest_info_##X, sizeof(rsa_digest_info_##X) }<br>
+-	_(md5),<br>
+-	_(sha1),<br>
+-	_(rmd160),<br>
+-	_(sha256),<br>
+-	_(sha384),<br>
+-	_(sha512),<br>
+-	_(sha224),<br>
+-	{ NULL }<br>
+-#undef _<br>
+-};<br>
+-<br>
+-static const struct rsa_asn1_template *rsa_lookup_asn1(const char *name)<br>
+-{<br>
+-	const struct rsa_asn1_template *p;<br>
+-<br>
+-	for (p = rsa_asn1_templates; p->name; p++)<br>
+-		if (strcmp(name, p->name) == 0)<br>
+-			return p;<br>
+-	return NULL;<br>
+-}<br>
+-<br>
+-struct rsapad_tfm_ctx {<br>
+-	struct crypto_akcipher *child;<br>
+-	unsigned int key_size;<br>
+-};<br>
+-<br>
+-struct rsapad_inst_ctx {<br>
+-	struct crypto_akcipher_spawn spawn;<br>
+-	const struct rsa_asn1_template *digest_info;<br>
+-};<br>
+-<br>
+-struct rsapad_akciper_req_ctx {<br>
+-	struct scatterlist in_sg[2], out_sg[1];<br>
+-	uint8_t *in_buf, *out_buf;<br>
+-	struct akcipher_request child_req;<br>
+-};<br>
+ <br>
+ static int rsapad_set_pub_key(struct crypto_akcipher *tfm, const void *key,<br>
+ 		unsigned int keylen)<br>
+diff --git a/include/crypto/internal/rsa-common.h b/include/crypto/internal/rsa-common.h<br>
+new file mode 100644<br>
+index 0000000000000..ecdce0cdafaa3<br>
+--- /dev/null<br>
++++ b/include/crypto/internal/rsa-common.h<br>
+@@ -0,0 +1,37 @@<br>
++/* SPDX-License-Identifier: GPL-2.0-or-later */<br>
++/*<br>
++ * Copyright (c) 2015  Intel Corporation<br>
++ * Copyright (C) 2021 SUSE<br>
++ *<br>
++ */<br>
++#ifndef _RSA_COMMON_<br>
++#define _RSA_COMMON_<br>
++<br>
++#include <crypto/algapi.h><br>
++#include <crypto/internal/akcipher.h><br>
++#include <linux/scatterlist.h><br>
++<br>
++struct rsa_asn1_template {<br>
++	const char	*name;<br>
++	const u8	*data;<br>
++	size_t		size;<br>
++};<br>
++const struct rsa_asn1_template *rsa_lookup_asn1(const char *name);<br>
++<br>
++struct rsapad_tfm_ctx {<br>
++	struct crypto_akcipher *child;<br>
++	unsigned int key_size;<br>
++};<br>
++<br>
++struct rsapad_inst_ctx {<br>
++	struct crypto_akcipher_spawn spawn;<br>
++	const struct rsa_asn1_template *digest_info;<br>
++};<br>
++<br>
++struct rsapad_akciper_req_ctx {<br>
++	struct scatterlist in_sg[2], out_sg[1];<br>
++	uint8_t *in_buf, *out_buf;<br>
++	struct akcipher_request child_req;<br>
++};<br>
++<br>
++#endif<br>
+-- <br>
+2.30.2<br>
+<br>
+<br>
+

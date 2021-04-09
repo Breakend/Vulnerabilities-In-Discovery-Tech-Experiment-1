@@ -1,0 +1,50 @@
+On Tue, Apr 06, 2021 at 02:25:49PM -0400, Jim Quinlan wrote:<br>
+><i> On Tue, Apr 6, 2021 at 1:32 PM Mark Brown <broonie@xxxxxxxxxx> wrote:</i><br>
+><i> ></i><br>
+><i> > On Tue, Apr 06, 2021 at 01:26:51PM -0400, Jim Quinlan wrote:</i><br>
+><i> > > On Tue, Apr 6, 2021 at 12:47 PM Mark Brown <broonie@xxxxxxxxxx> wrote:</i><br>
+><i> ></i><br>
+><i> > > > No great problem with having these in the controller node (assming it</i><br>
+><i> > > > accurately describes the hardware) but I do think we ought to also be</i><br>
+><i> > > > able to describe these per slot.</i><br>
+<br>
+PCIe is effectively point to point, so there's only 1 slot unless <br>
+there's a PCIe switch in the middle. If that's the case, then it's all <br>
+more complicated.<br>
+<br>
+><i> > > Can you explain what you think that would look like in the DT?</i><br>
+><i> ></i><br>
+><i> > I *think* that's just some properties on the nodes for the endpoints,</i><br>
+><i> > note that the driver could just ignore them for now.  Not sure where or</i><br>
+><i> > if we document any extensions but child nodes are in section 4 of the</i><br>
+><i> > v2.1 PCI bus binding.</i><br>
+><i> </i><br>
+><i> Hi Mark,</i><br>
+><i> </i><br>
+><i> I'm a little confused -- here is how I remember the chronology of the</i><br>
+><i> "DT bindings" commit reviews, please correct me if I'm wrong:</i><br>
+><i> </i><br>
+><i> o JimQ submitted a pullreq for using voltage regulators in the same</i><br>
+><i> style as the existing "rockport" PCIe driver.</i><br>
+><i> o After some deliberation, RobH preferred that the voltage regulators</i><br>
+><i> should go into the PCIe subnode device's DT node.</i><br>
+<br>
+IIRC, that's because you said there isn't a standard slot.<br>
+<br>
+><i> o JimQ put the voltage regulators in the subnode device's DT node.</i><br>
+><i> o MarkB didn't like the fact that the code did a global search for the</i><br>
+><i> regulator since it could not provide the owning struct device* handle.</i><br>
+><i> o RobH relented, and said that if it is just two specific and standard</i><br>
+><i> voltage regulators, perhaps they can go in the parent DT node after</i><br>
+><i> all.</i><br>
+><i> o JimQ put the regulators back in the PCIe node.</i><br>
+><i> o MarkB now wants the regulators to go back into the child node again?</i><br>
+><i> </i><br>
+><i> Folks, please advise.</i><br>
+><i> </i><br>
+><i> Regards,</i><br>
+><i> Jim Quinlan</i><br>
+><i> Broadcom STB</i><br>
+<br>
+<br>
+

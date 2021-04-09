@@ -1,0 +1,128 @@
+When some drivers use spi to send data, spi_transfer->speed_hz is<br>
+not assigned. If spidev->max_speed_hz is not assigned as well, it<br>
+will cause an error in configuring the clock.<br>
+Add a check for these two values before configuring the clock. An<br>
+error will be returned when they are not assigned.<br>
+<br>
+Signed-off-by: Clark Wang <xiaoning.wang@xxxxxxx><br>
+---<br>
+ drivers/spi/spi-imx.c | 37 +++++++++++++++++++++----------------<br>
+ 1 file changed, 21 insertions(+), 16 deletions(-)<br>
+<br>
+diff --git a/drivers/spi/spi-imx.c b/drivers/spi/spi-imx.c<br>
+index 24ba7ab1b05d..01f27b4d7384 100644<br>
+--- a/drivers/spi/spi-imx.c<br>
++++ b/drivers/spi/spi-imx.c<br>
+@@ -66,8 +66,7 @@ struct spi_imx_data;<br>
+ struct spi_imx_devtype_data {<br>
+ 	void (*intctrl)(struct spi_imx_data *, int);<br>
+ 	int (*prepare_message)(struct spi_imx_data *, struct spi_message *);<br>
+-	int (*prepare_transfer)(struct spi_imx_data *, struct spi_device *,<br>
+-				struct spi_transfer *);<br>
++	int (*prepare_transfer)(struct spi_imx_data *, struct spi_device *);<br>
+ 	void (*trigger)(struct spi_imx_data *);<br>
+ 	int (*rx_available)(struct spi_imx_data *);<br>
+ 	void (*reset)(struct spi_imx_data *);<br>
+@@ -581,11 +580,10 @@ static int mx51_ecspi_prepare_message(struct spi_imx_data *spi_imx,<br>
+ }<br>
+ <br>
+ static int mx51_ecspi_prepare_transfer(struct spi_imx_data *spi_imx,<br>
+-				       struct spi_device *spi,<br>
+-				       struct spi_transfer *t)<br>
++				       struct spi_device *spi)<br>
+ {<br>
+ 	u32 ctrl = readl(spi_imx->base + MX51_ECSPI_CTRL);<br>
+-	u32 clk = t->speed_hz, delay;<br>
++	u32 clk, delay;<br>
+ <br>
+ 	/* Clear BL field and set the right value */<br>
+ 	ctrl &= ~MX51_ECSPI_CTRL_BL_MASK;<br>
+@@ -599,7 +597,7 @@ static int mx51_ecspi_prepare_transfer(struct spi_imx_data *spi_imx,<br>
+ 	/* set clock speed */<br>
+ 	ctrl &= ~(0xf << MX51_ECSPI_CTRL_POSTDIV_OFFSET |<br>
+ 		  0xf << MX51_ECSPI_CTRL_PREDIV_OFFSET);<br>
+-	ctrl |= mx51_ecspi_clkdiv(spi_imx, t->speed_hz, &clk);<br>
++	ctrl |= mx51_ecspi_clkdiv(spi_imx, spi_imx->spi_bus_clk, &clk);<br>
+ 	spi_imx->spi_bus_clk = clk;<br>
+ <br>
+ 	if (spi_imx->usedma)<br>
+@@ -711,13 +709,12 @@ static int mx31_prepare_message(struct spi_imx_data *spi_imx,<br>
+ }<br>
+ <br>
+ static int mx31_prepare_transfer(struct spi_imx_data *spi_imx,<br>
+-				 struct spi_device *spi,<br>
+-				 struct spi_transfer *t)<br>
++				 struct spi_device *spi)<br>
+ {<br>
+ 	unsigned int reg = MX31_CSPICTRL_ENABLE | MX31_CSPICTRL_MASTER;<br>
+ 	unsigned int clk;<br>
+ <br>
+-	reg |= spi_imx_clkdiv_2(spi_imx->spi_clk, t->speed_hz, &clk) <<<br>
++	reg |= spi_imx_clkdiv_2(spi_imx->spi_clk, spi_imx->spi_bus_clk, &clk) <<<br>
+ 		MX31_CSPICTRL_DR_SHIFT;<br>
+ 	spi_imx->spi_bus_clk = clk;<br>
+ <br>
+@@ -816,14 +813,13 @@ static int mx21_prepare_message(struct spi_imx_data *spi_imx,<br>
+ }<br>
+ <br>
+ static int mx21_prepare_transfer(struct spi_imx_data *spi_imx,<br>
+-				 struct spi_device *spi,<br>
+-				 struct spi_transfer *t)<br>
++				 struct spi_device *spi)<br>
+ {<br>
+ 	unsigned int reg = MX21_CSPICTRL_ENABLE | MX21_CSPICTRL_MASTER;<br>
+ 	unsigned int max = is_imx27_cspi(spi_imx) ? 16 : 18;<br>
+ 	unsigned int clk;<br>
+ <br>
+-	reg |= spi_imx_clkdiv_1(spi_imx->spi_clk, t->speed_hz, max, &clk)<br>
++	reg |= spi_imx_clkdiv_1(spi_imx->spi_clk, spi_imx->spi_bus_clk, max, &clk)<br>
+ 		<< MX21_CSPICTRL_DR_SHIFT;<br>
+ 	spi_imx->spi_bus_clk = clk;<br>
+ <br>
+@@ -892,13 +888,12 @@ static int mx1_prepare_message(struct spi_imx_data *spi_imx,<br>
+ }<br>
+ <br>
+ static int mx1_prepare_transfer(struct spi_imx_data *spi_imx,<br>
+-				struct spi_device *spi,<br>
+-				struct spi_transfer *t)<br>
++				struct spi_device *spi)<br>
+ {<br>
+ 	unsigned int reg = MX1_CSPICTRL_ENABLE | MX1_CSPICTRL_MASTER;<br>
+ 	unsigned int clk;<br>
+ <br>
+-	reg |= spi_imx_clkdiv_2(spi_imx->spi_clk, t->speed_hz, &clk) <<<br>
++	reg |= spi_imx_clkdiv_2(spi_imx->spi_clk, spi_imx->spi_bus_clk, &clk) <<<br>
+ 		MX1_CSPICTRL_DR_SHIFT;<br>
+ 	spi_imx->spi_bus_clk = clk;<br>
+ <br>
+@@ -1177,6 +1172,16 @@ static int spi_imx_setupxfer(struct spi_device *spi,<br>
+ 	if (!t)<br>
+ 		return 0;<br>
+ <br>
++	if (!t->speed_hz) {<br>
++		if (!spi->max_speed_hz) {<br>
++			dev_err(&spi->dev, "no speed_hz provided!\n");<br>
++			return -EINVAL;<br>
++		}<br>
++		dev_dbg(&spi->dev, "using spi->max_speed_hz!\n");<br>
++		spi_imx->spi_bus_clk = spi->max_speed_hz;<br>
++	} else<br>
++		spi_imx->spi_bus_clk = t->speed_hz;<br>
++<br>
+ 	spi_imx->bits_per_word = t->bits_per_word;<br>
+ <br>
+ 	/*<br>
+@@ -1218,7 +1223,7 @@ static int spi_imx_setupxfer(struct spi_device *spi,<br>
+ 		spi_imx->slave_burst = t->len;<br>
+ 	}<br>
+ <br>
+-	spi_imx->devtype_data->prepare_transfer(spi_imx, spi, t);<br>
++	spi_imx->devtype_data->prepare_transfer(spi_imx, spi);<br>
+ <br>
+ 	return 0;<br>
+ }<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

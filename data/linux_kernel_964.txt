@@ -1,0 +1,61 @@
+
+<br>
+<br>
+Le 08/04/2021 à 10:50, Aneesh Kumar K.V a écrit :<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+Christophe Leroy <christophe.leroy@xxxxxxxxxx> writes:<br>
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+flush_coherent_icache() can use any valid address as mentionned<br>
+by the comment.<br>
+<br>
+Use PAGE_OFFSET as base address. This allows removing the<br>
+user access stuff.<br>
+<br>
+Signed-off-by: Christophe Leroy <christophe.leroy@xxxxxxxxxx><br>
+---<br>
+  arch/powerpc/mm/mem.c | 13 +++++--------<br>
+  1 file changed, 5 insertions(+), 8 deletions(-)<br>
+<br>
+diff --git a/arch/powerpc/mm/mem.c b/arch/powerpc/mm/mem.c<br>
+index ce6c81ce4362..19f807b87697 100644<br>
+--- a/arch/powerpc/mm/mem.c<br>
++++ b/arch/powerpc/mm/mem.c<br>
+@@ -342,10 +342,9 @@ void free_initmem(void)<br>
+  
+  /**
+<br>
+   * flush_coherent_icache() - if a CPU has a coherent icache, flush it<br>
+- * @addr: The base address to use (can be any valid address, the whole cache will be flushed)<br>
+   * Return true if the cache was flushed, false otherwise<br>
+   */<br>
+-static inline bool flush_coherent_icache(unsigned long addr)<br>
++static inline bool flush_coherent_icache(void)<br>
+  {<br>
+  	/*<br>
+  	 * For a snooping icache, we still need a dummy icbi to purge all the<br>
+@@ -355,9 +354,7 @@ static inline bool flush_coherent_icache(unsigned long addr)<br>
+  	 */<br>
+  	if (cpu_has_feature(CPU_FTR_COHERENT_ICACHE)) {<br>
+  		mb(); /* sync */<br>
+-		allow_read_from_user((const void __user *)addr, L1_CACHE_BYTES);<br>
+-		icbi((void *)addr);<br>
+-		prevent_read_from_user((const void __user *)addr, L1_CACHE_BYTES);<br>
++		icbi((void *)PAGE_OFFSET);<br>
+  		mb(); /* sync */<br>
+  		isync();<br>
+  		return true;<br>
+</blockquote>
+<br>
+do we need that followup sync? Usermanual suggest sync; icbi(any address);<br>
+isync sequence.<br>
+</blockquote>
+<br>
+I don't know.<br>
+<br>
+The original implementation is here: <a  rel="nofollow" href="https://github.com/linuxppc/linux/commit/0ce636700">https://github.com/linuxppc/linux/commit/0ce636700</a><br>
+<br>
+Christophe<br>
+<br>
+<br>
+

@@ -1,0 +1,863 @@
+From: SeongJae Park <sjpark@xxxxxxxxx><br>
+<br>
+This commit adds kunit based unit tests for the core and the virtual<br>
+address spaces monitoring primitives of DAMON.<br>
+<br>
+Signed-off-by: SeongJae Park <sjpark@xxxxxxxxx><br>
+Reviewed-by: Brendan Higgins <brendanhiggins@xxxxxxxxxx><br>
+---<br>
+ mm/damon/Kconfig      |  36 +++++<br>
+ mm/damon/core-test.h  | 253 ++++++++++++++++++++++++++++++++<br>
+ mm/damon/core.c       |   7 +<br>
+ mm/damon/dbgfs-test.h | 126 ++++++++++++++++<br>
+ mm/damon/dbgfs.c      |   2 +<br>
+ mm/damon/vaddr-test.h | 328 ++++++++++++++++++++++++++++++++++++++++++<br>
+ mm/damon/vaddr.c      |   7 +<br>
+ 7 files changed, 759 insertions(+)<br>
+ create mode 100644 mm/damon/core-test.h<br>
+ create mode 100644 mm/damon/dbgfs-test.h<br>
+ create mode 100644 mm/damon/vaddr-test.h<br>
+<br>
+diff --git a/mm/damon/Kconfig b/mm/damon/Kconfig<br>
+index 72f1683ba0ee..455995152697 100644<br>
+--- a/mm/damon/Kconfig<br>
++++ b/mm/damon/Kconfig<br>
+@@ -12,6 +12,18 @@ config DAMON<br>
+ 	  See <a  rel="nofollow" href="https://damonitor.github.io/doc/html/latest-damon/index.html">https://damonitor.github.io/doc/html/latest-damon/index.html</a> for<br>
+ 	  more information.<br>
+ <br>
++config DAMON_KUNIT_TEST<br>
++	bool "Test for damon" if !KUNIT_ALL_TESTS<br>
++	depends on DAMON && KUNIT=y<br>
++	default KUNIT_ALL_TESTS<br>
++	help<br>
++	  This builds the DAMON Kunit test suite.<br>
++<br>
++	  For more information on KUnit and unit tests in general, please refer<br>
++	  to the KUnit documentation.<br>
++<br>
++	  If unsure, say N.<br>
++<br>
+ config DAMON_VADDR<br>
+ 	bool "Data access monitoring primitives for virtual address spaces"<br>
+ 	depends on DAMON && MMU<br>
+@@ -21,6 +33,18 @@ config DAMON_VADDR<br>
+ 	  This builds the default data access monitoring primitives for DAMON<br>
+ 	  that works for virtual address spaces.<br>
+ <br>
++config DAMON_VADDR_KUNIT_TEST<br>
++	bool "Test for DAMON primitives" if !KUNIT_ALL_TESTS<br>
++	depends on DAMON_VADDR && KUNIT=y<br>
++	default KUNIT_ALL_TESTS<br>
++	help<br>
++	  This builds the DAMON virtual addresses primitives Kunit test suite.<br>
++<br>
++	  For more information on KUnit and unit tests in general, please refer<br>
++	  to the KUnit documentation.<br>
++<br>
++	  If unsure, say N.<br>
++<br>
+ config DAMON_DBGFS<br>
+ 	bool "DAMON debugfs interface"<br>
+ 	depends on DAMON_VADDR && DEBUG_FS<br>
+@@ -30,4 +54,16 @@ config DAMON_DBGFS<br>
+ <br>
+ 	  If unsure, say N.<br>
+ <br>
++config DAMON_DBGFS_KUNIT_TEST<br>
++	bool "Test for damon debugfs interface" if !KUNIT_ALL_TESTS<br>
++	depends on DAMON_DBGFS && KUNIT=y<br>
++	default KUNIT_ALL_TESTS<br>
++	help<br>
++	  This builds the DAMON debugfs interface Kunit test suite.<br>
++<br>
++	  For more information on KUnit and unit tests in general, please refer<br>
++	  to the KUnit documentation.<br>
++<br>
++	  If unsure, say N.<br>
++<br>
+ endmenu<br>
+diff --git a/mm/damon/core-test.h b/mm/damon/core-test.h<br>
+new file mode 100644<br>
+index 000000000000..b815dfbfb5fd<br>
+--- /dev/null<br>
++++ b/mm/damon/core-test.h<br>
+@@ -0,0 +1,253 @@<br>
++/* SPDX-License-Identifier: GPL-2.0 */<br>
++/*<br>
++ * Data Access Monitor Unit Tests<br>
++ *<br>
++ * Copyright 2019 Amazon.com, Inc. or its affiliates.  All rights reserved.<br>
++ *<br>
++ * Author: SeongJae Park <sjpark@xxxxxxxxx><br>
++ */<br>
++<br>
++#ifdef CONFIG_DAMON_KUNIT_TEST<br>
++<br>
++#ifndef _DAMON_CORE_TEST_H<br>
++#define _DAMON_CORE_TEST_H<br>
++<br>
++#include <kunit/test.h><br>
++<br>
++static void damon_test_regions(struct kunit *test)<br>
++{<br>
++	struct damon_region *r;<br>
++	struct damon_target *t;<br>
++<br>
++	r = damon_new_region(1, 2);<br>
++	KUNIT_EXPECT_EQ(test, 1ul, r->ar.start);<br>
++	KUNIT_EXPECT_EQ(test, 2ul, r->ar.end);<br>
++	KUNIT_EXPECT_EQ(test, 0u, r->nr_accesses);<br>
++<br>
++	t = damon_new_target(42);<br>
++	KUNIT_EXPECT_EQ(test, 0u, damon_nr_regions(t));<br>
++<br>
++	damon_add_region(r, t);<br>
++	KUNIT_EXPECT_EQ(test, 1u, damon_nr_regions(t));<br>
++<br>
++	damon_del_region(r);<br>
++	KUNIT_EXPECT_EQ(test, 0u, damon_nr_regions(t));<br>
++<br>
++	damon_free_target(t);<br>
++}<br>
++<br>
++static unsigned int nr_damon_targets(struct damon_ctx *ctx)<br>
++{<br>
++	struct damon_target *t;<br>
++	unsigned int nr_targets = 0;<br>
++<br>
++	damon_for_each_target(t, ctx)<br>
++		nr_targets++;<br>
++<br>
++	return nr_targets;<br>
++}<br>
++<br>
++static void damon_test_target(struct kunit *test)<br>
++{<br>
++	struct damon_ctx *c = damon_new_ctx();<br>
++	struct damon_target *t;<br>
++<br>
++	t = damon_new_target(42);<br>
++	KUNIT_EXPECT_EQ(test, 42ul, t->id);<br>
++	KUNIT_EXPECT_EQ(test, 0u, nr_damon_targets(c));<br>
++<br>
++	damon_add_target(c, t);<br>
++	KUNIT_EXPECT_EQ(test, 1u, nr_damon_targets(c));<br>
++<br>
++	damon_destroy_target(t);<br>
++	KUNIT_EXPECT_EQ(test, 0u, nr_damon_targets(c));<br>
++<br>
++	damon_destroy_ctx(c);<br>
++}<br>
++<br>
++/*<br>
++ * Test kdamond_reset_aggregated()<br>
++ *<br>
++ * DAMON checks access to each region and aggregates this information as the<br>
++ * access frequency of each region.  In detail, it increases '->nr_accesses' of<br>
++ * regions that an access has confirmed.  'kdamond_reset_aggregated()' flushes<br>
++ * the aggregated information ('->nr_accesses' of each regions) to the result<br>
++ * buffer.  As a result of the flushing, the '->nr_accesses' of regions are<br>
++ * initialized to zero.<br>
++ */<br>
++static void damon_test_aggregate(struct kunit *test)<br>
++{<br>
++	struct damon_ctx *ctx = damon_new_ctx();<br>
++	unsigned long target_ids[] = {1, 2, 3};<br>
++	unsigned long saddr[][3] = {{10, 20, 30}, {5, 42, 49}, {13, 33, 55} };<br>
++	unsigned long eaddr[][3] = {{15, 27, 40}, {31, 45, 55}, {23, 44, 66} };<br>
++	unsigned long accesses[][3] = {{42, 95, 84}, {10, 20, 30}, {0, 1, 2} };<br>
++	struct damon_target *t;<br>
++	struct damon_region *r;<br>
++	int it, ir;<br>
++<br>
++	damon_set_targets(ctx, target_ids, 3);<br>
++<br>
++	it = 0;<br>
++	damon_for_each_target(t, ctx) {<br>
++		for (ir = 0; ir < 3; ir++) {<br>
++			r = damon_new_region(saddr[it][ir], eaddr[it][ir]);<br>
++			r->nr_accesses = accesses[it][ir];<br>
++			damon_add_region(r, t);<br>
++		}<br>
++		it++;<br>
++	}<br>
++	kdamond_reset_aggregated(ctx);<br>
++	it = 0;<br>
++	damon_for_each_target(t, ctx) {<br>
++		ir = 0;<br>
++		/* '->nr_accesses' should be zeroed */<br>
++		damon_for_each_region(r, t) {<br>
++			KUNIT_EXPECT_EQ(test, 0u, r->nr_accesses);<br>
++			ir++;<br>
++		}<br>
++		/* regions should be preserved */<br>
++		KUNIT_EXPECT_EQ(test, 3, ir);<br>
++		it++;<br>
++	}<br>
++	/* targets also should be preserved */<br>
++	KUNIT_EXPECT_EQ(test, 3, it);<br>
++<br>
++	damon_destroy_ctx(ctx);<br>
++}<br>
++<br>
++static void damon_test_split_at(struct kunit *test)<br>
++{<br>
++	struct damon_ctx *c = damon_new_ctx();<br>
++	struct damon_target *t;<br>
++	struct damon_region *r;<br>
++<br>
++	t = damon_new_target(42);<br>
++	r = damon_new_region(0, 100);<br>
++	damon_add_region(r, t);<br>
++	damon_split_region_at(c, r, 25);<br>
++	KUNIT_EXPECT_EQ(test, r->ar.start, 0ul);<br>
++	KUNIT_EXPECT_EQ(test, r->ar.end, 25ul);<br>
++<br>
++	r = damon_next_region(r);<br>
++	KUNIT_EXPECT_EQ(test, r->ar.start, 25ul);<br>
++	KUNIT_EXPECT_EQ(test, r->ar.end, 100ul);<br>
++<br>
++	damon_free_target(t);<br>
++	damon_destroy_ctx(c);<br>
++}<br>
++<br>
++static void damon_test_merge_two(struct kunit *test)<br>
++{<br>
++	struct damon_target *t;<br>
++	struct damon_region *r, *r2, *r3;<br>
++	int i;<br>
++<br>
++	t = damon_new_target(42);<br>
++	r = damon_new_region(0, 100);<br>
++	r->nr_accesses = 10;<br>
++	damon_add_region(r, t);<br>
++	r2 = damon_new_region(100, 300);<br>
++	r2->nr_accesses = 20;<br>
++	damon_add_region(r2, t);<br>
++<br>
++	damon_merge_two_regions(r, r2);<br>
++	KUNIT_EXPECT_EQ(test, r->ar.start, 0ul);<br>
++	KUNIT_EXPECT_EQ(test, r->ar.end, 300ul);<br>
++	KUNIT_EXPECT_EQ(test, r->nr_accesses, 16u);<br>
++<br>
++	i = 0;<br>
++	damon_for_each_region(r3, t) {<br>
++		KUNIT_EXPECT_PTR_EQ(test, r, r3);<br>
++		i++;<br>
++	}<br>
++	KUNIT_EXPECT_EQ(test, i, 1);<br>
++<br>
++	damon_free_target(t);<br>
++}<br>
++<br>
++static struct damon_region *__nth_region_of(struct damon_target *t, int idx)<br>
++{<br>
++	struct damon_region *r;<br>
++	unsigned int i = 0;<br>
++<br>
++	damon_for_each_region(r, t) {<br>
++		if (i++ == idx)<br>
++			return r;<br>
++	}<br>
++<br>
++	return NULL;<br>
++}<br>
++<br>
++static void damon_test_merge_regions_of(struct kunit *test)<br>
++{<br>
++	struct damon_target *t;<br>
++	struct damon_region *r;<br>
++	unsigned long sa[] = {0, 100, 114, 122, 130, 156, 170, 184};<br>
++	unsigned long ea[] = {100, 112, 122, 130, 156, 170, 184, 230};<br>
++	unsigned int nrs[] = {0, 0, 10, 10, 20, 30, 1, 2};<br>
++<br>
++	unsigned long saddrs[] = {0, 114, 130, 156, 170};<br>
++	unsigned long eaddrs[] = {112, 130, 156, 170, 230};<br>
++	int i;<br>
++<br>
++	t = damon_new_target(42);<br>
++	for (i = 0; i < ARRAY_SIZE(sa); i++) {<br>
++		r = damon_new_region(sa[i], ea[i]);<br>
++		r->nr_accesses = nrs[i];<br>
++		damon_add_region(r, t);<br>
++	}<br>
++<br>
++	damon_merge_regions_of(t, 9, 9999);<br>
++	/* 0-112, 114-130, 130-156, 156-170 */<br>
++	KUNIT_EXPECT_EQ(test, damon_nr_regions(t), 5u);<br>
++	for (i = 0; i < 5; i++) {<br>
++		r = __nth_region_of(t, i);<br>
++		KUNIT_EXPECT_EQ(test, r->ar.start, saddrs[i]);<br>
++		KUNIT_EXPECT_EQ(test, r->ar.end, eaddrs[i]);<br>
++	}<br>
++	damon_free_target(t);<br>
++}<br>
++<br>
++static void damon_test_split_regions_of(struct kunit *test)<br>
++{<br>
++	struct damon_ctx *c = damon_new_ctx();<br>
++	struct damon_target *t;<br>
++	struct damon_region *r;<br>
++<br>
++	t = damon_new_target(42);<br>
++	r = damon_new_region(0, 22);<br>
++	damon_add_region(r, t);<br>
++	damon_split_regions_of(c, t, 2);<br>
++	KUNIT_EXPECT_EQ(test, damon_nr_regions(t), 2u);<br>
++	damon_free_target(t);<br>
++<br>
++	t = damon_new_target(42);<br>
++	r = damon_new_region(0, 220);<br>
++	damon_add_region(r, t);<br>
++	damon_split_regions_of(c, t, 4);<br>
++	KUNIT_EXPECT_EQ(test, damon_nr_regions(t), 4u);<br>
++	damon_free_target(t);<br>
++	damon_destroy_ctx(c);<br>
++}<br>
++<br>
++static struct kunit_case damon_test_cases[] = {<br>
++	KUNIT_CASE(damon_test_target),<br>
++	KUNIT_CASE(damon_test_regions),<br>
++	KUNIT_CASE(damon_test_aggregate),<br>
++	KUNIT_CASE(damon_test_split_at),<br>
++	KUNIT_CASE(damon_test_merge_two),<br>
++	KUNIT_CASE(damon_test_merge_regions_of),<br>
++	KUNIT_CASE(damon_test_split_regions_of),<br>
++	{},<br>
++};<br>
++<br>
++static struct kunit_suite damon_test_suite = {<br>
++	.name = "damon",<br>
++	.test_cases = damon_test_cases,<br>
++};<br>
++kunit_test_suite(damon_test_suite);<br>
++<br>
++#endif /* _DAMON_CORE_TEST_H */<br>
++<br>
++#endif	/* CONFIG_DAMON_KUNIT_TEST */<br>
+diff --git a/mm/damon/core.c b/mm/damon/core.c<br>
+index cad2b4cee39d..6bfb5d7d9142 100644<br>
+--- a/mm/damon/core.c<br>
++++ b/mm/damon/core.c<br>
+@@ -16,6 +16,11 @@<br>
+ #define CREATE_TRACE_POINTS<br>
+ #include <trace/events/damon.h><br>
+ <br>
++#ifdef CONFIG_DAMON_KUNIT_TEST<br>
++#undef DAMON_MIN_REGION<br>
++#define DAMON_MIN_REGION 1<br>
++#endif<br>
++<br>
+ /* Get a random number in [l, r) */<br>
+ #define damon_rand(l, r) (l + prandom_u32_max(r - l))<br>
+ <br>
+@@ -709,3 +714,5 @@ static int kdamond_fn(void *data)<br>
+ <br>
+ 	do_exit(0);<br>
+ }<br>
++<br>
++#include "core-test.h"<br>
+diff --git a/mm/damon/dbgfs-test.h b/mm/damon/dbgfs-test.h<br>
+new file mode 100644<br>
+index 000000000000..930e83bceef0<br>
+--- /dev/null<br>
++++ b/mm/damon/dbgfs-test.h<br>
+@@ -0,0 +1,126 @@<br>
++/* SPDX-License-Identifier: GPL-2.0 */<br>
++/*<br>
++ * DAMON Debugfs Interface Unit Tests<br>
++ *<br>
++ * Author: SeongJae Park <sjpark@xxxxxxxxx><br>
++ */<br>
++<br>
++#ifdef CONFIG_DAMON_DBGFS_KUNIT_TEST<br>
++<br>
++#ifndef _DAMON_DBGFS_TEST_H<br>
++#define _DAMON_DBGFS_TEST_H<br>
++<br>
++#include <kunit/test.h><br>
++<br>
++static void damon_dbgfs_test_str_to_target_ids(struct kunit *test)<br>
++{<br>
++	char *question;<br>
++	unsigned long *answers;<br>
++	unsigned long expected[] = {12, 35, 46};<br>
++	ssize_t nr_integers = 0, i;<br>
++<br>
++	question = "123";<br>
++	answers = str_to_target_ids(question, strnlen(question, 128),<br>
++			&nr_integers);<br>
++	KUNIT_EXPECT_EQ(test, (ssize_t)1, nr_integers);<br>
++	KUNIT_EXPECT_EQ(test, 123ul, answers[0]);<br>
++	kfree(answers);<br>
++<br>
++	question = "123abc";<br>
++	answers = str_to_target_ids(question, strnlen(question, 128),<br>
++			&nr_integers);<br>
++	KUNIT_EXPECT_EQ(test, (ssize_t)1, nr_integers);<br>
++	KUNIT_EXPECT_EQ(test, 123ul, answers[0]);<br>
++	kfree(answers);<br>
++<br>
++	question = "a123";<br>
++	answers = str_to_target_ids(question, strnlen(question, 128),<br>
++			&nr_integers);<br>
++	KUNIT_EXPECT_EQ(test, (ssize_t)0, nr_integers);<br>
++	kfree(answers);<br>
++<br>
++	question = "12 35";<br>
++	answers = str_to_target_ids(question, strnlen(question, 128),<br>
++			&nr_integers);<br>
++	KUNIT_EXPECT_EQ(test, (ssize_t)2, nr_integers);<br>
++	for (i = 0; i < nr_integers; i++)<br>
++		KUNIT_EXPECT_EQ(test, expected[i], answers[i]);<br>
++	kfree(answers);<br>
++<br>
++	question = "12 35 46";<br>
++	answers = str_to_target_ids(question, strnlen(question, 128),<br>
++			&nr_integers);<br>
++	KUNIT_EXPECT_EQ(test, (ssize_t)3, nr_integers);<br>
++	for (i = 0; i < nr_integers; i++)<br>
++		KUNIT_EXPECT_EQ(test, expected[i], answers[i]);<br>
++	kfree(answers);<br>
++<br>
++	question = "12 35 abc 46";<br>
++	answers = str_to_target_ids(question, strnlen(question, 128),<br>
++			&nr_integers);<br>
++	KUNIT_EXPECT_EQ(test, (ssize_t)2, nr_integers);<br>
++	for (i = 0; i < 2; i++)<br>
++		KUNIT_EXPECT_EQ(test, expected[i], answers[i]);<br>
++	kfree(answers);<br>
++<br>
++	question = "";<br>
++	answers = str_to_target_ids(question, strnlen(question, 128),<br>
++			&nr_integers);<br>
++	KUNIT_EXPECT_EQ(test, (ssize_t)0, nr_integers);<br>
++	kfree(answers);<br>
++<br>
++	question = "\n";<br>
++	answers = str_to_target_ids(question, strnlen(question, 128),<br>
++			&nr_integers);<br>
++	KUNIT_EXPECT_EQ(test, (ssize_t)0, nr_integers);<br>
++	kfree(answers);<br>
++}<br>
++<br>
++static void damon_dbgfs_test_set_targets(struct kunit *test)<br>
++{<br>
++	struct damon_ctx *ctx = dbgfs_new_ctx();<br>
++	unsigned long ids[] = {1, 2, 3};<br>
++	char buf[64];<br>
++<br>
++	/* Make DAMON consider target id as plain number */<br>
++	ctx->primitive.target_valid = NULL;<br>
++	ctx->primitive.cleanup = NULL;<br>
++<br>
++	damon_set_targets(ctx, ids, 3);<br>
++	sprint_target_ids(ctx, buf, 64);<br>
++	KUNIT_EXPECT_STREQ(test, (char *)buf, "1 2 3\n");<br>
++<br>
++	damon_set_targets(ctx, NULL, 0);<br>
++	sprint_target_ids(ctx, buf, 64);<br>
++	KUNIT_EXPECT_STREQ(test, (char *)buf, "\n");<br>
++<br>
++	damon_set_targets(ctx, (unsigned long []){1, 2}, 2);<br>
++	sprint_target_ids(ctx, buf, 64);<br>
++	KUNIT_EXPECT_STREQ(test, (char *)buf, "1 2\n");<br>
++<br>
++	damon_set_targets(ctx, (unsigned long []){2}, 1);<br>
++	sprint_target_ids(ctx, buf, 64);<br>
++	KUNIT_EXPECT_STREQ(test, (char *)buf, "2\n");<br>
++<br>
++	damon_set_targets(ctx, NULL, 0);<br>
++	sprint_target_ids(ctx, buf, 64);<br>
++	KUNIT_EXPECT_STREQ(test, (char *)buf, "\n");<br>
++<br>
++	dbgfs_destroy_ctx(ctx);<br>
++}<br>
++<br>
++static struct kunit_case damon_test_cases[] = {<br>
++	KUNIT_CASE(damon_dbgfs_test_str_to_target_ids),<br>
++	KUNIT_CASE(damon_dbgfs_test_set_targets),<br>
++	{},<br>
++};<br>
++<br>
++static struct kunit_suite damon_test_suite = {<br>
++	.name = "damon-dbgfs",<br>
++	.test_cases = damon_test_cases,<br>
++};<br>
++kunit_test_suite(damon_test_suite);<br>
++<br>
++#endif /* _DAMON_TEST_H */<br>
++<br>
++#endif	/* CONFIG_DAMON_KUNIT_TEST */<br>
+diff --git a/mm/damon/dbgfs.c b/mm/damon/dbgfs.c<br>
+index 66ac7e18b1df..51a300d3de1f 100644<br>
+--- a/mm/damon/dbgfs.c<br>
++++ b/mm/damon/dbgfs.c<br>
+@@ -613,3 +613,5 @@ static int __init damon_dbgfs_init(void)<br>
+ }<br>
+ <br>
+ module_init(damon_dbgfs_init);<br>
++<br>
++#include "dbgfs-test.h"<br>
+diff --git a/mm/damon/vaddr-test.h b/mm/damon/vaddr-test.h<br>
+new file mode 100644<br>
+index 000000000000..c9394e1d21d3<br>
+--- /dev/null<br>
++++ b/mm/damon/vaddr-test.h<br>
+@@ -0,0 +1,328 @@<br>
++/* SPDX-License-Identifier: GPL-2.0 */<br>
++/*<br>
++ * Data Access Monitor Unit Tests<br>
++ *<br>
++ * Copyright 2019 Amazon.com, Inc. or its affiliates.  All rights reserved.<br>
++ *<br>
++ * Author: SeongJae Park <sjpark@xxxxxxxxx><br>
++ */<br>
++<br>
++#ifdef CONFIG_DAMON_VADDR_KUNIT_TEST<br>
++<br>
++#ifndef _DAMON_VADDR_TEST_H<br>
++#define _DAMON_VADDR_TEST_H<br>
++<br>
++#include <kunit/test.h><br>
++<br>
++static void __link_vmas(struct vm_area_struct *vmas, ssize_t nr_vmas)<br>
++{<br>
++	int i, j;<br>
++	unsigned long largest_gap, gap;<br>
++<br>
++	if (!nr_vmas)<br>
++		return;<br>
++<br>
++	for (i = 0; i < nr_vmas - 1; i++) {<br>
++		vmas[i].vm_next = &vmas[i + 1];<br>
++<br>
++		vmas[i].vm_rb.rb_left = NULL;<br>
++		vmas[i].vm_rb.rb_right = &vmas[i + 1].vm_rb;<br>
++<br>
++		largest_gap = 0;<br>
++		for (j = i; j < nr_vmas; j++) {<br>
++			if (j == 0)<br>
++				continue;<br>
++			gap = vmas[j].vm_start - vmas[j - 1].vm_end;<br>
++			if (gap > largest_gap)<br>
++				largest_gap = gap;<br>
++		}<br>
++		vmas[i].rb_subtree_gap = largest_gap;<br>
++	}<br>
++	vmas[i].vm_next = NULL;<br>
++	vmas[i].vm_rb.rb_right = NULL;<br>
++	vmas[i].rb_subtree_gap = 0;<br>
++}<br>
++<br>
++/*<br>
++ * Test __damon_va_three_regions() function<br>
++ *<br>
++ * In case of virtual memory address spaces monitoring, DAMON converts the<br>
++ * complex and dynamic memory mappings of each target task to three<br>
++ * discontiguous regions which cover every mapped areas.  However, the three<br>
++ * regions should not include the two biggest unmapped areas in the original<br>
++ * mapping, because the two biggest areas are normally the areas between 1)<br>
++ * heap and the mmap()-ed regions, and 2) the mmap()-ed regions and stack.<br>
++ * Because these two unmapped areas are very huge but obviously never accessed,<br>
++ * covering the region is just a waste.<br>
++ *<br>
++ * '__damon_va_three_regions() receives an address space of a process.  It<br>
++ * first identifies the start of mappings, end of mappings, and the two biggest<br>
++ * unmapped areas.  After that, based on the information, it constructs the<br>
++ * three regions and returns.  For more detail, refer to the comment of<br>
++ * 'damon_init_regions_of()' function definition in 'mm/damon.c' file.<br>
++ *<br>
++ * For example, suppose virtual address ranges of 10-20, 20-25, 200-210,<br>
++ * 210-220, 300-305, and 307-330 (Other comments represent this mappings in<br>
++ * more short form: 10-20-25, 200-210-220, 300-305, 307-330) of a process are<br>
++ * mapped.  To cover every mappings, the three regions should start with 10,<br>
++ * and end with 305.  The process also has three unmapped areas, 25-200,<br>
++ * 220-300, and 305-307.  Among those, 25-200 and 220-300 are the biggest two<br>
++ * unmapped areas, and thus it should be converted to three regions of 10-25,<br>
++ * 200-220, and 300-330.<br>
++ */<br>
++static void damon_test_three_regions_in_vmas(struct kunit *test)<br>
++{<br>
++	struct damon_addr_range regions[3] = {0,};<br>
++	/* 10-20-25, 200-210-220, 300-305, 307-330 */<br>
++	struct vm_area_struct vmas[] = {<br>
++		(struct vm_area_struct) {.vm_start = 10, .vm_end = 20},<br>
++		(struct vm_area_struct) {.vm_start = 20, .vm_end = 25},<br>
++		(struct vm_area_struct) {.vm_start = 200, .vm_end = 210},<br>
++		(struct vm_area_struct) {.vm_start = 210, .vm_end = 220},<br>
++		(struct vm_area_struct) {.vm_start = 300, .vm_end = 305},<br>
++		(struct vm_area_struct) {.vm_start = 307, .vm_end = 330},<br>
++	};<br>
++<br>
++	__link_vmas(vmas, 6);<br>
++<br>
++	__damon_va_three_regions(&vmas[0], regions);<br>
++<br>
++	KUNIT_EXPECT_EQ(test, 10ul, regions[0].start);<br>
++	KUNIT_EXPECT_EQ(test, 25ul, regions[0].end);<br>
++	KUNIT_EXPECT_EQ(test, 200ul, regions[1].start);<br>
++	KUNIT_EXPECT_EQ(test, 220ul, regions[1].end);<br>
++	KUNIT_EXPECT_EQ(test, 300ul, regions[2].start);<br>
++	KUNIT_EXPECT_EQ(test, 330ul, regions[2].end);<br>
++}<br>
++<br>
++static struct damon_region *__nth_region_of(struct damon_target *t, int idx)<br>
++{<br>
++	struct damon_region *r;<br>
++	unsigned int i = 0;<br>
++<br>
++	damon_for_each_region(r, t) {<br>
++		if (i++ == idx)<br>
++			return r;<br>
++	}<br>
++<br>
++	return NULL;<br>
++}<br>
++<br>
++/*<br>
++ * Test 'damon_va_apply_three_regions()'<br>
++ *<br>
++ * test			kunit object<br>
++ * regions		an array containing start/end addresses of current<br>
++ *			monitoring target regions<br>
++ * nr_regions		the number of the addresses in 'regions'<br>
++ * three_regions	The three regions that need to be applied now<br>
++ * expected		start/end addresses of monitoring target regions that<br>
++ *			'three_regions' are applied<br>
++ * nr_expected		the number of addresses in 'expected'<br>
++ *<br>
++ * The memory mapping of the target processes changes dynamically.  To follow<br>
++ * the change, DAMON periodically reads the mappings, simplifies it to the<br>
++ * three regions, and updates the monitoring target regions to fit in the three<br>
++ * regions.  The update of current target regions is the role of<br>
++ * 'damon_va_apply_three_regions()'.<br>
++ *<br>
++ * This test passes the given target regions and the new three regions that<br>
++ * need to be applied to the function and check whether it updates the regions<br>
++ * as expected.<br>
++ */<br>
++static void damon_do_test_apply_three_regions(struct kunit *test,<br>
++				unsigned long *regions, int nr_regions,<br>
++				struct damon_addr_range *three_regions,<br>
++				unsigned long *expected, int nr_expected)<br>
++{<br>
++	struct damon_ctx *ctx = damon_new_ctx();<br>
++	struct damon_target *t;<br>
++	struct damon_region *r;<br>
++	int i;<br>
++<br>
++	t = damon_new_target(42);<br>
++	for (i = 0; i < nr_regions / 2; i++) {<br>
++		r = damon_new_region(regions[i * 2], regions[i * 2 + 1]);<br>
++		damon_add_region(r, t);<br>
++	}<br>
++	damon_add_target(ctx, t);<br>
++<br>
++	damon_va_apply_three_regions(ctx, t, three_regions);<br>
++<br>
++	for (i = 0; i < nr_expected / 2; i++) {<br>
++		r = __nth_region_of(t, i);<br>
++		KUNIT_EXPECT_EQ(test, r->ar.start, expected[i * 2]);<br>
++		KUNIT_EXPECT_EQ(test, r->ar.end, expected[i * 2 + 1]);<br>
++	}<br>
++<br>
++	damon_destroy_ctx(ctx);<br>
++}<br>
++<br>
++/*<br>
++ * This function test most common case where the three big regions are only<br>
++ * slightly changed.  Target regions should adjust their boundary (10-20-30,<br>
++ * 50-55, 70-80, 90-100) to fit with the new big regions or remove target<br>
++ * regions (57-79) that now out of the three regions.<br>
++ */<br>
++static void damon_test_apply_three_regions1(struct kunit *test)<br>
++{<br>
++	/* 10-20-30, 50-55-57-59, 70-80-90-100 */<br>
++	unsigned long regions[] = {10, 20, 20, 30, 50, 55, 55, 57, 57, 59,<br>
++				70, 80, 80, 90, 90, 100};<br>
++	/* 5-27, 45-55, 73-104 */<br>
++	struct damon_addr_range new_three_regions[3] = {<br>
++		(struct damon_addr_range){.start = 5, .end = 27},<br>
++		(struct damon_addr_range){.start = 45, .end = 55},<br>
++		(struct damon_addr_range){.start = 73, .end = 104} };<br>
++	/* 5-20-27, 45-55, 73-80-90-104 */<br>
++	unsigned long expected[] = {5, 20, 20, 27, 45, 55,<br>
++				73, 80, 80, 90, 90, 104};<br>
++<br>
++	damon_do_test_apply_three_regions(test, regions, ARRAY_SIZE(regions),<br>
++			new_three_regions, expected, ARRAY_SIZE(expected));<br>
++}<br>
++<br>
++/*<br>
++ * Test slightly bigger change.  Similar to above, but the second big region<br>
++ * now require two target regions (50-55, 57-59) to be removed.<br>
++ */<br>
++static void damon_test_apply_three_regions2(struct kunit *test)<br>
++{<br>
++	/* 10-20-30, 50-55-57-59, 70-80-90-100 */<br>
++	unsigned long regions[] = {10, 20, 20, 30, 50, 55, 55, 57, 57, 59,<br>
++				70, 80, 80, 90, 90, 100};<br>
++	/* 5-27, 56-57, 65-104 */<br>
++	struct damon_addr_range new_three_regions[3] = {<br>
++		(struct damon_addr_range){.start = 5, .end = 27},<br>
++		(struct damon_addr_range){.start = 56, .end = 57},<br>
++		(struct damon_addr_range){.start = 65, .end = 104} };<br>
++	/* 5-20-27, 56-57, 65-80-90-104 */<br>
++	unsigned long expected[] = {5, 20, 20, 27, 56, 57,<br>
++				65, 80, 80, 90, 90, 104};<br>
++<br>
++	damon_do_test_apply_three_regions(test, regions, ARRAY_SIZE(regions),<br>
++			new_three_regions, expected, ARRAY_SIZE(expected));<br>
++}<br>
++<br>
++/*<br>
++ * Test a big change.  The second big region has totally freed and mapped to<br>
++ * different area (50-59 -> 61-63).  The target regions which were in the old<br>
++ * second big region (50-55-57-59) should be removed and new target region<br>
++ * covering the second big region (61-63) should be created.<br>
++ */<br>
++static void damon_test_apply_three_regions3(struct kunit *test)<br>
++{<br>
++	/* 10-20-30, 50-55-57-59, 70-80-90-100 */<br>
++	unsigned long regions[] = {10, 20, 20, 30, 50, 55, 55, 57, 57, 59,<br>
++				70, 80, 80, 90, 90, 100};<br>
++	/* 5-27, 61-63, 65-104 */<br>
++	struct damon_addr_range new_three_regions[3] = {<br>
++		(struct damon_addr_range){.start = 5, .end = 27},<br>
++		(struct damon_addr_range){.start = 61, .end = 63},<br>
++		(struct damon_addr_range){.start = 65, .end = 104} };<br>
++	/* 5-20-27, 61-63, 65-80-90-104 */<br>
++	unsigned long expected[] = {5, 20, 20, 27, 61, 63,<br>
++				65, 80, 80, 90, 90, 104};<br>
++<br>
++	damon_do_test_apply_three_regions(test, regions, ARRAY_SIZE(regions),<br>
++			new_three_regions, expected, ARRAY_SIZE(expected));<br>
++}<br>
++<br>
++/*<br>
++ * Test another big change.  Both of the second and third big regions (50-59<br>
++ * and 70-100) has totally freed and mapped to different area (30-32 and<br>
++ * 65-68).  The target regions which were in the old second and third big<br>
++ * regions should now be removed and new target regions covering the new second<br>
++ * and third big regions should be crated.<br>
++ */<br>
++static void damon_test_apply_three_regions4(struct kunit *test)<br>
++{<br>
++	/* 10-20-30, 50-55-57-59, 70-80-90-100 */<br>
++	unsigned long regions[] = {10, 20, 20, 30, 50, 55, 55, 57, 57, 59,<br>
++				70, 80, 80, 90, 90, 100};<br>
++	/* 5-7, 30-32, 65-68 */<br>
++	struct damon_addr_range new_three_regions[3] = {<br>
++		(struct damon_addr_range){.start = 5, .end = 7},<br>
++		(struct damon_addr_range){.start = 30, .end = 32},<br>
++		(struct damon_addr_range){.start = 65, .end = 68} };<br>
++	/* expect 5-7, 30-32, 65-68 */<br>
++	unsigned long expected[] = {5, 7, 30, 32, 65, 68};<br>
++<br>
++	damon_do_test_apply_three_regions(test, regions, ARRAY_SIZE(regions),<br>
++			new_three_regions, expected, ARRAY_SIZE(expected));<br>
++}<br>
++<br>
++static void damon_test_split_evenly(struct kunit *test)<br>
++{<br>
++	struct damon_ctx *c = damon_new_ctx();<br>
++	struct damon_target *t;<br>
++	struct damon_region *r;<br>
++	unsigned long i;<br>
++<br>
++	KUNIT_EXPECT_EQ(test, damon_va_evenly_split_region(c, NULL, 5), -EINVAL);<br>
++<br>
++	t = damon_new_target(42);<br>
++	r = damon_new_region(0, 100);<br>
++	KUNIT_EXPECT_EQ(test, damon_va_evenly_split_region(c, r, 0), -EINVAL);<br>
++<br>
++	damon_add_region(r, t);<br>
++	KUNIT_EXPECT_EQ(test, damon_va_evenly_split_region(c, r, 10), 0);<br>
++	KUNIT_EXPECT_EQ(test, damon_nr_regions(t), 10u);<br>
++<br>
++	i = 0;<br>
++	damon_for_each_region(r, t) {<br>
++		KUNIT_EXPECT_EQ(test, r->ar.start, i++ * 10);<br>
++		KUNIT_EXPECT_EQ(test, r->ar.end, i * 10);<br>
++	}<br>
++	damon_free_target(t);<br>
++<br>
++	t = damon_new_target(42);<br>
++	r = damon_new_region(5, 59);<br>
++	damon_add_region(r, t);<br>
++	KUNIT_EXPECT_EQ(test, damon_va_evenly_split_region(c, r, 5), 0);<br>
++	KUNIT_EXPECT_EQ(test, damon_nr_regions(t), 5u);<br>
++<br>
++	i = 0;<br>
++	damon_for_each_region(r, t) {<br>
++		if (i == 4)<br>
++			break;<br>
++		KUNIT_EXPECT_EQ(test, r->ar.start, 5 + 10 * i++);<br>
++		KUNIT_EXPECT_EQ(test, r->ar.end, 5 + 10 * i);<br>
++	}<br>
++	KUNIT_EXPECT_EQ(test, r->ar.start, 5 + 10 * i);<br>
++	KUNIT_EXPECT_EQ(test, r->ar.end, 59ul);<br>
++	damon_free_target(t);<br>
++<br>
++	t = damon_new_target(42);<br>
++	r = damon_new_region(5, 6);<br>
++	damon_add_region(r, t);<br>
++	KUNIT_EXPECT_EQ(test, damon_va_evenly_split_region(c, r, 2), -EINVAL);<br>
++	KUNIT_EXPECT_EQ(test, damon_nr_regions(t), 1u);<br>
++<br>
++	damon_for_each_region(r, t) {<br>
++		KUNIT_EXPECT_EQ(test, r->ar.start, 5ul);<br>
++		KUNIT_EXPECT_EQ(test, r->ar.end, 6ul);<br>
++	}<br>
++	damon_free_target(t);<br>
++	damon_destroy_ctx(c);<br>
++}<br>
++<br>
++static struct kunit_case damon_test_cases[] = {<br>
++	KUNIT_CASE(damon_test_three_regions_in_vmas),<br>
++	KUNIT_CASE(damon_test_apply_three_regions1),<br>
++	KUNIT_CASE(damon_test_apply_three_regions2),<br>
++	KUNIT_CASE(damon_test_apply_three_regions3),<br>
++	KUNIT_CASE(damon_test_apply_three_regions4),<br>
++	KUNIT_CASE(damon_test_split_evenly),<br>
++	{},<br>
++};<br>
++<br>
++static struct kunit_suite damon_test_suite = {<br>
++	.name = "damon-primitives",<br>
++	.test_cases = damon_test_cases,<br>
++};<br>
++kunit_test_suite(damon_test_suite);<br>
++<br>
++#endif /* _DAMON_VADDR_TEST_H */<br>
++<br>
++#endif	/* CONFIG_DAMON_VADDR_KUNIT_TEST */<br>
+diff --git a/mm/damon/vaddr.c b/mm/damon/vaddr.c<br>
+index 3bc9dc9f0656..a0cd006b3ec5 100644<br>
+--- a/mm/damon/vaddr.c<br>
++++ b/mm/damon/vaddr.c<br>
+@@ -15,6 +15,11 @@<br>
+ #include <linux/sched/mm.h><br>
+ #include <linux/slab.h><br>
+ <br>
++#ifdef CONFIG_DAMON_VADDR_KUNIT_TEST<br>
++#undef DAMON_MIN_REGION<br>
++#define DAMON_MIN_REGION 1<br>
++#endif<br>
++<br>
+ /* Get a random number in [l, r) */<br>
+ #define damon_rand(l, r) (l + prandom_u32_max(r - l))<br>
+ <br>
+@@ -614,3 +619,5 @@ void damon_va_set_primitives(struct damon_ctx *ctx)<br>
+ 	ctx->primitive.target_valid = damon_va_target_valid;<br>
+ 	ctx->primitive.cleanup = damon_va_cleanup;<br>
+ }<br>
++<br>
++#include "vaddr-test.h"<br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+

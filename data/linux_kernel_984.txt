@@ -1,0 +1,57 @@
+On Thu, Apr 8, 2021 at 1:32 AM kernel test robot <oliver.sang@xxxxxxxxx> wrote:<br>
+><i></i><br>
+><i> FYI, we noticed a -41.9% regression of stress-ng.sigsegv.ops_per_sec due to commit</i><br>
+><i> 08ed4efad684 ("[PATCH v10 6/9] Reimplement RLIMIT_SIGPENDING on top of ucounts")</i><br>
+<br>
+Ouch.<br>
+<br>
+I *think* this test may be testing "send so many signals that it<br>
+triggers the signal queue overflow case".<br>
+<br>
+And I *think* that the performance degradation may be due to lots of<br>
+unnecessary allocations, because ity looks like that commit changes<br>
+__sigqueue_alloc() to do<br>
+<br>
+        struct sigqueue *q = kmem_cache_alloc(sigqueue_cachep, flags);<br>
+<br>
+*before* checking the signal limit, and then if the signal limit was<br>
+exceeded, it will just be free'd instead.<br>
+<br>
+The old code would check the signal count against RLIMIT_SIGPENDING<br>
+*first*, and if there were m ore pending signals then it wouldn't do<br>
+anything at all (including not incrementing that expensive atomic<br>
+count).<br>
+<br>
+Also, the old code was very careful to only do the "get_user()" for<br>
+the *first* signal it added to the queue, and do the "put_user()" for<br>
+when removing the last signal. Exactly because those atomics are very<br>
+expensive.<br>
+<br>
+The new code just does a lot of these atomics unconditionally.<br>
+<br>
+I dunno. The profile data in there is a bit hard to read, but there's<br>
+a lot more cachee misses, and a *lot* of node crossers:<br>
+<br>
+><i>    5961544          +190.4%   17314361        perf-stat.i.cache-misses</i><br>
+><i>   22107466          +119.2%   48457656        perf-stat.i.cache-references</i><br>
+><i>     163292 ą  3%   +4582.0%    7645410        perf-stat.i.node-load-misses</i><br>
+><i>     227388 ą  2%   +3708.8%    8660824        perf-stat.i.node-loads</i><br>
+<br>
+and (probably as a result) average instruction costs have gone up enormously:<br>
+<br>
+><i>       3.47           +66.8%       5.79        perf-stat.overall.cpi</i><br>
+><i>      22849           -65.6%       7866        perf-stat.overall.cycles-between-cache-misses</i><br>
+<br>
+and it does seem to be at least partly about "put_ucounts()":<br>
+<br>
+><i>       0.00            +4.5        4.46        perf-profile.calltrace.cycles-pp.put_ucounts.__sigqueue_free.get_signal.arch_do_signal_or_restart.exit_to_user_mode_prepare</i><br>
+<br>
+and a lot of "get_ucounts()".<br>
+<br>
+But it may also be that the new "get sigpending" is just *so* much<br>
+more expensive than it used to be.<br>
+<br>
+               Linus<br>
+<br>
+<br>
+

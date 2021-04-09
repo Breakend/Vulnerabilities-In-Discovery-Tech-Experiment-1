@@ -1,0 +1,93 @@
+Move the PG_fscache related helper funcs (such as SetPageFsCache()) to<br>
+linux/netfs.h rather than linux/fscache.h as the intention is to move to a<br>
+model where they're used by the network filesystem and the helper library,<br>
+but not by fscache/cachefiles itself.<br>
+<br>
+Signed-off-by: David Howells <dhowells@xxxxxxxxxx><br>
+cc: Matthew Wilcox <willy@xxxxxxxxxxxxx><br>
+cc: linux-mm@xxxxxxxxx<br>
+cc: linux-cachefs@xxxxxxxxxx<br>
+cc: linux-afs@xxxxxxxxxxxxxxxxxxx<br>
+cc: linux-nfs@xxxxxxxxxxxxxxx<br>
+cc: linux-cifs@xxxxxxxxxxxxxxx<br>
+cc: ceph-devel@xxxxxxxxxxxxxxx<br>
+cc: v9fs-developer@xxxxxxxxxxxxxxxxxxxxx<br>
+cc: linux-fsdevel@xxxxxxxxxxxxxxx<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161340392347.1303470.18065131603507621762.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161340392347.1303470.18065131603507621762.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v3<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161539534516.286939.6265142985563005000.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161539534516.286939.6265142985563005000.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v4<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161653792959.2770958.5386546945273988117.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161653792959.2770958.5386546945273988117.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v5<br>
+---<br>
+<br>
+ include/linux/fscache.h |   11 +----------<br>
+ include/linux/netfs.h   |   29 +++++++++++++++++++++++++++++<br>
+ 2 files changed, 30 insertions(+), 10 deletions(-)<br>
+ create mode 100644 include/linux/netfs.h<br>
+<br>
+diff --git a/include/linux/fscache.h b/include/linux/fscache.h<br>
+index a1c928fe98e7..1f8dc72369ee 100644<br>
+--- a/include/linux/fscache.h<br>
++++ b/include/linux/fscache.h<br>
+@@ -19,6 +19,7 @@<br>
+ #include <linux/pagemap.h><br>
+ #include <linux/pagevec.h><br>
+ #include <linux/list_bl.h><br>
++#include <linux/netfs.h><br>
+ <br>
+ #if defined(CONFIG_FSCACHE) || defined(CONFIG_FSCACHE_MODULE)<br>
+ #define fscache_available() (1)<br>
+@@ -29,16 +30,6 @@<br>
+ #endif<br>
+ <br>
+ <br>
+-/*<br>
+- * overload PG_private_2 to give us PG_fscache - this is used to indicate that<br>
+- * a page is currently backed by a local disk cache<br>
+- */<br>
+-#define PageFsCache(page)		PagePrivate2((page))<br>
+-#define SetPageFsCache(page)		SetPagePrivate2((page))<br>
+-#define ClearPageFsCache(page)		ClearPagePrivate2((page))<br>
+-#define TestSetPageFsCache(page)	TestSetPagePrivate2((page))<br>
+-#define TestClearPageFsCache(page)	TestClearPagePrivate2((page))<br>
+-<br>
+ /* pattern used to fill dead space in an index entry */<br>
+ #define FSCACHE_INDEX_DEADFILL_PATTERN 0x79<br>
+ <br>
+diff --git a/include/linux/netfs.h b/include/linux/netfs.h<br>
+new file mode 100644<br>
+index 000000000000..cc1102040488<br>
+--- /dev/null<br>
++++ b/include/linux/netfs.h<br>
+@@ -0,0 +1,29 @@<br>
++/* SPDX-License-Identifier: GPL-2.0-or-later */<br>
++/* Network filesystem support services.<br>
++ *<br>
++ * Copyright (C) 2021 Red Hat, Inc. All Rights Reserved.<br>
++ * Written by David Howells (dhowells@xxxxxxxxxx)<br>
++ *<br>
++ * See:<br>
++ *<br>
++ *	Documentation/filesystems/netfs_library.rst<br>
++ *<br>
++ * for a description of the network filesystem interface declared here.<br>
++ */<br>
++<br>
++#ifndef _LINUX_NETFS_H<br>
++#define _LINUX_NETFS_H<br>
++<br>
++#include <linux/pagemap.h><br>
++<br>
++/*<br>
++ * Overload PG_private_2 to give us PG_fscache - this is used to indicate that<br>
++ * a page is currently backed by a local disk cache<br>
++ */<br>
++#define PageFsCache(page)		PagePrivate2((page))<br>
++#define SetPageFsCache(page)		SetPagePrivate2((page))<br>
++#define ClearPageFsCache(page)		ClearPagePrivate2((page))<br>
++#define TestSetPageFsCache(page)	TestSetPagePrivate2((page))<br>
++#define TestClearPageFsCache(page)	TestClearPagePrivate2((page))<br>
++<br>
++#endif /* _LINUX_NETFS_H */<br>
+<br>
+<br>
+<br>
+

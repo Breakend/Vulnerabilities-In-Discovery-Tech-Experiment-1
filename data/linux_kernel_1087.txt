@@ -1,0 +1,29 @@
+On Thu, Apr 08, 2021 at 10:29:25AM +0000, Nadav Amit wrote:<br>
+><i> In the version that you referred me to, iommu_update_domain_tlb() only</i><br>
+><i> regards the size of the region to be flushed and disregards the</i><br>
+><i> alignment:</i><br>
+><i> </i><br>
+><i> +	order   = get_order(domain->flush.end - domain->flush.start);</i><br>
+><i> +	mask    = (0x1000ULL << order) - 1;</i><br>
+><i> +	address = ((domain->flush.start & ~mask) | (mask >> 1)) & ~0xfffULL;</i><br>
+><i> </i><br>
+><i> </i><br>
+><i> If you need to flush for instance the region between 0x1000-0x5000, this</i><br>
+><i> version would use the address|mask of 0x1000 (16KB page). The version I</i><br>
+><i> sent regards the alignment, and since the range is not aligned would use</i><br>
+><i> address|mask of 0x3000 (32KB page).</i><br>
+><i> </i><br>
+><i> IIUC, IOVA allocations today are aligned in such way, but at least in</i><br>
+><i> the past (looking on 3.19 for the matter), it was not like always like</i><br>
+><i> that, which can explain the problems.</i><br>
+<br>
+Yeah, that make sense and explains the data corruption problems. I will<br>
+give your patch a try on one of my test machines and consider it for<br>
+v5.13 if all goes well.<br>
+<br>
+Thanks,<br>
+<br>
+	Joerg<br>
+<br>
+<br>
+

@@ -1,0 +1,38 @@
+On Thu, Apr 08, 2021 at 08:56:18AM +0100, Marc Zyngier wrote:<br>
+><i> Hi Stephen,</i><br>
+><i> </i><br>
+><i> On 2021-04-08 07:35, Stephen Rothwell wrote:</i><br>
+><i> > Hi all,</i><br>
+><i> > </i><br>
+><i> > After merging the irqchip tree, today's linux-next build (x86_64</i><br>
+><i> > allmodconfig) failed like this:</i><br>
+><i> > </i><br>
+><i> > drivers/irqchip/irq-wpcm450-aic.c:9:10: fatal error: asm/exception.h:</i><br>
+><i> > No such file or directory</i><br>
+><i> >     9 | #include <asm/exception.h></i><br>
+><i> >       |          ^~~~~~~~~~~~~~~~~</i><br>
+><i> > </i><br>
+><i> > Caused by commit</i><br>
+><i> > </i><br>
+><i> >   fead4dd49663 ("irqchip: Add driver for WPCM450 interrupt controller")</i><br>
+><i> > </i><br>
+><i> > I have used the irqchip tree from next-20210407 for today.</i><br>
+><i> </i><br>
+><i> Thanks for the heads up. I guess that's the effect of COMPILE_TEST</i><br>
+><i> which was apparently not very well tested... I'll drop it from Kconfig.</i><br>
+<br>
+Right, sorry about that.<br>
+<br>
+><i> Jonathan, feel free to submit something re-enabling COMPILE_TEST once</i><br>
+><i> you've worked out the missing dependencies.</i><br>
+<br>
+I used __exception_irq_entry from asm/exception.h, like other irqchip<br>
+drivers for ARM. This macro is only defined in arch/arm and arch/arm64.<br>
+So, AFAICS, there is no right set of dependencies for COMPILE_TEST.<br>
+<br>
+<br>
+Jonathan<br>
+<p><strong>Attachment:
+<a href="00227/signature.asc" ><tt>signature.asc</tt></a></strong><br>
+<em>Description:</em> PGP signature</p>
+

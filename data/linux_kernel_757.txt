@@ -1,0 +1,307 @@
+Add kselftest to test that remove_on_exec removes inherited events from<br>
+child tasks.<br>
+<br>
+Signed-off-by: Marco Elver <elver@xxxxxxxxxx><br>
+---<br>
+v3:<br>
+* Fix for latest libc signal.h.<br>
+<br>
+v2:<br>
+* Add patch to series.<br>
+---<br>
+ .../testing/selftests/perf_events/.gitignore  |   1 +<br>
+ tools/testing/selftests/perf_events/Makefile  |   2 +-<br>
+ .../selftests/perf_events/remove_on_exec.c    | 260 ++++++++++++++++++<br>
+ 3 files changed, 262 insertions(+), 1 deletion(-)<br>
+ create mode 100644 tools/testing/selftests/perf_events/remove_on_exec.c<br>
+<br>
+diff --git a/tools/testing/selftests/perf_events/.gitignore b/tools/testing/selftests/perf_events/.gitignore<br>
+index 4dc43e1bd79c..790c47001e77 100644<br>
+--- a/tools/testing/selftests/perf_events/.gitignore<br>
++++ b/tools/testing/selftests/perf_events/.gitignore<br>
+@@ -1,2 +1,3 @@<br>
+ # SPDX-License-Identifier: GPL-2.0-only<br>
+ sigtrap_threads<br>
++remove_on_exec<br>
+diff --git a/tools/testing/selftests/perf_events/Makefile b/tools/testing/selftests/perf_events/Makefile<br>
+index 973a2c39ca83..fcafa5f0d34c 100644<br>
+--- a/tools/testing/selftests/perf_events/Makefile<br>
++++ b/tools/testing/selftests/perf_events/Makefile<br>
+@@ -2,5 +2,5 @@<br>
+ CFLAGS += -Wl,-no-as-needed -Wall -I../../../../usr/include<br>
+ LDFLAGS += -lpthread<br>
+ <br>
+-TEST_GEN_PROGS := sigtrap_threads<br>
++TEST_GEN_PROGS := sigtrap_threads remove_on_exec<br>
+ include ../lib.mk<br>
+diff --git a/tools/testing/selftests/perf_events/remove_on_exec.c b/tools/testing/selftests/perf_events/remove_on_exec.c<br>
+new file mode 100644<br>
+index 000000000000..5814611a1dc7<br>
+--- /dev/null<br>
++++ b/tools/testing/selftests/perf_events/remove_on_exec.c<br>
+@@ -0,0 +1,260 @@<br>
++// SPDX-License-Identifier: GPL-2.0<br>
++/*<br>
++ * Test for remove_on_exec.<br>
++ *<br>
++ * Copyright (C) 2021, Google LLC.<br>
++ */<br>
++<br>
++#define _GNU_SOURCE<br>
++<br>
++/* We need the latest siginfo from the kernel repo. */<br>
++#include <sys/types.h><br>
++#include <asm/siginfo.h><br>
++#define __have_siginfo_t 1<br>
++#define __have_sigval_t 1<br>
++#define __have_sigevent_t 1<br>
++#define __siginfo_t_defined<br>
++#define __sigval_t_defined<br>
++#define __sigevent_t_defined<br>
++#define _BITS_SIGINFO_CONSTS_H 1<br>
++#define _BITS_SIGEVENT_CONSTS_H 1<br>
++<br>
++#include <stdbool.h><br>
++#include <stddef.h><br>
++#include <stdint.h><br>
++#include <stdio.h><br>
++#include <linux/perf_event.h><br>
++#include <pthread.h><br>
++#include <signal.h><br>
++#include <sys/ioctl.h><br>
++#include <sys/syscall.h><br>
++#include <unistd.h><br>
++<br>
++#include "../kselftest_harness.h"<br>
++<br>
++static volatile int signal_count;<br>
++<br>
++static struct perf_event_attr make_event_attr(void)<br>
++{<br>
++	struct perf_event_attr attr = {<br>
++		.type		= PERF_TYPE_HARDWARE,<br>
++		.size		= sizeof(attr),<br>
++		.config		= PERF_COUNT_HW_INSTRUCTIONS,<br>
++		.sample_period	= 1000,<br>
++		.exclude_kernel = 1,<br>
++		.exclude_hv	= 1,<br>
++		.disabled	= 1,<br>
++		.inherit	= 1,<br>
++		/*<br>
++		 * Children normally retain their inherited event on exec; with<br>
++		 * remove_on_exec, we'll remove their event, but the parent and<br>
++		 * any other non-exec'd children will keep their events.<br>
++		 */<br>
++		.remove_on_exec = 1,<br>
++		.sigtrap	= 1,<br>
++	};<br>
++	return attr;<br>
++}<br>
++<br>
++static void sigtrap_handler(int signum, siginfo_t *info, void *ucontext)<br>
++{<br>
++	if (info->si_code != TRAP_PERF) {<br>
++		fprintf(stderr, "%s: unexpected si_code %d\n", __func__, info->si_code);<br>
++		return;<br>
++	}<br>
++<br>
++	signal_count++;<br>
++}<br>
++<br>
++FIXTURE(remove_on_exec)<br>
++{<br>
++	struct sigaction oldact;<br>
++	int fd;<br>
++};<br>
++<br>
++FIXTURE_SETUP(remove_on_exec)<br>
++{<br>
++	struct perf_event_attr attr = make_event_attr();<br>
++	struct sigaction action = {};<br>
++<br>
++	signal_count = 0;<br>
++<br>
++	/* Initialize sigtrap handler. */<br>
++	action.sa_flags = SA_SIGINFO | SA_NODEFER;<br>
++	action.sa_sigaction = sigtrap_handler;<br>
++	sigemptyset(&action.sa_mask);<br>
++	ASSERT_EQ(sigaction(SIGTRAP, &action, &self->oldact), 0);<br>
++<br>
++	/* Initialize perf event. */<br>
++	self->fd = syscall(__NR_perf_event_open, &attr, 0, -1, -1, PERF_FLAG_FD_CLOEXEC);<br>
++	ASSERT_NE(self->fd, -1);<br>
++}<br>
++<br>
++FIXTURE_TEARDOWN(remove_on_exec)<br>
++{<br>
++	close(self->fd);<br>
++	sigaction(SIGTRAP, &self->oldact, NULL);<br>
++}<br>
++<br>
++/* Verify event propagates to fork'd child. */<br>
++TEST_F(remove_on_exec, fork_only)<br>
++{<br>
++	int status;<br>
++	pid_t pid = fork();<br>
++<br>
++	if (pid == 0) {<br>
++		ASSERT_EQ(signal_count, 0);<br>
++		ASSERT_EQ(ioctl(self->fd, PERF_EVENT_IOC_ENABLE, 0), 0);<br>
++		while (!signal_count);<br>
++		_exit(42);<br>
++	}<br>
++<br>
++	while (!signal_count); /* Child enables event. */<br>
++	EXPECT_EQ(waitpid(pid, &status, 0), pid);<br>
++	EXPECT_EQ(WEXITSTATUS(status), 42);<br>
++}<br>
++<br>
++/*<br>
++ * Verify that event does _not_ propagate to fork+exec'd child; event enabled<br>
++ * after fork+exec.<br>
++ */<br>
++TEST_F(remove_on_exec, fork_exec_then_enable)<br>
++{<br>
++	pid_t pid_exec, pid_only_fork;<br>
++	int pipefd[2];<br>
++	int tmp;<br>
++<br>
++	/*<br>
++	 * Non-exec child, to ensure exec does not affect inherited events of<br>
++	 * other children.<br>
++	 */<br>
++	pid_only_fork = fork();<br>
++	if (pid_only_fork == 0) {<br>
++		/* Block until parent enables event. */<br>
++		while (!signal_count);<br>
++		_exit(42);<br>
++	}<br>
++<br>
++	ASSERT_NE(pipe(pipefd), -1);<br>
++	pid_exec = fork();<br>
++	if (pid_exec == 0) {<br>
++		ASSERT_NE(dup2(pipefd[1], STDOUT_FILENO), -1);<br>
++		close(pipefd[0]);<br>
++		execl("/proc/self/exe", "exec_child", NULL);<br>
++		_exit((perror("exec failed"), 1));<br>
++	}<br>
++	close(pipefd[1]);<br>
++<br>
++	ASSERT_EQ(waitpid(pid_exec, &tmp, WNOHANG), 0); /* Child is running. */<br>
++	/* Wait for exec'd child to start spinning. */<br>
++	EXPECT_EQ(read(pipefd[0], &tmp, sizeof(int)), sizeof(int));<br>
++	EXPECT_EQ(tmp, 42);<br>
++	close(pipefd[0]);<br>
++	/* Now we can enable the event, knowing the child is doing work. */<br>
++	EXPECT_EQ(ioctl(self->fd, PERF_EVENT_IOC_ENABLE, 0), 0);<br>
++	/* If the event propagated to the exec'd child, it will exit normally... */<br>
++	usleep(100000); /* ... give time for event to trigger (in case of bug). */<br>
++	EXPECT_EQ(waitpid(pid_exec, &tmp, WNOHANG), 0); /* Should still be running. */<br>
++	EXPECT_EQ(kill(pid_exec, SIGKILL), 0);<br>
++<br>
++	/* Verify removal from child did not affect this task's event. */<br>
++	tmp = signal_count;<br>
++	while (signal_count == tmp); /* Should not hang! */<br>
++	/* Nor should it have affected the first child. */<br>
++	EXPECT_EQ(waitpid(pid_only_fork, &tmp, 0), pid_only_fork);<br>
++	EXPECT_EQ(WEXITSTATUS(tmp), 42);<br>
++}<br>
++<br>
++/*<br>
++ * Verify that event does _not_ propagate to fork+exec'd child; event enabled<br>
++ * before fork+exec.<br>
++ */<br>
++TEST_F(remove_on_exec, enable_then_fork_exec)<br>
++{<br>
++	pid_t pid_exec;<br>
++	int tmp;<br>
++<br>
++	EXPECT_EQ(ioctl(self->fd, PERF_EVENT_IOC_ENABLE, 0), 0);<br>
++<br>
++	pid_exec = fork();<br>
++	if (pid_exec == 0) {<br>
++		execl("/proc/self/exe", "exec_child", NULL);<br>
++		_exit((perror("exec failed"), 1));<br>
++	}<br>
++<br>
++	/*<br>
++	 * The child may exit abnormally at any time if the event propagated and<br>
++	 * a SIGTRAP is sent before the handler was set up.<br>
++	 */<br>
++	usleep(100000); /* ... give time for event to trigger (in case of bug). */<br>
++	EXPECT_EQ(waitpid(pid_exec, &tmp, WNOHANG), 0); /* Should still be running. */<br>
++	EXPECT_EQ(kill(pid_exec, SIGKILL), 0);<br>
++<br>
++	/* Verify removal from child did not affect this task's event. */<br>
++	tmp = signal_count;<br>
++	while (signal_count == tmp); /* Should not hang! */<br>
++}<br>
++<br>
++TEST_F(remove_on_exec, exec_stress)<br>
++{<br>
++	pid_t pids[30];<br>
++	int i, tmp;<br>
++<br>
++	for (i = 0; i < sizeof(pids) / sizeof(pids[0]); i++) {<br>
++		pids[i] = fork();<br>
++		if (pids[i] == 0) {<br>
++			execl("/proc/self/exe", "exec_child", NULL);<br>
++			_exit((perror("exec failed"), 1));<br>
++		}<br>
++<br>
++		/* Some forked with event disabled, rest with enabled. */<br>
++		if (i > 10)<br>
++			EXPECT_EQ(ioctl(self->fd, PERF_EVENT_IOC_ENABLE, 0), 0);<br>
++	}<br>
++<br>
++	usleep(100000); /* ... give time for event to trigger (in case of bug). */<br>
++<br>
++	for (i = 0; i < sizeof(pids) / sizeof(pids[0]); i++) {<br>
++		/* All children should still be running. */<br>
++		EXPECT_EQ(waitpid(pids[i], &tmp, WNOHANG), 0);<br>
++		EXPECT_EQ(kill(pids[i], SIGKILL), 0);<br>
++	}<br>
++<br>
++	/* Verify event is still alive. */<br>
++	tmp = signal_count;<br>
++	while (signal_count == tmp);<br>
++}<br>
++<br>
++/* For exec'd child. */<br>
++static void exec_child(void)<br>
++{<br>
++	struct sigaction action = {};<br>
++	const int val = 42;<br>
++<br>
++	/* Set up sigtrap handler in case we erroneously receive a trap. */<br>
++	action.sa_flags = SA_SIGINFO | SA_NODEFER;<br>
++	action.sa_sigaction = sigtrap_handler;<br>
++	sigemptyset(&action.sa_mask);<br>
++	if (sigaction(SIGTRAP, &action, NULL))<br>
++		_exit((perror("sigaction failed"), 1));<br>
++<br>
++	/* Signal parent that we're starting to spin. */<br>
++	if (write(STDOUT_FILENO, &val, sizeof(int)) == -1)<br>
++		_exit((perror("write failed"), 1));<br>
++<br>
++	/* Should hang here until killed. */<br>
++	while (!signal_count);<br>
++}<br>
++<br>
++#define main test_main<br>
++TEST_HARNESS_MAIN<br>
++#undef main<br>
++int main(int argc, char *argv[])<br>
++{<br>
++	if (!strcmp(argv[0], "exec_child")) {<br>
++		exec_child();<br>
++		return 1;<br>
++	}<br>
++<br>
++	return test_main(argc, argv);<br>
++}<br>
+-- <br>
+2.31.0.208.g409f899ff0-goog<br>
+<br>
+<br>
+

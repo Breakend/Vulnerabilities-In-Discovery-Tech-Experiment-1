@@ -1,0 +1,27 @@
+On Mon, Apr 05, 2021 at 03:43:10PM -0500, madvenka@xxxxxxxxxxxxxxxxxxx wrote:<br>
+<br>
+><i> These checks will involve checking the return PC to see if it falls inside</i><br>
+><i> any special functions where the stack trace is considered unreliable.</i><br>
+><i> Implement the infrastructure needed for this.</i><br>
+<br>
+Following up again based on an off-list discussion with Mark Rutland:<br>
+while I think this is a reasonable implementation for specifically<br>
+listing functions that cause problems we could make life easier for<br>
+ourselves by instead using annotations at the call sites to put things<br>
+into sections which indicate that they're unsafe for unwinding, we can<br>
+then check for any address in one of those sections (or possibly do the<br>
+reverse and check for any address in a section we specifically know is<br>
+safe) rather than having to enumerate problematic functions in the<br>
+unwinder.  This also has the advantage of not having a list that's<br>
+separate to the functions themselves so it's less likely that the<br>
+unwinder will get out of sync with the rest of the code as things evolve.<br>
+<br>
+We already have SYM_CODE_START() annotations in the code for assembly<br>
+functions that aren't using the standard calling convention which should<br>
+help a lot here, we could add a variant of that for things that we know<br>
+are safe on stacks (like those we expect to find at the bottom of<br>
+stacks).<br>
+<p><strong>Attachment:
+<a href="01124/signature.asc" ><tt>signature.asc</tt></a></strong><br>
+<em>Description:</em> PGP signature</p>
+

@@ -1,0 +1,182 @@
+Currently, we use classzone_idx to calculate lowmem reserve proetection<br>
+for an allocation request. This classzone_idx causes a problem<br>
+on NUMA systems when the lowmem reserve protection exists for some zones<br>
+on a node that do not exist on other nodes.<br>
+<br>
+Before further explanation, I should first clarify how to compute<br>
+the classzone_idx and the high_zoneidx.<br>
+<br>
+- ac->high_zoneidx is computed via the arcane gfp_zone(gfp_mask) and<br>
+represents the index of the highest zone the allocation can use<br>
+- classzone_idx was supposed to be the index of the highest zone on<br>
+the local node that the allocation can use, that is actually available<br>
+in the system<br>
+<br>
+Think about following example. Node 0 has 4 populated zone,<br>
+DMA/DMA32/NORMAL/MOVABLE. Node 1 has 1 populated zone, NORMAL. Some zones,<br>
+such as MOVABLE, doesn't exist on node 1 and this makes following<br>
+difference.<br>
+<br>
+Assume that there is an allocation request whose gfp_zone(gfp_mask) is<br>
+the zone, MOVABLE. Then, it's high_zoneidx is 3. If this allocation is<br>
+initiated on node 0, it's classzone_idx is 3 since actually<br>
+available/usable zone on local (node 0) is MOVABLE. If this allocation<br>
+is initiated on node 1, it's classzone_idx is 2 since actually<br>
+available/usable zone on local (node 1) is NORMAL.<br>
+<br>
+You can see that classzone_idx of the allocation request are different<br>
+according to their starting node, even if their high_zoneidx is the same.<br>
+<br>
+Think more about these two allocation requests. If they are processed<br>
+on local, there is no problem. However, if allocation is initiated<br>
+on node 1 are processed on remote, in this example, at the NORMAL zone<br>
+on node 0, due to memory shortage, problem occurs. Their different<br>
+classzone_idx leads to different lowmem reserve and then different<br>
+min watermark. See the following example.<br>
+<br>
+root@ubuntu:/sys/devices/system/memory# cat /proc/zoneinfo<br>
+Node 0, zone      DMA<br>
+  per-node stats<br>
+...<br>
+  pages free     3965<br>
+        min      5<br>
+        low      8<br>
+        high     11<br>
+        spanned  4095<br>
+        present  3998<br>
+        managed  3977<br>
+        protection: (0, 2961, 4928, 5440)<br>
+...<br>
+Node 0, zone    DMA32<br>
+  pages free     757955<br>
+        min      1129<br>
+        low      1887<br>
+        high     2645<br>
+        spanned  1044480<br>
+        present  782303<br>
+        managed  758116<br>
+        protection: (0, 0, 1967, 2479)<br>
+...<br>
+Node 0, zone   Normal<br>
+  pages free     459806<br>
+        min      750<br>
+        low      1253<br>
+        high     1756<br>
+        spanned  524288<br>
+        present  524288<br>
+        managed  503620<br>
+        protection: (0, 0, 0, 4096)<br>
+...<br>
+Node 0, zone  Movable<br>
+  pages free     130759<br>
+        min      195<br>
+        low      326<br>
+        high     457<br>
+        spanned  1966079<br>
+        present  131072<br>
+        managed  131072<br>
+        protection: (0, 0, 0, 0)<br>
+...<br>
+Node 1, zone      DMA<br>
+  pages free     0<br>
+        min      0<br>
+        low      0<br>
+        high     0<br>
+        spanned  0<br>
+        present  0<br>
+        managed  0<br>
+        protection: (0, 0, 1006, 1006)<br>
+Node 1, zone    DMA32<br>
+  pages free     0<br>
+        min      0<br>
+        low      0<br>
+        high     0<br>
+        spanned  0<br>
+        present  0<br>
+        managed  0<br>
+        protection: (0, 0, 1006, 1006)<br>
+Node 1, zone   Normal<br>
+  per-node stats<br>
+...<br>
+  pages free     233277<br>
+        min      383<br>
+        low      640<br>
+        high     897<br>
+        spanned  262144<br>
+        present  262144<br>
+        managed  257744<br>
+        protection: (0, 0, 0, 0)<br>
+...<br>
+Node 1, zone  Movable<br>
+  pages free     0<br>
+        min      0<br>
+        low      0<br>
+        high     0<br>
+        spanned  262144<br>
+        present  0<br>
+        managed  0<br>
+        protection: (0, 0, 0, 0)<br>
+<br>
+- static min watermark for the NORMAL zone on node 0 is 750.<br>
+- lowmem reserve for the request with classzone idx 3 at the NORMAL<br>
+on node 0 is 4096.<br>
+- lowmem reserve for the request with classzone idx 2 at the NORMAL<br>
+on node 0 is 0.<br>
+<br>
+So, overall min watermark is:<br>
+allocation initiated on node 0 (classzone_idx 3): 750 + 4096 =3D 4846<br>
+allocation initiated on node 1 (classzone_idx 2): 750 + 0 =3D 750<br>
+<br>
+allocation initiated on node 1 will have some precedence than allocation<br>
+initiated on node 0 because min watermark of the former allocation is<br>
+lower than the other. So, allocation initiated on node 1 could succeed<br>
+on node 0 when allocation initiated on node 0 could not, and, this could<br>
+cause too many numa_miss allocation. Then, performance could be<br>
+downgraded.<br>
+<br>
+Recently, there was a regression report about this problem on CMA patches<br>
+since CMA memory are placed in ZONE_MOVABLE by those patches. I checked<br>
+that problem is disappeared with this fix that uses high_zoneidx<br>
+for classzone_idx.<br>
+<br>
+<a  rel="nofollow" href="http://lkml.kernel.org/r/20180102063528.GG30397@yexl-desktop">http://lkml.kernel.org/r/20180102063528.GG30397@yexl-desktop</a><br>
+<br>
+Using high_zoneidx for classzone_idx is more consistent way than previous<br>
+approach because system's memory layout doesn't affect anything to it.<br>
+With this patch, both classzone_idx on above example will be 3 so will<br>
+have the same min watermark.<br>
+<br>
+allocation initiated on node 0: 750 + 4096 =3D 4846<br>
+allocation initiated on node 1: 750 + 4096 =3D 4846<br>
+<br>
+One could wonder if there is a side effect that allocation initiated on<br>
+node 1 will use higher bar when allocation is handled on local since<br>
+classzone_idx could be higher than before. It will not happen because<br>
+the zone without managed page doesn't contributes lowmem_reserve at all.<br>
+<br>
+Reported-by: Ye Xiaolong <xiaolong.ye@xxxxxxxxx><br>
+Tested-by: Ye Xiaolong <xiaolong.ye@xxxxxxxxx><br>
+Acked-by: Vlastimil Babka <vbabka@xxxxxxx><br>
+Signed-off-by: Joonsoo Kim <iamjoonsoo.kim@xxxxxxx><br>
+---<br>
+ mm/internal.h | 2 +-<br>
+ 1 file changed, 1 insertion(+), 1 deletion(-)<br>
+<br>
+diff --git a/mm/internal.h b/mm/internal.h<br>
+index c39c895..aebaa33 100644<br>
+--- a/mm/internal.h<br>
++++ b/mm/internal.h<br>
+@@ -119,7 +119,7 @@ struct alloc_context {<br>
+        bool spread_dirty_pages;<br>
+ };<br>
+<br>
+-#define ac_classzone_idx(ac) zonelist_zone_idx(ac->preferred_zoneref)<br>
++#define ac_classzone_idx(ac) (ac->high_zoneidx)<br>
+<br>
+ /*<br>
+  * Locate the struct page for both the matching buddy in our<br>
+--=20<br>
+2.7.4<br>
+<br>
+<br>
+

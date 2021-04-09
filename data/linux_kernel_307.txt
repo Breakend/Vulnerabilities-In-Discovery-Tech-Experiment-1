@@ -1,0 +1,376 @@
+On Mon, Apr 05, 2021 at 04:36:08PM +0530, Krishna Manikandan wrote:<br>
+><i> Add YAML schema for the device tree bindings for DSI</i><br>
+><i> </i><br>
+><i> Signed-off-by: Krishna Manikandan <mkrishn@xxxxxxxxxxxxxx></i><br>
+><i> </i><br>
+><i> Changes in v1:</i><br>
+><i>     - Separate dsi controller bindings to a separate patch (Stephen Boyd)</i><br>
+><i>     - Merge dsi-common-controller.yaml and dsi-controller-main.yaml to</i><br>
+><i>       a single file (Stephen Boyd)</i><br>
+><i>     - Drop supply entries and definitions from properties (Stephen Boyd)</i><br>
+><i>     - Modify phy-names property for dsi controller (Stephen Boyd)</i><br>
+><i>     - Remove boolean from description (Stephen Boyd)</i><br>
+><i>     - Drop pinctrl properties as they are standard entries (Stephen Boyd)</i><br>
+><i>     - Modify the description for ports property and keep the reference</i><br>
+><i>       to the generic binding where this is defined (Stephen Boyd)</i><br>
+><i>     - Add description to clock names (Stephen Boyd)</i><br>
+><i>     - Correct the indendation (Stephen Boyd)</i><br>
+><i>     - Drop the label for display dt nodes and correct the node</i><br>
+><i>       name (Stephen Boyd)</i><br>
+><i> </i><br>
+><i> Changes in v2:</i><br>
+><i>     - Drop maxItems for clock (Stephen Boyd)</i><br>
+><i>     - Drop qcom,mdss-mdp-transfer-time-us as it is not used in upstream</i><br>
+><i>       dt file (Stephen Boyd)</i><br>
+><i>     - Keep child node directly under soc node (Stephen Boyd)</i><br>
+><i>     - Drop qcom,sync-dual-dsi as it is not used in upstream dt</i><br>
+><i> </i><br>
+><i> Changes in v3:</i><br>
+><i>     - Add description for register property (Stephen Boyd)</i><br>
+><i> </i><br>
+><i> Changes in v4:</i><br>
+><i>     - Add maxItems for phys property (Stephen Boyd)</i><br>
+><i>     - Add maxItems for reg property (Stephen Boyd)</i><br>
+><i>     - Add reference for data-lanes property (Stephen Boyd)</i><br>
+><i>     - Remove soc from example (Stephen Boyd)</i><br>
+><i> </i><br>
+><i> Changes in v5:</i><br>
+><i>     - Modify title and description (Stephen Boyd)</i><br>
+><i>     - Add required properties for ports node (Stephen Boyd)</i><br>
+><i>     - Add data-lanes in the example (Stephen Boyd)</i><br>
+><i>     - Drop qcom,master-dsi property (Stephen Boyd)</i><br>
+><i> </i><br>
+><i> Changes in v6:</i><br>
+><i>     - Add required properties for port@0, port@1 and corresponding</i><br>
+><i>       endpoints (Stephen Boyd)</i><br>
+><i>     - Add address-cells and size-cells for ports (Stephen Boyd)</i><br>
+><i>     - Use additionalProperties instead of unevaluatedProperties (Stephen Boyd)</i><br>
+><i> ---</i><br>
+><i>  .../bindings/display/msm/dsi-controller-main.yaml  | 213 ++++++++++++++++++</i><br>
+><i>  .../devicetree/bindings/display/msm/dsi.txt        | 249 ---------------------</i><br>
+><i>  2 files changed, 213 insertions(+), 249 deletions(-)</i><br>
+><i>  create mode 100644 Documentation/devicetree/bindings/display/msm/dsi-controller-main.yaml</i><br>
+><i>  delete mode 100644 Documentation/devicetree/bindings/display/msm/dsi.txt</i><br>
+><i> </i><br>
+><i> diff --git a/Documentation/devicetree/bindings/display/msm/dsi-controller-main.yaml b/Documentation/devicetree/bindings/display/msm/dsi-controller-main.yaml</i><br>
+><i> new file mode 100644</i><br>
+><i> index 0000000..7858524</i><br>
+><i> --- /dev/null</i><br>
+><i> +++ b/Documentation/devicetree/bindings/display/msm/dsi-controller-main.yaml</i><br>
+><i> @@ -0,0 +1,213 @@</i><br>
+><i> +# SPDX-License-Identifier: GPL-2.0-only or BSD-2-Clause</i><br>
+><i> +%YAML 1.2</i><br>
+><i> +---</i><br>
+><i> +$id: <a  rel="nofollow" href="http://devicetree.org/schemas/display/msm/dsi-controller-main.yaml#">http://devicetree.org/schemas/display/msm/dsi-controller-main.yaml#</a></i><br>
+><i> +$schema: <a  rel="nofollow" href="http://devicetree.org/meta-schemas/core.yaml#">http://devicetree.org/meta-schemas/core.yaml#</a></i><br>
+><i> +</i><br>
+><i> +title: Qualcomm Display DSI controller</i><br>
+><i> +</i><br>
+><i> +maintainers:</i><br>
+><i> +  - Krishna Manikandan <mkrishn@xxxxxxxxxxxxxx></i><br>
+><i> +</i><br>
+><i> +allOf:</i><br>
+><i> +  - $ref: "../dsi-controller.yaml#"</i><br>
+><i> +</i><br>
+><i> +properties:</i><br>
+><i> +  compatible:</i><br>
+><i> +    items:</i><br>
+><i> +      - const: qcom,mdss-dsi-ctrl</i><br>
+><i> +</i><br>
+><i> +  reg:</i><br>
+><i> +    maxItems: 1</i><br>
+><i> +</i><br>
+><i> +  reg-names:</i><br>
+><i> +    const: dsi_ctrl</i><br>
+><i> +</i><br>
+><i> +  interrupts:</i><br>
+><i> +    maxItems: 1</i><br>
+><i> +</i><br>
+><i> +  clocks:</i><br>
+><i> +    items:</i><br>
+><i> +      - description: Display byte clock</i><br>
+><i> +      - description: Display byte interface clock</i><br>
+><i> +      - description: Display pixel clock</i><br>
+><i> +      - description: Display escape clock</i><br>
+><i> +      - description: Display AHB clock</i><br>
+><i> +      - description: Display AXI clock</i><br>
+><i> +</i><br>
+><i> +  clock-names:</i><br>
+><i> +    items:</i><br>
+><i> +      - const: byte</i><br>
+><i> +      - const: byte_intf</i><br>
+><i> +      - const: pixel</i><br>
+><i> +      - const: core</i><br>
+><i> +      - const: iface</i><br>
+><i> +      - const: bus</i><br>
+><i> +</i><br>
+><i> +  phys:</i><br>
+><i> +    maxItems: 1</i><br>
+><i> +</i><br>
+><i> +  phy-names:</i><br>
+><i> +    const: dsi</i><br>
+><i> +</i><br>
+><i> +  "#address-cells": true</i><br>
+><i> +</i><br>
+><i> +  "#size-cells": true</i><br>
+><i> +</i><br>
+><i> +  syscon-sfpb:</i><br>
+><i> +    description: A phandle to mmss_sfpb syscon node (only for DSIv2).</i><br>
+><i> +    $ref: "/schemas/types.yaml#/definitions/phandle"</i><br>
+><i> +</i><br>
+><i> +  qcom,dual-dsi-mode:</i><br>
+><i> +    type: boolean</i><br>
+><i> +    description: |</i><br>
+><i> +      Indicates if the DSI controller is driving a panel which needs</i><br>
+><i> +      2 DSI links.</i><br>
+><i> +</i><br>
+><i> +  ports:</i><br>
+<br>
+Same issues in this one.<br>
+<br>
+><i> +    $ref: "/schemas/graph.yaml#/properties/port"</i><br>
+><i> +    type: object</i><br>
+><i> +    description: |</i><br>
+><i> +      Contains DSI controller input and output ports as children, each</i><br>
+><i> +      containing one endpoint subnode.</i><br>
+><i> +</i><br>
+><i> +    properties:</i><br>
+><i> +      port@0:</i><br>
+><i> +        type: object</i><br>
+><i> +        description: |</i><br>
+><i> +          Input endpoints of the controller.</i><br>
+><i> +</i><br>
+><i> +        properties:</i><br>
+><i> +          reg:</i><br>
+><i> +            const: 0</i><br>
+><i> +</i><br>
+><i> +          endpoint:</i><br>
+><i> +            type: object</i><br>
+><i> +            properties:</i><br>
+><i> +              remote-endpoint:</i><br>
+<br>
+Don't need to describe this, the common schema does.<br>
+<br>
+><i> +                description: |</i><br>
+><i> +                  For port@1, set to phandle of the connected panel/bridge's</i><br>
+><i> +                  input endpoint. For port@0, set to the MDP interface output.</i><br>
+><i> +</i><br>
+><i> +              data-lanes:</i><br>
+><i> +                $ref: "/schemas/media/video-interfaces.yaml#"</i><br>
+<br>
+Not how this reference works. Look at other examples.<br>
+<br>
+><i> +                description: |</i><br>
+><i> +                  This describes how the physical DSI data lanes are mapped</i><br>
+><i> +                  to the logical lanes on the given platform. The value contained in</i><br>
+><i> +                  index n describes what physical lane is mapped to the logical lane n</i><br>
+><i> +                  (DATAn, where n lies between 0 and 3). The clock lane position is fixed</i><br>
+><i> +                  and can't be changed. Hence, they aren't a part of the DT bindings.</i><br>
+><i> +</i><br>
+><i> +                items:</i><br>
+><i> +                  - const: 0</i><br>
+><i> +                  - const: 1</i><br>
+><i> +                  - const: 2</i><br>
+><i> +                  - const: 3</i><br>
+<br>
+If this is the only possible value, why does it need to be in DT?<br>
+<br>
+><i> +</i><br>
+><i> +            required:</i><br>
+><i> +              - remote-endpoint</i><br>
+><i> +</i><br>
+><i> +        required:</i><br>
+><i> +          - reg</i><br>
+><i> +          - endpoint</i><br>
+><i> +</i><br>
+><i> +      port@1:</i><br>
+><i> +        type: object</i><br>
+><i> +        description: |</i><br>
+><i> +          Output endpoints of the controller.</i><br>
+><i> +        properties:</i><br>
+><i> +          reg:</i><br>
+><i> +            const: 1</i><br>
+><i> +</i><br>
+><i> +          endpoint:</i><br>
+><i> +            type: object</i><br>
+><i> +            properties:</i><br>
+><i> +              remote-endpoint: true</i><br>
+><i> +              data-lanes:</i><br>
+><i> +                items:</i><br>
+><i> +                  - const: 0</i><br>
+><i> +                  - const: 1</i><br>
+><i> +                  - const: 2</i><br>
+><i> +                  - const: 3</i><br>
+><i> +</i><br>
+><i> +            required:</i><br>
+><i> +              - remote-endpoint</i><br>
+><i> +              - data-lanes</i><br>
+><i> +</i><br>
+><i> +        required:</i><br>
+><i> +          - reg</i><br>
+><i> +          - endpoint</i><br>
+><i> +</i><br>
+><i> +    required:</i><br>
+><i> +      - port@0</i><br>
+><i> +      - port@1</i><br>
+><i> +      - "#address-cells"</i><br>
+><i> +      - "#size-cells"</i><br>
+><i> +</i><br>
+><i> +required:</i><br>
+><i> +  - compatible</i><br>
+><i> +  - reg</i><br>
+><i> +  - reg-names</i><br>
+><i> +  - interrupts</i><br>
+><i> +  - clocks</i><br>
+><i> +  - clock-names</i><br>
+><i> +  - phys</i><br>
+><i> +  - phy-names</i><br>
+><i> +  - ports</i><br>
+><i> +</i><br>
+><i> +additionalProperties: false</i><br>
+><i> +</i><br>
+><i> +examples:</i><br>
+><i> +  - |</i><br>
+><i> +     #include <dt-bindings/interrupt-controller/arm-gic.h></i><br>
+><i> +     #include <dt-bindings/clock/qcom,dispcc-sdm845.h></i><br>
+><i> +     #include <dt-bindings/clock/qcom,gcc-sdm845.h></i><br>
+><i> +</i><br>
+><i> +     dsi@ae94000 {</i><br>
+><i> +           compatible = "qcom,mdss-dsi-ctrl";</i><br>
+><i> +           reg = <0x0ae94000 0x400>;</i><br>
+><i> +           reg-names = "dsi_ctrl";</i><br>
+><i> +</i><br>
+><i> +           #address-cells = <1>;</i><br>
+><i> +           #size-cells = <0>;</i><br>
+><i> +</i><br>
+><i> +           interrupt-parent = <&mdss>;</i><br>
+><i> +           interrupts = <4>;</i><br>
+><i> +</i><br>
+><i> +           clocks = <&dispcc DISP_CC_MDSS_BYTE0_CLK>,</i><br>
+><i> +                    <&dispcc DISP_CC_MDSS_BYTE0_INTF_CLK>,</i><br>
+><i> +                    <&dispcc DISP_CC_MDSS_PCLK0_CLK>,</i><br>
+><i> +                    <&dispcc DISP_CC_MDSS_ESC0_CLK>,</i><br>
+><i> +                    <&dispcc DISP_CC_MDSS_AHB_CLK>,</i><br>
+><i> +                    <&dispcc DISP_CC_MDSS_AXI_CLK>;</i><br>
+><i> +           clock-names = "byte",</i><br>
+><i> +                         "byte_intf",</i><br>
+><i> +                         "pixel",</i><br>
+><i> +                         "core",</i><br>
+><i> +                         "iface",</i><br>
+><i> +                         "bus";</i><br>
+><i> +</i><br>
+><i> +           phys = <&dsi0_phy>;</i><br>
+><i> +           phy-names = "dsi";</i><br>
+><i> +</i><br>
+><i> +           ports {</i><br>
+><i> +                  #address-cells = <1>;</i><br>
+><i> +                  #size-cells = <0>;</i><br>
+><i> +</i><br>
+><i> +                  port@0 {</i><br>
+><i> +                          reg = <0>;</i><br>
+><i> +                          dsi0_in: endpoint {</i><br>
+><i> +                                   remote-endpoint = <&dpu_intf1_out>;</i><br>
+><i> +                          };</i><br>
+><i> +                  };</i><br>
+><i> +</i><br>
+><i> +                  port@1 {</i><br>
+><i> +                          reg = <1>;</i><br>
+><i> +                          dsi0_out: endpoint {</i><br>
+><i> +                                   remote-endpoint = <&sn65dsi86_in>;</i><br>
+><i> +                                   data-lanes = <0 1 2 3>;</i><br>
+><i> +                          };</i><br>
+><i> +                  };</i><br>
+><i> +           };</i><br>
+><i> +     };</i><br>
+><i> +...</i><br>
+><i> diff --git a/Documentation/devicetree/bindings/display/msm/dsi.txt b/Documentation/devicetree/bindings/display/msm/dsi.txt</i><br>
+><i> deleted file mode 100644</i><br>
+><i> index b9a64d3..0000000</i><br>
+><i> --- a/Documentation/devicetree/bindings/display/msm/dsi.txt</i><br>
+><i> +++ /dev/null</i><br>
+><i> @@ -1,249 +0,0 @@</i><br>
+><i> -Qualcomm Technologies Inc. adreno/snapdragon DSI output</i><br>
+><i> -</i><br>
+><i> -DSI Controller:</i><br>
+><i> -Required properties:</i><br>
+><i> -- compatible:</i><br>
+><i> -  * "qcom,mdss-dsi-ctrl"</i><br>
+><i> -- reg: Physical base address and length of the registers of controller</i><br>
+><i> -- reg-names: The names of register regions. The following regions are required:</i><br>
+><i> -  * "dsi_ctrl"</i><br>
+><i> -- interrupts: The interrupt signal from the DSI block.</i><br>
+><i> -- power-domains: Should be <&mmcc MDSS_GDSC>.</i><br>
+><i> -- clocks: Phandles to device clocks.</i><br>
+><i> -- clock-names: the following clocks are required:</i><br>
+><i> -  * "mdp_core"</i><br>
+><i> -  * "iface"</i><br>
+><i> -  * "bus"</i><br>
+><i> -  * "core_mmss"</i><br>
+><i> -  * "byte"</i><br>
+><i> -  * "pixel"</i><br>
+><i> -  * "core"</i><br>
+><i> -  For DSIv2, we need an additional clock:</i><br>
+><i> -   * "src"</i><br>
+><i> -  For DSI6G v2.0 onwards, we need also need the clock:</i><br>
+><i> -   * "byte_intf"</i><br>
+><i> -- assigned-clocks: Parents of "byte" and "pixel" for the given platform.</i><br>
+><i> -- assigned-clock-parents: The Byte clock and Pixel clock PLL outputs provided</i><br>
+><i> -  by a DSI PHY block. See [1] for details on clock bindings.</i><br>
+><i> -- vdd-supply: phandle to vdd regulator device node</i><br>
+><i> -- vddio-supply: phandle to vdd-io regulator device node</i><br>
+><i> -- vdda-supply: phandle to vdda regulator device node</i><br>
+><i> -- phys: phandle to DSI PHY device node</i><br>
+><i> -- phy-names: the name of the corresponding PHY device</i><br>
+><i> -- syscon-sfpb: A phandle to mmss_sfpb syscon node (only for DSIv2)</i><br>
+><i> -- ports: Contains 2 DSI controller ports as child nodes. Each port contains</i><br>
+><i> -  an endpoint subnode as defined in [2] and [3].</i><br>
+><i> -</i><br>
+><i> -Optional properties:</i><br>
+><i> -- panel@0: Node of panel connected to this DSI controller.</i><br>
+><i> -  See files in [4] for each supported panel.</i><br>
+><i> -- qcom,dual-dsi-mode: Boolean value indicating if the DSI controller is</i><br>
+><i> -  driving a panel which needs 2 DSI links.</i><br>
+><i> -- qcom,master-dsi: Boolean value indicating if the DSI controller is driving</i><br>
+><i> -  the master link of the 2-DSI panel.</i><br>
+><i> -- qcom,sync-dual-dsi: Boolean value indicating if the DSI controller is</i><br>
+><i> -  driving a 2-DSI panel whose 2 links need receive command simultaneously.</i><br>
+><i> -- pinctrl-names: the pin control state names; should contain "default"</i><br>
+><i> -- pinctrl-0: the default pinctrl state (active)</i><br>
+><i> -- pinctrl-n: the "sleep" pinctrl state</i><br>
+><i> -- ports: contains DSI controller input and output ports as children, each</i><br>
+><i> -  containing one endpoint subnode.</i><br>
+><i> -</i><br>
+><i> -  DSI Endpoint properties:</i><br>
+><i> -  - remote-endpoint: For port@0, set to phandle of the connected panel/bridge's</i><br>
+><i> -    input endpoint. For port@1, set to the MDP interface output. See [2] for</i><br>
+><i> -    device graph info.</i><br>
+><i> -</i><br>
+><i> -  - data-lanes: this describes how the physical DSI data lanes are mapped</i><br>
+><i> -    to the logical lanes on the given platform. The value contained in</i><br>
+><i> -    index n describes what physical lane is mapped to the logical lane n</i><br>
+><i> -    (DATAn, where n lies between 0 and 3). The clock lane position is fixed</i><br>
+><i> -    and can't be changed. Hence, they aren't a part of the DT bindings. See</i><br>
+><i> -    [3] for more info on the data-lanes property.</i><br>
+><i> -</i><br>
+><i> -    For example:</i><br>
+><i> -</i><br>
+><i> -    data-lanes = <3 0 1 2>;</i><br>
+><i> -</i><br>
+><i> -    The above mapping describes that the logical data lane DATA0 is mapped to</i><br>
+><i> -    the physical data lane DATA3, logical DATA1 to physical DATA0, logic DATA2</i><br>
+><i> -    to phys DATA1 and logic DATA3 to phys DATA2.</i><br>
+><i> -</i><br>
+><i> -    There are only a limited number of physical to logical mappings possible:</i><br>
+><i> -    <0 1 2 3></i><br>
+><i> -    <1 2 3 0></i><br>
+><i> -    <2 3 0 1></i><br>
+><i> -    <3 0 1 2></i><br>
+><i> -    <0 3 2 1></i><br>
+><i> -    <1 0 3 2></i><br>
+><i> -    <2 1 0 3></i><br>
+><i> -    <3 2 1 0></i><br>
+<br>
+You've dropped all these?<br>
+<br>
+<br>
+

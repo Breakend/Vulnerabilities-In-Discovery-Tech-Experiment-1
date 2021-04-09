@@ -1,0 +1,26 @@
+David Collins (2):<br>
+  input: pm8941-pwrkey: add support for PMK8350 PON_HLOS PMIC peripheral<br>
+  dt-bindings: input: pm8941-pwrkey: add pmk8350 compatible strings<br>
+<br>
+satya priya (2):<br>
+  dt-bindings: power: reset: qcom-pon: Convert qcom PON binding to yaml<br>
+  dt-bindings: input: pm8941-pwrkey: Convert pm8941 power key binding to<br>
+    yaml<br>
+<br>
+ .../bindings/input/qcom,pm8941-pwrkey.txt          |  53 -----------<br>
+ .../bindings/input/qcom,pm8941-pwrkey.yaml         |  88 ++++++++++++++++++<br>
+ .../devicetree/bindings/power/reset/qcom,pon.txt   |  49 ----------<br>
+ .../devicetree/bindings/power/reset/qcom,pon.yaml  |  41 ++++++++<br>
+ drivers/input/misc/pm8941-pwrkey.c                 | 103 ++++++++++++++-------<br>
+ 5 files changed, 201 insertions(+), 133 deletions(-)<br>
+ delete mode 100644 Documentation/devicetree/bindings/input/qcom,pm8941-pwrkey.txt<br>
+ create mode 100644 Documentation/devicetree/bindings/input/qcom,pm8941-pwrkey.yaml<br>
+ delete mode 100644 Documentation/devicetree/bindings/power/reset/qcom,pon.txt<br>
+ create mode 100644 Documentation/devicetree/bindings/power/reset/qcom,pon.yaml<br>
+<br>
+-- <br>
+QUALCOMM INDIA, on behalf of Qualcomm Innovation Center, Inc. is a member <br>
+of Code Aurora Forum, hosted by The Linux Foundation<br>
+<br>
+<br>
+

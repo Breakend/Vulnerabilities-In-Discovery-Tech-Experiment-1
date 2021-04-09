@@ -1,0 +1,93 @@
+
+<br>
+On 2021/4/7 23:35, Alexandru Elisei wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+Hi Yanan,<br>
+<br>
+On 3/26/21 3:16 AM, Yanan Wang wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+With a guest translation fault, the memcache pages are not needed if KVM<br>
+is only about to install a new leaf entry into the existing page table.<br>
+And with a guest permission fault, the memcache pages are also not needed<br>
+for a write_fault in dirty-logging time if KVM is only about to update<br>
+the existing leaf entry instead of collapsing a block entry into a table.<br>
+<br>
+By comparing fault_granule and vma_pagesize, cases that require allocations<br>
+from memcache and cases that don't can be distinguished completely.<br>
+<br>
+Signed-off-by: Yanan Wang <wangyanan55@xxxxxxxxxx><br>
+---<br>
+  arch/arm64/kvm/mmu.c | 25 ++++++++++++-------------<br>
+  1 file changed, 12 insertions(+), 13 deletions(-)<br>
+<br>
+diff --git a/arch/arm64/kvm/mmu.c b/arch/arm64/kvm/mmu.c<br>
+index 1eec9f63bc6f..05af40dc60c1 100644<br>
+--- a/arch/arm64/kvm/mmu.c<br>
++++ b/arch/arm64/kvm/mmu.c<br>
+@@ -810,19 +810,6 @@ static int user_mem_abort(struct kvm_vcpu *vcpu, phys_addr_t fault_ipa,<br>
+  	gfn = fault_ipa >> PAGE_SHIFT;<br>
+  	mmap_read_unlock(current->mm);<br>
+  
+-	/*
+<br>
+-	 * Permission faults just need to update the existing leaf entry,<br>
+-	 * and so normally don't require allocations from the memcache. The<br>
+-	 * only exception to this is when dirty logging is enabled at runtime<br>
+-	 * and a write fault needs to collapse a block entry into a table.<br>
+-	 */<br>
+-	if (fault_status != FSC_PERM || (logging_active && write_fault)) {<br>
+-		ret = kvm_mmu_topup_memory_cache(memcache,<br>
+-						 kvm_mmu_cache_min_pages(kvm));<br>
+-		if (ret)<br>
+-			return ret;<br>
+-	}<br>
+-<br>
+  	mmu_seq = vcpu->kvm->mmu_notifier_seq;<br>
+  	/*<br>
+  	 * Ensure the read of mmu_notifier_seq happens before we call<br>
+@@ -880,6 +867,18 @@ static int user_mem_abort(struct kvm_vcpu *vcpu, phys_addr_t fault_ipa,<br>
+  	else if (cpus_have_const_cap(ARM64_HAS_CACHE_DIC))<br>
+  		prot |= KVM_PGTABLE_PROT_X;<br>
+  
++	/*
+<br>
++	 * Allocations from the memcache are required only when granule of the<br>
++	 * lookup level where the guest fault happened exceeds vma_pagesize,<br>
++	 * which means new page tables will be created in the fault handlers.<br>
++	 */<br>
++	if (fault_granule > vma_pagesize) {<br>
++		ret = kvm_mmu_topup_memory_cache(memcache,<br>
++						 kvm_mmu_cache_min_pages(kvm));<br>
++		if (ret)<br>
++			return ret;<br>
++	}<br>
+</blockquote>
+As I explained in v1 [1], this looks correct to me. I still think that someone<br>
+else should have a look, but if Marc decides to pick up this patch as-is, he can<br>
+add my Reviewed-by: Alexandru Elisei <alexandru.elisei@xxxxxxx>.<br>
+</blockquote>
+Thanks again for this, Alex!<br>
+<br>
+Hi Marc, Will,<br>
+Any thoughts about this patch?<br>
+<br>
+Thanks,<br>
+Yanan<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+[1] <a  rel="nofollow" href="https://lore.kernel.org/lkml/2c65bff2-be7f-b20c-9265-939bc73185b6@xxxxxxx/">https://lore.kernel.org/lkml/2c65bff2-be7f-b20c-9265-939bc73185b6@xxxxxxx/</a><br>
+<br>
+Thanks,<br>
+<br>
+Alex<br>
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
++<br>
+  	/*<br>
+  	 * Under the premise of getting a FSC_PERM fault, we just need to relax<br>
+  	 * permissions only if vma_pagesize equals fault_granule. Otherwise,<br>
+</blockquote>
+.<br>
+</blockquote>
+<br>
+<br>
+

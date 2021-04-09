@@ -1,0 +1,58 @@
+When the dedicated wake irq is level trigger, enable it before<br>
+calling runtime_suspend, will trigger an interrupt.<br>
+<br>
+e.g.<br>
+for a low level trigger type, it's low level at running time (0),<br>
+and becomes high level when enters suspend (runtime_suspend (1) is<br>
+called), a wakeup signal at (2) make it become low level, wake irq<br>
+will be triggered.<br>
+<br>
+                ------------------<br>
+               |           ^     ^|<br>
+----------------           |     | --------------<br>
+ |<---(0)--->|<--(1)--|   (3)   (2)    (4)<br>
+<br>
+if we enable the wake irq before calling runtime_suspend during (0),<br>
+an interrupt will arise, it causes resume immediately;<br>
+enable wake irq after calling runtime_suspend, e.g. at (3) or (4),<br>
+will works.<br>
+<br>
+This patch seems no side effect on edge trigger wake irq.<br>
+<br>
+Signed-off-by: Chunfeng Yun <chunfeng.yun@xxxxxxxxxxxx><br>
+---<br>
+ drivers/base/power/runtime.c | 5 ++---<br>
+ 1 file changed, 2 insertions(+), 3 deletions(-)<br>
+<br>
+diff --git a/drivers/base/power/runtime.c b/drivers/base/power/runtime.c<br>
+index a46a7e30881b..796739a015a5 100644<br>
+--- a/drivers/base/power/runtime.c<br>
++++ b/drivers/base/power/runtime.c<br>
+@@ -619,12 +619,12 @@ static int rpm_suspend(struct device *dev, int rpmflags)<br>
+ 	__update_runtime_status(dev, RPM_SUSPENDING);<br>
+ <br>
+ 	callback = RPM_GET_CALLBACK(dev, runtime_suspend);<br>
+-<br>
+-	dev_pm_enable_wake_irq_check(dev, true);<br>
+ 	retval = rpm_callback(callback, dev);<br>
+ 	if (retval)<br>
+ 		goto fail;<br>
+ <br>
++	dev_pm_enable_wake_irq_check(dev, true);<br>
++<br>
+  no_callback:<br>
+ 	__update_runtime_status(dev, RPM_SUSPENDED);<br>
+ 	pm_runtime_deactivate_timer(dev);<br>
+@@ -659,7 +659,6 @@ static int rpm_suspend(struct device *dev, int rpmflags)<br>
+ 	return retval;<br>
+ <br>
+  fail:<br>
+-	dev_pm_disable_wake_irq_check(dev);<br>
+ 	__update_runtime_status(dev, RPM_ACTIVE);<br>
+ 	dev->power.deferred_resume = false;<br>
+ 	wake_up_all(&dev->power.wait_queue);<br>
+-- <br>
+2.18.0<br>
+<br>
+<br>
+

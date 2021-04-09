@@ -1,0 +1,37 @@
+On Thu, Apr 08, 2021 at 10:56:40AM +0200, Borislav Petkov wrote:<br>
+><i> On Thu, Apr 08, 2021 at 11:48:46AM +0300, Jarkko Sakkinen wrote:</i><br>
+><i> > The regression is that the sgx_nr_free_pages is also incremented by</i><br>
+><i> > sgx_free_epc_pages(), and thus it ends up having double the number of</i><br>
+><i> > pages available.</i><br>
+><i> </i><br>
+><i> So when you add a new EPC section with sgx_setup_epc_section(), those</i><br>
+><i> new pages in "nr_pages" are initially not going to be accounted</i><br>
+><i> anywhere? Or is that sgx_nr_all_pages? And you do that in your second</i><br>
+><i> patch...</i><br>
+><i> </i><br>
+><i> But those new pages coming in *are* free pages so they should be in the</i><br>
+><i> free pages count too, IMHO.</i><br>
+<br>
+They are not in the "free_page_list" before sanitization process has put<br>
+them to there. So in that way the count is also better in sync with this<br>
+fix.<br>
+<br>
+It was even before NUMA patches kind of out-of-sync, i.e. free pages count<br>
+was incremented before putting them to the free list, but it didn't matter<br>
+that much because sanitization is fairly fast and it only prevented ksgxd<br>
+to trigger small time after the booth.<br>
+<br>
+I think I'll send the fix for this now as a separate patch with a better<br>
+descriptino so that I can use more time to the attributes and implement<br>
+that properly at once.<br>
+<br>
+><i> -- </i><br>
+><i> Regards/Gruss,</i><br>
+><i>     Boris.</i><br>
+><i> </i><br>
+><i> <a  rel="nofollow" href="https://people.kernel.org/tglx/notes-about-netiquette">https://people.kernel.org/tglx/notes-about-netiquette</a></i><br>
+<br>
+/Jarkko<br>
+<br>
+<br>
+

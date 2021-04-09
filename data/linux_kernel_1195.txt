@@ -1,0 +1,24 @@
+On Thu, 8 Apr 2021, Greg KH wrote:<br>
+<br>
+><i> > If there is a driver/subsystem code that can't handle the reverse </i><br>
+><i> > operation to modprobe, it clearly can't handle error handling during </i><br>
+><i> > modprobe (which, one would hope, is supported), and should be fixed.</i><br>
+><i> </i><br>
+><i> Huh?  No, that's not the issue here, it's the issue of different</i><br>
+><i> userspace code paths into the module at the same time that it is trying</i><br>
+><i> to be unloaded.  That has nothing to do with loading the module the</i><br>
+><i> first time as userspace is not touching those apis yet.</i><br>
+<br>
+So do you claim that once the first (out of possibly many) <br>
+userspace-visible sysfs entry has been created during module insertion and <br>
+made available to userspace, there is never going to be rollback happening <br>
+that'd be removing that first sysfs entry again?<br>
+<br>
+Thanks,<br>
+<br>
+-- <br>
+Jiri Kosina<br>
+SUSE Labs<br>
+<br>
+<br>
+

@@ -1,0 +1,49 @@
+On Thu, Apr 08, 2021 at 05:55:57PM +0300, Andy Shevchenko wrote:<br>
+><i> Currently the bitmap_remap() and bitmap_bitremap() are available</i><br>
+><i> only for CONFIG_NUMA=y case, while some users may benefit out of it</i><br>
+><i> and being independent to NUMA code. Make them available to users</i><br>
+><i> by moving out of ifdeffery and exporting for modules.</i><br>
+><i> </i><br>
+><i> Signed-off-by: Andy Shevchenko <andriy.shevchenko@xxxxxxxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  lib/bitmap.c | 5 +++--</i><br>
+><i>  1 file changed, 3 insertions(+), 2 deletions(-)</i><br>
+><i> </i><br>
+><i> diff --git a/lib/bitmap.c b/lib/bitmap.c</i><br>
+><i> index 74ceb02f45e3..7b6b2a67a6a6 100644</i><br>
+><i> --- a/lib/bitmap.c</i><br>
+><i> +++ b/lib/bitmap.c</i><br>
+><i> @@ -784,8 +784,6 @@ int bitmap_parse(const char *start, unsigned int buflen,</i><br>
+><i>  }</i><br>
+><i>  EXPORT_SYMBOL(bitmap_parse);</i><br>
+><i>  </i><br>
+><i> -</i><br>
+><i> -#ifdef CONFIG_NUMA</i><br>
+><i>  /**</i><br>
+><i>   * bitmap_pos_to_ord - find ordinal of set bit at given position in bitmap</i><br>
+><i>   *	@buf: pointer to a bitmap</i><br>
+><i> @@ -894,6 +892,7 @@ void bitmap_remap(unsigned long *dst, const unsigned long *src,</i><br>
+><i>  			set_bit(bitmap_ord_to_pos(new, n % w, nbits), dst);</i><br>
+><i>  	}</i><br>
+><i>  }</i><br>
+><i> +EXPORT_SYMBOL(bitmap_remap);</i><br>
+><i>  </i><br>
+><i>  /**</i><br>
+><i>   * bitmap_bitremap - Apply map defined by a pair of bitmaps to a single bit</i><br>
+><i> @@ -931,7 +930,9 @@ int bitmap_bitremap(int oldbit, const unsigned long *old,</i><br>
+><i>  	else</i><br>
+><i>  		return bitmap_ord_to_pos(new, n % w, bits);</i><br>
+><i>  }</i><br>
+><i> +EXPORT_SYMBOL(bitmap_bitremap);</i><br>
+><i>  </i><br>
+><i> +#ifdef CONFIG_NUMA</i><br>
+><i>  /**</i><br>
+><i>   * bitmap_onto - translate one bitmap relative to another</i><br>
+><i>   *	@dst: resulting translated bitmap</i><br>
+><i> -- </i><br>
+><i> 2.30.2</i><br>
+<br>
+Acked-by: Yury Norov <yury.norov@xxxxxxxxx><br>
+<br>
+<br>
+

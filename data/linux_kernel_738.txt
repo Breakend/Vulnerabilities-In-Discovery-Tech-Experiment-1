@@ -1,0 +1,17 @@
+On Mon, Apr 5, 2021 at 5:36 PM Rui Salvaterra <rsalvaterra@xxxxxxxxx> wrote:<br>
+><i></i><br>
+><i> Compared to lzo and zlib, zstd is the best all-around performer, both in terms</i><br>
+><i> of speed and compression ratio. Set it as the default, if available.</i><br>
+<br>
+I was about to NACK this patch but by looking at the diff I realized<br>
+that you change<br>
+the default compressor only for the default filesystem as created by<br>
+UBIFS itself.<br>
+Queued for the merge window. :-)<br>
+<br>
+-- <br>
+Thanks,<br>
+//richard<br>
+<br>
+<br>
+

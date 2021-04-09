@@ -1,0 +1,14 @@
+On Tue, 06 Apr 2021 17:26:32 +0800, Greentime Hu wrote:<br>
+><i> Add PCIe host controller DT bindings of SiFive FU740.</i><br>
+><i> </i><br>
+><i> Signed-off-by: Greentime Hu <greentime.hu@xxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  .../bindings/pci/sifive,fu740-pcie.yaml       | 113 ++++++++++++++++++</i><br>
+><i>  1 file changed, 113 insertions(+)</i><br>
+><i>  create mode 100644 Documentation/devicetree/bindings/pci/sifive,fu740-pcie.yaml</i><br>
+><i> </i><br>
+<br>
+Reviewed-by: Rob Herring <robh@xxxxxxxxxx><br>
+<br>
+<br>
+

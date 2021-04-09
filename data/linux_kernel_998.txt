@@ -1,0 +1,30 @@
+On Thu, Apr 08, 2021 at 04:55:45PM +0530, Mitali Borkar wrote:<br>
+><i> On Thu, Apr 08, 2021 at 10:30:09AM +0200, Julia Lawall wrote:</i><br>
+><i> > The subject line should be in the imperative, so "add" instead of "added".</i><br>
+><i> > </i><br>
+><i> Ok Ma'am</i><br>
+><i> > On Thu, 8 Apr 2021, Mitali Borkar wrote:</i><br>
+><i> > </i><br>
+><i> > > Clean up Check:spaces preferred around that '+' (ctx:VxV)</i><br>
+><i> > > Reported by checkpatch</i><br>
+><i> > </i><br>
+><i> > Please try to rephrase to explain what you did and why.  "Clean up" kind</i><br>
+><i> > of states what the goal is, but your opinion about what is a clean up</i><br>
+><i> > might be different than someone else's.  It's also not necessary to cite</i><br>
+><i> > the checkpatch warning exactly.</i><br>
+><i> > </i><br>
+><i> OKay Ma'am, will rewrite the appopriate commit message. May I know while</i><br>
+><i> resending this patch, what should I write in subject description, </i><br>
+><i> RESEND PATCH or PATCH v2</i><br>
+<br>
+"RESEND" is only ok if the patch and changelog text is identical to the<br>
+previous version and something got lost so it needed to be resent.<br>
+<br>
+I do not think that is the case here.<br>
+<br>
+thanks,<br>
+<br>
+greg k-h<br>
+<br>
+<br>
+

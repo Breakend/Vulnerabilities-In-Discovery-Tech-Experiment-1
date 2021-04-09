@@ -1,0 +1,49 @@
+While we released the pte lock, somebody else might faulted in this pte.<br>
+So we should check whether it's swap pte first to guard against such race<br>
+or swp_type would be unexpected. And we can also avoid some unnecessary<br>
+readahead cpu cycles possibly.<br>
+<br>
+Fixes: ec560175c0b6 ("mm, swap: VMA based swap readahead")<br>
+Signed-off-by: Miaohe Lin <linmiaohe@xxxxxxxxxx><br>
+---<br>
+ mm/swap_state.c | 13 +++++++++----<br>
+ 1 file changed, 9 insertions(+), 4 deletions(-)<br>
+<br>
+diff --git a/mm/swap_state.c b/mm/swap_state.c<br>
+index 709c260d644a..3bf0d0c297bc 100644<br>
+--- a/mm/swap_state.c<br>
++++ b/mm/swap_state.c<br>
+@@ -724,10 +724,10 @@ static void swap_ra_info(struct vm_fault *vmf,<br>
+ {<br>
+ 	struct vm_area_struct *vma = vmf->vma;<br>
+ 	unsigned long ra_val;<br>
+-	swp_entry_t entry;<br>
++	swp_entry_t swap_entry;<br>
+ 	unsigned long faddr, pfn, fpfn;<br>
+ 	unsigned long start, end;<br>
+-	pte_t *pte, *orig_pte;<br>
++	pte_t *pte, *orig_pte, entry;<br>
+ 	unsigned int max_win, hits, prev_win, win, left;<br>
+ #ifndef CONFIG_64BIT<br>
+ 	pte_t *tpte;<br>
+@@ -742,8 +742,13 @@ static void swap_ra_info(struct vm_fault *vmf,<br>
+ <br>
+ 	faddr = vmf->address;<br>
+ 	orig_pte = pte = pte_offset_map(vmf->pmd, faddr);<br>
+-	entry = pte_to_swp_entry(*pte);<br>
+-	if ((unlikely(non_swap_entry(entry)))) {<br>
++	entry = *pte;<br>
++	if (unlikely(!is_swap_pte(entry))) {<br>
++		pte_unmap(orig_pte);<br>
++		return;<br>
++	}<br>
++	swap_entry = pte_to_swp_entry(entry);<br>
++	if ((unlikely(non_swap_entry(swap_entry)))) {<br>
+ 		pte_unmap(orig_pte);<br>
+ 		return;<br>
+ 	}<br>
+-- <br>
+2.19.1<br>
+<br>
+<br>
+

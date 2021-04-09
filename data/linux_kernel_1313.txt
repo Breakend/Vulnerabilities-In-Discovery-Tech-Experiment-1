@@ -1,0 +1,103 @@
+Signed-off-by: Nikolay Borisov <nborisov@xxxxxxxx><br>
+---<br>
+ fs/btrfs/btrfs_inode.h | 17 -----------------<br>
+ fs/btrfs/inode.c       | 41 ++++++++++++++++++++++++++++++++++-------<br>
+ 2 files changed, 34 insertions(+), 24 deletions(-)<br>
+<br>
+diff --git a/fs/btrfs/btrfs_inode.h b/fs/btrfs/btrfs_inode.h<br>
+index 4e12a477d32e..e84f58cca02e 100644<br>
+--- a/fs/btrfs/btrfs_inode.h<br>
++++ b/fs/btrfs/btrfs_inode.h<br>
+@@ -317,23 +317,6 @@ struct btrfs_dio_private {<br>
+ 			blk_status_t);<br>
+ };<br>
+ <br>
+-/*<br>
+- * Disable DIO read nolock optimization, so new dio readers will be forced<br>
+- * to grab i_mutex. It is used to avoid the endless truncate due to<br>
+- * nonlocked dio read.<br>
+- */<br>
+-static inline void btrfs_inode_block_unlocked_dio(struct btrfs_inode *inode)<br>
+-{<br>
+-	set_bit(BTRFS_INODE_READDIO_NEED_LOCK, &inode->runtime_flags);<br>
+-	smp_mb();<br>
+-}<br>
+-<br>
+-static inline void btrfs_inode_resume_unlocked_dio(struct btrfs_inode *inode)<br>
+-{<br>
+-	smp_mb__before_atomic();<br>
+-	clear_bit(BTRFS_INODE_READDIO_NEED_LOCK, &inode->runtime_flags);<br>
+-}<br>
+-<br>
+ /* Array of bytes with variable length, hexadecimal format 0x1234 */<br>
+ #define CSUM_FMT				"0x%*phN"<br>
+ #define CSUM_FMT_VALUE(size, bytes)		size, bytes<br>
+diff --git a/fs/btrfs/inode.c b/fs/btrfs/inode.c<br>
+index 6d2bb58d277a..d64600268c3a 100644<br>
+--- a/fs/btrfs/inode.c<br>
++++ b/fs/btrfs/inode.c<br>
+@@ -4626,10 +4626,29 @@ static int btrfs_setsize(struct inode *inode, struct iattr *attr)<br>
+ <br>
+ 		truncate_setsize(inode, newsize);<br>
+ <br>
+-		/* Disable nonlocked read DIO to avoid the endless truncate */<br>
+-		btrfs_inode_block_unlocked_dio(BTRFS_I(inode));<br>
++		/*<br>
++		 * This code is very subtle. It is essentially a lock of its<br>
++		 * own type. BTRFS allows multiple DIO readers to race with<br>
++		 * writers so long as they don't read beyond EOF of an inode.<br>
++		 * However, if we have a pending truncate we'd like to signal<br>
++		 * DIO readers they should fall back to DIO_LOCKING semantics.<br>
++		 * This ensures that multiple aggressive DIO readers cannot<br>
++		 * starve the truncating thread.<br>
++		 *<br>
++		 * This semantics is achieved by the use of the below flag. If<br>
++		 * new readers come after the flag has been cleared then the<br>
++		 * state is still consistent, since the RELEASE semantics of<br>
++		 * clear_bit_unlock ensure the truncate inode size will be<br>
++		 * visible and DIO readers will bail out.<br>
++		 *<br>
++		 * The implied memory barrier by inode_dio_wait is paired with<br>
++		 * smp_mb__before_atomic in btrfs_direct_IO.<br>
++		 */<br>
++		set_bit(BTRFS_INODE_READDIO_NEED_LOCK,<br>
++			&BTRFS_I(inode)->runtime_flags);<br>
+ 		inode_dio_wait(inode);<br>
+-		btrfs_inode_resume_unlocked_dio(BTRFS_I(inode));<br>
++		clear_bit_unlock(BTRFS_INODE_READDIO_NEED_LOCK,<br>
++				 &BTRFS_I(inode)->runtime_flags);<br>
+ <br>
+ 		ret = btrfs_truncate(inode, newsize == oldsize);<br>
+ 		if (ret && inode->i_nlink) {<br>
+@@ -8070,11 +8089,19 @@ static ssize_t btrfs_direct_IO(struct kiocb *iocb, struct iov_iter *iter)<br>
+ 		dio_data.unsubmitted_oe_range_end = (u64)offset;<br>
+ 		current->journal_info = &dio_data;<br>
+ 		down_read(&BTRFS_I(inode)->dio_sem);<br>
+-	} else if (test_bit(BTRFS_INODE_READDIO_NEED_LOCK,<br>
++	} else {<br>
++		/*<br>
++		 * This barrier is paired with the implied barrier in<br>
++		 * inode_dio_wait. It ensures that READDIO_NEED_LOCK is<br>
++		 * visible if we have a pending truncate.<br>
++		 */<br>
++		smp_mb__before_atomic();<br>
++		if (test_bit(BTRFS_INODE_READDIO_NEED_LOCK,<br>
+ 				     &BTRFS_I(inode)->runtime_flags)) {<br>
+-		inode_dio_end(inode);<br>
+-		flags = DIO_LOCKING | DIO_SKIP_HOLES;<br>
+-		wakeup = false;<br>
++			inode_dio_end(inode);<br>
++			flags = DIO_LOCKING | DIO_SKIP_HOLES;<br>
++			wakeup = false;<br>
++		}<br>
+ 	}<br>
+ <br>
+ 	ret = __blockdev_direct_IO(iocb, inode,<br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+--------------961A561BD5F9D1A717978A8F--<br>
+<br>
+<br>
+

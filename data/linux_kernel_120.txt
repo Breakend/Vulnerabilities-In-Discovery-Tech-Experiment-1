@@ -1,0 +1,25 @@
+Enable A7 PLL driver and APCS clock driver on SDX55 platform.<br>
+<br>
+Signed-off-by: Manivannan Sadhasivam <manivannan.sadhasivam@xxxxxxxxxx><br>
+---<br>
+ arch/arm/configs/qcom_defconfig | 2 ++<br>
+ 1 file changed, 2 insertions(+)<br>
+<br>
+diff --git a/arch/arm/configs/qcom_defconfig b/arch/arm/configs/qcom_defconfig<br>
+index 0b9da27f923a..02f6185f31a6 100644<br>
+--- a/arch/arm/configs/qcom_defconfig<br>
++++ b/arch/arm/configs/qcom_defconfig<br>
+@@ -215,6 +215,8 @@ CONFIG_DMADEVICES=y<br>
+ CONFIG_QCOM_BAM_DMA=y<br>
+ CONFIG_STAGING=y<br>
+ CONFIG_COMMON_CLK_QCOM=y<br>
++CONFIG_QCOM_A7PLL=y<br>
++CONFIG_QCOM_CLK_APCS_SDX55=y<br>
+ CONFIG_QCOM_CLK_RPM=y<br>
+ CONFIG_QCOM_CLK_RPMH=y<br>
+ CONFIG_QCOM_CLK_SMD_RPM=y<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

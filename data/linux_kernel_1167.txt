@@ -1,0 +1,88 @@
+Ensure that all "goto out" error branches return correct error codes.<br>
+Currently, always returns 0.<br>
+<br>
+Reported-by: Hulk Robot <hulkci@xxxxxxxxxx><br>
+Signed-off-by: Zhen Lei <thunder.leizhen@xxxxxxxxxx><br>
+---<br>
+ drivers/message/fusion/mptctl.c | 20 ++++++++++++--------<br>
+ 1 file changed, 12 insertions(+), 8 deletions(-)<br>
+<br>
+diff --git a/drivers/message/fusion/mptctl.c b/drivers/message/fusion/mptctl.c<br>
+index 72025996cd70..57bf511245b6 100644<br>
+--- a/drivers/message/fusion/mptctl.c<br>
++++ b/drivers/message/fusion/mptctl.c<br>
+@@ -2326,7 +2326,7 @@ mptctl_hp_hostinfo(MPT_ADAPTER *ioc, unsigned long arg, unsigned int data_size)<br>
+ 	ToolboxIstwiReadWriteRequest_t	*IstwiRWRequest;<br>
+ 	MPT_FRAME_HDR		*mf = NULL;<br>
+ 	unsigned long		timeleft;<br>
+-	int			retval;<br>
++	int			retval = 0;<br>
+ 	u32			msgcontext;<br>
+ <br>
+ 	/* Reset long to int. Should affect IA64 and SPARC only<br>
+@@ -2453,6 +2453,7 @@ mptctl_hp_hostinfo(MPT_ADAPTER *ioc, unsigned long arg, unsigned int data_size)<br>
+ 	if ((mf = mpt_get_msg_frame(mptctl_id, ioc)) == NULL) {<br>
+ 		dfailprintk(ioc, printk(MYIOC_s_WARN_FMT<br>
+ 			"%s, no msg frames!!\n", ioc->name, __func__));<br>
++		retval = -EFAULT;<br>
+ 		goto out;<br>
+ 	}<br>
+ <br>
+@@ -2471,12 +2472,13 @@ mptctl_hp_hostinfo(MPT_ADAPTER *ioc, unsigned long arg, unsigned int data_size)<br>
+ 		IstwiRWRequest->DeviceAddr = 0xB0;<br>
+ <br>
+ 	pbuf = pci_alloc_consistent(ioc->pcidev, 4, &buf_dma);<br>
+-	if (!pbuf)<br>
++	if (!pbuf) {<br>
++		retval = -ENOMEM;<br>
+ 		goto out;<br>
++	}<br>
+ 	ioc->add_sge((char *)&IstwiRWRequest->SGL,<br>
+ 	    (MPT_SGE_FLAGS_SSIMPLE_READ|4), buf_dma);<br>
+ <br>
+-	retval = 0;<br>
+ 	SET_MGMT_MSG_CONTEXT(ioc->ioctl_cmds.msg_context,<br>
+ 				IstwiRWRequest->MsgContext);<br>
+ 	INITIALIZE_MGMT_STATUS(ioc->ioctl_cmds.status)<br>
+@@ -2486,10 +2488,10 @@ mptctl_hp_hostinfo(MPT_ADAPTER *ioc, unsigned long arg, unsigned int data_size)<br>
+ 	timeleft = wait_for_completion_timeout(&ioc->ioctl_cmds.done,<br>
+ 			HZ*MPT_IOCTL_DEFAULT_TIMEOUT);<br>
+ 	if (!(ioc->ioctl_cmds.status & MPT_MGMT_STATUS_COMMAND_GOOD)) {<br>
+-		retval = -ETIME;<br>
+ 		printk(MYIOC_s_WARN_FMT "%s: failed\n", ioc->name, __func__);<br>
+ 		if (ioc->ioctl_cmds.status & MPT_MGMT_STATUS_DID_IOCRESET) {<br>
+ 			mpt_free_msg_frame(ioc, mf);<br>
++			retval = -ETIME;<br>
+ 			goto out;<br>
+ 		}<br>
+ 		if (!timeleft) {<br>
+@@ -2497,9 +2499,11 @@ mptctl_hp_hostinfo(MPT_ADAPTER *ioc, unsigned long arg, unsigned int data_size)<br>
+ 			       "HOST INFO command timeout, doorbell=0x%08x\n",<br>
+ 			       ioc->name, mpt_GetIocState(ioc, 0));<br>
+ 			mptctl_timeout_expired(ioc, mf);<br>
+-		} else<br>
+-			goto retry_wait;<br>
+-		goto out;<br>
++			retval = -ETIME;<br>
++			goto out;<br>
++		}<br>
++<br>
++		goto retry_wait;<br>
+ 	}<br>
+ <br>
+ 	/*<br>
+@@ -2530,7 +2534,7 @@ mptctl_hp_hostinfo(MPT_ADAPTER *ioc, unsigned long arg, unsigned int data_size)<br>
+ 		return -EFAULT;<br>
+ 	}<br>
+ <br>
+-	return 0;<br>
++	return retval;<br>
+ <br>
+ }<br>
+ <br>
+-- <br>
+2.21.1<br>
+<br>
+<br>
+<br>
+

@@ -1,0 +1,46 @@
+On 4/7/21 2:45 PM, Ramakrishna Saripalli wrote:<br>
+><i> From: Ramakrishna Saripalli <rk.saripalli@xxxxxxx></i><br>
+><i> </i><br>
+><i> Expose Predictive Store Forwarding capability to guests.</i><br>
+><i> Guests enable or disable PSF via SPEC_CTRL MSR.</i><br>
+><i> </i><br>
+><i> Signed-off-by: Ramakrishna Saripalli <rk.saripalli@xxxxxxx></i><br>
+><i> ---</i><br>
+><i>  arch/x86/kvm/cpuid.c | 4 +++-</i><br>
+><i>  1 file changed, 3 insertions(+), 1 deletion(-)</i><br>
+><i> </i><br>
+><i> diff --git a/arch/x86/kvm/cpuid.c b/arch/x86/kvm/cpuid.c</i><br>
+><i> index 6bd2f8b830e4..9c4af0fef6d7 100644</i><br>
+><i> --- a/arch/x86/kvm/cpuid.c</i><br>
+><i> +++ b/arch/x86/kvm/cpuid.c</i><br>
+><i> @@ -448,6 +448,8 @@ void kvm_set_cpu_caps(void)</i><br>
+><i>  		kvm_cpu_cap_set(X86_FEATURE_INTEL_STIBP);</i><br>
+><i>  	if (boot_cpu_has(X86_FEATURE_AMD_SSBD))</i><br>
+><i>  		kvm_cpu_cap_set(X86_FEATURE_SPEC_CTRL_SSBD);</i><br>
+><i> +	if (boot_cpu_has(X86_FEATURE_AMD_PSFD))</i><br>
+><i> +		kvm_cpu_cap_set(X86_FEATURE_AMD_PSFD);</i><br>
+><i>  </i><br>
+><i>  	kvm_cpu_cap_mask(CPUID_7_1_EAX,</i><br>
+><i>  		F(AVX_VNNI) | F(AVX512_BF16)</i><br>
+><i> @@ -482,7 +484,7 @@ void kvm_set_cpu_caps(void)</i><br>
+><i>  	kvm_cpu_cap_mask(CPUID_8000_0008_EBX,</i><br>
+><i>  		F(CLZERO) | F(XSAVEERPTR) |</i><br>
+><i>  		F(WBNOINVD) | F(AMD_IBPB) | F(AMD_IBRS) | F(AMD_SSBD) | F(VIRT_SSBD) |</i><br>
+><i> -		F(AMD_SSB_NO) | F(AMD_STIBP) | F(AMD_STIBP_ALWAYS_ON)</i><br>
+><i> +		F(AMD_SSB_NO) | F(AMD_STIBP) | F(AMD_STIBP_ALWAYS_ON) | F(AMD_PSFD)</i><br>
+<br>
+Please note that this patch has a pre-req against the PSFD support that<br>
+defines this feature:<br>
+<br>
+<a  rel="nofollow" href="https://lore.kernel.org/lkml/20210406155004.230790-2-rsaripal@xxxxxxx/#t">https://lore.kernel.org/lkml/20210406155004.230790-2-rsaripal@xxxxxxx/#t</a><br>
+<br>
+Thanks,<br>
+Tom<br>
+<br>
+><i>  	);</i><br>
+><i>  </i><br>
+><i>  	/*</i><br>
+><i> </i><br>
+<br>
+<br>
+

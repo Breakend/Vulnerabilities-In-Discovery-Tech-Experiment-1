@@ -1,0 +1,76 @@
+
+On 08/04/21 12:05, Daniel Vetter wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+On Mon, Mar 29, 2021 at 10:31:01AM -0300, Jason Gunthorpe wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+On Tue, Mar 16, 2021 at 04:33:03PM +0100, Daniel Vetter wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+Both kvm (in bd2fae8da794 ("KVM: do not assume PTE is writable after<br>
+follow_pfn")) and vfio (in 07956b6269d3 ("vfio/type1: Use<br>
+follow_pte()")) have lost their callsites of follow_pfn(). All the<br>
+other ones have been switched over to unsafe_follow_pfn because they<br>
+cannot be fixed without breaking userspace api.<br>
+<br>
+Argueably the vfio code is still racy, but that's kinda a bigger<br>
+</blockquote>
+<br>
+vfio and kvm<br>
+</blockquote>
+<br>
+Hm I thought kvm is non-racy due to the mmu notifier catch races?<br>
+</blockquote>
+<br>
+No, but the plan is indeed to have some struct for each page that uses 
+follow_pfn and update it from the MMU notifiers.
+<br>
+<br>
+Paolo<br>
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em"><blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+picture. But since it does leak the pte beyond where it drops the pt<br>
+lock, without anything else like an mmu notifier guaranteeing<br>
+coherence, the problem is at least clearly visible in the vfio code.<br>
+So good enough with me.<br>
+<br>
+I've decided to keep the explanation that after dropping the pt lock<br>
+you must have an mmu notifier if you keep using the pte somehow by<br>
+adjusting it and moving it into the kerneldoc for the new follow_pte()<br>
+function.<br>
+<br>
+Cc: 3pvd@xxxxxxxxxx<br>
+Cc: Jann Horn <jannh@xxxxxxxxxx><br>
+Cc: Paolo Bonzini <pbonzini@xxxxxxxxxx><br>
+Cc: Jason Gunthorpe <jgg@xxxxxxxxxx><br>
+Cc: Cornelia Huck <cohuck@xxxxxxxxxx><br>
+Cc: Peter Xu <peterx@xxxxxxxxxx><br>
+Cc: Alex Williamson <alex.williamson@xxxxxxxxxx><br>
+Cc: linux-mm@xxxxxxxxx<br>
+Cc: linux-arm-kernel@xxxxxxxxxxxxxxxxxxx<br>
+Cc: linux-samsung-soc@xxxxxxxxxxxxxxx<br>
+Cc: linux-media@xxxxxxxxxxxxxxx<br>
+Cc: kvm@xxxxxxxxxxxxxxx<br>
+Signed-off-by: Daniel Vetter <daniel.vetter@xxxxxxxxx><br>
+---<br>
+  include/linux/mm.h |  2 --<br>
+  mm/memory.c        | 26 +++++---------------------<br>
+  mm/nommu.c         | 13 +------------<br>
+  3 files changed, 6 insertions(+), 35 deletions(-)<br>
+</blockquote>
+<br>
+Reviewed-by: Jason Gunthorpe <jgg@xxxxxxxxxx><br>
+</blockquote>
+<br>
+Thanks for your r-b tags, I'll add them.<br>
+-Daniel<br>
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+<br>
+Jason<br>
+</blockquote>
+<br>
+</blockquote>
+<br>
+<br>
+

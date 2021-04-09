@@ -1,0 +1,36 @@
+From: Nicolas Ferre <nicolas.ferre@xxxxxxxxxxxxx><br>
+<br>
+Fix the etm node hex address to lower case for matching regexp<br>
+specification and removing the additional warning that looks like:<br>
+<br>
+arch/arm/boot/dts/at91-sama5d2_ptc_ek.dt.yaml: /: 'etm@73C000' does not<br>
+match any of the regexes: '@(0|[1-9a-f][0-9a-f]*)$', '^[^@]+$',<br>
+'pinctrl-[0-9]+'<br>
+<br>
+Reported-by: Arnd Bergmann <arnd@xxxxxxxxxx><br>
+Signed-off-by: Nicolas Ferre <nicolas.ferre@xxxxxxxxxxxxx><br>
+---<br>
+ arch/arm/boot/dts/sama5d2.dtsi | 4 ++--<br>
+ 1 file changed, 2 insertions(+), 2 deletions(-)<br>
+<br>
+diff --git a/arch/arm/boot/dts/sama5d2.dtsi b/arch/arm/boot/dts/sama5d2.dtsi<br>
+index a27294394508..801969c113d6 100644<br>
+--- a/arch/arm/boot/dts/sama5d2.dtsi<br>
++++ b/arch/arm/boot/dts/sama5d2.dtsi<br>
+@@ -56,9 +56,9 @@ etb_in: endpoint {<br>
+ 		};<br>
+ 	};<br>
+ <br>
+-	etm@73C000 {<br>
++	etm@73c000 {<br>
+ 		compatible = "arm,coresight-etm3x", "arm,primecell";<br>
+-		reg = <0x73C000 0x1000>;<br>
++		reg = <0x73c000 0x1000>;<br>
+ <br>
+ 		clocks = <&pmc PMC_TYPE_CORE PMC_MCK>;<br>
+ 		clock-names = "apb_pclk";<br>
+-- <br>
+2.31.1<br>
+<br>
+<br>
+

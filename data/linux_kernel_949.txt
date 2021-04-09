@@ -1,0 +1,36 @@
+On Thu, Apr 01, 2021 at 11:32:18AM -0700, Dave Hansen wrote:<br>
+><i> </i><br>
+><i> From: Dave Hansen <dave.hansen@xxxxxxxxxxxxxxx></i><br>
+><i> </i><br>
+><i> Prepare for the kernel to auto-migrate pages to other memory nodes</i><br>
+><i> with a user defined node migration table. This allows creating single</i><br>
+><i> migration target for each NUMA node to enable the kernel to do NUMA</i><br>
+><i> page migrations instead of simply reclaiming colder pages. A node</i><br>
+><i> with no target is a "terminal node", so reclaim acts normally there.</i><br>
+><i> The migration target does not fundamentally _need_ to be a single node,</i><br>
+><i> but this implementation starts there to limit complexity.</i><br>
+><i> </i><br>
+><i> If you consider the migration path as a graph, cycles (loops) in the</i><br>
+><i> graph are disallowed.  This avoids wasting resources by constantly</i><br>
+><i> migrating (A->B, B->A, A->B ...).  The expectation is that cycles will</i><br>
+><i> never be allowed.</i><br>
+><i> </i><br>
+><i> Signed-off-by: Dave Hansen <dave.hansen@xxxxxxxxxxxxxxx></i><br>
+><i> Reviewed-by: Yang Shi <shy828301@xxxxxxxxx></i><br>
+><i> Cc: Wei Xu <weixugc@xxxxxxxxxx></i><br>
+><i> Cc: David Rientjes <rientjes@xxxxxxxxxx></i><br>
+><i> Cc: Huang Ying <ying.huang@xxxxxxxxx></i><br>
+><i> Cc: Dan Williams <dan.j.williams@xxxxxxxxx></i><br>
+><i> Cc: David Hildenbrand <david@xxxxxxxxxx></i><br>
+><i> Cc: osalvador <osalvador@xxxxxxx></i><br>
+<br>
+I think this patch and patch#2 could be squashed<br>
+<br>
+Reviewed-by: Oscar Salvador <osalvador@xxxxxxx><br>
+<br>
+-- <br>
+Oscar Salvador<br>
+SUSE L3<br>
+<br>
+<br>
+

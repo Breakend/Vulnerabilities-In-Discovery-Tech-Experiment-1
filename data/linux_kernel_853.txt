@@ -1,0 +1,226 @@
+On Mon, Apr 05, 2021 at 10:48:10PM +0200, Thomas Weißschuh wrote:<br>
+><i> Changes since v1:</i><br>
+><i> * Incorporate feedback from Barnabás Pőcze</i><br>
+><i>   * Use a WMI driver instead of a platform driver</i><br>
+><i>   * Let the kernel manage the driver lifecycle</i><br>
+><i>   * Fix errno/ACPI error confusion</i><br>
+><i>   * Fix resource cleanup</i><br>
+><i>   * Document reason for integer casting</i><br>
+><i> </i><br>
+><i> Thank you Barnabás for your review, it is much appreciated.</i><br>
+><i> </i><br>
+><i> -- >8 --</i><br>
+><i> </i><br>
+><i> Tested with a X570 I Aorus Pro Wifi.</i><br>
+><i> The mainboard contains an ITE IT8688E chip for management.</i><br>
+><i> This chips is also handled by drivers/hwmon/i87.c but as it is also used</i><br>
+><i> by the firmware itself it needs an ACPI driver.</i><br>
+><i> </i><br>
+><i> Unfortunately not all sensor registers are handled by the firmware and even</i><br>
+><i> less are exposed via WMI.</i><br>
+><i> </i><br>
+><i> Signed-off-by: Thomas Weißschuh <linux@xxxxxxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  drivers/platform/x86/Kconfig        |  11 +++</i><br>
+><i>  drivers/platform/x86/Makefile       |   1 +</i><br>
+><i>  drivers/platform/x86/gigabyte-wmi.c | 138 ++++++++++++++++++++++++++++</i><br>
+<br>
+Originally drivers/platform was supposed to be used for platform specific<br>
+code. Not that I have control over it, but I really dislike that more and<br>
+more hwmon drivers end up there.<br>
+<br>
+At least hwmon is in good company - I see drivers for various other subsystems<br>
+there as well. I just wonder if that is such a good idea. That entire directory<br>
+is bypassing subsystem maintainer reviews.<br>
+<br>
+Guenter<br>
+<br>
+><i>  3 files changed, 150 insertions(+)</i><br>
+><i>  create mode 100644 drivers/platform/x86/gigabyte-wmi.c</i><br>
+><i> </i><br>
+><i> diff --git a/drivers/platform/x86/Kconfig b/drivers/platform/x86/Kconfig</i><br>
+><i> index ad4e630e73e2..96622a2106f7 100644</i><br>
+><i> --- a/drivers/platform/x86/Kconfig</i><br>
+><i> +++ b/drivers/platform/x86/Kconfig</i><br>
+><i> @@ -123,6 +123,17 @@ config XIAOMI_WMI</i><br>
+><i>  	  To compile this driver as a module, choose M here: the module will</i><br>
+><i>  	  be called xiaomi-wmi.</i><br>
+><i>  </i><br>
+><i> +config GIGABYTE_WMI</i><br>
+><i> +	tristate "Gigabyte WMI temperature driver"</i><br>
+><i> +	depends on ACPI_WMI</i><br>
+><i> +	depends on HWMON</i><br>
+><i> +	help</i><br>
+><i> +	  Say Y here if you want to support WMI-based temperature reporting on</i><br>
+><i> +	  Gigabyte mainboards.</i><br>
+><i> +</i><br>
+><i> +	  To compile this driver as a module, choose M here: the module will</i><br>
+><i> +	  be called gigabyte-wmi.</i><br>
+><i> +</i><br>
+><i>  config ACERHDF</i><br>
+><i>  	tristate "Acer Aspire One temperature and fan driver"</i><br>
+><i>  	depends on ACPI && THERMAL</i><br>
+><i> diff --git a/drivers/platform/x86/Makefile b/drivers/platform/x86/Makefile</i><br>
+><i> index 60d554073749..1621ebfd04fd 100644</i><br>
+><i> --- a/drivers/platform/x86/Makefile</i><br>
+><i> +++ b/drivers/platform/x86/Makefile</i><br>
+><i> @@ -15,6 +15,7 @@ obj-$(CONFIG_INTEL_WMI_THUNDERBOLT)	+= intel-wmi-thunderbolt.o</i><br>
+><i>  obj-$(CONFIG_MXM_WMI)			+= mxm-wmi.o</i><br>
+><i>  obj-$(CONFIG_PEAQ_WMI)			+= peaq-wmi.o</i><br>
+><i>  obj-$(CONFIG_XIAOMI_WMI)		+= xiaomi-wmi.o</i><br>
+><i> +obj-$(CONFIG_GIGABYTE_WMI)		+= gigabyte-wmi.o</i><br>
+><i>  </i><br>
+><i>  # Acer</i><br>
+><i>  obj-$(CONFIG_ACERHDF)		+= acerhdf.o</i><br>
+><i> diff --git a/drivers/platform/x86/gigabyte-wmi.c b/drivers/platform/x86/gigabyte-wmi.c</i><br>
+><i> new file mode 100644</i><br>
+><i> index 000000000000..8618363e3ccf</i><br>
+><i> --- /dev/null</i><br>
+><i> +++ b/drivers/platform/x86/gigabyte-wmi.c</i><br>
+><i> @@ -0,0 +1,138 @@</i><br>
+><i> +// SPDX-License-Identifier: GPL-2.0-or-later</i><br>
+><i> +/*</i><br>
+><i> + *  Copyright (C) 2021 Thomas Weißschuh <thomas@xxxxxxxxxxxxxx></i><br>
+><i> + */</i><br>
+><i> +#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt</i><br>
+><i> +</i><br>
+><i> +#include <linux/acpi.h></i><br>
+><i> +#include <linux/hwmon.h></i><br>
+><i> +#include <linux/module.h></i><br>
+><i> +#include <linux/wmi.h></i><br>
+><i> +</i><br>
+><i> +#define GIGABYTE_WMI_GUID "DEADBEEF-2001-0000-00A0-C90629100000"</i><br>
+><i> +</i><br>
+><i> +enum gigabyte_wmi_commandtype {</i><br>
+><i> +	GIGABYTE_WMI_BUILD_DATE_QUERY       =   0x1,</i><br>
+><i> +	GIGABYTE_WMI_MAINBOARD_TYPE_QUERY   =   0x2,</i><br>
+><i> +	GIGABYTE_WMI_FIRMWARE_VERSION_QUERY =   0x4,</i><br>
+><i> +	GIGABYTE_WMI_MAINBOARD_NAME_QUERY   =   0x5,</i><br>
+><i> +	GIGABYTE_WMI_TEMPERATURE_QUERY      = 0x125,</i><br>
+><i> +};</i><br>
+><i> +</i><br>
+><i> +struct gigabyte_wmi_args {</i><br>
+><i> +	u32 arg1;</i><br>
+><i> +};</i><br>
+><i> +</i><br>
+><i> +static int gigabyte_wmi_perform_query(enum gigabyte_wmi_commandtype command,</i><br>
+><i> +		struct gigabyte_wmi_args *args, struct acpi_buffer *out)</i><br>
+><i> +{</i><br>
+><i> +	const struct acpi_buffer in = {</i><br>
+><i> +		.length = sizeof(*args),</i><br>
+><i> +		.pointer = args,</i><br>
+><i> +	};</i><br>
+><i> +</i><br>
+><i> +	acpi_status ret = wmi_evaluate_method(GIGABYTE_WMI_GUID, 0x0, command, &in, out);</i><br>
+><i> +	if (ret == AE_OK) {</i><br>
+><i> +		return 0;</i><br>
+><i> +	} else {</i><br>
+><i> +		return -EIO;</i><br>
+><i> +	};</i><br>
+><i> +}</i><br>
+><i> +</i><br>
+><i> +static int gigabyte_wmi_query_integer(enum gigabyte_wmi_commandtype command,</i><br>
+><i> +		struct gigabyte_wmi_args *args, u64 *res)</i><br>
+><i> +{</i><br>
+><i> +	union acpi_object *obj;</i><br>
+><i> +	struct acpi_buffer result = { ACPI_ALLOCATE_BUFFER, NULL };</i><br>
+><i> +	int ret;</i><br>
+><i> +</i><br>
+><i> +	ret = gigabyte_wmi_perform_query(command, args, &result);</i><br>
+><i> +	if (ret) {</i><br>
+><i> +		goto out;</i><br>
+><i> +	}</i><br>
+><i> +	obj = result.pointer;</i><br>
+><i> +	if (obj && obj->type == ACPI_TYPE_INTEGER) {</i><br>
+><i> +		*res = obj->integer.value;</i><br>
+><i> +		ret = 0;</i><br>
+><i> +	} else {</i><br>
+><i> +		ret = -EIO;</i><br>
+><i> +	}</i><br>
+><i> +out:</i><br>
+><i> +	kfree(result.pointer);</i><br>
+><i> +	return ret;</i><br>
+><i> +}</i><br>
+><i> +</i><br>
+><i> +static int gigabyte_wmi_temperature(u8 sensor, long *res)</i><br>
+><i> +{</i><br>
+><i> +	struct gigabyte_wmi_args args = {</i><br>
+><i> +		.arg1 = sensor,</i><br>
+><i> +	};</i><br>
+><i> +	u64 temp;</i><br>
+><i> +	acpi_status ret;</i><br>
+><i> +</i><br>
+><i> +	ret = gigabyte_wmi_query_integer(GIGABYTE_WMI_TEMPERATURE_QUERY, &args, &temp);</i><br>
+><i> +	if (ret == 0)</i><br>
+><i> +		*res = (s8) temp * 1000; // value is a signed 8-bit integer</i><br>
+><i> +	return ret;</i><br>
+><i> +}</i><br>
+><i> +</i><br>
+><i> +static int gigabyte_wmi_hwmon_read(struct device *dev, enum hwmon_sensor_types type,</i><br>
+><i> +		u32 attr, int channel, long *val)</i><br>
+><i> +{</i><br>
+><i> +	return gigabyte_wmi_temperature(channel, val);</i><br>
+><i> +}</i><br>
+><i> +</i><br>
+><i> +static umode_t gigabyte_wmi_hwmon_is_visible(const void *data, enum hwmon_sensor_types type,</i><br>
+><i> +		u32 attr, int channel)</i><br>
+><i> +{</i><br>
+><i> +	return 0444;</i><br>
+><i> +}</i><br>
+><i> +</i><br>
+><i> +static const struct hwmon_channel_info *gigabyte_wmi_hwmon_info[] = {</i><br>
+><i> +	HWMON_CHANNEL_INFO(temp,</i><br>
+><i> +			HWMON_T_INPUT,</i><br>
+><i> +			HWMON_T_INPUT,</i><br>
+><i> +			HWMON_T_INPUT,</i><br>
+><i> +			HWMON_T_INPUT,</i><br>
+><i> +			HWMON_T_INPUT,</i><br>
+><i> +			HWMON_T_INPUT),</i><br>
+><i> +	NULL,</i><br>
+><i> +};</i><br>
+><i> +</i><br>
+><i> +static const struct hwmon_ops gigabyte_wmi_hwmon_ops = {</i><br>
+><i> +	.read = gigabyte_wmi_hwmon_read,</i><br>
+><i> +	.is_visible = gigabyte_wmi_hwmon_is_visible,</i><br>
+><i> +};</i><br>
+><i> +</i><br>
+><i> +static const struct hwmon_chip_info gigabyte_wmi_hwmon_chip_info = {</i><br>
+><i> +	.ops = &gigabyte_wmi_hwmon_ops,</i><br>
+><i> +	.info = gigabyte_wmi_hwmon_info,</i><br>
+><i> +};</i><br>
+><i> +</i><br>
+><i> +static int gigabyte_wmi_probe(struct wmi_device *wdev, const void *context)</i><br>
+><i> +{</i><br>
+><i> +	struct device *hwmon_dev = devm_hwmon_device_register_with_info(&wdev->dev,</i><br>
+><i> +			"gigabyte_wmi", NULL,</i><br>
+><i> +			&gigabyte_wmi_hwmon_chip_info, NULL);</i><br>
+><i> +</i><br>
+><i> +	return PTR_ERR_OR_ZERO(hwmon_dev);</i><br>
+><i> +}</i><br>
+><i> +</i><br>
+><i> +static const struct wmi_device_id gigabyte_wmi_id_table[] = {</i><br>
+><i> +	{ GIGABYTE_WMI_GUID, NULL },</i><br>
+><i> +	{ },</i><br>
+><i> +};</i><br>
+><i> +</i><br>
+><i> +static struct wmi_driver gigabyte_wmi_driver = {</i><br>
+><i> +	.driver = {</i><br>
+><i> +		.name = "gigabyte-wmi",</i><br>
+><i> +	},</i><br>
+><i> +	.id_table = gigabyte_wmi_id_table,</i><br>
+><i> +	.probe = gigabyte_wmi_probe,</i><br>
+><i> +};</i><br>
+><i> +module_wmi_driver(gigabyte_wmi_driver);</i><br>
+><i> +</i><br>
+><i> +MODULE_DEVICE_TABLE(wmi, gigabyte_wmi_id_table);</i><br>
+><i> +MODULE_AUTHOR("Thomas Weißschuh <thomas@xxxxxxxxxxxxxx>");</i><br>
+><i> +MODULE_DESCRIPTION("Gigabyte Temperature WMI Driver");</i><br>
+><i> +MODULE_LICENSE("GPL");</i><br>
+><i> </i><br>
+><i> base-commit: 144c79ef33536b4ecb4951e07dbc1f2b7fa99d32</i><br>
+><i> -- </i><br>
+><i> 2.31.1</i><br>
+><i> </i><br>
+<br>
+<br>
+

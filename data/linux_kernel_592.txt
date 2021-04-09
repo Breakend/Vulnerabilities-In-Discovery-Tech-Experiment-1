@@ -1,0 +1,101 @@
+The following commit has been merged into the x86/entry branch of tip:<br>
+<br>
+Commit-ID:     51cba1ebc60df9c4ce034a9f5441169c0d0956c0<br>
+Gitweb:        <a  rel="nofollow" href="https://git.kernel.org/tip/51cba1ebc60df9c4ce034a9f5441169c0d0956c0">https://git.kernel.org/tip/51cba1ebc60df9c4ce034a9f5441169c0d0956c0</a><br>
+Author:        Kees Cook <keescook@xxxxxxxxxxxx><br>
+AuthorDate:    Thu, 01 Apr 2021 16:23:43 -07:00<br>
+Committer:     Thomas Gleixner <tglx@xxxxxxxxxxxxx><br>
+CommitterDate: Thu, 08 Apr 2021 14:05:19 +02:00<br>
+<br>
+init_on_alloc: Optimize static branches<br>
+<br>
+The state of CONFIG_INIT_ON_ALLOC_DEFAULT_ON (and ...ON_FREE...) did not<br>
+change the assembly ordering of the static branches: they were always out<br>
+of line. Use the new jump_label macros to check the CONFIG settings to<br>
+default to the "expected" state, which slightly optimizes the resulting<br>
+assembly code.<br>
+<br>
+Signed-off-by: Kees Cook <keescook@xxxxxxxxxxxx><br>
+Signed-off-by: Thomas Gleixner <tglx@xxxxxxxxxxxxx><br>
+Reviewed-by: Alexander Potapenko <glider@xxxxxxxxxx><br>
+Acked-by: Vlastimil Babka <vbabka@xxxxxxx><br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/20210401232347.2791257-3-keescook@xxxxxxxxxxxx">https://lore.kernel.org/r/20210401232347.2791257-3-keescook@xxxxxxxxxxxx</a><br>
+---<br>
+ include/linux/mm.h | 10 ++++++----<br>
+ mm/page_alloc.c    |  4 ++--<br>
+ mm/slab.h          |  6 ++++--<br>
+ 3 files changed, 12 insertions(+), 8 deletions(-)<br>
+<br>
+diff --git a/include/linux/mm.h b/include/linux/mm.h<br>
+index 8ba4342..616dcaf 100644<br>
+--- a/include/linux/mm.h<br>
++++ b/include/linux/mm.h<br>
+@@ -2904,18 +2904,20 @@ static inline void kernel_poison_pages(struct page *page, int numpages) { }<br>
+ static inline void kernel_unpoison_pages(struct page *page, int numpages) { }<br>
+ #endif<br>
+ <br>
+-DECLARE_STATIC_KEY_FALSE(init_on_alloc);<br>
++DECLARE_STATIC_KEY_MAYBE(CONFIG_INIT_ON_ALLOC_DEFAULT_ON, init_on_alloc);<br>
+ static inline bool want_init_on_alloc(gfp_t flags)<br>
+ {<br>
+-	if (static_branch_unlikely(&init_on_alloc))<br>
++	if (static_branch_maybe(CONFIG_INIT_ON_ALLOC_DEFAULT_ON,<br>
++				&init_on_alloc))<br>
+ 		return true;<br>
+ 	return flags & __GFP_ZERO;<br>
+ }<br>
+ <br>
+-DECLARE_STATIC_KEY_FALSE(init_on_free);<br>
++DECLARE_STATIC_KEY_MAYBE(CONFIG_INIT_ON_FREE_DEFAULT_ON, init_on_free);<br>
+ static inline bool want_init_on_free(void)<br>
+ {<br>
+-	return static_branch_unlikely(&init_on_free);<br>
++	return static_branch_maybe(CONFIG_INIT_ON_FREE_DEFAULT_ON,<br>
++				   &init_on_free);<br>
+ }<br>
+ <br>
+ extern bool _debug_pagealloc_enabled_early;<br>
+diff --git a/mm/page_alloc.c b/mm/page_alloc.c<br>
+index cfc7287..e2f19bf 100644<br>
+--- a/mm/page_alloc.c<br>
++++ b/mm/page_alloc.c<br>
+@@ -167,10 +167,10 @@ unsigned long totalcma_pages __read_mostly;<br>
+ <br>
+ int percpu_pagelist_fraction;<br>
+ gfp_t gfp_allowed_mask __read_mostly = GFP_BOOT_MASK;<br>
+-DEFINE_STATIC_KEY_FALSE(init_on_alloc);<br>
++DEFINE_STATIC_KEY_MAYBE(CONFIG_INIT_ON_ALLOC_DEFAULT_ON, init_on_alloc);<br>
+ EXPORT_SYMBOL(init_on_alloc);<br>
+ <br>
+-DEFINE_STATIC_KEY_FALSE(init_on_free);<br>
++DEFINE_STATIC_KEY_MAYBE(CONFIG_INIT_ON_FREE_DEFAULT_ON, init_on_free);<br>
+ EXPORT_SYMBOL(init_on_free);<br>
+ <br>
+ static bool _init_on_alloc_enabled_early __read_mostly<br>
+diff --git a/mm/slab.h b/mm/slab.h<br>
+index 076582f..774c722 100644<br>
+--- a/mm/slab.h<br>
++++ b/mm/slab.h<br>
+@@ -601,7 +601,8 @@ static inline void cache_random_seq_destroy(struct kmem_cache *cachep) { }<br>
+ <br>
+ static inline bool slab_want_init_on_alloc(gfp_t flags, struct kmem_cache *c)<br>
+ {<br>
+-	if (static_branch_unlikely(&init_on_alloc)) {<br>
++	if (static_branch_maybe(CONFIG_INIT_ON_ALLOC_DEFAULT_ON,<br>
++				&init_on_alloc)) {<br>
+ 		if (c->ctor)<br>
+ 			return false;<br>
+ 		if (c->flags & (SLAB_TYPESAFE_BY_RCU | SLAB_POISON))<br>
+@@ -613,7 +614,8 @@ static inline bool slab_want_init_on_alloc(gfp_t flags, struct kmem_cache *c)<br>
+ <br>
+ static inline bool slab_want_init_on_free(struct kmem_cache *c)<br>
+ {<br>
+-	if (static_branch_unlikely(&init_on_free))<br>
++	if (static_branch_maybe(CONFIG_INIT_ON_FREE_DEFAULT_ON,<br>
++				&init_on_free))<br>
+ 		return !(c->ctor ||<br>
+ 			 (c->flags & (SLAB_TYPESAFE_BY_RCU | SLAB_POISON)));<br>
+ 	return false;<br>
+<br>
+<br>
+

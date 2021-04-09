@@ -1,0 +1,8 @@
+><i> </i><br>
+><i> Again, please make this only one file.</i><br>
+><i> </i><br>
+Hi Greg, the 2 boards have some same named registers in idt82p33_reg.h and idt8a340_reg.h<br>
+so if I put them all in the same file, there will be name conflicts. <br>
+<br>
+<br>
+

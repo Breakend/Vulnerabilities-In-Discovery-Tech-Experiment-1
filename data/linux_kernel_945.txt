@@ -1,0 +1,42 @@
+On Wed, 7 Apr 2021 21:40:05 +0100<br>
+Will Deacon <will@xxxxxxxxxx> wrote:<br>
+<br>
+><i> On Wed, Apr 07, 2021 at 05:49:02PM +0800, Qi Liu wrote:</i><br>
+><i> > PCIe PMU Root Complex Integrated End Point(RCiEP) device is supported</i><br>
+><i> > to sample bandwidth, latency, buffer occupation etc.</i><br>
+><i> > </i><br>
+><i> > Each PMU RCiEP device monitors multiple root ports, and each RCiEP is</i><br>
+><i> > registered as a pmu in /sys/bus/event_source/devices, so users can</i><br>
+><i> > select target PMU, and use filter to do further sets.</i><br>
+><i> > </i><br>
+><i> > Filtering options contains:</i><br>
+><i> > event        - select the event.</i><br>
+><i> > subevent     - select the subevent.</i><br>
+><i> > port         - select target root ports. Information of root ports</i><br>
+><i> >                are shown under sysfs.</i><br>
+><i> > bdf           - select requester_id of target EP device.</i><br>
+><i> > trig_len     - set trigger condition for starting event statistics.</i><br>
+><i> > trigger_mode - set trigger mode. 0 means starting to statistic when</i><br>
+><i> >                bigger than trigger condition, and 1 means smaller.</i><br>
+><i> > thr_len      - set threshold for statistics.</i><br>
+><i> > thr_mode     - set threshold mode. 0 means count when bigger than</i><br>
+><i> >                threshold, and 1 means smaller.</i><br>
+><i> > </i><br>
+><i> > Reviewed-by: Jonathan Cameron <Jonathan.Cameron@xxxxxxxxxx>  </i><br>
+><i> </i><br>
+><i> Do you have a link to this review, please?</i><br>
+<br>
+Internal review, so drop the tag.<br>
+<br>
+Jonathan<br>
+<br>
+><i> </i><br>
+><i> Will</i><br>
+><i> </i><br>
+><i> _______________________________________________</i><br>
+><i> linux-arm-kernel mailing list</i><br>
+><i> linux-arm-kernel@xxxxxxxxxxxxxxxxxxx</i><br>
+><i> <a  rel="nofollow" href="http://lists.infradead.org/mailman/listinfo/linux-arm-kernel">http://lists.infradead.org/mailman/listinfo/linux-arm-kernel</a></i><br>
+<br>
+<br>
+

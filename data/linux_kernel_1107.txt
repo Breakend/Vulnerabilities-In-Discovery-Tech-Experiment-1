@@ -1,0 +1,207 @@
+Remove camelcase. Issue detected by checkpatch.pl. For now, change only<br>
+names of static functions in order to not break the driver's code.<br>
+<br>
+Signed-off-by: Fabio M. De Francesco <fmdefrancesco@xxxxxxxxx><br>
+---<br>
+<br>
+Changes from v3: fix errors in the format of the patch.<br>
+Changes from v2: Remove unnecessary comment. Shortened a function name.<br>
+Changes from v1: No changes to the code but only to the subject for the<br>
+purpose to differentiate this patch because other removes of camelcase<br>
+have been made in other files of the same directory.<br>
+<br>
+ drivers/staging/rtl8723bs/hal/sdio_ops.c | 46 +++++++++++-------------<br>
+ 1 file changed, 21 insertions(+), 25 deletions(-)<br>
+<br>
+diff --git a/drivers/staging/rtl8723bs/hal/sdio_ops.c b/drivers/staging/rtl8723bs/hal/sdio_ops.c<br>
+index 8df3350d53fb..af7f846f90fe 100644<br>
+--- a/drivers/staging/rtl8723bs/hal/sdio_ops.c<br>
++++ b/drivers/staging/rtl8723bs/hal/sdio_ops.c<br>
+@@ -19,7 +19,7 @@<br>
+ /*  */<br>
+ /*  Creadted by Roger, 2011.01.31. */<br>
+ /*  */<br>
+-static void HalSdioGetCmdAddr8723BSdio(<br>
++static void hal_sdio_get_cmd_addr_8723b(<br>
+ 	struct adapter *adapter,<br>
+ 	u8 device_id,<br>
+ 	u32 addr,<br>
+@@ -95,10 +95,6 @@ static u8 get_deviceid(u32 addr)<br>
+ 	return devide_id;<br>
+ }<br>
+ <br>
+-/*<br>
+- * Ref:<br>
+- *HalSdioGetCmdAddr8723BSdio()<br>
+- */<br>
+ static u32 _cvrt2ftaddr(const u32 addr, u8 *pdevice_id, u16 *poffset)<br>
+ {<br>
+ 	u8 device_id;<br>
+@@ -426,7 +422,7 @@ static u32 sdio_read_port(<br>
+ 	psdio = &adapter_to_dvobj(adapter)->intf_data;<br>
+ 	hal = GET_HAL_DATA(adapter);<br>
+ <br>
+-	HalSdioGetCmdAddr8723BSdio(adapter, addr, hal->SdioRxFIFOCnt++, &addr);<br>
++	hal_sdio_get_cmd_addr_8723b(adapter, addr, hal->SdioRxFIFOCnt++, &addr);<br>
+ <br>
+ 	if (cnt > psdio->block_transfer_len)<br>
+ 		cnt = _RND(cnt, psdio->block_transfer_len);<br>
+@@ -473,7 +469,7 @@ static u32 sdio_write_port(<br>
+ 		return _FAIL;<br>
+ <br>
+ 	cnt = round_up(cnt, 4);<br>
+-	HalSdioGetCmdAddr8723BSdio(adapter, addr, cnt >> 2, &addr);<br>
++	hal_sdio_get_cmd_addr_8723b(adapter, addr, cnt >> 2, &addr);<br>
+ <br>
+ 	if (cnt > psdio->block_transfer_len)<br>
+ 		cnt = _RND(cnt, psdio->block_transfer_len);<br>
+@@ -526,7 +522,7 @@ static s32 _sdio_local_read(<br>
+ <br>
+ 	intfhdl = &adapter->iopriv.intf;<br>
+ <br>
+-	HalSdioGetCmdAddr8723BSdio(adapter, SDIO_LOCAL_DEVICE_ID, addr, &addr);<br>
++	hal_sdio_get_cmd_addr_8723b(adapter, SDIO_LOCAL_DEVICE_ID, addr, &addr);<br>
+ <br>
+ 	rtw_hal_get_hwreg(adapter, HW_VAR_APFM_ON_MAC, &mac_pwr_ctrl_on);<br>
+ 	if (!mac_pwr_ctrl_on)<br>
+@@ -564,7 +560,7 @@ s32 sdio_local_read(<br>
+ <br>
+ 	intfhdl = &adapter->iopriv.intf;<br>
+ <br>
+-	HalSdioGetCmdAddr8723BSdio(adapter, SDIO_LOCAL_DEVICE_ID, addr, &addr);<br>
++	hal_sdio_get_cmd_addr_8723b(adapter, SDIO_LOCAL_DEVICE_ID, addr, &addr);<br>
+ <br>
+ 	rtw_hal_get_hwreg(adapter, HW_VAR_APFM_ON_MAC, &mac_pwr_ctrl_on);<br>
+ 	if (<br>
+@@ -610,7 +606,7 @@ s32 sdio_local_write(<br>
+ <br>
+ 	intfhdl = &adapter->iopriv.intf;<br>
+ <br>
+-	HalSdioGetCmdAddr8723BSdio(adapter, SDIO_LOCAL_DEVICE_ID, addr, &addr);<br>
++	hal_sdio_get_cmd_addr_8723b(adapter, SDIO_LOCAL_DEVICE_ID, addr, &addr);<br>
+ <br>
+ 	rtw_hal_get_hwreg(adapter, HW_VAR_APFM_ON_MAC, &mac_pwr_ctrl_on);<br>
+ 	if (<br>
+@@ -637,24 +633,24 @@ u8 SdioLocalCmd52Read1Byte(struct adapter *adapter, u32 addr)<br>
+ 	u8 val = 0;<br>
+ 	struct intf_hdl *intfhdl = &adapter->iopriv.intf;<br>
+ <br>
+-	HalSdioGetCmdAddr8723BSdio(adapter, SDIO_LOCAL_DEVICE_ID, addr, &addr);<br>
++	hal_sdio_get_cmd_addr_8723b(adapter, SDIO_LOCAL_DEVICE_ID, addr, &addr);<br>
+ 	sd_cmd52_read(intfhdl, addr, 1, &val);<br>
+ <br>
+ 	return val;<br>
+ }<br>
+ <br>
+-static u16 SdioLocalCmd52Read2Byte(struct adapter *adapter, u32 addr)<br>
++static u16 sdio_local_cmd52_read2byte(struct adapter *adapter, u32 addr)<br>
+ {<br>
+ 	__le16 val = 0;<br>
+ 	struct intf_hdl *intfhdl = &adapter->iopriv.intf;<br>
+ <br>
+-	HalSdioGetCmdAddr8723BSdio(adapter, SDIO_LOCAL_DEVICE_ID, addr, &addr);<br>
++	hal_sdio_get_cmd_addr_8723b(adapter, SDIO_LOCAL_DEVICE_ID, addr, &addr);<br>
+ 	sd_cmd52_read(intfhdl, addr, 2, (u8 *)&val);<br>
+ <br>
+ 	return le16_to_cpu(val);<br>
+ }<br>
+ <br>
+-static u32 SdioLocalCmd53Read4Byte(struct adapter *adapter, u32 addr)<br>
++static u32 sdio_local_cmd53_read4byte(struct adapter *adapter, u32 addr)<br>
+ {<br>
+ <br>
+ 	u8 mac_pwr_ctrl_on;<br>
+@@ -662,7 +658,7 @@ static u32 SdioLocalCmd53Read4Byte(struct adapter *adapter, u32 addr)<br>
+ 	struct intf_hdl *intfhdl = &adapter->iopriv.intf;<br>
+ 	__le32 le_tmp;<br>
+ <br>
+-	HalSdioGetCmdAddr8723BSdio(adapter, SDIO_LOCAL_DEVICE_ID, addr, &addr);<br>
++	hal_sdio_get_cmd_addr_8723b(adapter, SDIO_LOCAL_DEVICE_ID, addr, &addr);<br>
+ 	rtw_hal_get_hwreg(adapter, HW_VAR_APFM_ON_MAC, &mac_pwr_ctrl_on);<br>
+ 	if (!mac_pwr_ctrl_on || adapter_to_pwrctl(adapter)->bFwCurrentInPSMode) {<br>
+ 		sd_cmd52_read(intfhdl, addr, 4, (u8 *)&le_tmp);<br>
+@@ -677,21 +673,21 @@ void SdioLocalCmd52Write1Byte(struct adapter *adapter, u32 addr, u8 v)<br>
+ {<br>
+ 	struct intf_hdl *intfhdl = &adapter->iopriv.intf;<br>
+ <br>
+-	HalSdioGetCmdAddr8723BSdio(adapter, SDIO_LOCAL_DEVICE_ID, addr, &addr);<br>
++	hal_sdio_get_cmd_addr_8723b(adapter, SDIO_LOCAL_DEVICE_ID, addr, &addr);<br>
+ 	sd_cmd52_write(intfhdl, addr, 1, &v);<br>
+ }<br>
+ <br>
+-static void SdioLocalCmd52Write4Byte(struct adapter *adapter, u32 addr, u32 v)<br>
++static void sdio_local_cmd52_write4byte(struct adapter *adapter, u32 addr, u32 v)<br>
+ {<br>
+ 	struct intf_hdl *intfhdl = &adapter->iopriv.intf;<br>
+ 	__le32 le_tmp;<br>
+ <br>
+-	HalSdioGetCmdAddr8723BSdio(adapter, SDIO_LOCAL_DEVICE_ID, addr, &addr);<br>
++	hal_sdio_get_cmd_addr_8723b(adapter, SDIO_LOCAL_DEVICE_ID, addr, &addr);<br>
+ 	le_tmp = cpu_to_le32(v);<br>
+ 	sd_cmd52_write(intfhdl, addr, 4, (u8 *)&le_tmp);<br>
+ }<br>
+ <br>
+-static s32 ReadInterrupt8723BSdio(struct adapter *adapter, u32 *phisr)<br>
++static s32 read_interrupt_8723b_sdio(struct adapter *adapter, u32 *phisr)<br>
+ {<br>
+ 	u32 hisr, himr;<br>
+ 	u8 val8, hisr_len;<br>
+@@ -924,7 +920,7 @@ void sd_int_dpc(struct adapter *adapter)<br>
+ 		status = rtw_malloc(4);<br>
+ 		if (status) {<br>
+ 			addr = REG_TXDMA_STATUS;<br>
+-			HalSdioGetCmdAddr8723BSdio(adapter, WLAN_IOREG_DEVICE_ID, addr, &addr);<br>
++			hal_sdio_get_cmd_addr_8723b(adapter, WLAN_IOREG_DEVICE_ID, addr, &addr);<br>
+ 			_sd_read(intfhdl, addr, 4, status);<br>
+ 			_sd_write(intfhdl, addr, 4, status);<br>
+ 			DBG_8192C("%s: SDIO_HISR_TXERR (0x%08x)\n", __func__, le32_to_cpu(*(u32 *)status));<br>
+@@ -974,7 +970,7 @@ void sd_int_dpc(struct adapter *adapter)<br>
+ <br>
+ 		hal->sdio_hisr ^= SDIO_HISR_RX_REQUEST;<br>
+ 		do {<br>
+-			hal->SdioRxFIFOSize = SdioLocalCmd52Read2Byte(adapter, SDIO_REG_RX0_REQ_LEN);<br>
++			hal->SdioRxFIFOSize = sdio_local_cmd52_read2byte(adapter, SDIO_REG_RX0_REQ_LEN);<br>
+ 			if (hal->SdioRxFIFOSize != 0) {<br>
+ 				recvbuf = sd_recv_rxfifo(adapter, hal->SdioRxFIFOSize);<br>
+ 				if (recvbuf)<br>
+@@ -989,7 +985,7 @@ void sd_int_dpc(struct adapter *adapter)<br>
+ 				break;<br>
+ <br>
+ 			hisr = 0;<br>
+-			ReadInterrupt8723BSdio(adapter, &hisr);<br>
++			read_interrupt_8723b_sdio(adapter, &hisr);<br>
+ 			hisr &= SDIO_HISR_RX_REQUEST;<br>
+ 			if (!hisr)<br>
+ 				break;<br>
+@@ -1009,7 +1005,7 @@ void sd_int_hdl(struct adapter *adapter)<br>
+ 	hal = GET_HAL_DATA(adapter);<br>
+ <br>
+ 	hal->sdio_hisr = 0;<br>
+-	ReadInterrupt8723BSdio(adapter, &hal->sdio_hisr);<br>
++	read_interrupt_8723b_sdio(adapter, &hal->sdio_hisr);<br>
+ <br>
+ 	if (hal->sdio_hisr & hal->sdio_himr) {<br>
+ 		u32 v32;<br>
+@@ -1019,7 +1015,7 @@ void sd_int_hdl(struct adapter *adapter)<br>
+ 		/*  clear HISR */<br>
+ 		v32 = hal->sdio_hisr & MASK_SDIO_HISR_CLEAR;<br>
+ 		if (v32)<br>
+-			SdioLocalCmd52Write4Byte(adapter, SDIO_REG_HISR, v32);<br>
++			sdio_local_cmd52_write4byte(adapter, SDIO_REG_HISR, v32);<br>
+ <br>
+ 		sd_int_dpc(adapter);<br>
+ 	}<br>
+@@ -1042,7 +1038,7 @@ u8 HalQueryTxBufferStatus8723BSdio(struct adapter *adapter)<br>
+ <br>
+ 	hal = GET_HAL_DATA(adapter);<br>
+ <br>
+-	numof_free_page = SdioLocalCmd53Read4Byte(adapter, SDIO_REG_FREE_TXPG);<br>
++	numof_free_page = sdio_local_cmd53_read4byte(adapter, SDIO_REG_FREE_TXPG);<br>
+ <br>
+ 	memcpy(hal->SdioTxFIFOFreePage, &numof_free_page, 4);<br>
+ <br>
+-- <br>
+2.30.2<br>
+<br>
+<br>
+

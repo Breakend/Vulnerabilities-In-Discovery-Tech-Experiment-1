@@ -1,0 +1,18 @@
+On Wed, Apr 07, 2021 at 05:24:52PM +0200, Greg Kroah-Hartman wrote:<br>
+><i> On Wed, Apr 07, 2021 at 12:45:25PM +0200, Johan Hovold wrote:</i><br>
+><i> > Now that all USB serial drivers supports changing the closing_wait</i><br>
+><i> > parameter through TIOCSSERIAL (setserial), we can remove the related</i><br>
+><i> > driver-specific module parameters and settings.</i><br>
+><i> > </i><br>
+><i> > These depend on the recently posted TIOCSSERIAL series.</i><br>
+><i> </i><br>
+><i> Yes!  Getting rid of the module parameter is so good...</i><br>
+><i> </i><br>
+><i> Reviewed-by: Greg Kroah-Hartman <gregkh@xxxxxxxxxxxxxxxxxxx></i><br>
+<br>
+Thanks for reviewing these. All three sets now applied.<br>
+<br>
+Johan<br>
+<br>
+<br>
+

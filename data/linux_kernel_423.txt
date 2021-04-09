@@ -1,0 +1,53 @@
+From: Matthew Wilcox (Oracle) <willy@xxxxxxxxxxxxx><br>
+<br>
+Turn the comments into kernel-doc and improve the wording slightly.<br>
+<br>
+Signed-off-by: Matthew Wilcox (Oracle) <willy@xxxxxxxxxxxxx><br>
+Signed-off-by: David Howells <dhowells@xxxxxxxxxx><br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/20210407201857.3582797-3-willy@xxxxxxxxxxxxx/">https://lore.kernel.org/r/20210407201857.3582797-3-willy@xxxxxxxxxxxxx/</a><br>
+---<br>
+<br>
+ include/linux/fs.h |   24 ++++++++++++++----------<br>
+ 1 file changed, 14 insertions(+), 10 deletions(-)<br>
+<br>
+diff --git a/include/linux/fs.h b/include/linux/fs.h<br>
+index ec8f3ddf4a6a..33831a8bda52 100644<br>
+--- a/include/linux/fs.h<br>
++++ b/include/linux/fs.h<br>
+@@ -891,18 +891,22 @@ struct fown_struct {<br>
+ 	int signum;		/* posix.1b rt signal to be delivered on IO */<br>
+ };<br>
+ <br>
+-/*<br>
+- * Track a single file's readahead state<br>
++/**<br>
++ * struct file_ra_state - Track a file's readahead state.<br>
++ * @start: Where the most recent readahead started.<br>
++ * @size: Number of pages read in the most recent readahead.<br>
++ * @async_size: Start next readahead when this many pages are left.<br>
++ * @ra_pages: Maximum size of a readahead request.<br>
++ * @mmap_miss: How many mmap accesses missed in the page cache.<br>
++ * @prev_pos: The last byte in the most recent read request.<br>
+  */<br>
+ struct file_ra_state {<br>
+-	pgoff_t start;			/* where readahead started */<br>
+-	unsigned int size;		/* # of readahead pages */<br>
+-	unsigned int async_size;	/* do asynchronous readahead when<br>
+-					   there are only # of pages ahead */<br>
+-<br>
+-	unsigned int ra_pages;		/* Maximum readahead window */<br>
+-	unsigned int mmap_miss;		/* Cache miss stat for mmap accesses */<br>
+-	loff_t prev_pos;		/* Cache last read() position */<br>
++	pgoff_t start;<br>
++	unsigned int size;<br>
++	unsigned int async_size;<br>
++	unsigned int ra_pages;<br>
++	unsigned int mmap_miss;<br>
++	loff_t prev_pos;<br>
+ };<br>
+ <br>
+ /*<br>
+<br>
+<br>
+<br>
+

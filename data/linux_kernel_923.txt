@@ -1,0 +1,24 @@
+Delete one of two same header files <linux/clk.h> included in drivers/bus/bt1-apb.c<br>
+<br>
+Signed-off-by: Chen Jiahao <chenjiahao16@xxxxxxxxxx><br>
+---<br>
+ drivers/bus/bt1-apb.c | 1 -<br>
+ 1 file changed, 1 deletion(-)<br>
+<br>
+diff --git a/drivers/bus/bt1-apb.c b/drivers/bus/bt1-apb.c<br>
+index b25ff941e7c7..74b1b712ef3a 100644<br>
+--- a/drivers/bus/bt1-apb.c<br>
++++ b/drivers/bus/bt1-apb.c<br>
+@@ -22,7 +22,6 @@<br>
+ #include <linux/clk.h><br>
+ #include <linux/reset.h><br>
+ #include <linux/time64.h><br>
+-#include <linux/clk.h><br>
+ #include <linux/sysfs.h><br>
+ <br>
+ #define APB_EHB_ISR			0x00<br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+

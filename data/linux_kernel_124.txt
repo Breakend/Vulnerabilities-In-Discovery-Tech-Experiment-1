@@ -1,0 +1,23 @@
+Enable CPUFreq and CPUFreq DT drivers to carry out CPU Frequency scaling<br>
+duties on platforms like SDX55.<br>
+<br>
+Signed-off-by: Manivannan Sadhasivam <manivannan.sadhasivam@xxxxxxxxxx><br>
+---<br>
+ arch/arm/configs/qcom_defconfig | 2 ++<br>
+ 1 file changed, 2 insertions(+)<br>
+<br>
+diff --git a/arch/arm/configs/qcom_defconfig b/arch/arm/configs/qcom_defconfig<br>
+index 02f6185f31a6..47343d0ea586 100644<br>
+--- a/arch/arm/configs/qcom_defconfig<br>
++++ b/arch/arm/configs/qcom_defconfig<br>
+@@ -302,3 +302,5 @@ CONFIG_MAGIC_SYSRQ=y<br>
+ CONFIG_WATCHDOG=y<br>
+ CONFIG_QCOM_WDT=y<br>
+ CONFIG_ARM_PSCI=y<br>
++CONFIG_CPU_FREQ=y<br>
++CONFIG_CPUFREQ_DT=y<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

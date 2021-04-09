@@ -1,0 +1,28 @@
+
+<br>
+On 4/8/21 1:15 PM, Mimi Zohar wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+On Thu, 2021-04-08 at 11:24 -0400, Stefan Berger wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+Address a kbuild issue where a developer created an ECDSA key for signing<br>
+kernel modules and then builds an older version of the kernel, when bi-<br>
+secting the kernel for example, that does not support ECDSA keys.<br>
+<br>
+Trigger the creation of an RSA module signing key if it is not an RSA key.<br>
+<br>
+Fixes: cfc411e7fff3 ("Move certificate handling to its own directory")<br>
+Signed-off-by: Stefan Berger <stefanb@xxxxxxxxxxxxx><br>
+</blockquote>
+Thanks, Stefan.<br>
+<br>
+Reviewed-by: Mimi Zohar <zohar@xxxxxxxxxxxxx><br>
+<br>
+</blockquote>
+<br>
+Via which tree will this go upstream? keyrings?<br>
+<br>
+<br>
+   Stefan<br>
+<br>
+<br>
+

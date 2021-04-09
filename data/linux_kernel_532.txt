@@ -1,0 +1,20 @@
+On Thu, Apr 08, 2021 at 02:51:21PM +0200, Greg Kroah-Hartman wrote:<br>
+><i> Turns out there is a lot of tty-internal stuff in include/linux/tty.h</i><br>
+><i> that do not belong there.  Create a internal-to-the-tty-layer .h file</i><br>
+><i> for these types of things and move function prototypes to it instead of</i><br>
+><i> being in the system-wide header file.</i><br>
+><i> </i><br>
+><i> Along the way clean up the use of some old tty-only debugging macros and</i><br>
+><i> use the in-kernel dev_*() calls instead.</i><br>
+<br>
+I'm afraid that's not a good idea since not all ttys have a<br>
+corresponding class device. Notable exception include pseudo terminals<br>
+and serdev.<br>
+<br>
+While dev_printk() can handle a NULL device argument without crashing,<br>
+we'll actually lose log information by removing the tty printk helpers.<br>
+<br>
+Johan<br>
+<br>
+<br>
+

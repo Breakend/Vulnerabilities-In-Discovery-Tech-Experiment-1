@@ -1,0 +1,51 @@
+We (Power team in Arm) are working with an experimental kernel for the<br>
+Google's Pixel4 to evaluate and improve the current mainline performance<br>
+and energy consumption on a real life device with Android.<br>
+<br>
+The SD855 SoC found in this phone has several OPPs that are inefficient.<br>
+I.e. despite a lower frequency, they have a greater cost. (That cost being<br>
+fmax * OPP power / OPP freq). This issue is twofold. First of course,<br>
+running a specific workload at an inefficient OPP is counterproductive<br>
+since it wastes wasting energy. But also, inefficient OPPs make a<br>
+performance domain less appealing for task placement than it really is.<br>
+<br>
+We evaluated the change presented here by running 30 iterations of Android<br>
+PCMark "Work 2.0 Performance". While we did not see any statistically<br>
+significant performance impact, this change allowed to drastically improve<br>
+the idle time residency.<br>
+<br>
+<br>
+                           |   Running   |  WFI [1]  |    Idle   |<br>
+   ------------------------+-------------+-----------+-----------+<br>
+   Little cluster (4 CPUs) |    -0.35%   |   +0.35%  |   +0.79%  |<br>
+   ------------------------+-------------+-----------+-----------+<br>
+   Medium cluster (3 CPUs) |    -6.3%    |    -18%   |    +12%   |<br>
+   ------------------------+-------------+-----------+-----------+<br>
+   Big cluster    (1 CPU)  |    -6.4%    |    -6.5%  |    +2.8%  |<br>
+   ------------------------+-------------+-----------+-----------+<br>
+<br>
+On the SD855, the inefficient OPPs are found on the little cluster. By<br>
+removing them from the Energy Model, we make the most efficient CPUs more<br>
+appealing for task placement, helping to reduce the running time for the<br>
+medium and big CPUs. Increasing idle time is crucial for this platform due<br>
+to the substantial energy cost differences among the clusters. Also,<br>
+despite not appearing in the statistics (the idle driver used here doesn't<br>
+report it), we can speculate that we also improve the cluster idle time.<br>
+<br>
+<br>
+[1] WFI: Wait for interrupt.<br>
+<br>
+<br>
+Vincent Donnefort (1):<br>
+  PM / EM: Inefficient OPPs detection<br>
+<br>
+ include/linux/energy_model.h     | 131 ++++++++++++++++++++++++++++++++++++---<br>
+ kernel/power/energy_model.c      | 126 +++++++++++++++++++++++++++++++------<br>
+ kernel/sched/cpufreq_schedutil.c |   4 ++<br>
+ 3 files changed, 234 insertions(+), 27 deletions(-)<br>
+<br>
+-- <br>
+2.7.4<br>
+<br>
+<br>
+

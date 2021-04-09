@@ -1,0 +1,50 @@
+According to Documentation/core-api/printk-formats.rst, Use<br>
+the correct print format. Printing an unsigned int value should use %u<br>
+instead of %d.<br>
+<br>
+Signed-off-by: Kai Ye <yekai13@xxxxxxxxxx><br>
+---<br>
+ drivers/crypto/atmel-i2c.c | 2 +-<br>
+ drivers/crypto/atmel-sha.c | 4 ++--<br>
+ 2 files changed, 3 insertions(+), 3 deletions(-)<br>
+<br>
+diff --git a/drivers/crypto/atmel-i2c.c b/drivers/crypto/atmel-i2c.c<br>
+index e8e8281..6fd3e96 100644<br>
+--- a/drivers/crypto/atmel-i2c.c<br>
++++ b/drivers/crypto/atmel-i2c.c<br>
+@@ -339,7 +339,7 @@ int atmel_i2c_probe(struct i2c_client *client, const struct i2c_device_id *id)<br>
+ 	}<br>
+ <br>
+ 	if (bus_clk_rate > 1000000L) {<br>
+-		dev_err(dev, "%d exceeds maximum supported clock frequency (1MHz)\n",<br>
++		dev_err(dev, "%u exceeds maximum supported clock frequency (1MHz)\n",<br>
+ 			bus_clk_rate);<br>
+ 		return -EINVAL;<br>
+ 	}<br>
+diff --git a/drivers/crypto/atmel-sha.c b/drivers/crypto/atmel-sha.c<br>
+index 352d80c..1b13f60 100644<br>
+--- a/drivers/crypto/atmel-sha.c<br>
++++ b/drivers/crypto/atmel-sha.c<br>
+@@ -434,7 +434,7 @@ static int atmel_sha_init(struct ahash_request *req)<br>
+ <br>
+ 	ctx->flags = 0;<br>
+ <br>
+-	dev_dbg(dd->dev, "init: digest size: %d\n",<br>
++	dev_dbg(dd->dev, "init: digest size: %u\n",<br>
+ 		crypto_ahash_digestsize(tfm));<br>
+ <br>
+ 	switch (crypto_ahash_digestsize(tfm)) {<br>
+@@ -1102,7 +1102,7 @@ static int atmel_sha_start(struct atmel_sha_dev *dd)<br>
+ 	struct atmel_sha_reqctx *ctx = ahash_request_ctx(req);<br>
+ 	int err;<br>
+ <br>
+-	dev_dbg(dd->dev, "handling new req, op: %lu, nbytes: %d\n",<br>
++	dev_dbg(dd->dev, "handling new req, op: %lu, nbytes: %u\n",<br>
+ 						ctx->op, req->nbytes);<br>
+ <br>
+ 	err = atmel_sha_hw_init(dd);<br>
+-- <br>
+2.8.1<br>
+<br>
+<br>
+

@@ -1,0 +1,64 @@
+CONFIG_CFI_CLANG_SHADOW assumes the __cfi_check() function is page<br>
+aligned and at the beginning of the .text section. While Clang would<br>
+normally align the function correctly, it fails to do so for modules<br>
+with no executable code.<br>
+<br>
+This change ensures the correct __cfi_check() location and<br>
+alignment. It also discards the .eh_frame section, which Clang can<br>
+generate with certain sanitizers, such as CFI.<br>
+<br>
+Link: <a  rel="nofollow" href="https://bugs.llvm.org/show_bug.cgi?id=46293">https://bugs.llvm.org/show_bug.cgi?id=46293</a><br>
+Signed-off-by: Sami Tolvanen <samitolvanen@xxxxxxxxxx><br>
+Reviewed-by: Kees Cook <keescook@xxxxxxxxxxxx><br>
+Acked-by: Jessica Yu <jeyu@xxxxxxxxxx><br>
+Tested-by: Nathan Chancellor <nathan@xxxxxxxxxx><br>
+---<br>
+ scripts/module.lds.S | 19 ++++++++++++++++++-<br>
+ 1 file changed, 18 insertions(+), 1 deletion(-)<br>
+<br>
+diff --git a/scripts/module.lds.S b/scripts/module.lds.S<br>
+index 2c52535f9b56..04c5685c25cf 100644<br>
+--- a/scripts/module.lds.S<br>
++++ b/scripts/module.lds.S<br>
+@@ -3,10 +3,20 @@<br>
+  * Archs are free to supply their own linker scripts.  ld will<br>
+  * combine them automatically.<br>
+  */<br>
++#ifdef CONFIG_CFI_CLANG<br>
++# include <asm/page.h><br>
++# define ALIGN_CFI 		ALIGN(PAGE_SIZE)<br>
++# define SANITIZER_DISCARDS	*(.eh_frame)<br>
++#else<br>
++# define ALIGN_CFI<br>
++# define SANITIZER_DISCARDS<br>
++#endif<br>
++<br>
+ SECTIONS {<br>
+ 	/DISCARD/ : {<br>
+ 		*(.discard)<br>
+ 		*(.discard.*)<br>
++		SANITIZER_DISCARDS<br>
+ 	}<br>
+ <br>
+ 	__ksymtab		0 : { *(SORT(___ksymtab+*)) }<br>
+@@ -41,7 +51,14 @@ SECTIONS {<br>
+ 		*(.rodata..L*)<br>
+ 	}<br>
+ <br>
+-	.text : { *(.text .text.[0-9a-zA-Z_]*) }<br>
++	/*<br>
++	 * With CONFIG_CFI_CLANG, we assume __cfi_check is at the beginning<br>
++	 * of the .text section, and is aligned to PAGE_SIZE.<br>
++	 */<br>
++	.text : ALIGN_CFI {<br>
++		*(.text.__cfi_check)<br>
++		*(.text .text.[0-9a-zA-Z_]* .text..L.cfi*)<br>
++	}<br>
+ #endif<br>
+ }<br>
+ <br>
+-- <br>
+2.31.1.295.g9ea45b61b8-goog<br>
+<br>
+<br>
+

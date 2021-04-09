@@ -1,0 +1,97 @@
+On Wed, 7 Apr 2021 15:26:24 -0700<br>
+Ben Widawsky <ben.widawsky@xxxxxxxxx> wrote:<br>
+<br>
+><i> Memory devices have a list of required register regions within the</i><br>
+><i> register block, but this isn't required of all CXL components or</i><br>
+><i> devices. To make things more tidy, and allow for easily setting up other</i><br>
+><i> block types in this loop, the helper is introduced.</i><br>
+<br>
+Two things in here, the move and allowing it to be missing.<br>
+I would call that out explicitly in the patch description.<br>
+<br>
+><i> </i><br>
+><i> Signed-off-by: Ben Widawsky <ben.widawsky@xxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  drivers/cxl/mem.c | 38 +++++++++++++++++++++++---------------</i><br>
+><i>  1 file changed, 23 insertions(+), 15 deletions(-)</i><br>
+><i> </i><br>
+><i> diff --git a/drivers/cxl/mem.c b/drivers/cxl/mem.c</i><br>
+><i> index 49f651694cb0..b7342aaf38c4 100644</i><br>
+><i> --- a/drivers/cxl/mem.c</i><br>
+><i> +++ b/drivers/cxl/mem.c</i><br>
+><i> @@ -974,6 +974,24 @@ static int cxl_mem_dvsec(struct pci_dev *pdev, int dvsec)</i><br>
+><i>  	return 0;</i><br>
+><i>  }</i><br>
+><i>  </i><br>
+><i> +static int __cxl_setup_device_regs(struct cxl_mem *cxlm, void __iomem *base)</i><br>
+<br>
+Naming is a little unusual.   Normally __ would imply unlocked or something<br>
+like that, whereas here it's mostly implying more error checks.<br>
+<br>
+I don't immediately have a good idea for a name however...<br>
+<br>
+><i> +{</i><br>
+><i> +	struct cxl_regs *regs = &cxlm->regs;</i><br>
+><i> +	struct pci_dev *pdev = cxlm->pdev;</i><br>
+><i> +	struct device *dev = &pdev->dev;</i><br>
+><i> +</i><br>
+><i> +	cxl_setup_device_regs(dev, base, &regs->device_regs);</i><br>
+><i> +	if (!regs->status || !regs->mbox || !regs->memdev) {</i><br>
+><i> +		dev_err(dev, "registers not found: %s%s%s\n",</i><br>
+><i> +				!regs->status ? "status " : "",</i><br>
+><i> +				!regs->mbox ? "mbox " : "",</i><br>
+><i> +				!regs->memdev ? "memdev" : "");</i><br>
+><i> +		return -ENXIO;</i><br>
+><i> +	}</i><br>
+><i> +</i><br>
+><i> +	return 0;</i><br>
+><i> +}</i><br>
+><i> +</i><br>
+><i>  /**</i><br>
+><i>   * cxl_mem_setup_regs() - Setup necessary MMIO.</i><br>
+><i>   * @cxlm: The CXL memory device to communicate with.</i><br>
+><i> @@ -986,12 +1004,11 @@ static int cxl_mem_dvsec(struct pci_dev *pdev, int dvsec)</i><br>
+><i>   */</i><br>
+><i>  static int cxl_mem_setup_regs(struct cxl_mem *cxlm)</i><br>
+><i>  {</i><br>
+><i> -	struct cxl_regs *regs = &cxlm->regs;</i><br>
+><i>  	struct pci_dev *pdev = cxlm->pdev;</i><br>
+><i>  	struct device *dev = &pdev->dev;</i><br>
+><i>  	u32 regloc_size, regblocks;</i><br>
+><i>  	void __iomem *base;</i><br>
+><i> -	int regloc, i;</i><br>
+><i> +	int regloc, i, rc;</i><br>
+><i>  </i><br>
+><i>  	regloc = cxl_mem_dvsec(pdev, PCI_DVSEC_ID_CXL_REGLOC_OFFSET);</i><br>
+><i>  	if (!regloc) {</i><br>
+><i> @@ -1021,23 +1038,14 @@ static int cxl_mem_setup_regs(struct cxl_mem *cxlm)</i><br>
+><i>  			if (IS_ERR(base))</i><br>
+><i>  				return PTR_ERR(base);</i><br>
+><i>  </i><br>
+><i> -			cxl_setup_device_regs(dev, base, &regs->device_regs);</i><br>
+><i> -			if (!regs->status || !regs->mbox || !regs->memdev) {</i><br>
+><i> -				dev_err(dev, "registers not found: %s%s%s\n",</i><br>
+><i> -						!regs->status ? "status " : "",</i><br>
+><i> -						!regs->mbox ? "mbox " : "",</i><br>
+><i> -						!regs->memdev ? "memdev" : "");</i><br>
+><i> -				return -ENXIO;</i><br>
+><i> -			}</i><br>
+><i> +			rc = __cxl_setup_device_regs(cxlm, base);</i><br>
+><i> +			if (rc)</i><br>
+><i> +				return rc;</i><br>
+><i> +</i><br>
+><i>  			break;</i><br>
+><i>  		}</i><br>
+><i>  	}</i><br>
+><i>  </i><br>
+><i> -	if (i == regblocks) {</i><br>
+><i> -		dev_err(dev, "Missing register locator for device registers\n");</i><br>
+><i> -		return -ENXIO;</i><br>
+><i> -	}</i><br>
+><i> -</i><br>
+><i>  	return 0;</i><br>
+><i>  }</i><br>
+><i>  </i><br>
+<br>
+<br>
+

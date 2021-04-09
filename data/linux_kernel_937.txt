@@ -1,0 +1,47 @@
+When v4l2_subdev_call() fails, a pairing PM usage counter<br>
+decrement is needed to keep the counter balanced. It's the<br>
+same for the following error paths in case 'enable' is on.<br>
+<br>
+Signed-off-by: Dinghao Liu <dinghao.liu@xxxxxxxxxx><br>
+---<br>
+ drivers/staging/media/imx/imx7-mipi-csis.c | 9 +++++++--<br>
+ 1 file changed, 7 insertions(+), 2 deletions(-)<br>
+<br>
+diff --git a/drivers/staging/media/imx/imx7-mipi-csis.c b/drivers/staging/media/imx/imx7-mipi-csis.c<br>
+index a01a7364b4b9..2a3fff231a40 100644<br>
+--- a/drivers/staging/media/imx/imx7-mipi-csis.c<br>
++++ b/drivers/staging/media/imx/imx7-mipi-csis.c<br>
+@@ -627,21 +627,26 @@ static int mipi_csis_s_stream(struct v4l2_subdev *mipi_sd, int enable)<br>
+ 			return ret;<br>
+ 		}<br>
+ 		ret = v4l2_subdev_call(state->src_sd, core, s_power, 1);<br>
+-		if (ret < 0)<br>
++		if (ret < 0) {<br>
++			pm_runtime_put_noidle(&state->pdev->dev);<br>
+ 			return ret;<br>
++		}<br>
+ 	}<br>
+ <br>
+ 	mutex_lock(&state->lock);<br>
+ 	if (enable) {<br>
+ 		if (state->flags & ST_SUSPENDED) {<br>
+ 			ret = -EBUSY;<br>
++			pm_runtime_put_noidle(&state->pdev->dev);<br>
+ 			goto unlock;<br>
+ 		}<br>
+ <br>
+ 		mipi_csis_start_stream(state);<br>
+ 		ret = v4l2_subdev_call(state->src_sd, video, s_stream, 1);<br>
+-		if (ret < 0)<br>
++		if (ret < 0) {<br>
++			pm_runtime_put_noidle(&state->pdev->dev);<br>
+ 			goto unlock;<br>
++		}<br>
+ <br>
+ 		mipi_csis_log_counters(state, true);<br>
+ <br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+

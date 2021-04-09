@@ -1,0 +1,261 @@
+This patch helps to make perf build more reproducible<br>
+<br>
+It seems there is some need to have an ability to invoke<br>
+perf from build directory without installation<br>
+(84cfac7f05e1: perf tools: Set and pass DOCDIR to builtin-report.c)<br>
+DOCDIR contains an absolute path to kernel source directory.<br>
+This path can be read from .config-detected that is stored in the<br>
+same dir as perf executable.<br>
+<br>
+There is also python binding test where PYTHONPATH is used to store<br>
+absolute path to python/perf.so library. This path can be<br>
+also determined in runtime.<br>
+<br>
+bison stores full paths in generated files. This can be<br>
+remapped by using --file-prefix-map option that is available<br>
+starting from version 3.7.1.<br>
+<br>
+Signed-off-by: Denys Zagorui <dzagorui@xxxxxxxxx><br>
+---<br>
+ tools/perf/Build              |  1 -<br>
+ tools/perf/Makefile.config    |  9 +++++<br>
+ tools/perf/builtin-report.c   | 13 +++++++-<br>
+ tools/perf/tests/Build        |  2 +-<br>
+ tools/perf/tests/python-use.c | 14 +++++++-<br>
+ tools/perf/util/Build         |  6 ++--<br>
+ tools/perf/util/util.c        | 62 +++++++++++++++++++++++++++++++++++<br>
+ tools/perf/util/util.h        |  5 +++<br>
+ 8 files changed, 105 insertions(+), 7 deletions(-)<br>
+<br>
+diff --git a/tools/perf/Build b/tools/perf/Build<br>
+index db61dbe2b543..56d0189f1029 100644<br>
+--- a/tools/perf/Build<br>
++++ b/tools/perf/Build<br>
+@@ -45,7 +45,6 @@ CFLAGS_perf.o              += -DPERF_HTML_PATH="BUILD_STR($(htmldir_SQ))"	\<br>
+ 			      -DPREFIX="BUILD_STR($(prefix_SQ))"<br>
+ CFLAGS_builtin-trace.o	   += -DSTRACE_GROUPS_DIR="BUILD_STR($(STRACE_GROUPS_DIR_SQ))"<br>
+ CFLAGS_builtin-report.o	   += -DTIPDIR="BUILD_STR($(tipdir_SQ))"<br>
+-CFLAGS_builtin-report.o	   += -DDOCDIR="BUILD_STR($(srcdir_SQ)/Documentation)"<br>
+ <br>
+ perf-y += util/<br>
+ perf-y += arch/<br>
+diff --git a/tools/perf/Makefile.config b/tools/perf/Makefile.config<br>
+index d8e59d31399a..2035bae6d5c5 100644<br>
+--- a/tools/perf/Makefile.config<br>
++++ b/tools/perf/Makefile.config<br>
+@@ -195,6 +195,12 @@ ifeq ($(call get-executable,$(BISON)),)<br>
+   dummy := $(error Error: $(BISON) is missing on this system, please install it)<br>
+ endif<br>
+ <br>
++ifneq ($(OUTPUT),)<br>
++  ifeq ($(shell expr $(shell $(BISON) --version | grep bison | sed -e 's/.\+ \([0-9]\+\).\([0-9]\+\).\([0-9]\+\)/\1\2\3/g') \>\= 371), 1)<br>
++    BISON_FILE_PREFIX_MAP := --file-prefix-map=$(OUTPUT)=<br>
++  endif<br>
++endif<br>
++<br>
+ # Treat warnings as errors unless directed not to<br>
+ ifneq ($(WERROR),0)<br>
+   CORE_CFLAGS += -Werror<br>
+@@ -1208,3 +1214,6 @@ $(call detected_var,LIBDIR)<br>
+ $(call detected_var,GTK_CFLAGS)<br>
+ $(call detected_var,PERL_EMBED_CCOPTS)<br>
+ $(call detected_var,PYTHON_EMBED_CCOPTS)<br>
++ifneq ($(BISON_FILE_PREFIX_MAP),)<br>
++$(call detected_var,BISON_FILE_PREFIX_MAP)<br>
++endif<br>
+diff --git a/tools/perf/builtin-report.c b/tools/perf/builtin-report.c<br>
+index 2a845d6cac09..33f7ac6ed6ce 100644<br>
+--- a/tools/perf/builtin-report.c<br>
++++ b/tools/perf/builtin-report.c<br>
+@@ -610,12 +610,23 @@ static int report__browse_hists(struct report *rep)<br>
+ 	struct perf_session *session = rep->session;<br>
+ 	struct evlist *evlist = session->evlist;<br>
+ 	const char *help = perf_tip(system_path(TIPDIR));<br>
++	char *exec_path = NULL;<br>
++	char *docdir = NULL;<br>
+ <br>
+ 	if (help == NULL) {<br>
+ 		/* fallback for people who don't install perf ;-) */<br>
+-		help = perf_tip(DOCDIR);<br>
++		exec_path = perf_exe_path();<br>
++		if (exec_path == NULL || perf_src_doc(exec_path, &docdir))<br>
++			docdir = NULL;<br>
++<br>
++		if (docdir != NULL)<br>
++			help = perf_tip(docdir);<br>
++<br>
+ 		if (help == NULL)<br>
+ 			help = "Cannot load tips.txt file, please install perf!";<br>
++<br>
++		free(exec_path);<br>
++		free(docdir);<br>
+ 	}<br>
+ <br>
+ 	switch (use_browser) {<br>
+diff --git a/tools/perf/tests/Build b/tools/perf/tests/Build<br>
+index 650aec19d490..a20098dcdbc4 100644<br>
+--- a/tools/perf/tests/Build<br>
++++ b/tools/perf/tests/Build<br>
+@@ -98,5 +98,5 @@ perf-$(CONFIG_DWARF_UNWIND) += dwarf-unwind.o<br>
+ endif<br>
+ <br>
+ CFLAGS_attr.o         += -DBINDIR="BUILD_STR($(bindir_SQ))" -DPYTHON="BUILD_STR($(PYTHON_WORD))"<br>
+-CFLAGS_python-use.o   += -DPYTHONPATH="BUILD_STR($(OUTPUT)python)" -DPYTHON="BUILD_STR($(PYTHON_WORD))"<br>
++CFLAGS_python-use.o   += -DPYTHON="BUILD_STR($(PYTHON_WORD))"<br>
+ CFLAGS_dwarf-unwind.o += -fno-optimize-sibling-calls<br>
+diff --git a/tools/perf/tests/python-use.c b/tools/perf/tests/python-use.c<br>
+index 98c6d474aa6f..930aa4c6264e 100644<br>
+--- a/tools/perf/tests/python-use.c<br>
++++ b/tools/perf/tests/python-use.c<br>
+@@ -8,16 +8,28 @@<br>
+ #include <linux/compiler.h><br>
+ #include "tests.h"<br>
+ #include "util/debug.h"<br>
++#include "util/util.h"<br>
+ <br>
+ int test__python_use(struct test *test __maybe_unused, int subtest __maybe_unused)<br>
+ {<br>
+ 	char *cmd;<br>
+ 	int ret;<br>
++	char *exec_path;<br>
++	char *pythonpath;<br>
++<br>
++	exec_path = perf_exe_path();<br>
++	if (exec_path == NULL)<br>
++		return -1;<br>
++<br>
++	if (asprintf(&pythonpath, "%spython", exec_path) < 0)<br>
++		return -1;<br>
+ <br>
+ 	if (asprintf(&cmd, "echo \"import sys ; sys.path.append('%s'); import perf\" | %s %s",<br>
+-		     PYTHONPATH, PYTHON, verbose > 0 ? "" : "2> /dev/null") < 0)<br>
++		     pythonpath, PYTHON, verbose > 0 ? "" : "2> /dev/null") < 0)<br>
+ 		return -1;<br>
+ <br>
++	free(exec_path);<br>
++	free(pythonpath);<br>
+ 	pr_debug("python usage test: \"%s\"\n", cmd);<br>
+ 	ret = system(cmd) ? -1 : 0;<br>
+ 	free(cmd);<br>
+diff --git a/tools/perf/util/Build b/tools/perf/util/Build<br>
+index e3e12f9d4733..33476b1d28d5 100644<br>
+--- a/tools/perf/util/Build<br>
++++ b/tools/perf/util/Build<br>
+@@ -204,7 +204,7 @@ $(OUTPUT)util/parse-events-flex.c $(OUTPUT)util/parse-events-flex.h: util/parse-<br>
+ <br>
+ $(OUTPUT)util/parse-events-bison.c $(OUTPUT)util/parse-events-bison.h: util/parse-events.y<br>
+ 	$(call rule_mkdir)<br>
+-	$(Q)$(call echo-cmd,bison)$(BISON) -v $< -d $(PARSER_DEBUG_BISON) \<br>
++	$(Q)$(call echo-cmd,bison)$(BISON) -v $< -d $(PARSER_DEBUG_BISON) $(BISON_FILE_PREFIX_MAP) \<br>
+ 		-o $(OUTPUT)util/parse-events-bison.c -p parse_events_<br>
+ <br>
+ $(OUTPUT)util/expr-flex.c $(OUTPUT)util/expr-flex.h: util/expr.l $(OUTPUT)util/expr-bison.c<br>
+@@ -214,7 +214,7 @@ $(OUTPUT)util/expr-flex.c $(OUTPUT)util/expr-flex.h: util/expr.l $(OUTPUT)util/e<br>
+ <br>
+ $(OUTPUT)util/expr-bison.c $(OUTPUT)util/expr-bison.h: util/expr.y<br>
+ 	$(call rule_mkdir)<br>
+-	$(Q)$(call echo-cmd,bison)$(BISON) -v $< -d $(PARSER_DEBUG_BISON) \<br>
++	$(Q)$(call echo-cmd,bison)$(BISON) -v $< -d $(PARSER_DEBUG_BISON) $(BISON_FILE_PREFIX_MAP) \<br>
+ 		-o $(OUTPUT)util/expr-bison.c -p expr_<br>
+ <br>
+ $(OUTPUT)util/pmu-flex.c $(OUTPUT)util/pmu-flex.h: util/pmu.l $(OUTPUT)util/pmu-bison.c<br>
+@@ -224,7 +224,7 @@ $(OUTPUT)util/pmu-flex.c $(OUTPUT)util/pmu-flex.h: util/pmu.l $(OUTPUT)util/pmu-<br>
+ <br>
+ $(OUTPUT)util/pmu-bison.c $(OUTPUT)util/pmu-bison.h: util/pmu.y<br>
+ 	$(call rule_mkdir)<br>
+-	$(Q)$(call echo-cmd,bison)$(BISON) -v $< -d $(PARSER_DEBUG_BISON) \<br>
++	$(Q)$(call echo-cmd,bison)$(BISON) -v $< -d $(PARSER_DEBUG_BISON) $(BISON_FILE_PREFIX_MAP) \<br>
+ 		-o $(OUTPUT)util/pmu-bison.c -p perf_pmu_<br>
+ <br>
+ FLEX_GE_26 := $(shell expr $(shell $(FLEX) --version | sed -e  's/flex \([0-9]\+\).\([0-9]\+\)/\1\2/g') \>\= 26)<br>
+diff --git a/tools/perf/util/util.c b/tools/perf/util/util.c<br>
+index 37a9492edb3e..f5408520a3b5 100644<br>
+--- a/tools/perf/util/util.c<br>
++++ b/tools/perf/util/util.c<br>
+@@ -416,3 +416,65 @@ char *perf_exe(char *buf, int len)<br>
+ 	}<br>
+ 	return strcpy(buf, "perf");<br>
+ }<br>
++<br>
++char *perf_exe_path(void)<br>
++{<br>
++	int i;<br>
++	char *buf;<br>
++<br>
++	buf = malloc(PATH_MAX);<br>
++	buf = perf_exe(buf, PATH_MAX);<br>
++<br>
++	for (i = strlen(buf) - 1; i != 0 && buf[i] != '/'; i--)<br>
++		;<br>
++<br>
++	if (!i) {<br>
++		free(buf);<br>
++		return NULL;<br>
++	}<br>
++<br>
++	buf[i + 1] = 0;<br>
++<br>
++	return buf;<br>
++}<br>
++<br>
++int perf_src_doc(const char *exec_path, char **strp)<br>
++{<br>
++	FILE *file;<br>
++	char *line = NULL;<br>
++	size_t line_len = 0;<br>
++	ssize_t nread;<br>
++	int ret = -1;<br>
++	char *config_detected = NULL;<br>
++	static const char srcdir[] = "srcdir_SQ";<br>
++<br>
++	if (asprintf(&config_detected, "%s.config-detected", exec_path) < 0)<br>
++		return -1;<br>
++<br>
++	file = fopen(config_detected, "r");<br>
++	if (!file)<br>
++		goto out;<br>
++<br>
++	while (!feof(file)) {<br>
++		nread = getline(&line, &line_len, file);<br>
++		if (nread < 0)<br>
++			break;<br>
++<br>
++		if (!strncmp(line, srcdir, sizeof(srcdir) - 1)) {<br>
++<br>
++			if (line[nread - 1] == '\n')<br>
++				line[nread - 1] = 0;<br>
++<br>
++			if (asprintf(strp, "%s/Documentation", &line[sizeof(srcdir)]) != -1)<br>
++				ret = 0;<br>
++<br>
++			break;<br>
++		}<br>
++	}<br>
++<br>
++	fclose(file);<br>
++out:<br>
++	free(line);<br>
++	free(config_detected);<br>
++	return ret;<br>
++}<br>
+diff --git a/tools/perf/util/util.h b/tools/perf/util/util.h<br>
+index ad737052e597..e480df3f5993 100644<br>
+--- a/tools/perf/util/util.h<br>
++++ b/tools/perf/util/util.h<br>
+@@ -51,6 +51,11 @@ void perf_set_singlethreaded(void);<br>
+ void perf_set_multithreaded(void);<br>
+ <br>
+ char *perf_exe(char *buf, int len);<br>
++/* perf_exe_path return malloc'd string and perf_src_doc allocate<br>
++ * memory for strp, caller must free it<br>
++ */<br>
++char *perf_exe_path(void);<br>
++int perf_src_doc(const char *exe_path, char **strp);<br>
+ <br>
+ #ifndef O_CLOEXEC<br>
+ #ifdef __sparc__<br>
+-- <br>
+2.26.2.Cisco<br>
+<br>
+<br>
+

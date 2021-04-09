@@ -1,0 +1,44 @@
+From: Liu xuzhi <liu.xuzhi@xxxxxxxxxx><br>
+<br>
+Two typos are found out by codespell tool \<br>
+in 2217th and 2254th lines of segment.c:<br>
+<br>
+$ codespell ./fs/nilfs2/<br>
+./segment.c:2217 :retured  ==> returned<br>
+./segment.c:2254: retured  ==> returned<br>
+<br>
+Fix two typos found by codespell.<br>
+<br>
+Signed-off-by: Liu xuzhi <liu.xuzhi@xxxxxxxxxx><br>
+Signed-off-by: Ryusuke Konishi <konishi.ryusuke@xxxxxxxxx><br>
+---<br>
+ fs/nilfs2/segment.c | 4 ++--<br>
+ 1 file changed, 2 insertions(+), 2 deletions(-)<br>
+<br>
+diff --git a/fs/nilfs2/segment.c b/fs/nilfs2/segment.c<br>
+index cd4da9535aed..686c8ee7b29c 100644<br>
+--- a/fs/nilfs2/segment.c<br>
++++ b/fs/nilfs2/segment.c<br>
+@@ -2214,7 +2214,7 @@ static void nilfs_segctor_wakeup(struct nilfs_sc_info *sci, int err)<br>
+  * nilfs_construct_segment - construct a logical segment<br>
+  * @sb: super block<br>
+  *<br>
+- * Return Value: On success, 0 is retured. On errors, one of the following<br>
++ * Return Value: On success, 0 is returned. On errors, one of the following<br>
+  * negative error code is returned.<br>
+  *<br>
+  * %-EROFS - Read only filesystem.<br>
+@@ -2251,7 +2251,7 @@ int nilfs_construct_segment(struct super_block *sb)<br>
+  * @start: start byte offset<br>
+  * @end: end byte offset (inclusive)<br>
+  *<br>
+- * Return Value: On success, 0 is retured. On errors, one of the following<br>
++ * Return Value: On success, 0 is returned. On errors, one of the following<br>
+  * negative error code is returned.<br>
+  *<br>
+  * %-EROFS - Read only filesystem.<br>
+-- <br>
+1.8.3.1<br>
+<br>
+<br>
+

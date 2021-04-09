@@ -1,0 +1,22 @@
+TU-T SG 16 standardization on visual coding – the Video Coding Experts Group (VCEG)
+The visual compression coding work in the ITU has a long and rich history dating back to the development of the H.120 digital video coding standard in 1984, its substantial revision in 1988, the early days of the JPEG work for still image compression, and the pioneering development of ITU-T H.261 for video videoconferencing, and the MPEG-2 standard (ITU-T H.262) for entertainment-quality digital video​. In July 2006, the video coding work of the ITU was voted as the most influential area of standardization work in the 50-year history of the ITU-T and its predecessor, the CCITT. In May 2015, the work of VCEG was one of five key areas of standardization recognized by an "ITU 150 Award", which was presented on the occasion of the 150th anniversary of the founding of the ITU in 1865.
+
+Today, work on visual coding within the ITU takes place under Question 6/16 of ITU-T Study Group 16, and the experts group is informally known as VCEG (Video Coding Experts Group or Visual Coding Experts Group).
+
+In the image compression area, ITU experts were active in the production of the first generation of still image compression standards jointly with ISO/IEC JTC1/SC29/WG1 – in a group known as JPEG, which also gives its informal name to the ITU-T T.81 standard and a suite of related standards. Today, ITU-T Study Group 16 remains a partner to the work in SC 29/WG1 for various families of still image compression standards including JPEG, JBIG, JBIG2, JPEG-LS, JPEG 2000, MRC, and JPEG XR.
+
+The ITU has been a major leader in digital video coding, with the coding formats defined in the H.120 and H.26x-series of Recommendations. Three of the ITU video coding standards are ITU-only developments:
+
+    ITU-T H.120 Codecs for videoconferencing using primary digital group transmission was the first international standard for digital video compression. It was originally developed in 1984 and substantially revised in 1988, including such pioneering developments as motion-compensated inter-frame coding.
+    ITU-T H.261 Video codec for audiovisual services at p x 64 kbit/s was the first commercially-successful digital video coding standard, and introduced the modern architecture of hybrid block-based video coding technology.
+    ITU-T H.263 Video coding for low bit rate communication provided substantial improvements for real-time video coding communication, and was deployed in hundreds of millions of mobile devices as well as video conferencing systems.
+
+Three other video coding standards have been developed collaboratively with ISO/IEC JTC1 SC29/WG11 (also known as MPEG):
+
+    ITU-T H.262 | ISO/IEC 13818-2 Generic coding of moving pictures and associated audio information: Video is the result of the development under the collaborative team of the ITU-T advanced video coding rapporteur group and MPEG. It ushered in the era of digital television as it is known today.
+    ITU-T H.264 | ISO/IEC 14496-10 Advanced video coding (AVC) for generic audiovisual services is the result of the development under the collaborative team known as the JVT. It is the dominant video coding technology world-wide and is supported in virtually all devices that include video functionality.
+    ITU-T H.265 | ISO/IEC 23008-2 High efficiency video coding (HEVC) is the result of the development under the collaborative team known as the JCT-VC. It has emerged as a substantial advance over prior designs to ease pressure on global networks and usher in an era of ultra-high definition (UHD) television and high dynamic range (HDR). Essentially, all 4K UHD televisions and most personal computers and mobile handset devices have included HEVC support since 2015.
+
+Extensions of AVC and HEVC have been developed to provide enhanced support for 3D video and spatial and quality scalability.
+
+Currently, VCEG is developing a next-generation video coding standard with compression capability beyond that of HEVC and its extensions, called Versatile Video Coding (VVC). The VVC standardization activity is being conducted jointly with MPEG in an effort called the Joint Video Experts Team (JVET).

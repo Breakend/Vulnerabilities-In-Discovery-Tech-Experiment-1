@@ -1,0 +1,39 @@
+
+Hi Vitaly,<br>
+<br>
+On 4/8/21 7:06 AM, Vitaly Kuznetsov wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+-	if (ms_hyperv.hints & HV_X64_ENLIGHTENED_VMCS_RECOMMENDED) {<br>
++	/*<br>
++	 * AMD does not need enlightened VMCS as VMCB is already a<br>
++	 * datastructure in memory.<br>
+Well, VMCS is also a structure in memory, isn't it? It's just that we<br>
+don't have a 'clean field' concept for it and we can't use normal memory<br>
+accesses.<br>
+</blockquote>
+<br>
+Yes, you are right. I was referring to the fact that we cant use normal<br>
+memory accesses, but is a bit mis-worded.<br>
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+	We need to get the nested<br>
++	 * features if SVM is enabled.<br>
++	 */<br>
++	if (boot_cpu_has(X86_FEATURE_SVM) ||<br>
++	    ms_hyperv.hints & HV_X64_ENLIGHTENED_VMCS_RECOMMENDED) {<br>
+</blockquote>
+Do I understand correctly that we can just look at CPUID.0x40000000.EAX<br>
+and in case it is >= 0x4000000A we can read HYPERV_CPUID_NESTED_FEATURES<br>
+leaf? I'd suggest we do that intead then.<br>
+</blockquote>
+I agree, that is a better way to consolidate both the cases.<br>
+Will change it in the next iteration. Probably the above code<br>
+comment is not needed when we consolidate the cases here.<br>
+<br>
+Thanks,<br>
+Vineeth<br>
+<br>
+<br>
+

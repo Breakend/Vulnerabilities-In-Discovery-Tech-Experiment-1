@@ -1,0 +1,46 @@
+Hi Gioh,<br>
+<br>
+Thank you for the patch! Yet something to improve:<br>
+<br>
+[auto build test ERROR on linux/master]<br>
+[also build test ERROR on kees/for-next/pstore linus/master v5.12-rc6 next-20210407]<br>
+[If your patch is applied to the wrong git tree, kindly drop us a note.<br>
+And when submitting patch, we suggest to use '--base' as documented in<br>
+<a  rel="nofollow" href="https://git-scm.com/docs/git-format-patch">https://git-scm.com/docs/git-format-patch</a>]<br>
+<br>
+url:    <a  rel="nofollow" href="https://github.com/0day-ci/linux/commits/Gioh-Kim/lib-string-Introduce-sysfs_streqcase/20210408-173449">https://github.com/0day-ci/linux/commits/Gioh-Kim/lib-string-Introduce-sysfs_streqcase/20210408-173449</a><br>
+base:   <a  rel="nofollow" href="https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git">https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git</a> 5e46d1b78a03d52306f21f77a4e4a144b6d31486<br>
+config: nds32-allnoconfig (attached as .config)<br>
+compiler: nds32le-linux-gcc (GCC) 9.3.0<br>
+reproduce (this is a W=1 build):<br>
+        wget <a  rel="nofollow" href="https://raw.githubusercontent.com/intel/lkp-tests/master/sbin/make.cross">https://raw.githubusercontent.com/intel/lkp-tests/master/sbin/make.cross</a> -O ~/bin/make.cross<br>
+        chmod +x ~/bin/make.cross<br>
+        # <a  rel="nofollow" href="https://github.com/0day-ci/linux/commit/7de114025f207fa41a9cffdf91c28e9b914e09f4">https://github.com/0day-ci/linux/commit/7de114025f207fa41a9cffdf91c28e9b914e09f4</a><br>
+        git remote add linux-review <a  rel="nofollow" href="https://github.com/0day-ci/linux">https://github.com/0day-ci/linux</a><br>
+        git fetch --no-tags linux-review Gioh-Kim/lib-string-Introduce-sysfs_streqcase/20210408-173449<br>
+        git checkout 7de114025f207fa41a9cffdf91c28e9b914e09f4<br>
+        # save the attached .config to linux build tree<br>
+        COMPILER_INSTALL_PATH=$HOME/0day COMPILER=gcc-9.3.0 make.cross ARCH=nds32 <br>
+<br>
+If you fix the issue, kindly add following tag as appropriate<br>
+Reported-by: kernel test robot <lkp@xxxxxxxxx><br>
+<br>
+All errors (new ones prefixed by >>):<br>
+<br>
+   nds32le-linux-ld: drivers/base/core.o: in function `device_find_child_by_name':<br>
+   core.c:(.text+0x2e4c): undefined reference to `sysfs_streq'<br>
+><i>> nds32le-linux-ld: core.c:(.text+0x2e50): undefined reference to `sysfs_streq'</i><br>
+   nds32le-linux-ld: drivers/base/core.o: in function `device_match_name':<br>
+   core.c:(.text+0x35a0): undefined reference to `sysfs_streq'<br>
+   nds32le-linux-ld: core.c:(.text+0x35a4): undefined reference to `sysfs_streq'<br>
+   nds32le-linux-ld: lib/string.o: in function `__sysfs_match_string':<br>
+   string.c:(.text+0x668): undefined reference to `sysfs_streq'<br>
+   nds32le-linux-ld: lib/string.o:string.c:(.text+0x66c): more undefined references to `sysfs_streq' follow<br>
+<br>
+---<br>
+0-DAY CI Kernel Test Service, Intel Corporation<br>
+<a  rel="nofollow" href="https://lists.01.org/hyperkitty/list/kbuild-all@xxxxxxxxxxxx">https://lists.01.org/hyperkitty/list/kbuild-all@xxxxxxxxxxxx</a><br>
+<p><strong>Attachment:
+<a href="00569/.config.gz" ><tt>.config.gz</tt></a></strong><br>
+<em>Description:</em> application/gzip</p>
+

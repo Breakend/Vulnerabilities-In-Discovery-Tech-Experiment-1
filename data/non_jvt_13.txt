@@ -1,0 +1,65 @@
+Re: Use cases / requirements for raw data access functions
+
+    This message: [ Message body ] [ Respond ] [ More options ]
+    Related messages: [ Next message ] [ Previous message ] [ In reply to ] [ Next in thread ]
+
+From: Peter Thatcher <pthatcher@google.com>
+Date: Mon, 21 May 2018 11:25:23 -0700
+Message-ID: <CAJrXDUF9koPo7-tRid8mw=L-UgMm6gPnq3chT63PQPXF2puFBQ@mail.gmail.com>
+To: Sergio Garcia Murillo <sergio.garcia.murillo@gmail.com>
+Cc: public-webrtc@w3.org
+
+On Fri, May 18, 2018 at 11:35 PM Sergio Garcia Murillo <
+sergio.garcia.murillo@gmail.com> wrote:
+
+> On 19/05/2018 1:14, Peter Thatcher wrote:
+> > It sounds like what you're saying is that in our quest to make
+> > lower-level APIs, you don't want it to go so low that it's a pain in
+> > the neck to use.  Which I can completely understand.  Finding the
+> > right balance between easy to use and flexible and powerful  can be
+> > tricky, and we should keep your viewpoint (the "keep it easy" one) in
+> > mind as we consider the tradeoffs in design.
+> >
+>
+> Yes, that is exactly what I mean. There is a long way between providing
+> lower-level APIs and having to re-implement the rtp stack in js..
+>
+
+Yes, that's the tradeoff.  But would it be so bad if there was a low-level
+API in the browser and than there were different JS libraries that built on
+top of that to give you higher level ones?
+
+By the way, I'm not suggesting re-implementing all of RTP in JS.  But I am
+perhaps suggesting that apps/JS do the packetization of the media (which
+seems simple for all codecs except h264/h265, as far as I can tell) and
+choose what metadata (header extensions) to include.
+
+
+>
+> > But I think that's mostly orthogonal to QUIC vs. RTP.
+>
+> It is not when if we make the decision on how to implement an use case
+> based on what is easier to implement for QUIC and then apply it to RTP.
+>
+> For example, implementing e2ee on the whole encoded frame before
+> packetization is trivial to the best for QUIC (or DC or WS), but implies
+> that we need to add a new custom payload with an agnostic payload
+> packetization when used in RTP.
+>
+
+> If it was orthogonal, we would only consider what is easiest for RTP,
+> that is implementing e2ee after packetization.
+>
+>
+
+I think it depends on the codec, but yes, it does conflict with some
+packetizations (like h264).
+
+But, like I mentioned, if the JS/wasm is doing the packetization of the
+media, then it could choose how it wants to do this.
+
+
+> Best regards
+> Sergio
+>
+

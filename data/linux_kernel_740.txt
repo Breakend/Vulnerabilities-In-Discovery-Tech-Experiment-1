@@ -1,0 +1,38 @@
+On Thu, Apr 01, 2021 at 11:32:25AM -0700, Dave Hansen wrote:<br>
+><i> </i><br>
+><i> From: Dave Hansen <dave.hansen@xxxxxxxxxxxxxxx></i><br>
+><i> </i><br>
+><i> This is mostly derived from a patch from Yang Shi:</i><br>
+><i> </i><br>
+><i> 	<a  rel="nofollow" href="https://lore.kernel.org/linux-mm/1560468577-101178-10-git-send-email-yang.shi@xxxxxxxxxxxxxxxxx/">https://lore.kernel.org/linux-mm/1560468577-101178-10-git-send-email-yang.shi@xxxxxxxxxxxxxxxxx/</a></i><br>
+><i> </i><br>
+><i> Add code to the reclaim path (shrink_page_list()) to "demote" data</i><br>
+><i> to another NUMA node instead of discarding the data.  This always</i><br>
+><i> avoids the cost of I/O needed to read the page back in and sometimes</i><br>
+><i> avoids the writeout cost when the pagee is dirty.</i><br>
+><i> </i><br>
+><i> A second pass through shrink_page_list() will be made if any demotions</i><br>
+><i> fail.  This essentally falls back to normal reclaim behavior in the</i><br>
+><i> case that demotions fail.  Previous versions of this patch may have</i><br>
+><i> simply failed to reclaim pages which were eligible for demotion but</i><br>
+><i> were unable to be demoted in practice.</i><br>
+><i> </i><br>
+><i> Note: This just adds the start of infratructure for migration. It is</i><br>
+><i> actually disabled next to the FIXME in migrate_demote_page_ok().</i><br>
+><i> </i><br>
+><i> Signed-off-by: Dave Hansen <dave.hansen@xxxxxxxxxxxxxxx></i><br>
+><i> Cc: Wei Xu <weixugc@xxxxxxxxxx></i><br>
+><i> Cc: Yang Shi <yang.shi@xxxxxxxxxxxxxxxxx></i><br>
+><i> Cc: David Rientjes <rientjes@xxxxxxxxxx></i><br>
+><i> Cc: Huang Ying <ying.huang@xxxxxxxxx></i><br>
+><i> Cc: Dan Williams <dan.j.williams@xxxxxxxxx></i><br>
+><i> Cc: osalvador <osalvador@xxxxxxx></i><br>
+<br>
+Reviewed-by: Oscar Salvador <osalvador@xxxxxxx><br>
+<br>
+-- <br>
+Oscar Salvador<br>
+SUSE L3<br>
+<br>
+<br>
+

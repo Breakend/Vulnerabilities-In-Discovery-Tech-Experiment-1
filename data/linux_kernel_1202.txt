@@ -1,0 +1,111 @@
+On Wed, Apr 7, 2021 at 4:22 PM Loic Poulain <loic.poulain@xxxxxxxxxx> wrote:<br>
+><i></i><br>
+><i> Hi Jarvis,</i><br>
+><i></i><br>
+><i> On Wed, 7 Apr 2021 at 04:51, Jarvis Jiang <jarvis.w.jiang@xxxxxxxxx> wrote:</i><br>
+><i> ></i><br>
+><i> > Add support for T99W175 modems, this modem series is based on SDX55</i><br>
+><i> > qcom chip. The modem is mainly based on MBIM protocol for both the</i><br>
+><i> > data and control path.</i><br>
+><i> ></i><br>
+><i> > This patch was tested with Ubuntu 20.04 X86_64 PC as host</i><br>
+><i> ></i><br>
+><i> > Signed-off-by: Jarvis Jiang <jarvis.w.jiang@xxxxxxxxx></i><br>
+><i> > ---</i><br>
+><i> >  drivers/bus/mhi/pci_generic.c | 58 +++++++++++++++++++++++++++++++++++</i><br>
+><i> >  1 file changed, 58 insertions(+)</i><br>
+><i> ></i><br>
+><i> > diff --git a/drivers/bus/mhi/pci_generic.c b/drivers/bus/mhi/pci_generic.c</i><br>
+><i> > index 5cf44bcfe040..3e396c65a758 100644</i><br>
+><i> > --- a/drivers/bus/mhi/pci_generic.c</i><br>
+><i> > +++ b/drivers/bus/mhi/pci_generic.c</i><br>
+><i> > @@ -260,6 +260,52 @@ static const struct mhi_pci_dev_info mhi_quectel_em1xx_info = {</i><br>
+><i> >         .dma_data_width = 32</i><br>
+><i> >  };</i><br>
+><i> ></i><br>
+><i> > +static const struct mhi_channel_config mhi_foxconn_sdx55_channels[] = {</i><br>
+><i> > +       MHI_CHANNEL_CONFIG_UL(0, "LOOPBACK", 32, 0),</i><br>
+><i> > +       MHI_CHANNEL_CONFIG_DL(1, "LOOPBACK", 32, 0),</i><br>
+><i> > +       MHI_CHANNEL_CONFIG_UL(4, "DIAG", 32, 1),</i><br>
+><i> > +       MHI_CHANNEL_CONFIG_DL(5, "DIAG", 32, 1),</i><br>
+><i> > +       MHI_CHANNEL_CONFIG_UL(12, "MBIM", 32, 0),</i><br>
+><i> > +       MHI_CHANNEL_CONFIG_DL(13, "MBIM", 32, 0),</i><br>
+><i> > +       MHI_CHANNEL_CONFIG_UL(14, "QMI", 32, 0),</i><br>
+><i> > +       MHI_CHANNEL_CONFIG_DL(15, "QMI", 32, 0),</i><br>
+><i> > +       MHI_CHANNEL_CONFIG_UL(16, "QMI1", 32, 0),</i><br>
+><i> > +       MHI_CHANNEL_CONFIG_DL(17, "QMI1", 32, 0),</i><br>
+><i></i><br>
+><i> Are these QMI channels need to be exposed, vendors usually expose</i><br>
+><i> either QMI+QMAP or MBIM (for data and control), here you expose</i><br>
+><i> IP_HW0_MBIM as 'data' channel, so I would expect that MBIM is all you</i><br>
+><i> need for the 'control' channel.</i><br>
+<br>
+Yes, the unnecessary channels will be removed in  the next patch.<br>
+<br>
+Thanks,<br>
+Jarvis<br>
+<br>
+><i></i><br>
+><i> > +       MHI_CHANNEL_CONFIG_UL(18, "IP_CTRL", 32, 0),</i><br>
+><i> > +       MHI_CHANNEL_CONFIG_DL(19, "IP_CTRL", 32, 0),</i><br>
+><i> > +       MHI_CHANNEL_CONFIG_UL(20, "IPCR", 32, 0),</i><br>
+><i> > +       MHI_CHANNEL_CONFIG_DL(21, "IPCR", 32, 0),</i><br>
+><i> > +       MHI_CHANNEL_CONFIG_UL(32, "AT", 32, 0),</i><br>
+><i> > +       MHI_CHANNEL_CONFIG_DL(33, "AT", 32, 0),</i><br>
+><i> > +       MHI_CHANNEL_CONFIG_HW_UL(100, "IP_HW0_MBIM", 128, 2),</i><br>
+><i> > +       MHI_CHANNEL_CONFIG_HW_DL(101, "IP_HW0_MBIM", 128, 3),</i><br>
+><i> > +};</i><br>
+><i> > +</i><br>
+><i> > +static struct mhi_event_config mhi_foxconn_sdx55_events[] = {</i><br>
+><i> > +       MHI_EVENT_CONFIG_CTRL(0, 128),</i><br>
+><i> > +       MHI_EVENT_CONFIG_DATA(1, 128),</i><br>
+><i> > +       MHI_EVENT_CONFIG_HW_DATA(2, 1024, 100),</i><br>
+><i> > +       MHI_EVENT_CONFIG_HW_DATA(3, 1024, 101)</i><br>
+><i> > +};</i><br>
+><i> > +</i><br>
+><i> > +static struct mhi_controller_config modem_foxconn_sdx55_config = {</i><br>
+><i> > +       .max_channels = 128,</i><br>
+><i> > +       .timeout_ms = 20000,</i><br>
+><i> > +       .num_channels = ARRAY_SIZE(mhi_foxconn_sdx55_channels),</i><br>
+><i> > +       .ch_cfg = mhi_foxconn_sdx55_channels,</i><br>
+><i> > +       .num_events = ARRAY_SIZE(mhi_foxconn_sdx55_events),</i><br>
+><i> > +       .event_cfg = mhi_foxconn_sdx55_events,</i><br>
+><i> > +};</i><br>
+><i> > +</i><br>
+><i> > +static const struct mhi_pci_dev_info mhi_foxconn_sdx55_info = {</i><br>
+><i> > +       .name = "foxconn-sdx55",</i><br>
+><i> > +       .fw = "qcom/sdx55m/sbl1.mbn",</i><br>
+><i> > +       .edl = "qcom/sdx55m/edl.mbn",</i><br>
+><i> > +       .config = &modem_foxconn_sdx55_config,</i><br>
+><i> > +       .bar_num = MHI_PCI_DEFAULT_BAR_NUM,</i><br>
+><i> > +       .dma_data_width = 32</i><br>
+><i> > +};</i><br>
+><i> > +</i><br>
+><i> >  static const struct pci_device_id mhi_pci_id_table[] = {</i><br>
+><i> >         { PCI_DEVICE(PCI_VENDOR_ID_QCOM, 0x0306),</i><br>
+><i> >                 .driver_data = (kernel_ulong_t) &mhi_qcom_sdx55_info },</i><br>
+><i> > @@ -269,6 +315,18 @@ static const struct pci_device_id mhi_pci_id_table[] = {</i><br>
+><i> >                 .driver_data = (kernel_ulong_t) &mhi_quectel_em1xx_info },</i><br>
+><i> >         { PCI_DEVICE(0x1eac, 0x1002), /* EM160R-GL (sdx24) */</i><br>
+><i> >                 .driver_data = (kernel_ulong_t) &mhi_quectel_em1xx_info },</i><br>
+><i> > +       { PCI_DEVICE(PCI_VENDOR_ID_FOXCONN, 0xe0ab), /* T99W175 (sdx55) */</i><br>
+><i> > +               .driver_data = (kernel_ulong_t) &mhi_foxconn_sdx55_info },</i><br>
+><i> > +       { PCI_DEVICE(PCI_VENDOR_ID_FOXCONN, 0xe0b2), /* T99W175 (sdx55) */</i><br>
+><i> > +               .driver_data = (kernel_ulong_t) &mhi_foxconn_sdx55_info },</i><br>
+><i> > +       { PCI_DEVICE(PCI_VENDOR_ID_FOXCONN, 0xe0b3), /* T99W175 (sdx55) */</i><br>
+><i> > +               .driver_data = (kernel_ulong_t) &mhi_foxconn_sdx55_info },</i><br>
+><i> > +       /* DW5930e (sdx55), With eSIM, It's also T99W175 */</i><br>
+><i> > +       { PCI_DEVICE(PCI_VENDOR_ID_FOXCONN, 0xe0b0),</i><br>
+><i> > +               .driver_data = (kernel_ulong_t) &mhi_foxconn_sdx55_info },</i><br>
+><i> > +       /* DW5930e (sdx55), Non-eSIM, It's also T99W175 */</i><br>
+><i> > +       { PCI_DEVICE(PCI_VENDOR_ID_FOXCONN, 0xe0b1),</i><br>
+><i> > +               .driver_data = (kernel_ulong_t) &mhi_foxconn_sdx55_info },</i><br>
+><i> >         {  }</i><br>
+><i> >  };</i><br>
+><i> >  MODULE_DEVICE_TABLE(pci, mhi_pci_id_table);</i><br>
+><i> > --</i><br>
+><i> > 2.25.1</i><br>
+><i> ></i><br>
+<br>
+<br>
+

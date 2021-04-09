@@ -1,0 +1,21 @@
+<br>
+On 4/8/21 8:27 AM, Jethro Beekman wrote:<br>
+><i> But the native “executable format” for SGX is very clearly defined in</i><br>
+><i> the Intel SDM as a specific sequence of ECREATE, EADD, EEXTEND and</i><br>
+><i> EINIT calls. It's that sequence that's used for loading the enclave</i><br>
+><i> and it's that sequence that's used for code signing. So when I say</i><br>
+><i> save space I mean save space in the native format.</i><br>
+><i> </i><br>
+><i> Not EEXTENDing unnecessarily also reduces enclave load time if</i><br>
+><i> you're looking for additional arguments.</i><br>
+I look forward to all of this being clearly explained in your resubmission.<br>
+<br>
+><i> SGX defines lots of things and you may not see the use case for all</i><br>
+><i> of this immediately. No one has a usecase for creating enclaves with</i><br>
+><i> SECS.SSAFRAMESIZE = 1000 or TCS.NSSA = 3. Why did you not demand</i><br>
+><i> checks for this in the ECREATE/EADD ioctls?</i><br>
+There's a difference between adding code to support a feature and adding<br>
+code to *RESTRICT* use of a feature.<br>
+<br>
+<br>
+

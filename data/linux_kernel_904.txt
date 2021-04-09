@@ -1,0 +1,67 @@
+
+On 08.04.21 12:27, David Hildenbrand wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+On 08.04.21 12:20, Arnd Bergmann wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+On Thu, Apr 8, 2021 at 11:22 AM David Hildenbrand <david@xxxxxxxxxx> wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+<br>
+Random drivers should not override a user configuration of core knobs<br>
+(e.g., CONFIG_DMA_CMA=n). Use "imply" instead, to still respect<br>
+dependencies and manual overrides.<br>
+<br>
+"This is similar to "select" as it enforces a lower limit on another<br>
+   symbol except that the "implied" symbol's value may still be set to n<br>
+   from a direct dependency or with a visible prompt."<br>
+<br>
+Implying DRM_CMA should be sufficient, as that depends on CMA.<br>
+<br>
+Note: If this is a real dependency, we should use "depends on DMA_CMA"<br>
+instead -  but I assume the driver can work without CMA just fine --<br>
+esp. when we wouldn't have HAVE_DMA_CONTIGUOUS right now.<br>
+</blockquote>
+<br>
+'imply' is almost never the right solution, and it tends to cause more<br>
+problems than it solves.<br>
+</blockquote>
+<br>
+I thought that was the case with "select" :)<br>
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+<br>
+In particular, it does not prevent a configuration with 'DRM_CMA=m'<br>
+</blockquote>
+<br>
+I assume you meant "DRM_CMA=n" ? DRM_CMA cannot be built as a module.<br>
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+and 'DRMA_ASPEED_GFX=y', or any build failures from such<br>
+a configuration.<br>
+</blockquote>
+<br>
+I don't follow. "DRM_CMA=n" and 'DRMA_ASPEED_GFX=y' is supposed to work<br>
+just fine (e.g., without HAVE_DMA_CONTIGUOUS) or what am I missing?<br>
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+<br>
+If you want this kind of soft dependency, you need<br>
+'depends on DRM_CMA || !DRM_CMA'.<br>
+</blockquote>
+<br>
+Seriously? I think the point of imply is "please enable if possible and<br>
+not prevented by someone else". Your example looks more like a NOP - no?<br>
+Or will it have the same effect?<br>
+</blockquote>
+<br>
+I just tried (remove CONFIG_DMA_CMA from .config followed by make) and 
+the default will be set to "N" (when querying the user). So it indeed 
+looks like a NOP - unless I am missing something.
+<br>
+<br>
+--<br>
+Thanks,<br>
+<br>
+David / dhildenb<br>
+<br>
+<br>
+

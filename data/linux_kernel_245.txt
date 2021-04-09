@@ -1,0 +1,56 @@
+flush_dcache_icache_hugepage() is a static function, with<br>
+only one caller. That caller calls it when PageCompound() is true,<br>
+so bugging on !PageCompound() is useless if we can trust the<br>
+compiler a little. Remove the BUG_ON(!PageCompound()).<br>
+<br>
+The number of elements of a page won't change over time, but<br>
+GCC doesn't know about it, so it gets the value at every iteration.<br>
+<br>
+To avoid that, call compound_nr() outside the loop and save it in<br>
+a local variable.<br>
+<br>
+Whether the page is a HIGHMEM page or not doesn't change over time.<br>
+<br>
+But GCC doesn't know it so it does the test on every iteration.<br>
+<br>
+Do the test outside the loop.<br>
+<br>
+When the page is not a HIGHMEM page, page_address() will fallback on<br>
+lowmem_page_address(), so call lowmem_page_address() directly and<br>
+don't suffer the call to page_address() on every iteration.<br>
+<br>
+Signed-off-by: Christophe Leroy <christophe.leroy@xxxxxxxxxx><br>
+---<br>
+ arch/powerpc/mm/cacheflush.c | 12 ++++++------<br>
+ 1 file changed, 6 insertions(+), 6 deletions(-)<br>
+<br>
+diff --git a/arch/powerpc/mm/cacheflush.c b/arch/powerpc/mm/cacheflush.c<br>
+index 811045c50d82..3268a3e55c3f 100644<br>
+--- a/arch/powerpc/mm/cacheflush.c<br>
++++ b/arch/powerpc/mm/cacheflush.c<br>
+@@ -162,14 +162,14 @@ static void __flush_dcache_icache(void *p)<br>
+ static void flush_dcache_icache_hugepage(struct page *page)<br>
+ {<br>
+ 	int i;<br>
++	int nr = compound_nr(page);<br>
+ 	void *start;<br>
+ <br>
+-	BUG_ON(!PageCompound(page));<br>
+-<br>
+-	for (i = 0; i < compound_nr(page); i++) {<br>
+-		if (!PageHighMem(page)) {<br>
+-			__flush_dcache_icache(page_address(page+i));<br>
+-		} else {<br>
++	if (!PageHighMem(page)) {<br>
++		for (i = 0; i < nr; i++)<br>
++			__flush_dcache_icache(lowmem_page_address(page + i));<br>
++	} else {<br>
++		for (i = 0; i < nr; i++) {<br>
+ 			start = kmap_atomic(page+i);<br>
+ 			__flush_dcache_icache(start);<br>
+ 			kunmap_atomic(start);<br>
+-- <br>
+2.25.0<br>
+<br>
+<br>
+

@@ -1,0 +1,95 @@
+On Thu, Apr 08, 2021 at 02:50:40PM +0200, Thierry Reding wrote:<br>
+><i> On Wed, Apr 07, 2021 at 11:34:03PM +0200, Uwe Kleine-König wrote:</i><br>
+><i> > On Wed, Apr 07, 2021 at 10:21:10PM +0200, Clemens Gruber wrote:</i><br>
+><i> > > On Wed, Apr 07, 2021 at 07:46:58AM +0200, Uwe Kleine-König wrote:</i><br>
+><i> > > > On Tue, Apr 06, 2021 at 06:41:37PM +0200, Clemens Gruber wrote:</i><br>
+><i> > > > > If the flag PWM_STAGGERING_ALLOWED is set on a channel, the PWM driver</i><br>
+><i> > > > > may (if supported by the HW) delay the ON time of the channel relative</i><br>
+><i> > > > > to the channel number.</i><br>
+><i> > > > > This does not alter the duty cycle ratio and is only relevant for PWM</i><br>
+><i> > > > > chips with less prescalers than channels, which would otherwise assert</i><br>
+><i> > > > > multiple or even all enabled channels at the same time.</i><br>
+><i> > > > > </i><br>
+><i> > > > > If this feature is supported by the driver and the flag is set on</i><br>
+><i> > > > > multiple channels, their ON times are spread out to improve EMI and</i><br>
+><i> > > > > reduce current spikes.</i><br>
+><i> > > > </i><br>
+><i> > > > As said in reply to patch 4/8 already: I don't like this idea and</i><br>
+><i> > > > think this should be made explicit using a new offset member in struct</i><br>
+><i> > > > pwm_state instead. That's because I think that the wave form a PWM</i><br>
+><i> > > > generates should be (completely) defined by the consumer and not by a</i><br>
+><i> > > > mix between consumer and device tree. Also the consumer has no (sane)</i><br>
+><i> > > > way to determine if staggering is in use or not.</i><br>
+><i> > > </i><br>
+><i> > > I don't think offsets are ideal for this feature: It makes it more</i><br>
+><i> > > cumbersome for the user, because he has to allocate the offsets</i><br>
+><i> > > himself instead of a simple on/off switch.</i><br>
+><i> > > The envisioned usecase is: "I want better EMI behavior and don't care</i><br>
+><i> > > about the individual channels no longer being asserted at the exact same</i><br>
+><i> > > time".</i><br>
+><i> > </i><br>
+><i> > The formal thing is: "I want better EMI behavior and don't care if</i><br>
+><i> > periods start with the active phase, it might be anywhere, even over a</i><br>
+><i> > period boundary." Being asserted at the exact same time is just a detail</i><br>
+><i> > for the pca9685.</i><br>
+><i> >  </i><br>
+><i> > > > One side effect (at least for the pca9685) is that when programming a</i><br>
+><i> > > > new duty cycle it takes a bit longer than without staggering until the</i><br>
+><i> > > > new setting is active. </i><br>
+><i> > > </i><br>
+><i> > > Yes, but it can be turned off if this is a problem, now even per-PWM.</i><br>
+><i> > </i><br>
+><i> > Yes and that is a good thing. (BTW: I'd call it per-PWM-consumer, but</i><br>
+><i> > details.)</i><br>
+><i> > </i><br>
+><i> > > > Another objection I have is that we already have some technical debt</i><br>
+><i> > > > because there are already two different types of drivers (.apply vs</i><br>
+><i> > > > .config+.set_polarity+.enable+.disable) and I would like to unify this</i><br>
+><i> > > > first before introducing new stuff.</i><br>
+><i> > > </i><br>
+><i> > > But there is already PWM_POLARITY_INVERTED, which can be set in the DT.</i><br>
+><i> > > I am only adding another flag.</i><br>
+><i> > </i><br>
+><i> > I understand your reasoning, and similar to "This diplay backlight needs</i><br>
+><i> > an inverted PWM (as a low duty-cycle results in a high brightness" this</i><br>
+><i> > semantic "This consumer doesn't care if the active cycle is anywhere in</i><br>
+><i> > the period". Hmm, maybe I just have to think about it a bit more to</i><br>
+><i> > become friends with that thought.</i><br>
+><i> </i><br>
+><i> Yes, I think that's basically what this is saying. I think we're perhaps</i><br>
+><i> getting hung up on the terminology here. PWM_STAGGERING_ALLOWED gives</i><br>
+><i> the impression that we're dealing with some provider-specific feature,</i><br>
+><i> whereas what we really want to express is that the PWM doesn't care</i><br>
+><i> exactly when the active cycle starts and based on that a provider that</i><br>
+><i> can support it may optimize the EMI behavior.</i><br>
+><i> </i><br>
+><i> Maybe we can find a better name for this? Ultimately what this means is</i><br>
+><i> that the consumer is primarily interested in the power output of the PWM</i><br>
+><i> rather than the exact shape of the signal. So perhaps something like</i><br>
+><i> PWM_USAGE_POWER would be more appropriate.</i><br>
+<br>
+Yes, although it would then no longer be obvious that this feature leads<br>
+to improved EMI behavior, as long as we mention that in the docs, I<br>
+think it's a good idea<br>
+<br>
+Maybe document it as follows?<br>
+PWM_USAGE_POWER - Allow the driver to delay the start of the cycle<br>
+for EMI improvements, as long as the power output stays the same<br>
+<br>
+><i> </i><br>
+><i> Come to think of it, a flag like that might even be useful to implement</i><br>
+><i> the common case of emulating inverted polarity with reversing the duty</i><br>
+><i> cycle. That is, if PWM_USAGE_POWER | PWM_POLARITY_INVERSED was specified</i><br>
+><i> and the PWM provider did not support polarity inversion, the inversion</i><br>
+><i> could still be implemented using emulation. Currently we push that logic</i><br>
+><i> down into consumers, but this could be a way to bring that up into</i><br>
+><i> drivers, or perhaps even the core.</i><br>
+<br>
+Interesting, but that would be left for another series in the future, I<br>
+assume?<br>
+<br>
+Thanks,<br>
+Clemens<br>
+<br>
+<br>
+

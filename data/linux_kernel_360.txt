@@ -1,0 +1,151 @@
+The RSA output must be processed as per the EMSA-PSS-VERIFY operation<br>
+from RFC8017, which forms the core of the PSS signature verification.<br>
+<br>
+Implement the verification callback, which operates on the RSA output<br>
+buffer.<br>
+<br>
+Reference: <a  rel="nofollow" href="https://tools.ietf.org/html/rfc8017#section-9.1.2">https://tools.ietf.org/html/rfc8017#section-9.1.2</a><br>
+Signed-off-by: Varad Gautam <varad.gautam@xxxxxxxx><br>
+---<br>
+v2: Allow mgf_hash_algo to be different from digest hash algorithm.<br>
+<br>
+ crypto/rsa-psspad.c | 114 +++++++++++++++++++++++++++++++++++++++++++-<br>
+ 1 file changed, 113 insertions(+), 1 deletion(-)<br>
+<br>
+diff --git a/crypto/rsa-psspad.c b/crypto/rsa-psspad.c<br>
+index 4ba4d69f6ce17..87e90479a4fa7 100644<br>
+--- a/crypto/rsa-psspad.c<br>
++++ b/crypto/rsa-psspad.c<br>
+@@ -8,6 +8,7 @@<br>
+ <br>
+ #include <crypto/hash.h><br>
+ #include <crypto/internal/akcipher.h><br>
++#include <crypto/internal/rsa.h><br>
+ #include <crypto/internal/rsa-common.h><br>
+ #include <crypto/public_key.h><br>
+ <br>
+@@ -107,7 +108,118 @@ static int pkcs1_mgf1(u8 *seed, unsigned int seed_len,<br>
+ <br>
+ static int psspad_verify_complete(struct akcipher_request *req, int err)<br>
+ {<br>
+-	return -EOPNOTSUPP;<br>
++	struct crypto_akcipher *tfm = crypto_akcipher_reqtfm(req);<br>
++	struct rsapad_tfm_ctx *ctx = akcipher_tfm_ctx(tfm);<br>
++	struct rsapad_akciper_req_ctx *req_ctx = akcipher_request_ctx(req);<br>
++	struct akcipher_instance *inst = akcipher_alg_instance(tfm);<br>
++	struct rsapad_inst_ctx *ictx = akcipher_instance_ctx(inst);<br>
++	const struct rsa_asn1_template *digest_info = ictx->digest_info;<br>
++	struct crypto_shash *hash_tfm = NULL;<br>
++	struct shash_desc *desc = NULL;<br>
++	struct rsa_mpi_key *pkey = akcipher_tfm_ctx(ctx->child);<br>
++<br>
++	u8 *em, *h, *salt, *maskeddb;<br>
++	unsigned int em_len, em_bits, h_len, s_len, maskeddb_len;<br>
++	u8 *m_hash, *db_mask, *db, *h_;<br>
++	static u8 zeroes[8] = { 0 };<br>
++	unsigned int pos;<br>
++<br>
++	if (err)<br>
++		goto out;<br>
++<br>
++	err = -EINVAL;<br>
++	if (!digest_info)<br>
++		goto out;<br>
++<br>
++	em = req_ctx->out_buf;<br>
++	em_len = ctx->key_size;<br>
++	em_bits = mpi_get_nbits(pkey->n) - 1;<br>
++	if ((em_bits & 0x7) == 0) {<br>
++		em_len--;<br>
++		em++;<br>
++	}<br>
++<br>
++	h_len = req->dst_len;<br>
++	s_len = ictx->salt_len;<br>
++<br>
++	if (em_len < h_len + s_len + 2)<br>
++		goto out;<br>
++<br>
++	if (em[em_len - 1] != 0xbc)<br>
++		goto out;<br>
++<br>
++	maskeddb = em;<br>
++	maskeddb_len = em_len - h_len - 1;<br>
++	h = em + maskeddb_len;<br>
++<br>
++	if (em[0] & ~((u8) 0xff >> (8 * em_len - em_bits)))<br>
++		goto out;<br>
++<br>
++	db_mask = kzalloc(maskeddb_len, GFP_KERNEL);<br>
++	if (!db_mask) {<br>
++		err = -ENOMEM;<br>
++		goto out;<br>
++	}<br>
++<br>
++	err = psspad_setup_shash(&hash_tfm, &desc, ictx->mgf_hash_algo);<br>
++	if (err < 0)<br>
++		goto out_db_mask;<br>
++<br>
++	err = pkcs1_mgf1(h, h_len, desc, db_mask, maskeddb_len);<br>
++	if (err < 0)<br>
++		goto out_shash;<br>
++<br>
++	for (pos = 0; pos < maskeddb_len; pos++)<br>
++		maskeddb[pos] ^= db_mask[pos];<br>
++	db = maskeddb;<br>
++<br>
++	db[0] &= ((u8) 0xff >> (8 * em_len - em_bits));<br>
++<br>
++	err = -EINVAL;<br>
++	for (pos = 0; pos < em_len - h_len - s_len - 2; pos++) {<br>
++		if (db[pos] != 0)<br>
++			goto out_shash;<br>
++	}<br>
++	if (db[pos] != 0x01)<br>
++		goto out_shash;<br>
++<br>
++	salt = db + (maskeddb_len - s_len);<br>
++<br>
++	m_hash = req_ctx->out_buf + ctx->key_size;<br>
++	sg_pcopy_to_buffer(req->src,<br>
++			   sg_nents_for_len(req->src, req->src_len + req->dst_len),<br>
++			   m_hash,<br>
++			   req->dst_len, ctx->key_size);<br>
++<br>
++	if (strcmp(ictx->mgf_hash_algo, digest_info->name) != 0) {<br>
++		psspad_free_shash(hash_tfm, desc);<br>
++		err = psspad_setup_shash(&hash_tfm, &desc, digest_info->name);<br>
++		if (err < 0)<br>
++			goto out_db_mask;<br>
++	}<br>
++<br>
++	err = crypto_shash_init(desc);<br>
++	if (!err)<br>
++		err = crypto_shash_update(desc, zeroes, 8);<br>
++	if (!err)<br>
++		err = crypto_shash_update(desc, m_hash, h_len);<br>
++	if (!err)<br>
++		err = crypto_shash_finup(desc, salt, s_len, m_hash);<br>
++	if (err < 0)<br>
++		goto out_shash;<br>
++<br>
++	h_ = m_hash;<br>
++<br>
++	if (memcmp(h_, h, h_len) != 0)<br>
++		err = -EKEYREJECTED;<br>
++<br>
++out_shash:<br>
++	psspad_free_shash(hash_tfm, desc);<br>
++out_db_mask:<br>
++	kfree(db_mask);<br>
++out:<br>
++	kfree_sensitive(req_ctx->out_buf);<br>
++	return err;<br>
+ }<br>
+ <br>
+ static void psspad_verify_complete_cb(struct crypto_async_request *child_async_req,<br>
+-- <br>
+2.30.2<br>
+<br>
+<br>
+

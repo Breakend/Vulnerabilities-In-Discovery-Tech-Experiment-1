@@ -1,0 +1,47 @@
+TIOCSSERIAL is a horrid, underspecified, legacy interface which for most<br>
+serial devices is only useful for setting the close_delay and<br>
+closing_wait parameters.<br>
+<br>
+The xmit_fifo_size parameter could be used to set the hardware transmit<br>
+fifo size of a legacy UART when it could not be detected, but the<br>
+interface is limited to eight bits and should be left unset when it is<br>
+not used.<br>
+<br>
+Similarly, baud_base could be used to set the UART base clock when it<br>
+could not be detected, but might as well be left unset when it is not<br>
+known (which is the case for CDC).<br>
+<br>
+Fix the cdc-acm TIOCGSERIAL implementation by dropping its custom<br>
+interpretation of the unused xmit_fifo_size and baud_base fields, which<br>
+overflowed the former with the URB buffer size and set the latter to the<br>
+current line speed. Also return the port line number, which is the only<br>
+other value used besides the close parameters.<br>
+<br>
+Note that the current line speed can still be retrieved through the<br>
+standard termios interfaces.<br>
+<br>
+Fixes: 18c75720e667 ("USB: allow users to run setserial with cdc-acm")<br>
+Signed-off-by: Johan Hovold <johan@xxxxxxxxxx><br>
+---<br>
+ drivers/usb/class/cdc-acm.c | 3 +--<br>
+ 1 file changed, 1 insertion(+), 2 deletions(-)<br>
+<br>
+diff --git a/drivers/usb/class/cdc-acm.c b/drivers/usb/class/cdc-acm.c<br>
+index 43e31dad4831..b74713518b3a 100644<br>
+--- a/drivers/usb/class/cdc-acm.c<br>
++++ b/drivers/usb/class/cdc-acm.c<br>
+@@ -929,8 +929,7 @@ static int get_serial_info(struct tty_struct *tty, struct serial_struct *ss)<br>
+ {<br>
+ 	struct acm *acm = tty->driver_data;<br>
+ <br>
+-	ss->xmit_fifo_size = acm->writesize;<br>
+-	ss->baud_base = le32_to_cpu(acm->line.dwDTERate);<br>
++	ss->line = acm->minor;<br>
+ 	ss->close_delay	= jiffies_to_msecs(acm->port.close_delay) / 10;<br>
+ 	ss->closing_wait = acm->port.closing_wait == ASYNC_CLOSING_WAIT_NONE ?<br>
+ 				ASYNC_CLOSING_WAIT_NONE :<br>
+-- <br>
+2.26.3<br>
+<br>
+<br>
+

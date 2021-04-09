@@ -1,0 +1,61 @@
+On Wed, Apr 07, 2021 at 06:18:11PM +0200, Borislav Petkov wrote:<br>
+><i> On Wed, Apr 07, 2021 at 07:03:47PM +0300, Jarkko Sakkinen wrote:</i><br>
+><i> > > Which leads to my question: what is sgx_nr_free_pages supposed to denote?</i><br>
+><i> > > </i><br>
+><i> > > Because I understand the callpath</i><br>
+><i> > > </i><br>
+><i> > > sgx_page_cache_init</i><br>
+><i> > > ...</i><br>
+><i> > > for (i = 0; i < ARRAY_SIZE(sgx_epc_sections); i++) {</i><br>
+><i> > > 	...</i><br>
+><i> > > 	sgx_setup_epc_section</i><br>
+><i> > > 	...</i><br>
+><i> > > 		sgx_nr_free_pages += nr_pages;</i><br>
+><i> > > </i><br>
+><i> > > as adding the number of pages of each new EPC section to the total</i><br>
+><i> > > number of the free pages. Unless that variable accounts something else.</i><br>
+><i> > > </i><br>
+><i> > > So what does this variable actually mean?</i><br>
+><i> > </i><br>
+><i> > It's used for only to trigger watermark for reclaiming. I.e. causes</i><br>
+><i> > ksgxd to trigger. And it gives the number of total free EPC pages in</i><br>
+><i> > all NUMA nodes.</i><br>
+><i> </i><br>
+><i> So the callpath I laid out above is adding the number of pages of each</i><br>
+><i> section to the total free EPC pages number.</i><br>
+><i> </i><br>
+><i> Why is that wrong and why is your patch needed?</i><br>
+ <br>
+As part of "x86/sgx: Replace section->init_laundry_list with sgx_dirty_page_list"<br>
+pages are processed from a global list by ksgxd.<br>
+<br>
+This in turn introduces change to sanitization:<br>
+<br>
+-		if (!ret)<br>
+-			list_move(&page->list, &section->page_list);<br>
+-		else<br>
++		if (!ret) {<br>
++			/*<br>
++			 * page is now sanitized.  Make it available via the SGX<br>
++			 * page allocator:<br>
++			 */<br>
++			list_del(&page->list);<br>
++			sgx_free_epc_page(page);<br>
++		} else {<br>
++			/* The page is not yet clean - move to the dirty list. */<br>
+ 			list_move_tail(&page->list, &dirty);<br>
+-<br>
+-		spin_unlock(&section->lock);<br>
++		}<br>
+<br>
+This is done for the reason that it is best to keep the logic to assign<br>
+available-for-use EPC pages to correct NUMA lists in a single location.<br>
+<br>
+The regression is that the sgx_nr_free_pages is also incremented by<br>
+sgx_free_epc_pages(), and thus it ends up having double the number of<br>
+pages available.<br>
+<br>
+/Jarkko<br>
+<br>
+<br>
+

@@ -1,0 +1,29 @@
+Fix below warnings:<br>
+drivers/message/fusion/mptctl.c: In function ‘mptctl_do_taskmgmt’:<br>
+drivers/message/fusion/mptctl.c:324:17: warning: variable ‘time_count’ set but not used [-Wunused-but-set-variable]<br>
+  324 |  unsigned long  time_count;<br>
+      |                 ^~~~~~~~~~<br>
+drivers/message/fusion/mptctl.c: In function ‘mptctl_gettargetinfo’:<br>
+drivers/message/fusion/mptctl.c:1372:7: warning: variable ‘port’ set but not used [-Wunused-but-set-variable]<br>
+ 1372 |  u8   port;<br>
+      |       ^~~~<br>
+drivers/message/fusion/mptctl.c: In function ‘mptctl_hp_hostinfo’:<br>
+drivers/message/fusion/mptctl.c:2337:8: warning: variable ‘retval’ set but not used [-Wunused-but-set-variable]<br>
+ 2337 |  int   retval;<br>
+      |        ^~~~~~<br>
+<br>
+<br>
+Zhen Lei (3):<br>
+  scsi: mptfusion: Remove unused local variable 'time_count'<br>
+  scsi: mptfusion: Remove unused local variable 'port'<br>
+  scsi: mptfusion: Fix error return code of mptctl_hp_hostinfo()<br>
+<br>
+ drivers/message/fusion/mptctl.c | 28 ++++++++++++----------------<br>
+ 1 file changed, 12 insertions(+), 16 deletions(-)<br>
+<br>
+-- <br>
+2.21.1<br>
+<br>
+<br>
+<br>
+

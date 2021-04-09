@@ -1,0 +1,10 @@
+On Tue, Apr 06, 2021, Keqian Zhu wrote:<br>
+><i> kvm_mmu_slot_largepage_remove_write_access() is decared but not used,</i><br>
+><i> just remove it.</i><br>
+><i> </i><br>
+><i> Signed-off-by: Keqian Zhu <zhukeqian1@xxxxxxxxxx></i><br>
+<br>
+Reviewed-by: Sean Christopherson <seanjc@xxxxxxxxxx><br>
+<br>
+<br>
+

@@ -1,0 +1,40 @@
+On Wed, Apr 07, 2021 at 07:05:22PM +0200, Martin Kaiser wrote:<br>
+><i> usb_ops_linux.h contains a couple of macros to make functions usable as</i><br>
+><i> urb completion callbacks. Most of them are unused and can be removed.</i><br>
+><i> </i><br>
+><i> Signed-off-by: Martin Kaiser <martin@xxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  drivers/staging/rtl8188eu/include/usb_ops_linux.h | 8 --------</i><br>
+><i>  1 file changed, 8 deletions(-)</i><br>
+><i> </i><br>
+><i> diff --git a/drivers/staging/rtl8188eu/include/usb_ops_linux.h b/drivers/staging/rtl8188eu/include/usb_ops_linux.h</i><br>
+><i> index 4e0e48cb5c8e..1a0b38de5027 100644</i><br>
+><i> --- a/drivers/staging/rtl8188eu/include/usb_ops_linux.h</i><br>
+><i> +++ b/drivers/staging/rtl8188eu/include/usb_ops_linux.h</i><br>
+><i> @@ -23,18 +23,10 @@</i><br>
+><i>  #define USB_HIGH_SPEED_BULK_SIZE	512</i><br>
+><i>  #define USB_FULL_SPEED_BULK_SIZE	64</i><br>
+><i>  </i><br>
+><i> -#define _usbctrl_vendorreq_async_callback(urb, regs)	\</i><br>
+><i> -	_usbctrl_vendorreq_async_callback(urb)</i><br>
+><i> -#define usb_bulkout_zero_complete(purb, regs)		\</i><br>
+><i> -	usb_bulkout_zero_complete(purb)</i><br>
+><i> -#define usb_write_mem_complete(purb, regs)		\</i><br>
+><i> -	usb_write_mem_complete(purb)</i><br>
+><i>  #define usb_write_port_complete(purb, regs)		\</i><br>
+><i>  	usb_write_port_complete(purb)</i><br>
+><i>  #define usb_read_port_complete(purb, regs)		\</i><br>
+><i>  	usb_read_port_complete(purb)</i><br>
+><i> -#define usb_read_interrupt_complete(purb, regs)		\</i><br>
+><i> -	usb_read_interrupt_complete(purb)</i><br>
+<br>
+Wow, that's there for a really old kernel version and should not be<br>
+needed anymore at all.  I'll take this, but please remove the other ones<br>
+here, they are not necessary.<br>
+<br>
+thanks,<br>
+<br>
+greg k-h<br>
+<br>
+<br>
+

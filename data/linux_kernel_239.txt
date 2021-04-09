@@ -1,0 +1,54 @@
+Turns out, the default setting of attr.aux_watermark to half of the total<br>
+buffer size is not very useful, especially with smaller buffers. The<br>
+problem is that, after half of the buffer is filled up, the kernel updates<br>
+->aux_head and sets up the next "transaction", while observing that<br>
+->aux_tail is still zero (as userspace haven't had the chance to update<br>
+it), meaning that the trace will have to stop at the end of this second<br>
+"transaction". This means, for example, that the second PERF_RECORD_AUX in<br>
+every trace comes with TRUNCATED flag set.<br>
+<br>
+Setting attr.aux_watermark to quarter of the buffer gives enough space for<br>
+the ->aux_tail update to be observed and prevents the data loss.<br>
+<br>
+The obligatory before/after showcase:<br>
+<br>
+><i> # perf_before record -e intel_pt//u -m,8 uname</i><br>
+><i> Linux</i><br>
+><i> [ perf record: Woken up 6 times to write data ]</i><br>
+><i> Warning:</i><br>
+><i> AUX data lost 4 times out of 10!</i><br>
+><i></i><br>
+><i> [ perf record: Captured and wrote 0.099 MB perf.data ]</i><br>
+><i> # perf record -e intel_pt//u -m,8 uname</i><br>
+><i> Linux</i><br>
+><i> [ perf record: Woken up 4 times to write data ]</i><br>
+><i> [ perf record: Captured and wrote 0.039 MB perf.data ]</i><br>
+<br>
+The effect is still visible with large workloads and large buffers,<br>
+although less pronounced.<br>
+<br>
+Signed-off-by: Alexander Shishkin <alexander.shishkin@xxxxxxxxxxxxxxx><br>
+---<br>
+ tools/perf/arch/x86/util/intel-pt.c | 4 ++++<br>
+ 1 file changed, 4 insertions(+)<br>
+<br>
+diff --git a/tools/perf/arch/x86/util/intel-pt.c b/tools/perf/arch/x86/util/intel-pt.c<br>
+index a6420c647959..d00707faf547 100644<br>
+--- a/tools/perf/arch/x86/util/intel-pt.c<br>
++++ b/tools/perf/arch/x86/util/intel-pt.c<br>
+@@ -776,6 +776,10 @@ static int intel_pt_recording_options(struct auxtrace_record *itr,<br>
+ 		}<br>
+ 	}<br>
+ <br>
++	if (opts->full_auxtrace)<br>
++		intel_pt_evsel->core.attr.aux_watermark =<br>
++		       opts->auxtrace_mmap_pages / 4 * page_size;<br>
++<br>
+ 	intel_pt_parse_terms(intel_pt_pmu->name, &intel_pt_pmu->format,<br>
+ 			     "tsc", &tsc_bit);<br>
+ <br>
+-- <br>
+2.30.2<br>
+<br>
+<br>
+

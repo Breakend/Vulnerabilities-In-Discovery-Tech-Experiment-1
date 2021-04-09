@@ -1,0 +1,37 @@
+pm_runtime_get_sync() will increment pm usage counter even it failed.<br>
+Forgetting to putting operation will result in reference leak here.<br>
+Fix it by replacing it with pm_runtime_resume_and_get() to keep usage<br>
+counter balanced.<br>
+<br>
+Signed-off-by: Pu Lehui <pulehui@xxxxxxxxxx><br>
+---<br>
+ drivers/i2c/busses/i2c-cadence.c | 4 ++--<br>
+ 1 file changed, 2 insertions(+), 2 deletions(-)<br>
+<br>
+diff --git a/drivers/i2c/busses/i2c-cadence.c b/drivers/i2c/busses/i2c-cadence.c<br>
+index e4b7f2a951ad..e8eae8725900 100644<br>
+--- a/drivers/i2c/busses/i2c-cadence.c<br>
++++ b/drivers/i2c/busses/i2c-cadence.c<br>
+@@ -789,7 +789,7 @@ static int cdns_i2c_master_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,<br>
+ 	bool change_role = false;<br>
+ #endif<br>
+ <br>
+-	ret = pm_runtime_get_sync(id->dev);<br>
++	ret = pm_runtime_resume_and_get(id->dev);<br>
+ 	if (ret < 0)<br>
+ 		return ret;<br>
+ <br>
+@@ -911,7 +911,7 @@ static int cdns_reg_slave(struct i2c_client *slave)<br>
+ 	if (slave->flags & I2C_CLIENT_TEN)<br>
+ 		return -EAFNOSUPPORT;<br>
+ <br>
+-	ret = pm_runtime_get_sync(id->dev);<br>
++	ret = pm_runtime_resume_and_get(id->dev);<br>
+ 	if (ret < 0)<br>
+ 		return ret;<br>
+ <br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+

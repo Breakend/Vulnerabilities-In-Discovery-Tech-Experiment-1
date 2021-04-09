@@ -1,0 +1,57 @@
+As with other ioctls (such as PERF_EVENT_IOC_{ENABLE,DISABLE}), fix up<br>
+handling of PERF_EVENT_IOC_MODIFY_ATTRIBUTES to also apply to children.<br>
+<br>
+Suggested-by: Dmitry Vyukov <dvyukov@xxxxxxxxxx><br>
+Reviewed-by: Dmitry Vyukov <dvyukov@xxxxxxxxxx><br>
+Signed-off-by: Marco Elver <elver@xxxxxxxxxx><br>
+---<br>
+ kernel/events/core.c | 22 +++++++++++++++++++++-<br>
+ 1 file changed, 21 insertions(+), 1 deletion(-)<br>
+<br>
+diff --git a/kernel/events/core.c b/kernel/events/core.c<br>
+index e77294c7e654..a9a0a46909af 100644<br>
+--- a/kernel/events/core.c<br>
++++ b/kernel/events/core.c<br>
+@@ -3199,16 +3199,36 @@ static int perf_event_modify_breakpoint(struct perf_event *bp,<br>
+ static int perf_event_modify_attr(struct perf_event *event,<br>
+ 				  struct perf_event_attr *attr)<br>
+ {<br>
++	int (*func)(struct perf_event *, struct perf_event_attr *);<br>
++	struct perf_event *child;<br>
++	int err;<br>
++<br>
+ 	if (event->attr.type != attr->type)<br>
+ 		return -EINVAL;<br>
+ <br>
+ 	switch (event->attr.type) {<br>
+ 	case PERF_TYPE_BREAKPOINT:<br>
+-		return perf_event_modify_breakpoint(event, attr);<br>
++		func = perf_event_modify_breakpoint;<br>
++		break;<br>
+ 	default:<br>
+ 		/* Place holder for future additions. */<br>
+ 		return -EOPNOTSUPP;<br>
+ 	}<br>
++<br>
++	WARN_ON_ONCE(event->ctx->parent_ctx);<br>
++<br>
++	mutex_lock(&event->child_mutex);<br>
++	err = func(event, attr);<br>
++	if (err)<br>
++		goto out;<br>
++	list_for_each_entry(child, &event->child_list, child_list) {<br>
++		err = func(child, attr);<br>
++		if (err)<br>
++			goto out;<br>
++	}<br>
++out:<br>
++	mutex_unlock(&event->child_mutex);<br>
++	return err;<br>
+ }<br>
+ <br>
+ static void ctx_sched_out(struct perf_event_context *ctx,<br>
+-- <br>
+2.31.0.208.g409f899ff0-goog<br>
+<br>
+<br>
+

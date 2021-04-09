@@ -1,0 +1,175 @@
+With the new helpers, i.e. xgpio_read_chan() / xgpio_write_chan(),<br>
+the code is easier to read and maintain. No functional changes<br>
+intended.<br>
+<br>
+Signed-off-by: Andy Shevchenko <andriy.shevchenko@xxxxxxxxxxxxxxx><br>
+---<br>
+ drivers/gpio/gpio-xilinx.c | 68 +++++++++++++++++++++-----------------<br>
+ 1 file changed, 37 insertions(+), 31 deletions(-)<br>
+<br>
+diff --git a/drivers/gpio/gpio-xilinx.c b/drivers/gpio/gpio-xilinx.c<br>
+index 136557e7dd3c..e6c78409ab3a 100644<br>
+--- a/drivers/gpio/gpio-xilinx.c<br>
++++ b/drivers/gpio/gpio-xilinx.c<br>
+@@ -23,7 +23,8 @@<br>
+ #define XGPIO_DATA_OFFSET   (0x0)	/* Data register  */<br>
+ #define XGPIO_TRI_OFFSET    (0x4)	/* I/O direction register  */<br>
+ <br>
+-#define XGPIO_CHANNEL_OFFSET	0x8<br>
++#define XGPIO_CHANNEL0_OFFSET	0x0<br>
++#define XGPIO_CHANNEL1_OFFSET	0x8<br>
+ <br>
+ #define XGPIO_GIER_OFFSET	0x11c /* Global Interrupt Enable */<br>
+ #define XGPIO_GIER_IE		BIT(31)<br>
+@@ -79,12 +80,26 @@ static inline int xgpio_index(struct xgpio_instance *chip, int gpio)<br>
+ 	return 0;<br>
+ }<br>
+ <br>
+-static inline int xgpio_regoffset(struct xgpio_instance *chip, int gpio)<br>
++static inline int xgpio_regoffset(struct xgpio_instance *chip, int ch)<br>
+ {<br>
+-	if (xgpio_index(chip, gpio))<br>
+-		return XGPIO_CHANNEL_OFFSET;<br>
++	switch (ch) {<br>
++	case 0:<br>
++		return XGPIO_CHANNEL0_OFFSET;<br>
++	case 1:<br>
++		return XGPIO_CHANNEL1_OFFSET;<br>
++	default:<br>
++		return -EINVAL;<br>
++	}<br>
++}<br>
+ <br>
+-	return 0;<br>
++static inline u32 xgpio_read_chan(struct xgpio_instance *chip, int reg, int ch)<br>
++{<br>
++	return xgpio_readreg(chip->regs + reg + xgpio_regoffset(chip, ch));<br>
++}<br>
++<br>
++static inline void xgpio_write_chan(struct xgpio_instance *chip, int reg, int ch, u32 v)<br>
++{<br>
++	xgpio_writereg(chip->regs + reg + xgpio_regoffset(chip, ch), v);<br>
+ }<br>
+ <br>
+ static inline int xgpio_offset(struct xgpio_instance *chip, int gpio)<br>
+@@ -109,12 +124,13 @@ static inline int xgpio_offset(struct xgpio_instance *chip, int gpio)<br>
+ static int xgpio_get(struct gpio_chip *gc, unsigned int gpio)<br>
+ {<br>
+ 	struct xgpio_instance *chip = gpiochip_get_data(gc);<br>
++	int index = xgpio_index(chip, gpio);<br>
++	int offset = xgpio_offset(chip, gpio);<br>
+ 	u32 val;<br>
+ <br>
+-	val = xgpio_readreg(chip->regs + XGPIO_DATA_OFFSET +<br>
+-			    xgpio_regoffset(chip, gpio));<br>
++	val = xgpio_read_chan(chip, XGPIO_DATA_OFFSET, index);<br>
+ <br>
+-	return !!(val & BIT(xgpio_offset(chip, gpio)));<br>
++	return !!(val & BIT(offset));<br>
+ }<br>
+ <br>
+ /**<br>
+@@ -141,8 +157,7 @@ static void xgpio_set(struct gpio_chip *gc, unsigned int gpio, int val)<br>
+ 	else<br>
+ 		chip->gpio_state[index] &= ~BIT(offset);<br>
+ <br>
+-	xgpio_writereg(chip->regs + XGPIO_DATA_OFFSET +<br>
+-		       xgpio_regoffset(chip, gpio), chip->gpio_state[index]);<br>
++	xgpio_write_chan(chip, XGPIO_DATA_OFFSET, index, chip->gpio_state[index]);<br>
+ <br>
+ 	spin_unlock_irqrestore(&chip->gpio_lock, flags);<br>
+ }<br>
+@@ -172,9 +187,8 @@ static void xgpio_set_multiple(struct gpio_chip *gc, unsigned long *mask,<br>
+ 			break;<br>
+ 		/* Once finished with an index write it out to the register */<br>
+ 		if (index !=  xgpio_index(chip, i)) {<br>
+-			xgpio_writereg(chip->regs + XGPIO_DATA_OFFSET +<br>
+-				       index * XGPIO_CHANNEL_OFFSET,<br>
+-				       chip->gpio_state[index]);<br>
++			xgpio_write_chan(chip, XGPIO_DATA_OFFSET, index,<br>
++					 chip->gpio_state[index]);<br>
+ 			spin_unlock_irqrestore(&chip->gpio_lock, flags);<br>
+ 			index =  xgpio_index(chip, i);<br>
+ 			spin_lock_irqsave(&chip->gpio_lock, flags);<br>
+@@ -188,8 +202,7 @@ static void xgpio_set_multiple(struct gpio_chip *gc, unsigned long *mask,<br>
+ 		}<br>
+ 	}<br>
+ <br>
+-	xgpio_writereg(chip->regs + XGPIO_DATA_OFFSET +<br>
+-		       index * XGPIO_CHANNEL_OFFSET, chip->gpio_state[index]);<br>
++	xgpio_write_chan(chip, XGPIO_DATA_OFFSET, index, chip->gpio_state[index]);<br>
+ <br>
+ 	spin_unlock_irqrestore(&chip->gpio_lock, flags);<br>
+ }<br>
+@@ -214,8 +227,7 @@ static int xgpio_dir_in(struct gpio_chip *gc, unsigned int gpio)<br>
+ <br>
+ 	/* Set the GPIO bit in shadow register and set direction as input */<br>
+ 	chip->gpio_dir[index] |= BIT(offset);<br>
+-	xgpio_writereg(chip->regs + XGPIO_TRI_OFFSET +<br>
+-		       xgpio_regoffset(chip, gpio), chip->gpio_dir[index]);<br>
++	xgpio_write_chan(chip, XGPIO_TRI_OFFSET, index, chip->gpio_dir[index]);<br>
+ <br>
+ 	spin_unlock_irqrestore(&chip->gpio_lock, flags);<br>
+ <br>
+@@ -248,13 +260,11 @@ static int xgpio_dir_out(struct gpio_chip *gc, unsigned int gpio, int val)<br>
+ 		chip->gpio_state[index] |= BIT(offset);<br>
+ 	else<br>
+ 		chip->gpio_state[index] &= ~BIT(offset);<br>
+-	xgpio_writereg(chip->regs + XGPIO_DATA_OFFSET +<br>
+-			xgpio_regoffset(chip, gpio), chip->gpio_state[index]);<br>
++	xgpio_write_chan(chip, XGPIO_DATA_OFFSET, index, chip->gpio_state[index]);<br>
+ <br>
+ 	/* Clear the GPIO bit in shadow register and set direction as output */<br>
+ 	chip->gpio_dir[index] &= ~BIT(offset);<br>
+-	xgpio_writereg(chip->regs + XGPIO_TRI_OFFSET +<br>
+-			xgpio_regoffset(chip, gpio), chip->gpio_dir[index]);<br>
++	xgpio_write_chan(chip, XGPIO_TRI_OFFSET, index, chip->gpio_dir[index]);<br>
+ <br>
+ 	spin_unlock_irqrestore(&chip->gpio_lock, flags);<br>
+ <br>
+@@ -267,16 +277,14 @@ static int xgpio_dir_out(struct gpio_chip *gc, unsigned int gpio, int val)<br>
+  */<br>
+ static void xgpio_save_regs(struct xgpio_instance *chip)<br>
+ {<br>
+-	xgpio_writereg(chip->regs + XGPIO_DATA_OFFSET,	chip->gpio_state[0]);<br>
+-	xgpio_writereg(chip->regs + XGPIO_TRI_OFFSET, chip->gpio_dir[0]);<br>
++	xgpio_write_chan(chip, XGPIO_DATA_OFFSET, 0, chip->gpio_state[0]);<br>
++	xgpio_write_chan(chip, XGPIO_TRI_OFFSET, 0, chip->gpio_dir[0]);<br>
+ <br>
+ 	if (!chip->gpio_width[1])<br>
+ 		return;<br>
+ <br>
+-	xgpio_writereg(chip->regs + XGPIO_DATA_OFFSET + XGPIO_CHANNEL_OFFSET,<br>
+-		       chip->gpio_state[1]);<br>
+-	xgpio_writereg(chip->regs + XGPIO_TRI_OFFSET + XGPIO_CHANNEL_OFFSET,<br>
+-		       chip->gpio_dir[1]);<br>
++	xgpio_write_chan(chip, XGPIO_DATA_OFFSET, 1, chip->gpio_state[1]);<br>
++	xgpio_write_chan(chip, XGPIO_TRI_OFFSET, 1, chip->gpio_dir[1]);<br>
+ }<br>
+ <br>
+ static int xgpio_request(struct gpio_chip *chip, unsigned int offset)<br>
+@@ -434,8 +442,7 @@ static void xgpio_irq_unmask(struct irq_data *irq_data)<br>
+ 			xgpio_writereg(chip->regs + XGPIO_IPISR_OFFSET, val);<br>
+ <br>
+ 		/* Update GPIO IRQ read data before enabling interrupt*/<br>
+-		val = xgpio_readreg(chip->regs + XGPIO_DATA_OFFSET +<br>
+-				    index * XGPIO_CHANNEL_OFFSET);<br>
++		val = xgpio_read_chan(chip, XGPIO_DATA_OFFSET, index);<br>
+ 		chip->gpio_last_irq_read[index] = val;<br>
+ <br>
+ 		/* Enable per channel interrupt */<br>
+@@ -512,8 +519,7 @@ static void xgpio_irqhandler(struct irq_desc *desc)<br>
+ 			unsigned int irq;<br>
+ <br>
+ 			spin_lock_irqsave(&chip->gpio_lock, flags);<br>
+-			data = xgpio_readreg(chip->regs + XGPIO_DATA_OFFSET +<br>
+-					     index * XGPIO_CHANNEL_OFFSET);<br>
++			data = xgpio_read_chan(chip, XGPIO_DATA_OFFSET, index);<br>
+ 			rising_events = data &<br>
+ 					~chip->gpio_last_irq_read[index] &<br>
+ 					chip->irq_enable[index] &<br>
+-- <br>
+2.30.2<br>
+<br>
+<br>
+

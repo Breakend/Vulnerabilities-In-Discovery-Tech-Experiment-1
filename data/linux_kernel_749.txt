@@ -1,0 +1,146 @@
+tree/branch: <a  rel="nofollow" href="https://git.kernel.org/pub/scm/linux/kernel/git/paulmck/linux-rcu.git">https://git.kernel.org/pub/scm/linux/kernel/git/paulmck/linux-rcu.git</a> rcu/next<br>
+branch HEAD: 420d9384a0b98b51e74684d55d7853dfc113d660  rcu: Reject RCU_LOCKDEP_WARN() false positives<br>
+<br>
+elapsed time: 728m<br>
+<br>
+configs tested: 127<br>
+configs skipped: 3<br>
+<br>
+The following configs have been built successfully.<br>
+More configs may be tested in the coming days.<br>
+<br>
+gcc tested configs:<br>
+arm                                 defconfig<br>
+arm64                            allyesconfig<br>
+arm64                               defconfig<br>
+arm                              allyesconfig<br>
+arm                              allmodconfig<br>
+riscv                            allmodconfig<br>
+x86_64                           allyesconfig<br>
+riscv                            allyesconfig<br>
+m68k                         amcore_defconfig<br>
+alpha                            allyesconfig<br>
+powerpc                   currituck_defconfig<br>
+sh                            hp6xx_defconfig<br>
+arc                     nsimosci_hs_defconfig<br>
+powerpc                 mpc836x_rdk_defconfig<br>
+arm                         socfpga_defconfig<br>
+mips                      malta_kvm_defconfig<br>
+mips                             allyesconfig<br>
+i386                                defconfig<br>
+powerpc                     mpc5200_defconfig<br>
+arm                       omap2plus_defconfig<br>
+csky                                defconfig<br>
+arm                        mvebu_v7_defconfig<br>
+arm                        neponset_defconfig<br>
+m68k                        stmark2_defconfig<br>
+arm                        spear3xx_defconfig<br>
+arm                            zeus_defconfig<br>
+openrisc                  or1klitex_defconfig<br>
+arm                         at91_dt_defconfig<br>
+sh                   rts7751r2dplus_defconfig<br>
+arm                  colibri_pxa300_defconfig<br>
+sh                          kfr2r09_defconfig<br>
+arm                      footbridge_defconfig<br>
+arm                          iop32x_defconfig<br>
+xtensa                           alldefconfig<br>
+mips                      loongson3_defconfig<br>
+powerpc                      chrp32_defconfig<br>
+arm                         axm55xx_defconfig<br>
+mips                      fuloong2e_defconfig<br>
+arm                            pleb_defconfig<br>
+sh                        sh7757lcr_defconfig<br>
+parisc                              defconfig<br>
+arm                           omap1_defconfig<br>
+openrisc                 simple_smp_defconfig<br>
+sh                         ecovec24_defconfig<br>
+m68k                            q40_defconfig<br>
+sparc                       sparc32_defconfig<br>
+mips                        nlm_xlr_defconfig<br>
+sh                          rsk7201_defconfig<br>
+mips                           gcw0_defconfig<br>
+sh                               alldefconfig<br>
+m68k                       m5249evb_defconfig<br>
+sh                        sh7763rdp_defconfig<br>
+h8300                               defconfig<br>
+powerpc                      tqm8xx_defconfig<br>
+powerpc                     tqm8541_defconfig<br>
+mips                            ar7_defconfig<br>
+powerpc                        fsp2_defconfig<br>
+um                               allyesconfig<br>
+sh                         ap325rxa_defconfig<br>
+powerpc                 mpc832x_mds_defconfig<br>
+powerpc                      bamboo_defconfig<br>
+mips                      pistachio_defconfig<br>
+arm                        trizeps4_defconfig<br>
+ia64                             allmodconfig<br>
+ia64                                defconfig<br>
+ia64                             allyesconfig<br>
+m68k                             allmodconfig<br>
+m68k                                defconfig<br>
+m68k                             allyesconfig<br>
+nios2                               defconfig<br>
+arc                              allyesconfig<br>
+nds32                             allnoconfig<br>
+nds32                               defconfig<br>
+nios2                            allyesconfig<br>
+alpha                               defconfig<br>
+xtensa                           allyesconfig<br>
+h8300                            allyesconfig<br>
+arc                                 defconfig<br>
+sh                               allmodconfig<br>
+s390                             allyesconfig<br>
+s390                             allmodconfig<br>
+parisc                           allyesconfig<br>
+s390                                defconfig<br>
+i386                             allyesconfig<br>
+sparc                            allyesconfig<br>
+sparc                               defconfig<br>
+mips                             allmodconfig<br>
+powerpc                          allyesconfig<br>
+powerpc                          allmodconfig<br>
+powerpc                           allnoconfig<br>
+i386                 randconfig-a006-20210407<br>
+i386                 randconfig-a003-20210407<br>
+i386                 randconfig-a001-20210407<br>
+i386                 randconfig-a004-20210407<br>
+i386                 randconfig-a002-20210407<br>
+i386                 randconfig-a005-20210407<br>
+x86_64               randconfig-a014-20210407<br>
+x86_64               randconfig-a015-20210407<br>
+x86_64               randconfig-a013-20210407<br>
+x86_64               randconfig-a011-20210407<br>
+x86_64               randconfig-a012-20210407<br>
+x86_64               randconfig-a016-20210407<br>
+i386                 randconfig-a014-20210407<br>
+i386                 randconfig-a011-20210407<br>
+i386                 randconfig-a016-20210407<br>
+i386                 randconfig-a012-20210407<br>
+i386                 randconfig-a015-20210407<br>
+i386                 randconfig-a013-20210407<br>
+x86_64               randconfig-a004-20210408<br>
+x86_64               randconfig-a005-20210408<br>
+x86_64               randconfig-a003-20210408<br>
+x86_64               randconfig-a001-20210408<br>
+x86_64               randconfig-a002-20210408<br>
+x86_64               randconfig-a006-20210408<br>
+riscv                    nommu_k210_defconfig<br>
+riscv                    nommu_virt_defconfig<br>
+riscv                             allnoconfig<br>
+riscv                               defconfig<br>
+riscv                          rv32_defconfig<br>
+um                               allmodconfig<br>
+um                                allnoconfig<br>
+um                                  defconfig<br>
+x86_64                    rhel-8.3-kselftests<br>
+x86_64                              defconfig<br>
+x86_64                               rhel-8.3<br>
+x86_64                      rhel-8.3-kbuiltin<br>
+x86_64                                  kexec<br>
+<br>
+---<br>
+0-DAY CI Kernel Test Service, Intel Corporation<br>
+<a  rel="nofollow" href="https://lists.01.org/hyperkitty/list/kbuild-all@xxxxxxxxxxxx">https://lists.01.org/hyperkitty/list/kbuild-all@xxxxxxxxxxxx</a><br>
+<br>
+<br>
+

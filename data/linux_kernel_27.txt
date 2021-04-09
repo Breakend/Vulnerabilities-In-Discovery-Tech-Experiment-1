@@ -1,0 +1,31 @@
+Like the Intel DC P3700 NVMe, the Intel P4510 NVMe exhibits a timeout<br>
+failure when the driver tries to interact with the device to soon after<br>
+an FLR. The same reset quirk the P3700 uses also resolves the failure<br>
+for the P4510, so this change introduces the same reset quirk for the<br>
+P4510.<br>
+<br>
+Reviewed-by: Alex Williamson <alex.williamson@xxxxxxxxxx><br>
+Signed-off-by: Alay Shah <alay.shah@xxxxxxxxxxx><br>
+Signed-off-by: Suresh Gumpula <suresh.gumpula@xxxxxxxxxxx><br>
+Signed-off-by: Raphael Norwitz <raphael.norwitz@xxxxxxxxxxx><br>
+---<br>
+ drivers/pci/quirks.c | 1 +<br>
+ 1 file changed, 1 insertion(+)<br>
+<br>
+diff --git a/drivers/pci/quirks.c b/drivers/pci/quirks.c<br>
+index 653660e3ba9e..5a8c059b848d 100644<br>
+--- a/drivers/pci/quirks.c<br>
++++ b/drivers/pci/quirks.c<br>
+@@ -3922,6 +3922,7 @@ static const struct pci_dev_reset_methods pci_dev_reset_methods[] = {<br>
+ 		reset_ivb_igd },<br>
+ 	{ PCI_VENDOR_ID_SAMSUNG, 0xa804, nvme_disable_and_flr },<br>
+ 	{ PCI_VENDOR_ID_INTEL, 0x0953, delay_250ms_after_flr },<br>
++	{ PCI_VENDOR_ID_INTEL, 0x0a54, delay_250ms_after_flr },<br>
+ 	{ PCI_VENDOR_ID_CHELSIO, PCI_ANY_ID,<br>
+ 		reset_chelsio_generic_dev },<br>
+ 	{ 0 }<br>
+-- <br>
+2.20.1<br>
+<br>
+<br>
+

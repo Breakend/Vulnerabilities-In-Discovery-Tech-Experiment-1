@@ -1,0 +1,64 @@
+On Thu, Apr 08, 2021 at 02:45:12PM +0200, Rasmus Villemoes wrote:<br>
+><i> On 06/04/2021 15.31, Andy Shevchenko wrote:</i><br>
+><i> > kernel.h is being used as a dump for all kinds of stuff for a long time.</i><br>
+><i> > Here is the attempt to start cleaning it up by splitting out panic and</i><br>
+><i> > oops helpers.</i><br>
+><i> </i><br>
+><i> Yay.</i><br>
+><i> </i><br>
+><i> Acked-by: Rasmus Villemoes <linux@xxxxxxxxxxxxxxxxxx></i><br>
+<br>
+Thanks!<br>
+<br>
+><i> > At the same time convert users in header and lib folder to use new header.</i><br>
+><i> > Though for time being include new header back to kernel.h to avoid twisted</i><br>
+><i> > indirected includes for existing users.</i><br>
+><i> </i><br>
+><i> I think it would be good to have some place to note that "This #include</i><br>
+><i> is just for backwards compatibility, it will go away RealSoonNow, so if</i><br>
+><i> you rely on something from linux/panic.h, include that explicitly</i><br>
+><i> yourself TYVM. And if you're looking for a janitorial task, write a</i><br>
+><i> script to check that every file that uses some identifier defined in</i><br>
+><i> panic.h actually includes that file. When all offenders are found and</i><br>
+><i> dealt with, remove the #include and this note.".</i><br>
+<br>
+Good and...<br>
+<br>
+><i> > +struct taint_flag {</i><br>
+><i> > +	char c_true;	/* character printed when tainted */</i><br>
+><i> > +	char c_false;	/* character printed when not tainted */</i><br>
+><i> > +	bool module;	/* also show as a per-module taint flag */</i><br>
+><i> > +};</i><br>
+><i> > +</i><br>
+><i> > +extern const struct taint_flag taint_flags[TAINT_FLAGS_COUNT];</i><br>
+><i> </i><br>
+><i> While you're doing this, nothing outside of kernel/panic.c cares about</i><br>
+><i> the definition of struct taint_flag or use the taint_flags array, so</i><br>
+><i> could you make the definition private to that file and make the array</i><br>
+><i> static? (Another patch, of course.)</i><br>
+<br>
+...according to the above if *you are looking for a janitorial task*... :-))<br>
+<br>
+><i> > +enum lockdep_ok {</i><br>
+><i> > +	LOCKDEP_STILL_OK,</i><br>
+><i> > +	LOCKDEP_NOW_UNRELIABLE,</i><br>
+><i> > +};</i><br>
+><i> > +</i><br>
+><i> > +extern const char *print_tainted(void);</i><br>
+><i> > +extern void add_taint(unsigned flag, enum lockdep_ok);</i><br>
+><i> > +extern int test_taint(unsigned flag);</i><br>
+><i> > +extern unsigned long get_taint(void);</i><br>
+><i> </i><br>
+><i> I know you're just moving code, but it would be a nice opportunity to</i><br>
+><i> drop the redundant externs.</i><br>
+<br>
+As above. But for all these I have heard you. So, I'll keep this response<br>
+as part of my always only growing TODO list.<br>
+<br>
+-- <br>
+With Best Regards,<br>
+Andy Shevchenko<br>
+<br>
+<br>
+<br>
+

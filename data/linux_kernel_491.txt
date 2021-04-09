@@ -1,0 +1,26 @@
+This series fixes up a few issues with cdc-acm TIOCSSERIAL<br>
+implementation.<br>
+<br>
+Johan<br>
+<br>
+Changes in v2<br>
+ - amend commit message to clarify that the 12 cs close_delay bug had<br>
+   already been fixed by an earlier patch (1/3)<br>
+<br>
+ - amend commit message to clarify that the base clock rate isn't known<br>
+   for CDC and that the current line speed can still be retrieved<br>
+   through the standard termios interfaces (3/3)<br>
+<br>
+Johan Hovold (3):<br>
+  Revert "USB: cdc-acm: fix rounding error in TIOCSSERIAL"<br>
+  USB: cdc-acm: fix unprivileged TIOCCSERIAL<br>
+  USB: cdc-acm: fix TIOCGSERIAL implementation<br>
+<br>
+ drivers/usb/class/cdc-acm.c | 16 +++-------------<br>
+ 1 file changed, 3 insertions(+), 13 deletions(-)<br>
+<br>
+-- <br>
+2.26.3<br>
+<br>
+<br>
+

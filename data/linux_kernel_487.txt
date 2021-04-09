@@ -1,0 +1,37 @@
+TIOCSSERIAL is a horrid, underspecified, legacy interface which for most<br>
+serial devices is only useful for setting the close_delay and<br>
+closing_wait parameters.<br>
+<br>
+A non-privileged user has only ever been able to set the since long<br>
+deprecated ASYNC_SPD flags and trying to change any other *supported*<br>
+feature should result in -EPERM being returned. Setting the current<br>
+values for any supported features should return success.<br>
+<br>
+Fix the cdc-acm implementation which instead indicated that the<br>
+TIOCSSERIAL ioctl was not even implemented when a non-privileged user<br>
+set the current values.<br>
+<br>
+Fixes: ba2d8ce9db0a ("cdc-acm: implement TIOCSSERIAL to avoid blocking close(2)")<br>
+Signed-off-by: Johan Hovold <johan@xxxxxxxxxx><br>
+---<br>
+ drivers/usb/class/cdc-acm.c | 2 --<br>
+ 1 file changed, 2 deletions(-)<br>
+<br>
+diff --git a/drivers/usb/class/cdc-acm.c b/drivers/usb/class/cdc-acm.c<br>
+index 96e221803fa6..43e31dad4831 100644<br>
+--- a/drivers/usb/class/cdc-acm.c<br>
++++ b/drivers/usb/class/cdc-acm.c<br>
+@@ -955,8 +955,6 @@ static int set_serial_info(struct tty_struct *tty, struct serial_struct *ss)<br>
+ 		if ((close_delay != acm->port.close_delay) ||<br>
+ 		    (closing_wait != acm->port.closing_wait))<br>
+ 			retval = -EPERM;<br>
+-		else<br>
+-			retval = -EOPNOTSUPP;<br>
+ 	} else {<br>
+ 		acm->port.close_delay  = close_delay;<br>
+ 		acm->port.closing_wait = closing_wait;<br>
+-- <br>
+2.26.3<br>
+<br>
+<br>
+

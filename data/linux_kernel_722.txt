@@ -1,0 +1,35 @@
+Hi Yu,<br>
+<br>
+Yu Kuai <yukuai3@xxxxxxxxxx> wrote on Thu, 8 Apr 2021 21:38:12 +0800:<br>
+<br>
+><i> Return a negative error code from the error handling case instead</i><br>
+><i> of 0, as done elsewhere in this function.</i><br>
+><i> </i><br>
+><i> Reported-by: Hulk Robot <hulkci@xxxxxxxxxx></i><br>
+><i> Signed-off-by: Yu Kuai <yukuai3@xxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  drivers/mtd/devices/phram.c | 1 +</i><br>
+><i>  1 file changed, 1 insertion(+)</i><br>
+><i> </i><br>
+><i> diff --git a/drivers/mtd/devices/phram.c b/drivers/mtd/devices/phram.c</i><br>
+><i> index 5b04ae6c3057..6ed6c51fac69 100644</i><br>
+><i> --- a/drivers/mtd/devices/phram.c</i><br>
+><i> +++ b/drivers/mtd/devices/phram.c</i><br>
+><i> @@ -270,6 +270,7 @@ static int phram_setup(const char *val)</i><br>
+><i>  	if (len == 0 || erasesize == 0 || erasesize > len</i><br>
+><i>  	    || erasesize > UINT_MAX || rem) {</i><br>
+><i>  		parse_err("illegal erasesize or len\n");</i><br>
+><i> +		ret = -EINVAL;</i><br>
+><i>  		goto error;</i><br>
+><i>  	}</i><br>
+><i>  </i><br>
+<br>
+Actually I don't know why but I overlooked the change. I thought you<br>
+were removing the ret = line, sorry about that. Anyway, I prefer<br>
+the new wording so I'll apply the v2.<br>
+<br>
+Thanks,<br>
+Miquèl<br>
+<br>
+<br>
+

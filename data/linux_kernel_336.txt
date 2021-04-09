@@ -1,0 +1,30 @@
+On Sat, Mar 27, 2021 at 1:11 PM Xiaofei Tan <tanxiaofei@xxxxxxxxxx> wrote:<br>
+><i></i><br>
+><i> Fix some coding style issues reported by checkpatch.pl.</i><br>
+><i> Only cleanup and no function changes.</i><br>
+><i></i><br>
+><i> Differences from v2 to v3:</i><br>
+><i> - Remove the modifications that may cause function change.</i><br>
+><i></i><br>
+><i> Differences from v1 to v2:</i><br>
+><i> - Add subsystem and module name in the name of patch 05/15.</i><br>
+><i> - Change to use more proper module name for some patch names.</i><br>
+><i></i><br>
+><i> Xiaofei Tan (12):</i><br>
+><i>   ACPI: APD: fix a block comment align issue</i><br>
+><i>   ACPI: processor: fix some coding style issues</i><br>
+><i>   ACPI: ipmi: remove useless return statement for void function</i><br>
+><i>   ACPI: LPSS: add a missed blank line after declarations</i><br>
+><i>   ACPI: acpi_pad: add a missed blank line after declarations</i><br>
+><i>   ACPI: battery: fix some coding style issues</i><br>
+><i>   ACPI: button: fix some coding style issues</i><br>
+><i>   ACPI: CPPC: fix some coding style issues</i><br>
+><i>   ACPI: custom_method: fix a coding style issue</i><br>
+><i>   ACPI: PM: add a missed blank line after declarations</i><br>
+><i>   ACPI: sysfs: fix some coding style issues</i><br>
+><i>   ACPI: dock: fix some coding style issues</i><br>
+<br>
+All applied as 5.13 material, thanks!<br>
+<br>
+<br>
+

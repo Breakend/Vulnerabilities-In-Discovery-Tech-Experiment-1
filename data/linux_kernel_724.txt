@@ -1,0 +1,26 @@
+Return a negative error code from the error handling case instead<br>
+of 0, as done elsewhere in this function.<br>
+<br>
+Reported-by: Hulk Robot <hulkci@xxxxxxxxxx><br>
+Signed-off-by: Yu Kuai <yukuai3@xxxxxxxxxx><br>
+---<br>
+ drivers/mtd/devices/phram.c | 1 +<br>
+ 1 file changed, 1 insertion(+)<br>
+<br>
+diff --git a/drivers/mtd/devices/phram.c b/drivers/mtd/devices/phram.c<br>
+index 5b04ae6c3057..6ed6c51fac69 100644<br>
+--- a/drivers/mtd/devices/phram.c<br>
++++ b/drivers/mtd/devices/phram.c<br>
+@@ -270,6 +270,7 @@ static int phram_setup(const char *val)<br>
+ 	if (len == 0 || erasesize == 0 || erasesize > len<br>
+ 	    || erasesize > UINT_MAX || rem) {<br>
+ 		parse_err("illegal erasesize or len\n");<br>
++		ret = -EINVAL;<br>
+ 		goto error;<br>
+ 	}<br>
+ <br>
+-- <br>
+2.25.4<br>
+<br>
+<br>
+

@@ -1,0 +1,47 @@
+On 4/7/21 8:13 PM, Alexandre Belloni wrote:<br>
+><i> Hi,</i><br>
+><i> </i><br>
+><i> On 07/04/2021 20:00:53+0300, Eugen Hristev wrote:</i><br>
+><i>> From: Claudiu Beznea <claudiu.beznea@xxxxxxxxxxxxx></i><br>
+><i>></i><br>
+><i>> Select PLL, generic clock and UTMI support for SAMA7G5.</i><br>
+><i>></i><br>
+><i>> Signed-off-by: Claudiu Beznea <claudiu.beznea@xxxxxxxxxxxxx></i><br>
+><i>> Signed-off-by: Eugen Hristev <eugen.hristev@xxxxxxxxxxxxx></i><br>
+><i>> ---</i><br>
+><i>>   arch/arm/mach-at91/Kconfig | 3 +++</i><br>
+><i>>   1 file changed, 3 insertions(+)</i><br>
+><i>></i><br>
+><i>> diff --git a/arch/arm/mach-at91/Kconfig b/arch/arm/mach-at91/Kconfig</i><br>
+><i>> index 5eb2a9206f42..f52b46bccd85 100644</i><br>
+><i>> --- a/arch/arm/mach-at91/Kconfig</i><br>
+><i>> +++ b/arch/arm/mach-at91/Kconfig</i><br>
+><i>> @@ -60,6 +60,9 @@ config SOC_SAMA5D4</i><br>
+><i>>   config SOC_SAMA7G5</i><br>
+><i>>        bool "SAMA7G5 family"</i><br>
+><i>>        depends on ARCH_MULTI_V7</i><br>
+><i>> +     select HAVE_AT91_GENERATED_CLK</i><br>
+><i>> +     select HAVE_AT91_SAM9X60_PLL</i><br>
+><i>> +     select HAVE_AT91_UTMI</i><br>
+><i> </i><br>
+><i> Shouldn't that be squashed in 1/3?</i><br>
+<br>
+I kept the original contributions of each author. I can squash it into a <br>
+single patch if it's cleaner.<br>
+<br>
+Eugen<br>
+><i> </i><br>
+><i>>        select SOC_SAMA7</i><br>
+><i>>        help</i><br>
+><i>>          Select this if you are using one of Microchip's SAMA7G5 family SoC.</i><br>
+><i>> --</i><br>
+><i>> 2.25.1</i><br>
+><i>></i><br>
+><i> </i><br>
+><i> --</i><br>
+><i> Alexandre Belloni, co-owner and COO, Bootlin</i><br>
+><i> Embedded Linux and Kernel engineering</i><br>
+><i> <a  rel="nofollow" href="https://bootlin.com">https://bootlin.com</a></i><br>
+><i> </i><br>
+<br>
+

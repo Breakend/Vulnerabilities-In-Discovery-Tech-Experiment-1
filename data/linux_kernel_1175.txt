@@ -1,0 +1,26 @@
+The snd_soc_dai_ops structures is only stored in the ops field of a<br>
+snd_soc_dai_driver structure, so make the snd_soc_dai_ops structure<br>
+const to allow the compiler to put it in read-only memory.<br>
+<br>
+Reported-by: Hulk Robot <hulkci@xxxxxxxxxx><br>
+Signed-off-by: Ye Bin <yebin10@xxxxxxxxxx><br>
+---<br>
+ sound/soc/amd/renoir/acp3x-pdm-dma.c | 2 +-<br>
+ 1 file changed, 1 insertion(+), 1 deletion(-)<br>
+<br>
+diff --git a/sound/soc/amd/renoir/acp3x-pdm-dma.c b/sound/soc/amd/renoir/acp3x-pdm-dma.c<br>
+index 1acd20439399..4c2810e58dce 100644<br>
+--- a/sound/soc/amd/renoir/acp3x-pdm-dma.c<br>
++++ b/sound/soc/amd/renoir/acp3x-pdm-dma.c<br>
+@@ -356,7 +356,7 @@ static int acp_pdm_dai_trigger(struct snd_pcm_substream *substream,<br>
+ 	return ret;<br>
+ }<br>
+ <br>
+-static struct snd_soc_dai_ops acp_pdm_dai_ops = {<br>
++static const struct snd_soc_dai_ops acp_pdm_dai_ops = {<br>
+ 	.trigger   = acp_pdm_dai_trigger,<br>
+ };<br>
+ <br>
+<br>
+<br>
+

@@ -1,0 +1,584 @@
+From: SeongJae Park <sjpark@xxxxxxxxx><br>
+<br>
+DAMON is designed to be used by kernel space code such as the memory<br>
+management subsystems, and therefore it provides only kernel space API.<br>
+That said, letting the user space control DAMON could provide some<br>
+benefits to them.  For example, it will allow user space to analyze<br>
+their specific workloads and make their own special optimizations.<br>
+<br>
+For such cases, this commit implements a simple DAMON application kernel<br>
+module, namely 'damon-dbgfs', which merely wraps the DAMON api and<br>
+exports those to the user space via the debugfs.<br>
+<br>
+'damon-dbgfs' exports three files, ``attrs``, ``target_ids``, and<br>
+``monitor_on`` under its debugfs directory, ``<debugfs>/damon/``.<br>
+<br>
+Attributes<br>
+----------<br>
+<br>
+Users can read and write the ``sampling interval``, ``aggregation<br>
+interval``, ``regions update interval``, and min/max number of<br>
+monitoring target regions by reading from and writing to the ``attrs``<br>
+file.  For example, below commands set those values to 5 ms, 100 ms,<br>
+1,000 ms, 10, 1000 and check it again::<br>
+<br>
+    # cd <debugfs>/damon<br>
+    # echo 5000 100000 1000000 10 1000 > attrs<br>
+    # cat attrs<br>
+    5000 100000 1000000 10 1000<br>
+<br>
+Target IDs<br>
+----------<br>
+<br>
+Some types of address spaces supports multiple monitoring target.  For<br>
+example, the virtual memory address spaces monitoring can have multiple<br>
+processes as the monitoring targets.  Users can set the targets by<br>
+writing relevant id values of the targets to, and get the ids of the<br>
+current targets by reading from the ``target_ids`` file.  In case of the<br>
+virtual address spaces monitoring, the values should be pids of the<br>
+monitoring target processes.  For example, below commands set processes<br>
+having pids 42 and 4242 as the monitoring targets and check it again::<br>
+<br>
+    # cd <debugfs>/damon<br>
+    # echo 42 4242 > target_ids<br>
+    # cat target_ids<br>
+    42 4242<br>
+<br>
+Note that setting the target ids doesn't start the monitoring.<br>
+<br>
+Turning On/Off<br>
+--------------<br>
+<br>
+Setting the files as described above doesn't incur effect unless you<br>
+explicitly start the monitoring.  You can start, stop, and check the<br>
+current status of the monitoring by writing to and reading from the<br>
+``monitor_on`` file.  Writing ``on`` to the file starts the monitoring<br>
+of the targets with the attributes.  Writing ``off`` to the file stops<br>
+those.  DAMON also stops if every targets are invalidated (in case of<br>
+the virtual memory monitoring, target processes are invalidated when<br>
+terminated).  Below example commands turn on, off, and check the status<br>
+of DAMON::<br>
+<br>
+    # cd <debugfs>/damon<br>
+    # echo on > monitor_on<br>
+    # echo off > monitor_on<br>
+    # cat monitor_on<br>
+    off<br>
+<br>
+Please note that you cannot write to the above-mentioned debugfs files<br>
+while the monitoring is turned on.  If you write to the files while<br>
+DAMON is running, an error code such as ``-EBUSY`` will be returned.<br>
+<br>
+Signed-off-by: SeongJae Park <sjpark@xxxxxxxxx><br>
+Reviewed-by: Leonard Foerster <foersleo@xxxxxxxxx><br>
+---<br>
+ include/linux/damon.h |   3 +<br>
+ mm/damon/Kconfig      |   9 +<br>
+ mm/damon/Makefile     |   1 +<br>
+ mm/damon/core.c       |  47 ++++++<br>
+ mm/damon/dbgfs.c      | 382 ++++++++++++++++++++++++++++++++++++++++++<br>
+ 5 files changed, 442 insertions(+)<br>
+ create mode 100644 mm/damon/dbgfs.c<br>
+<br>
+diff --git a/include/linux/damon.h b/include/linux/damon.h<br>
+index 72cf5ebd35fe..b17e808a9cae 100644<br>
+--- a/include/linux/damon.h<br>
++++ b/include/linux/damon.h<br>
+@@ -237,9 +237,12 @@ unsigned int damon_nr_regions(struct damon_target *t);<br>
+ <br>
+ struct damon_ctx *damon_new_ctx(void);<br>
+ void damon_destroy_ctx(struct damon_ctx *ctx);<br>
++int damon_set_targets(struct damon_ctx *ctx,<br>
++		unsigned long *ids, ssize_t nr_ids);<br>
+ int damon_set_attrs(struct damon_ctx *ctx, unsigned long sample_int,<br>
+ 		unsigned long aggr_int, unsigned long primitive_upd_int,<br>
+ 		unsigned long min_nr_reg, unsigned long max_nr_reg);<br>
++int damon_nr_running_ctxs(void);<br>
+ <br>
+ int damon_start(struct damon_ctx **ctxs, int nr_ctxs);<br>
+ int damon_stop(struct damon_ctx **ctxs, int nr_ctxs);<br>
+diff --git a/mm/damon/Kconfig b/mm/damon/Kconfig<br>
+index 8ae080c52950..72f1683ba0ee 100644<br>
+--- a/mm/damon/Kconfig<br>
++++ b/mm/damon/Kconfig<br>
+@@ -21,4 +21,13 @@ config DAMON_VADDR<br>
+ 	  This builds the default data access monitoring primitives for DAMON<br>
+ 	  that works for virtual address spaces.<br>
+ <br>
++config DAMON_DBGFS<br>
++	bool "DAMON debugfs interface"<br>
++	depends on DAMON_VADDR && DEBUG_FS<br>
++	help<br>
++	  This builds the debugfs interface for DAMON.  The user space admins<br>
++	  can use the interface for arbitrary data access monitoring.<br>
++<br>
++	  If unsure, say N.<br>
++<br>
+ endmenu<br>
+diff --git a/mm/damon/Makefile b/mm/damon/Makefile<br>
+index 6ebbd08aed67..fed4be3bace3 100644<br>
+--- a/mm/damon/Makefile<br>
++++ b/mm/damon/Makefile<br>
+@@ -2,3 +2,4 @@<br>
+ <br>
+ obj-$(CONFIG_DAMON)		:= core.o<br>
+ obj-$(CONFIG_DAMON_VADDR)	+= vaddr.o<br>
++obj-$(CONFIG_DAMON_DBGFS)	+= dbgfs.o<br>
+diff --git a/mm/damon/core.c b/mm/damon/core.c<br>
+index 912112662d0c..cad2b4cee39d 100644<br>
+--- a/mm/damon/core.c<br>
++++ b/mm/damon/core.c<br>
+@@ -172,6 +172,39 @@ void damon_destroy_ctx(struct damon_ctx *ctx)<br>
+ 	kfree(ctx);<br>
+ }<br>
+ <br>
++/**<br>
++ * damon_set_targets() - Set monitoring targets.<br>
++ * @ctx:	monitoring context<br>
++ * @ids:	array of target ids<br>
++ * @nr_ids:	number of entries in @ids<br>
++ *<br>
++ * This function should not be called while the kdamond is running.<br>
++ *<br>
++ * Return: 0 on success, negative error code otherwise.<br>
++ */<br>
++int damon_set_targets(struct damon_ctx *ctx,<br>
++		      unsigned long *ids, ssize_t nr_ids)<br>
++{<br>
++	ssize_t i;<br>
++	struct damon_target *t, *next;<br>
++<br>
++	damon_destroy_targets(ctx);<br>
++<br>
++	for (i = 0; i < nr_ids; i++) {<br>
++		t = damon_new_target(ids[i]);<br>
++		if (!t) {<br>
++			pr_err("Failed to alloc damon_target\n");<br>
++			/* The caller should do cleanup of the ids itself */<br>
++			damon_for_each_target_safe(t, next, ctx)<br>
++				damon_destroy_target(t);<br>
++			return -ENOMEM;<br>
++		}<br>
++		damon_add_target(ctx, t);<br>
++	}<br>
++<br>
++	return 0;<br>
++}<br>
++<br>
+ /**<br>
+  * damon_set_attrs() - Set attributes for the monitoring.<br>
+  * @ctx:		monitoring context<br>
+@@ -210,6 +243,20 @@ int damon_set_attrs(struct damon_ctx *ctx, unsigned long sample_int,<br>
+ 	return 0;<br>
+ }<br>
+ <br>
++/**<br>
++ * damon_nr_running_ctxs() - Return number of currently running contexts.<br>
++ */<br>
++int damon_nr_running_ctxs(void)<br>
++{<br>
++	int nr_ctxs;<br>
++<br>
++	mutex_lock(&damon_lock);<br>
++	nr_ctxs = nr_running_ctxs;<br>
++	mutex_unlock(&damon_lock);<br>
++<br>
++	return nr_ctxs;<br>
++}<br>
++<br>
+ /* Returns the size upper limit for each monitoring region */<br>
+ static unsigned long damon_region_sz_limit(struct damon_ctx *ctx)<br>
+ {<br>
+diff --git a/mm/damon/dbgfs.c b/mm/damon/dbgfs.c<br>
+new file mode 100644<br>
+index 000000000000..9af844faffd4<br>
+--- /dev/null<br>
++++ b/mm/damon/dbgfs.c<br>
+@@ -0,0 +1,382 @@<br>
++// SPDX-License-Identifier: GPL-2.0<br>
++/*<br>
++ * DAMON Debugfs Interface<br>
++ *<br>
++ * Author: SeongJae Park <sjpark@xxxxxxxxx><br>
++ */<br>
++<br>
++#define pr_fmt(fmt) "damon-dbgfs: " fmt<br>
++<br>
++#include <linux/damon.h><br>
++#include <linux/debugfs.h><br>
++#include <linux/file.h><br>
++#include <linux/mm.h><br>
++#include <linux/module.h><br>
++#include <linux/page_idle.h><br>
++#include <linux/slab.h><br>
++<br>
++static struct damon_ctx **dbgfs_ctxs;<br>
++static int dbgfs_nr_ctxs;<br>
++static struct dentry **dbgfs_dirs;<br>
++<br>
++/*<br>
++ * Returns non-empty string on success, negarive error code otherwise.<br>
++ */<br>
++static char *user_input_str(const char __user *buf, size_t count, loff_t *ppos)<br>
++{<br>
++	char *kbuf;<br>
++	ssize_t ret;<br>
++<br>
++	/* We do not accept continuous write */<br>
++	if (*ppos)<br>
++		return ERR_PTR(-EINVAL);<br>
++<br>
++	kbuf = kmalloc(count + 1, GFP_KERNEL);<br>
++	if (!kbuf)<br>
++		return ERR_PTR(-ENOMEM);<br>
++<br>
++	ret = simple_write_to_buffer(kbuf, count + 1, ppos, buf, count);<br>
++	if (ret != count) {<br>
++		kfree(kbuf);<br>
++		return ERR_PTR(-EIO);<br>
++	}<br>
++	kbuf[ret] = '\0';<br>
++<br>
++	return kbuf;<br>
++}<br>
++<br>
++static ssize_t dbgfs_attrs_read(struct file *file,<br>
++		char __user *buf, size_t count, loff_t *ppos)<br>
++{<br>
++	struct damon_ctx *ctx = file->private_data;<br>
++	char kbuf[128];<br>
++	int ret;<br>
++<br>
++	mutex_lock(&ctx->kdamond_lock);<br>
++	ret = scnprintf(kbuf, ARRAY_SIZE(kbuf), "%lu %lu %lu %lu %lu\n",<br>
++			ctx->sample_interval, ctx->aggr_interval,<br>
++			ctx->primitive_update_interval, ctx->min_nr_regions,<br>
++			ctx->max_nr_regions);<br>
++	mutex_unlock(&ctx->kdamond_lock);<br>
++<br>
++	return simple_read_from_buffer(buf, count, ppos, kbuf, ret);<br>
++}<br>
++<br>
++static ssize_t dbgfs_attrs_write(struct file *file,<br>
++		const char __user *buf, size_t count, loff_t *ppos)<br>
++{<br>
++	struct damon_ctx *ctx = file->private_data;<br>
++	unsigned long s, a, r, minr, maxr;<br>
++	char *kbuf;<br>
++	ssize_t ret = count;<br>
++	int err;<br>
++<br>
++	kbuf = user_input_str(buf, count, ppos);<br>
++	if (IS_ERR(kbuf))<br>
++		return PTR_ERR(kbuf);<br>
++<br>
++	if (sscanf(kbuf, "%lu %lu %lu %lu %lu",<br>
++				&s, &a, &r, &minr, &maxr) != 5) {<br>
++		ret = -EINVAL;<br>
++		goto out;<br>
++	}<br>
++<br>
++	mutex_lock(&ctx->kdamond_lock);<br>
++	if (ctx->kdamond) {<br>
++		ret = -EBUSY;<br>
++		goto unlock_out;<br>
++	}<br>
++<br>
++	err = damon_set_attrs(ctx, s, a, r, minr, maxr);<br>
++	if (err)<br>
++		ret = err;<br>
++unlock_out:<br>
++	mutex_unlock(&ctx->kdamond_lock);<br>
++out:<br>
++	kfree(kbuf);<br>
++	return ret;<br>
++}<br>
++<br>
++#define targetid_is_pid(ctx)	\<br>
++	(ctx->primitive.target_valid == damon_va_target_valid)<br>
++<br>
++static ssize_t sprint_target_ids(struct damon_ctx *ctx, char *buf, ssize_t len)<br>
++{<br>
++	struct damon_target *t;<br>
++	unsigned long id;<br>
++	int written = 0;<br>
++	int rc;<br>
++<br>
++	damon_for_each_target(t, ctx) {<br>
++		id = t->id;<br>
++		if (targetid_is_pid(ctx))<br>
++			/* Show pid numbers to debugfs users */<br>
++			id = (unsigned long)pid_vnr((struct pid *)id);<br>
++<br>
++		rc = scnprintf(&buf[written], len - written, "%lu ", id);<br>
++		if (!rc)<br>
++			return -ENOMEM;<br>
++		written += rc;<br>
++	}<br>
++	if (written)<br>
++		written -= 1;<br>
++	written += scnprintf(&buf[written], len - written, "\n");<br>
++	return written;<br>
++}<br>
++<br>
++static ssize_t dbgfs_target_ids_read(struct file *file,<br>
++		char __user *buf, size_t count, loff_t *ppos)<br>
++{<br>
++	struct damon_ctx *ctx = file->private_data;<br>
++	ssize_t len;<br>
++	char ids_buf[320];<br>
++<br>
++	mutex_lock(&ctx->kdamond_lock);<br>
++	len = sprint_target_ids(ctx, ids_buf, 320);<br>
++	mutex_unlock(&ctx->kdamond_lock);<br>
++	if (len < 0)<br>
++		return len;<br>
++<br>
++	return simple_read_from_buffer(buf, count, ppos, ids_buf, len);<br>
++}<br>
++<br>
++/*<br>
++ * Converts a string into an array of unsigned long integers<br>
++ *<br>
++ * Returns an array of unsigned long integers if the conversion success, or<br>
++ * NULL otherwise.<br>
++ */<br>
++static unsigned long *str_to_target_ids(const char *str, ssize_t len,<br>
++					ssize_t *nr_ids)<br>
++{<br>
++	unsigned long *ids;<br>
++	const int max_nr_ids = 32;<br>
++	unsigned long id;<br>
++	int pos = 0, parsed, ret;<br>
++<br>
++	*nr_ids = 0;<br>
++	ids = kmalloc_array(max_nr_ids, sizeof(id), GFP_KERNEL);<br>
++	if (!ids)<br>
++		return NULL;<br>
++	while (*nr_ids < max_nr_ids && pos < len) {<br>
++		ret = sscanf(&str[pos], "%lu%n", &id, &parsed);<br>
++		pos += parsed;<br>
++		if (ret != 1)<br>
++			break;<br>
++		ids[*nr_ids] = id;<br>
++		*nr_ids += 1;<br>
++	}<br>
++<br>
++	return ids;<br>
++}<br>
++<br>
++static void dbgfs_put_pids(unsigned long *ids, int nr_ids)<br>
++{<br>
++	int i;<br>
++<br>
++	for (i = 0; i < nr_ids; i++)<br>
++		put_pid((struct pid *)ids[i]);<br>
++}<br>
++<br>
++static ssize_t dbgfs_target_ids_write(struct file *file,<br>
++		const char __user *buf, size_t count, loff_t *ppos)<br>
++{<br>
++	struct damon_ctx *ctx = file->private_data;<br>
++	char *kbuf, *nrs;<br>
++	unsigned long *targets;<br>
++	ssize_t nr_targets;<br>
++	ssize_t ret = count;<br>
++	int i;<br>
++	int err;<br>
++<br>
++	kbuf = user_input_str(buf, count, ppos);<br>
++	if (IS_ERR(kbuf))<br>
++		return PTR_ERR(kbuf);<br>
++<br>
++	nrs = kbuf;<br>
++<br>
++	targets = str_to_target_ids(nrs, ret, &nr_targets);<br>
++	if (!targets) {<br>
++		ret = -ENOMEM;<br>
++		goto out;<br>
++	}<br>
++<br>
++	if (targetid_is_pid(ctx)) {<br>
++		for (i = 0; i < nr_targets; i++) {<br>
++			targets[i] = (unsigned long)find_get_pid(<br>
++					(int)targets[i]);<br>
++			if (!targets[i]) {<br>
++				dbgfs_put_pids(targets, i);<br>
++				ret = -EINVAL;<br>
++				goto free_targets_out;<br>
++			}<br>
++		}<br>
++	}<br>
++<br>
++	mutex_lock(&ctx->kdamond_lock);<br>
++	if (ctx->kdamond) {<br>
++		if (targetid_is_pid(ctx))<br>
++			dbgfs_put_pids(targets, nr_targets);<br>
++		ret = -EBUSY;<br>
++		goto unlock_out;<br>
++	}<br>
++<br>
++	err = damon_set_targets(ctx, targets, nr_targets);<br>
++	if (err) {<br>
++		if (targetid_is_pid(ctx))<br>
++			dbgfs_put_pids(targets, nr_targets);<br>
++		ret = err;<br>
++	}<br>
++<br>
++unlock_out:<br>
++	mutex_unlock(&ctx->kdamond_lock);<br>
++free_targets_out:<br>
++	kfree(targets);<br>
++out:<br>
++	kfree(kbuf);<br>
++	return ret;<br>
++}<br>
++<br>
++static int damon_dbgfs_open(struct inode *inode, struct file *file)<br>
++{<br>
++	file->private_data = inode->i_private;<br>
++<br>
++	return nonseekable_open(inode, file);<br>
++}<br>
++<br>
++static const struct file_operations attrs_fops = {<br>
++	.owner = THIS_MODULE,<br>
++	.open = damon_dbgfs_open,<br>
++	.read = dbgfs_attrs_read,<br>
++	.write = dbgfs_attrs_write,<br>
++};<br>
++<br>
++static const struct file_operations target_ids_fops = {<br>
++	.owner = THIS_MODULE,<br>
++	.open = damon_dbgfs_open,<br>
++	.read = dbgfs_target_ids_read,<br>
++	.write = dbgfs_target_ids_write,<br>
++};<br>
++<br>
++static int dbgfs_fill_ctx_dir(struct dentry *dir, struct damon_ctx *ctx)<br>
++{<br>
++	const char * const file_names[] = {"attrs", "target_ids"};<br>
++	const struct file_operations *fops[] = {&attrs_fops, &target_ids_fops};<br>
++	int i;<br>
++<br>
++	for (i = 0; i < ARRAY_SIZE(file_names); i++)<br>
++		debugfs_create_file(file_names[i], 0600, dir, ctx, fops[i]);<br>
++<br>
++	return 0;<br>
++}<br>
++<br>
++static struct damon_ctx *dbgfs_new_ctx(void)<br>
++{<br>
++	struct damon_ctx *ctx;<br>
++<br>
++	ctx = damon_new_ctx();<br>
++	if (!ctx)<br>
++		return NULL;<br>
++<br>
++	damon_va_set_primitives(ctx);<br>
++	return ctx;<br>
++}<br>
++<br>
++static ssize_t dbgfs_monitor_on_read(struct file *file,<br>
++		char __user *buf, size_t count, loff_t *ppos)<br>
++{<br>
++	char monitor_on_buf[5];<br>
++	bool monitor_on = damon_nr_running_ctxs() != 0;<br>
++	int len;<br>
++<br>
++	len = scnprintf(monitor_on_buf, 5, monitor_on ? "on\n" : "off\n");<br>
++<br>
++	return simple_read_from_buffer(buf, count, ppos, monitor_on_buf, len);<br>
++}<br>
++<br>
++static ssize_t dbgfs_monitor_on_write(struct file *file,<br>
++		const char __user *buf, size_t count, loff_t *ppos)<br>
++{<br>
++	ssize_t ret = count;<br>
++	char *kbuf;<br>
++	int err;<br>
++<br>
++	kbuf = user_input_str(buf, count, ppos);<br>
++	if (IS_ERR(kbuf))<br>
++		return PTR_ERR(kbuf);<br>
++<br>
++	/* Remove white space */<br>
++	if (sscanf(kbuf, "%s", kbuf) != 1) {<br>
++		kfree(kbuf);<br>
++		return -EINVAL;<br>
++	}<br>
++<br>
++	if (!strncmp(kbuf, "on", count))<br>
++		err = damon_start(dbgfs_ctxs, dbgfs_nr_ctxs);<br>
++	else if (!strncmp(kbuf, "off", count))<br>
++		err = damon_stop(dbgfs_ctxs, dbgfs_nr_ctxs);<br>
++	else<br>
++		err = -EINVAL;<br>
++<br>
++	if (err)<br>
++		ret = err;<br>
++	kfree(kbuf);<br>
++	return ret;<br>
++}<br>
++<br>
++static const struct file_operations monitor_on_fops = {<br>
++	.owner = THIS_MODULE,<br>
++	.read = dbgfs_monitor_on_read,<br>
++	.write = dbgfs_monitor_on_write,<br>
++};<br>
++<br>
++static int __init __damon_dbgfs_init(void)<br>
++{<br>
++	struct dentry *dbgfs_root;<br>
++	const char * const file_names[] = {"monitor_on"};<br>
++	const struct file_operations *fops[] = {&monitor_on_fops};<br>
++	int i;<br>
++<br>
++	dbgfs_root = debugfs_create_dir("damon", NULL);<br>
++<br>
++	for (i = 0; i < ARRAY_SIZE(file_names); i++)<br>
++		debugfs_create_file(file_names[i], 0600, dbgfs_root, NULL,<br>
++				fops[i]);<br>
++	dbgfs_fill_ctx_dir(dbgfs_root, dbgfs_ctxs[0]);<br>
++<br>
++	dbgfs_dirs = kmalloc_array(1, sizeof(dbgfs_root), GFP_KERNEL);<br>
++	if (!dbgfs_dirs)<br>
++		return -ENOMEM;<br>
++	dbgfs_dirs[0] = dbgfs_root;<br>
++<br>
++	return 0;<br>
++}<br>
++<br>
++/*<br>
++ * Functions for the initialization<br>
++ */<br>
++<br>
++static int __init damon_dbgfs_init(void)<br>
++{<br>
++	int rc;<br>
++<br>
++	dbgfs_ctxs = kmalloc(sizeof(*dbgfs_ctxs), GFP_KERNEL);<br>
++	if (!dbgfs_ctxs) {<br>
++		pr_err("%s: dbgfs ctxs alloc failed\n", __func__);<br>
++		return -ENOMEM;<br>
++	}<br>
++	dbgfs_ctxs[0] = dbgfs_new_ctx();<br>
++	if (!dbgfs_ctxs[0]) {<br>
++		pr_err("%s: dbgfs ctx alloc failed\n", __func__);<br>
++		return -ENOMEM;<br>
++	}<br>
++	dbgfs_nr_ctxs = 1;<br>
++<br>
++	rc = __damon_dbgfs_init();<br>
++	if (rc)<br>
++		pr_err("%s: dbgfs init failed\n", __func__);<br>
++<br>
++	return rc;<br>
++}<br>
++<br>
++module_init(damon_dbgfs_init);<br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+

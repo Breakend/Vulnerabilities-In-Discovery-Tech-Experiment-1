@@ -1,0 +1,177 @@
+Convert qcom pm8941 power key binding from .txt to .yaml format.<br>
+<br>
+Signed-off-by: satya priya <skakit@xxxxxxxxxxxxxx><br>
+---<br>
+Changes in V2:<br>
+ - Fixed bot errors, took reference from input.yaml for "linux,code"<br>
+ - Added one complete example for powerkey and resin, and referenced it<br>
+   in main PON binding.<br>
+ - Moved this patch to the end of the series.<br>
+<br>
+ .../bindings/input/qcom,pm8941-pwrkey.txt          | 55 --------------<br>
+ .../bindings/input/qcom,pm8941-pwrkey.yaml         | 88 ++++++++++++++++++++++<br>
+ 2 files changed, 88 insertions(+), 55 deletions(-)<br>
+ delete mode 100644 Documentation/devicetree/bindings/input/qcom,pm8941-pwrkey.txt<br>
+ create mode 100644 Documentation/devicetree/bindings/input/qcom,pm8941-pwrkey.yaml<br>
+<br>
+diff --git a/Documentation/devicetree/bindings/input/qcom,pm8941-pwrkey.txt b/Documentation/devicetree/bindings/input/qcom,pm8941-pwrkey.txt<br>
+deleted file mode 100644<br>
+index 6cd08bc..0000000<br>
+--- a/Documentation/devicetree/bindings/input/qcom,pm8941-pwrkey.txt<br>
++++ /dev/null<br>
+@@ -1,55 +0,0 @@<br>
+-Qualcomm PM8941 PMIC Power Key<br>
+-<br>
+-PROPERTIES<br>
+-<br>
+-- compatible:<br>
+-	Usage: required<br>
+-	Value type: <string><br>
+-	Definition: must be one of:<br>
+-		    "qcom,pm8941-pwrkey"<br>
+-		    "qcom,pm8941-resin"<br>
+-		    "qcom,pmk8350-pwrkey"<br>
+-		    "qcom,pmk8350-resin"<br>
+-<br>
+-- reg:<br>
+-	Usage: required<br>
+-	Value type: <prop-encoded-array><br>
+-	Definition: base address of registers for block<br>
+-<br>
+-- interrupts:<br>
+-	Usage: required<br>
+-	Value type: <prop-encoded-array><br>
+-	Definition: key change interrupt; The format of the specifier is<br>
+-		    defined by the binding document describing the node's<br>
+-		    interrupt parent.<br>
+-<br>
+-- debounce:<br>
+-	Usage: optional<br>
+-	Value type: <u32><br>
+-	Definition: time in microseconds that key must be pressed or released<br>
+-		    for state change interrupt to trigger.<br>
+-<br>
+-- bias-pull-up:<br>
+-	Usage: optional<br>
+-	Value type: <empty><br>
+-	Definition: presence of this property indicates that the KPDPWR_N pin<br>
+-		    should be configured for pull up.<br>
+-<br>
+-- linux,code:<br>
+-	Usage: optional<br>
+-	Value type: <u32><br>
+-	Definition: The input key-code associated with the power key.<br>
+-		    Use the linux event codes defined in<br>
+-		    include/dt-bindings/input/linux-event-codes.h<br>
+-		    When property is omitted KEY_POWER is assumed.<br>
+-<br>
+-EXAMPLE<br>
+-<br>
+-	pwrkey@800 {<br>
+-		compatible = "qcom,pm8941-pwrkey";<br>
+-		reg = <0x800>;<br>
+-		interrupts = <0x0 0x8 0 IRQ_TYPE_EDGE_BOTH>;<br>
+-		debounce = <15625>;<br>
+-		bias-pull-up;<br>
+-		linux,code = <KEY_POWER>;<br>
+-	};<br>
+diff --git a/Documentation/devicetree/bindings/input/qcom,pm8941-pwrkey.yaml b/Documentation/devicetree/bindings/input/qcom,pm8941-pwrkey.yaml<br>
+new file mode 100644<br>
+index 0000000..fb6cbe8<br>
+--- /dev/null<br>
++++ b/Documentation/devicetree/bindings/input/qcom,pm8941-pwrkey.yaml<br>
+@@ -0,0 +1,88 @@<br>
++# SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)<br>
++%YAML 1.2<br>
++---<br>
++$id: <a  rel="nofollow" href="http://devicetree.org/schemas/input/qcom,pm8941-pwrkey.yaml#">http://devicetree.org/schemas/input/qcom,pm8941-pwrkey.yaml#</a><br>
++$schema: <a  rel="nofollow" href="http://devicetree.org/meta-schemas/core.yaml#">http://devicetree.org/meta-schemas/core.yaml#</a><br>
++<br>
++title: Qualcomm PM8941 PMIC Power Key<br>
++<br>
++maintainers:<br>
++  - Courtney Cavin <courtney.cavin@xxxxxxxxxxxxxx><br>
++  - Vinod Koul <vkoul@xxxxxxxxxx><br>
++<br>
++properties:<br>
++  compatible:<br>
++    enum:<br>
++      - qcom,pm8941-pwrkey<br>
++      - qcom,pm8941-resin<br>
++      - qcom,pmk8350-pwrkey<br>
++      - qcom,pmk8350-resin<br>
++<br>
++  interrupts:<br>
++    description: |<br>
++          Key change interrupt; The format of the specifier is<br>
++          defined by the binding document describing the node's<br>
++          interrupt parent.<br>
++<br>
++  debounce:<br>
++    description: |<br>
++          Time in microseconds that key must be pressed or<br>
++          released for state change interrupt to trigger.<br>
++    $ref: /schemas/types.yaml#/definitions/uint32<br>
++<br>
++  bias-pull-up:<br>
++    description: |<br>
++           Presence of this property indicates that the KPDPWR_N<br>
++           pin should be configured for pull up.<br>
++    $ref: /schemas/types.yaml#/definitions/flag<br>
++<br>
++  linux,code:<br>
++    description: |<br>
++           The input key-code associated with the power key.<br>
++           Use the linux event codes defined in<br>
++           include/dt-bindings/input/linux-event-codes.h<br>
++           When property is omitted KEY_POWER is assumed.<br>
++    $ref: "input.yaml#"<br>
++<br>
++required:<br>
++  - compatible<br>
++  - interrupts<br>
++<br>
++additionalProperties: false<br>
++<br>
++examples:<br>
++  - |<br>
++   #include <dt-bindings/interrupt-controller/irq.h><br>
++   #include <dt-bindings/input/linux-event-codes.h><br>
++   #include <dt-bindings/spmi/spmi.h><br>
++   spmi_bus: spmi@c440000 {<br>
++     reg = <0x0c440000 0x1100>;<br>
++     #address-cells = <2>;<br>
++     #size-cells = <0>;<br>
++     pmk8350: pmic@0 {<br>
++       reg = <0x0 SPMI_USID>;<br>
++       #address-cells = <1>;<br>
++       #size-cells = <0>;<br>
++       pmk8350_pon: pon_hlos@1300 {<br>
++         reg = <0x1300>;<br>
++         compatible = "qcom,pm8998-pon";<br>
++<br>
++         pwrkey {<br>
++            compatible = "qcom,pm8941-pwrkey";<br>
++            interrupts = < 0x0 0x8 0 IRQ_TYPE_EDGE_BOTH >;<br>
++            debounce = <15625>;<br>
++            bias-pull-up;<br>
++            linux,code = <KEY_POWER>;<br>
++         };<br>
++<br>
++         resin {<br>
++            compatible = "qcom,pm8941-resin";<br>
++            interrupts = <0x0 0x8 1 IRQ_TYPE_EDGE_BOTH>;<br>
++            debounce = <15625>;<br>
++            bias-pull-up;<br>
++            linux,code = <KEY_VOLUMEDOWN>;<br>
++         };<br>
++       };<br>
++     };<br>
++   };<br>
++...<br>
+-- <br>
+QUALCOMM INDIA, on behalf of Qualcomm Innovation Center, Inc. is a member <br>
+of Code Aurora Forum, hosted by The Linux Foundation<br>
+<br>
+<br>
+

@@ -1,0 +1,34 @@
+On Wed, Apr 07, 2021 at 09:59:52PM +0000, Dexuan Cui wrote:<br>
+><i> > From: Leon Romanovsky <leon@xxxxxxxxxx></i><br>
+><i> > Sent: Wednesday, April 7, 2021 5:45 AM</i><br>
+><i> > > ></i><br>
+><i> > > > BTW, you don't need to write { 0 }, the {} is enough.</i><br>
+><i> > ></i><br>
+><i> > > Thanks for the suggestion! I'll use {0} in v2.</i><br>
+><i> > </i><br>
+><i> > You missed the point, "{ 0 }" change to be "{}" without 0.</i><br>
+><i> </i><br>
+><i> Got it. Will make the suggested change.</i><br>
+<br>
+The numbers are not important, if you are curious, read this thread, it<br>
+talks about {}, {0}, memset(0,..) and padding :)<br>
+<a  rel="nofollow" href="https://lore.kernel.org/linux-rdma/20200730192026.110246-1-yepeilin.cs@xxxxxxxxx/">https://lore.kernel.org/linux-rdma/20200730192026.110246-1-yepeilin.cs@xxxxxxxxx/</a><br>
+<br>
+><i> </i><br>
+><i> FWIW, {0} and { 0 } are still widely used, but it looks like</i><br>
+><i> {} is indeed more preferred:</i><br>
+><i> </i><br>
+><i> $ grep "= {};" drivers/net/  -nr  | wc -l</i><br>
+><i> 829</i><br>
+><i> </i><br>
+><i> $ grep "= {0};" drivers/net/  -nr  | wc -l</i><br>
+><i> 708</i><br>
+><i> </i><br>
+><i> $ grep "= {};" kernel/  -nr  | wc -l</i><br>
+><i> 29</i><br>
+><i> </i><br>
+><i> $ grep "= {0};" kernel/  -nr  | wc -l</i><br>
+><i> 4</i><br>
+<br>
+<br>
+

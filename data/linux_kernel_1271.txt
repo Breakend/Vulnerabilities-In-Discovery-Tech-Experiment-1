@@ -1,0 +1,17 @@
+Hi Luiz,<br>
+<br>
+On Thu, 8 Apr 2021 04:47:04 +0000 "Von Dentz, Luiz" <luiz.von.dentz@xxxxxxxxx> wrote:<br>
+><i></i><br>
+><i> I'd leave this for Marcel to comments, but there are quite many</i><br>
+><i> instances of // comment like that, so I wonder what is going on, or</i><br>
+><i> perhaps that is not allowed in include/uapi?</i><br>
+<br>
+We only do these standalone compile checks on the uapi header files.<br>
+<br>
+-- <br>
+Cheers,<br>
+Stephen Rothwell<br>
+<p><strong>Attachment:
+<a href="00030/pgpnDosl5SJUp.pgp" ><tt>pgpnDosl5SJUp.pgp</tt></a></strong><br>
+<em>Description:</em> OpenPGP digital signature</p>
+

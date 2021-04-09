@@ -1,0 +1,25 @@
+Hi Mel Gorman,<br>
+<br>
+I may have found a problem in pfmemalloc skb handling in<br>
+net/core/dev.c. I see there are "if" conditions checking for<br>
+"sk_memalloc_socks() && skb_pfmemalloc(skb)", and when the condition<br>
+is true, the skb is handled specially as a pfmemalloc skb, otherwise<br>
+it is handled as a normal skb.<br>
+<br>
+However, if "sk_memalloc_socks()" is false and "skb_pfmemalloc(skb)"<br>
+is true, the skb is still handled as a normal skb. Is this correct?<br>
+This might happen if "sk_memalloc_socks()" was originally true and has<br>
+just turned into false before the check. Can this happen?<br>
+<br>
+I found the original commit that added the "if" conditions:<br>
+commit b4b9e3558508 ("netvm: set PF_MEMALLOC as appropriate during SKB<br>
+processing")<br>
+The commit message clearly indicates pfmemalloc skbs shouldn't be<br>
+delivered to taps (or protocols that don't support pfmemalloc skbs).<br>
+However, if they are incorrectly handled as normal skbs, they could be<br>
+delivered to those places.<br>
+<br>
+I'm not sure if my understanding is correct. Could you please help? Thank you!<br>
+<br>
+<br>
+

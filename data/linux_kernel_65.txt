@@ -1,0 +1,236 @@
+Clean up macros even further after removal get_fs/set_fs.<br>
+<br>
+Signed-off-by: Thomas Bogendoerfer <tsbogend@xxxxxxxxxxxxxxxx><br>
+---<br>
+ arch/mips/include/asm/uaccess.h | 157 +++++++++++++++-----------------<br>
+ 1 file changed, 71 insertions(+), 86 deletions(-)<br>
+<br>
+diff --git a/arch/mips/include/asm/uaccess.h b/arch/mips/include/asm/uaccess.h<br>
+index 91bc7fb7dca1..e0dedd47e4e6 100644<br>
+--- a/arch/mips/include/asm/uaccess.h<br>
++++ b/arch/mips/include/asm/uaccess.h<br>
+@@ -102,8 +102,15 @@ static inline int __access_ok(const void __user *p, unsigned long size)<br>
+  *<br>
+  * Returns zero on success, or -EFAULT on error.<br>
+  */<br>
+-#define put_user(x,ptr) \<br>
+-	__put_user_check((x), (ptr), sizeof(*(ptr)))<br>
++#define put_user(x, ptr)						\<br>
++({									\<br>
++	__typeof__(*(ptr)) __user *__p = (ptr);				\<br>
++									\<br>
++	might_fault();							\<br>
++	access_ok(__p, sizeof(*__p)) ?					\<br>
++		__put_user((x), __p) :					\<br>
++		-EFAULT;						\<br>
++})<br>
+ <br>
+ /*<br>
+  * get_user: - Get a simple variable from user space.<br>
+@@ -123,8 +130,15 @@ static inline int __access_ok(const void __user *p, unsigned long size)<br>
+  * Returns zero on success, or -EFAULT on error.<br>
+  * On error, the variable @x is set to zero.<br>
+  */<br>
+-#define get_user(x,ptr) \<br>
+-	__get_user_check((x), (ptr), sizeof(*(ptr)))<br>
++#define get_user(x, ptr)						\<br>
++({									\<br>
++	const __typeof__(*(ptr)) __user *__p = (ptr);			\<br>
++									\<br>
++	might_fault();							\<br>
++	access_ok(__p, sizeof(*__p)) ?					\<br>
++		__get_user((x), __p) :					\<br>
++		((x) = 0, -EFAULT);					\<br>
++})<br>
+ <br>
+ /*<br>
+  * __put_user: - Write a simple value into user space, with less checking.<br>
+@@ -146,8 +160,32 @@ static inline int __access_ok(const void __user *p, unsigned long size)<br>
+  *<br>
+  * Returns zero on success, or -EFAULT on error.<br>
+  */<br>
+-#define __put_user(x,ptr) \<br>
+-	__put_user_nocheck((x), (ptr), sizeof(*(ptr)))<br>
++#define __put_user(x, ptr)						\<br>
++({									\<br>
++	__typeof__(*(ptr)) __user *__pu_ptr = (ptr);			\<br>
++	__typeof__(*(ptr)) __pu_val = (x);				\<br>
++	int __pu_err = 0;						\<br>
++									\<br>
++	__chk_user_ptr(__pu_ptr);					\<br>
++	switch (sizeof(*__pu_ptr)) {					\<br>
++	case 1:								\<br>
++		__put_data_asm(user_sb, __pu_ptr);			\<br>
++		break;							\<br>
++	case 2:								\<br>
++		__put_data_asm(user_sh, __pu_ptr);			\<br>
++		break;							\<br>
++	case 4:								\<br>
++		__put_data_asm(user_sw, __pu_ptr);			\<br>
++		break;							\<br>
++	case 8:								\<br>
++		__PUT_DW(user_sd, __pu_ptr);				\<br>
++		break;							\<br>
++	default:							\<br>
++		BUILD_BUG();						\<br>
++	}								\<br>
++									\<br>
++	__pu_err;							\<br>
++})<br>
+ <br>
+ /*<br>
+  * __get_user: - Get a simple variable from user space, with less checking.<br>
+@@ -170,8 +208,31 @@ static inline int __access_ok(const void __user *p, unsigned long size)<br>
+  * Returns zero on success, or -EFAULT on error.<br>
+  * On error, the variable @x is set to zero.<br>
+  */<br>
+-#define __get_user(x,ptr) \<br>
+-	__get_user_nocheck((x), (ptr), sizeof(*(ptr)))<br>
++#define __get_user(x, ptr)						\<br>
++({									\<br>
++	const __typeof__(*(ptr)) __user *__gu_ptr = (ptr);		\<br>
++	int __gu_err = 0;						\<br>
++									\<br>
++	__chk_user_ptr(__gu_ptr);					\<br>
++	switch (sizeof(*__gu_ptr)) {					\<br>
++	case 1:								\<br>
++		__get_data_asm((x), user_lb, __gu_ptr);			\<br>
++		break;							\<br>
++	case 2:								\<br>
++		__get_data_asm((x), user_lh, __gu_ptr);			\<br>
++		break;							\<br>
++	case 4:								\<br>
++		__get_data_asm((x), user_lw, __gu_ptr);			\<br>
++		break;							\<br>
++	case 8:								\<br>
++		__GET_DW((x), user_ld, __gu_ptr);			\<br>
++		break;							\<br>
++	default:							\<br>
++		BUILD_BUG();						\<br>
++	}								\<br>
++									\<br>
++	__gu_err;							\<br>
++})<br>
+ <br>
+ struct __large_struct { unsigned long buf[100]; };<br>
+ #define __m(x) (*(struct __large_struct __user *)(x))<br>
+@@ -183,43 +244,6 @@ struct __large_struct { unsigned long buf[100]; };<br>
+ #define __GET_DW(val, insn, ptr) __get_data_asm(val, insn, ptr)<br>
+ #endif<br>
+ <br>
+-extern void __get_user_unknown(void);<br>
+-<br>
+-#define __get_user_common(val, size, ptr)				\<br>
+-do {									\<br>
+-	switch (size) {							\<br>
+-	case 1: __get_data_asm(val, user_lb, ptr); break;		\<br>
+-	case 2: __get_data_asm(val, user_lh, ptr); break;		\<br>
+-	case 4: __get_data_asm(val, user_lw, ptr); break;		\<br>
+-	case 8: __GET_DW(val, user_ld, ptr); break;			\<br>
+-	default: __get_user_unknown(); break;				\<br>
+-	}								\<br>
+-} while (0)<br>
+-<br>
+-#define __get_user_nocheck(x, ptr, size)				\<br>
+-({									\<br>
+-	int __gu_err;							\<br>
+-									\<br>
+-	__chk_user_ptr(ptr);						\<br>
+-	__get_user_common((x), size, ptr);				\<br>
+-									\<br>
+-	__gu_err;							\<br>
+-})<br>
+-<br>
+-#define __get_user_check(x, ptr, size)					\<br>
+-({									\<br>
+-	int __gu_err = -EFAULT;						\<br>
+-	const __typeof__(*(ptr)) __user * __gu_ptr = (ptr);		\<br>
+-									\<br>
+-	might_fault();							\<br>
+-	if (likely(access_ok(__gu_ptr, size))) {			\<br>
+-		__get_user_common((x), size, __gu_ptr);			\<br>
+-	} else								\<br>
+-		(x) = 0;						\<br>
+-									\<br>
+-	__gu_err;							\<br>
+-})<br>
+-<br>
+ #define __get_data_asm(val, insn, addr)					\<br>
+ {									\<br>
+ 	long __gu_tmp;							\<br>
+@@ -297,7 +321,7 @@ do {									\<br>
+ 			 (__force type *)(src));			\<br>
+ 		break;							\<br>
+ 	default:							\<br>
+-		__get_user_unknown();					\<br>
++		BUILD_BUG();						\<br>
+ 		break;							\<br>
+ 	}								\<br>
+ 	if (unlikely(__gu_err))						\<br>
+@@ -315,43 +339,6 @@ do {									\<br>
+ #define __PUT_DW(insn, ptr) __put_data_asm(insn, ptr)<br>
+ #endif<br>
+ <br>
+-#define __put_user_common(ptr, size)					\<br>
+-do {									\<br>
+-	switch (size) {							\<br>
+-	case 1: __put_data_asm(user_sb, ptr); break;			\<br>
+-	case 2: __put_data_asm(user_sh, ptr); break;			\<br>
+-	case 4: __put_data_asm(user_sw, ptr); break;			\<br>
+-	case 8: __PUT_DW(user_sd, ptr); break;				\<br>
+-	default: __put_user_unknown(); break;				\<br>
+-	}								\<br>
+-} while (0)<br>
+-<br>
+-#define __put_user_nocheck(x, ptr, size)				\<br>
+-({									\<br>
+-	__typeof__(*(ptr)) __pu_val;					\<br>
+-	int __pu_err = 0;						\<br>
+-									\<br>
+-	__pu_val = (x);							\<br>
+-	__chk_user_ptr(ptr);						\<br>
+-	__put_user_common(ptr, size);					\<br>
+-									\<br>
+-	__pu_err;							\<br>
+-})<br>
+-<br>
+-#define __put_user_check(x, ptr, size)					\<br>
+-({									\<br>
+-	__typeof__(*(ptr)) __user *__pu_addr = (ptr);			\<br>
+-	__typeof__(*(ptr)) __pu_val = (x);				\<br>
+-	int __pu_err = -EFAULT;						\<br>
+-									\<br>
+-	might_fault();							\<br>
+-	if (likely(access_ok(__pu_addr, size))) {			\<br>
+-		__put_user_common(__pu_addr, size);			\<br>
+-	}								\<br>
+-									\<br>
+-	__pu_err;							\<br>
+-})<br>
+-<br>
+ #define __put_data_asm(insn, ptr)					\<br>
+ {									\<br>
+ 	__asm__ __volatile__(						\<br>
+@@ -390,8 +377,6 @@ do {									\<br>
+ 	  "i" (-EFAULT));						\<br>
+ }<br>
+ <br>
+-extern void __put_user_unknown(void);<br>
+-<br>
+ #define __put_kernel_nofault(dst, src, type, err_label)			\<br>
+ do {									\<br>
+ 	type __pu_val;					\<br>
+@@ -412,7 +397,7 @@ do {									\<br>
+ 		__PUT_DW(kernel_sd, (type *)(dst));			\<br>
+ 		break;							\<br>
+ 	default:							\<br>
+-		__put_user_unknown();					\<br>
++		BUILD_BUG();						\<br>
+ 		break;							\<br>
+ 	}								\<br>
+ 	if (unlikely(__pu_err))						\<br>
+-- <br>
+2.29.2<br>
+<br>
+<br>
+

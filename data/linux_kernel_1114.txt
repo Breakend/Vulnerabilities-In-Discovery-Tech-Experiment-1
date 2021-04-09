@@ -1,0 +1,14 @@
+On Wed, Apr 07, 2021 at 10:27:12PM +0100, Matthew Wilcox wrote:<br>
+><i> Doing I/O without any lock held already works; it just uses the file</i><br>
+><i> refcount.  It would be better to use a vma refcount, as I already said.</i><br>
+<br>
+The original workload that I developed SPF for (waaaay back when) was<br>
+prefaulting a single huge vma. Using a vma refcount was a total loss<br>
+because it resulted in the same cacheline contention that down_read()<br>
+was having.<br>
+<br>
+As such, I'm always incredibly sad to see mention of vma refcounts.<br>
+They're fundamentally not solving the problem :/<br>
+<br>
+<br>
+

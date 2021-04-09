@@ -1,0 +1,60 @@
+The RSASSA-PSS signature scheme requires knowing the RSA modulus size<br>
+in bits. The rsa akcipher_alg max_size call is insufficient for this,<br>
+as the returned keysize is rounded up to the next byte.<br>
+<br>
+Since the RSA modulus is stored as an MPI accessible via<br>
+struct rsa_mpi_key, move the struct definition to rsa.h to help RSA<br>
+sub-implementations query the MPI values.<br>
+<br>
+Signed-off-by: Varad Gautam <varad.gautam@xxxxxxxx><br>
+---<br>
+ crypto/rsa.c                  | 6 ------<br>
+ include/crypto/internal/rsa.h | 7 +++++++<br>
+ 2 files changed, 7 insertions(+), 6 deletions(-)<br>
+<br>
+diff --git a/crypto/rsa.c b/crypto/rsa.c<br>
+index 4cdbec95d0779..5c4eece5b8028 100644<br>
+--- a/crypto/rsa.c<br>
++++ b/crypto/rsa.c<br>
+@@ -12,12 +12,6 @@<br>
+ #include <crypto/akcipher.h><br>
+ #include <crypto/algapi.h><br>
+ <br>
+-struct rsa_mpi_key {<br>
+-	MPI n;<br>
+-	MPI e;<br>
+-	MPI d;<br>
+-};<br>
+-<br>
+ /*<br>
+  * RSAEP function [RFC3447 sec 5.1.1]<br>
+  * c = m^e mod n;<br>
+diff --git a/include/crypto/internal/rsa.h b/include/crypto/internal/rsa.h<br>
+index e870133f4b775..e73c61f788e68 100644<br>
+--- a/include/crypto/internal/rsa.h<br>
++++ b/include/crypto/internal/rsa.h<br>
+@@ -7,6 +7,7 @@<br>
+  */<br>
+ #ifndef _RSA_HELPER_<br>
+ #define _RSA_HELPER_<br>
++#include <linux/mpi.h><br>
+ #include <linux/types.h><br>
+ <br>
+ /**<br>
+@@ -53,5 +54,11 @@ int rsa_parse_pub_key(struct rsa_key *rsa_key, const void *key,<br>
+ int rsa_parse_priv_key(struct rsa_key *rsa_key, const void *key,<br>
+ 		       unsigned int key_len);<br>
+ <br>
++struct rsa_mpi_key {<br>
++	MPI n;<br>
++	MPI e;<br>
++	MPI d;<br>
++};<br>
++<br>
+ extern struct crypto_template rsa_pkcs1pad_tmpl;<br>
+ #endif<br>
+-- <br>
+2.30.2<br>
+<br>
+<br>
+

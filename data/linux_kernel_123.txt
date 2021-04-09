@@ -1,0 +1,25 @@
+Enable Qualcomm APCS IPC mailbox driver for IPC communication between<br>
+application processor and other masters in platforms like SDX55.<br>
+<br>
+Signed-off-by: Manivannan Sadhasivam <manivannan.sadhasivam@xxxxxxxxxx><br>
+---<br>
+ arch/arm/configs/qcom_defconfig | 1 +<br>
+ 1 file changed, 1 insertion(+)<br>
+<br>
+diff --git a/arch/arm/configs/qcom_defconfig b/arch/arm/configs/qcom_defconfig<br>
+index 3f36887e8333..0b9da27f923a 100644<br>
+--- a/arch/arm/configs/qcom_defconfig<br>
++++ b/arch/arm/configs/qcom_defconfig<br>
+@@ -232,6 +232,7 @@ CONFIG_ARM_SMMU=y<br>
+ CONFIG_HWSPINLOCK=y<br>
+ CONFIG_HWSPINLOCK_QCOM=y<br>
+ CONFIG_MAILBOX=y<br>
++CONFIG_QCOM_APCS_IPC=y<br>
+ CONFIG_REMOTEPROC=y<br>
+ CONFIG_QCOM_ADSP_PIL=y<br>
+ CONFIG_QCOM_Q6V5_PIL=y<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

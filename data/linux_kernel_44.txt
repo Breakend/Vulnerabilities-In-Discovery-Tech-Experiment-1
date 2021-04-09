@@ -1,0 +1,51 @@
+Hello,<br>
+<br>
+after my last patch got accepted and is now in net as commit<br>
+3e6fdeb28f4c33 ("net: dsa: lantiq_gswip: Let GSWIP automatically set<br>
+the xMII clock") [0] some more people from the OpenWrt community<br>
+(many thanks to everyone involved) helped test the GSWIP driver: [1]<br>
+<br>
+It turns out that the previous fix does not work for all boards.<br>
+There's no regression, but it doesn't fix as many problems as I<br>
+thought. This is why two more fixes are needed:<br>
+- the first one solves many (four known but probably there are<br>
+  a few extra hidden ones) reported bugs with the GSWIP where no<br>
+  traffic would flow. Not all circumstances are fully understood<br>
+  but testing shows that switching away from PHY auto polling<br>
+  solves all of them<br>
+- while investigating the different problems which are addressed<br>
+  by the first patch some small issues with the existing code were<br>
+  found. These are addressed by the second patch<br>
+<br>
+<br>
+Changes since v1 at [0]:<br>
+- Don't configure the link parameters in gswip_phylink_mac_config<br>
+  (as we're using the "modern" way in gswip_phylink_mac_link_up).<br>
+  Thanks to Andrew for the hint with the phylink documentation.<br>
+- Clarify that GSWIP_MII_CFG_RMII_CLK is ignored by the hardware in<br>
+  the description of the second patch as suggested by Hauke<br>
+- Don't set GSWIP_MII_CFG_RGMII_IBS in the second patch as we don't<br>
+  have any hardware available for testing this. The patch<br>
+  description now also reflects this.<br>
+- Added Andrew's Reviewed-by to the first patch (thank you!)<br>
+<br>
+<br>
+Best regards,<br>
+Martin<br>
+<br>
+<br>
+[0] <a  rel="nofollow" href="https://patchwork.kernel.org/project/netdevbpf/cover/20210406203508.476122-1-martin.blumenstingl@xxxxxxxxxxxxxx/">https://patchwork.kernel.org/project/netdevbpf/cover/20210406203508.476122-1-martin.blumenstingl@xxxxxxxxxxxxxx/</a><br>
+<br>
+<br>
+Martin Blumenstingl (2):<br>
+  net: dsa: lantiq_gswip: Don't use PHY auto polling<br>
+  net: dsa: lantiq_gswip: Configure all remaining GSWIP_MII_CFG bits<br>
+<br>
+ drivers/net/dsa/lantiq_gswip.c | 202 ++++++++++++++++++++++++++++-----<br>
+ 1 file changed, 174 insertions(+), 28 deletions(-)<br>
+<br>
+-- <br>
+2.31.1<br>
+<br>
+<br>
+

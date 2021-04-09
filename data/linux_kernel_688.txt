@@ -1,0 +1,32 @@
+From: Wanpeng Li <wanpengli@xxxxxxxxxxx><br>
+<br>
+If the target is self we do not need to yield, we can avoid malicious <br>
+guest to play this.<br>
+<br>
+Signed-off-by: Wanpeng Li <wanpengli@xxxxxxxxxxx><br>
+---<br>
+Rebased on <a  rel="nofollow" href="https://lore.kernel.org/kvm/1617697935-4158-1-git-send-email-wanpengli@xxxxxxxxxxx/">https://lore.kernel.org/kvm/1617697935-4158-1-git-send-email-wanpengli@xxxxxxxxxxx/</a><br>
+<br>
+ arch/x86/kvm/x86.c | 4 ++++<br>
+ 1 file changed, 4 insertions(+)<br>
+<br>
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c<br>
+index 43c9f9b..260650f 100644<br>
+--- a/arch/x86/kvm/x86.c<br>
++++ b/arch/x86/kvm/x86.c<br>
+@@ -8230,6 +8230,10 @@ static void kvm_sched_yield(struct kvm_vcpu *vcpu, unsigned long dest_id)<br>
+ 	if (!target)<br>
+ 		goto no_yield;<br>
+ <br>
++	/* yield to self */<br>
++	if (vcpu->vcpu_id == target->vcpu_id)<br>
++		goto no_yield;<br>
++<br>
+ 	if (!READ_ONCE(target->ready))<br>
+ 		goto no_yield;<br>
+ <br>
+-- <br>
+2.7.4<br>
+<br>
+<br>
+

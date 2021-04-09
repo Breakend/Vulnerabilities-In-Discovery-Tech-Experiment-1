@@ -1,0 +1,88 @@
+
+<br>
+On 3/30/2021 7:02 PM, Greg Kroah-Hartman wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+On Tue, Mar 30, 2021 at 06:18:43PM +0530, Sai Prakash Ranjan wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+On 2021-03-30 16:46, Greg Kroah-Hartman wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+On Tue, Mar 30, 2021 at 03:25:58PM +0530, Sai Prakash Ranjan wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+On 2021-03-30 14:37, Greg Kroah-Hartman wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+On Tue, Mar 30, 2021 at 02:12:04PM +0530, Sandeep Maheswaram wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+On 3/26/2021 7:07 PM, Greg Kroah-Hartman wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+On Wed, Mar 24, 2021 at 12:57:32AM +0530, Sandeep Maheswaram wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+This patch adds a shutdown callback to USB DWC core driver to ensure that<br>
+it is properly shutdown in reboot/shutdown path. This is required<br>
+where SMMU address translation is enabled like on SC7180<br>
+SoC and few others. If the hardware is still accessing memory after<br>
+SMMU translation is disabled as part of SMMU shutdown callback in<br>
+system reboot or shutdown path, then IOVAs(I/O virtual address)<br>
+which it was using will go on the bus as the physical addresses which<br>
+might result in unknown crashes (NoC/interconnect errors).<br>
+<br>
+Previously this was added in dwc3 qcom glue driver.<br>
+<a  rel="nofollow" href="https://patchwork.kernel.org/project/linux-arm-msm/list/?series=382449">https://patchwork.kernel.org/project/linux-arm-msm/list/?series=382449</a><br>
+But observed kernel panic as glue driver shutdown getting called after<br>
+iommu shutdown. As we are adding iommu nodes in dwc core node<br>
+in device tree adding shutdown callback in core driver seems correct.<br>
+</blockquote>
+So shouldn't you also remove this from the qcom glue driver at the same<br>
+time?  Please submit both as a patch series.<br>
+<br>
+thanks,<br>
+<br>
+greg k-h<br>
+</blockquote>
+Hi Greg,<br>
+<br>
+The qcom glue driver patch is not merged yet. I have just mentioned<br>
+for it for reference.<br>
+</blockquote>
+You know that we can not add callbacks for no in-kernel user, so what<br>
+good is this patch for now?<br>
+<br>
+</blockquote>
+What in-kernel user? Since when does shutdown callback need an<br>
+in-kernel<br>
+user? When you reboot or shutdown a system, it gets called. The reason<br>
+why the shutdown callback is needed is provided in the commit text.<br>
+</blockquote>
+As I can't see the patch here, I have no idea...<br>
+</blockquote>
+You are replying now to the same patch which adds this shutdown callback :)<br>
+Anyways the qcom dwc3 driver patch which is abandoned which is also<br>
+mentioned<br>
+in the commit text is here [1] and the new shutdown callback patch which we<br>
+are both replying to is in here [2]<br>
+<br>
+[1] <a  rel="nofollow" href="https://lore.kernel.org/lkml/1605162619-10064-1-git-send-email-sanm@xxxxxxxxxxxxxx/">https://lore.kernel.org/lkml/1605162619-10064-1-git-send-email-sanm@xxxxxxxxxxxxxx/</a><br>
+<br>
+[2] <a  rel="nofollow" href="https://lore.kernel.org/lkml/1616527652-7937-1-git-send-email-sanm@xxxxxxxxxxxxxx/">https://lore.kernel.org/lkml/1616527652-7937-1-git-send-email-sanm@xxxxxxxxxxxxxx/</a><br>
+</blockquote>
+Thanks, so, what am I supposed to do here?  The patch is long gone from<br>
+my queue...<br>
+<br>
+greg k-h<br>
+</blockquote>
+<br>
+Hi Greg,<br>
+<br>
+Should I resend this patch ? If so let me know your about opinion about 
+Stephen's comment on just calling dwc3_remove in
+<br>
+<br>
+dwc3_shutdown and ignoring return value.<br>
+<br>
+<a  rel="nofollow" href="https://lore.kernel.org/patchwork/patch/1401242/#1599316">https://lore.kernel.org/patchwork/patch/1401242/#1599316</a><br>
+<br>
+Thanks<br>
+<br>
+Sandeep<br>
+<br>
+<br>
+

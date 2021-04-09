@@ -1,0 +1,25 @@
+There is a error message within devm_ioremap_resource<br>
+already, so remove the dev_err call to avoid redundant<br>
+error message.<br>
+<br>
+Reported-by: Hulk Robot <hulkci@xxxxxxxxxx><br>
+Signed-off-by: Ruiqi Gong <gongruiqi1@xxxxxxxxxx><br>
+---<br>
+ drivers/thermal/broadcom/bcm2835_thermal.c | 1 -<br>
+ 1 file changed, 1 deletion(-)<br>
+<br>
+diff --git a/drivers/thermal/broadcom/bcm2835_thermal.c b/drivers/thermal/broadcom/bcm2835_thermal.c<br>
+index 3199977f1e73..c8e4344d5a3d 100644<br>
+--- a/drivers/thermal/broadcom/bcm2835_thermal.c<br>
++++ b/drivers/thermal/broadcom/bcm2835_thermal.c<br>
+@@ -184,7 +184,6 @@ static int bcm2835_thermal_probe(struct platform_device *pdev)<br>
+ 	data->regs = devm_ioremap_resource(&pdev->dev, res);<br>
+ 	if (IS_ERR(data->regs)) {<br>
+ 		err = PTR_ERR(data->regs);<br>
+-		dev_err(&pdev->dev, "Could not get registers: %d\n", err);<br>
+ 		return err;<br>
+ 	}<br>
+ <br>
+<br>
+<br>
+

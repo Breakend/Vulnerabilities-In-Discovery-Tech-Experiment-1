@@ -1,0 +1,43 @@
+LLVM 13 adds a new warning, -Walign-mismatch, which has an instance in<br>
+blk_mq_complete_send_ipi():<br>
+<br>
+block/blk-mq.c:630:39: warning: passing 8-byte aligned argument to<br>
+32-byte aligned parameter 2 of 'smp_call_function_single_async' may<br>
+result in an unaligned pointer access [-Walign-mismatch]<br>
+                smp_call_function_single_async(cpu, &rq->csd);<br>
+                                                    ^<br>
+1 warning generated.<br>
+<br>
+This is expected after commit 4ccafe032005 ("block: unalign<br>
+call_single_data in struct request"), which purposefully unaligned the<br>
+structure to save space. Given that there is no real alignment<br>
+requirement and there have been no reports of issues since that change,<br>
+it should be safe to disable the warning for this one translation unit.<br>
+<br>
+Link: <a  rel="nofollow" href="https://github.com/ClangBuiltLinux/linux/issues/1328">https://github.com/ClangBuiltLinux/linux/issues/1328</a><br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/20210310182307.zzcbi5w5jrmveld4@archlinux-ax161/">https://lore.kernel.org/r/20210310182307.zzcbi5w5jrmveld4@archlinux-ax161/</a><br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/20210330230249.709221-1-jiancai@xxxxxxxxxx/">https://lore.kernel.org/r/20210330230249.709221-1-jiancai@xxxxxxxxxx/</a><br>
+Signed-off-by: Nathan Chancellor <nathan@xxxxxxxxxx><br>
+---<br>
+ block/Makefile | 1 +<br>
+ 1 file changed, 1 insertion(+)<br>
+<br>
+diff --git a/block/Makefile b/block/Makefile<br>
+index 8d841f5f986f..d69ac0bd8e61 100644<br>
+--- a/block/Makefile<br>
++++ b/block/Makefile<br>
+@@ -10,6 +10,7 @@ obj-$(CONFIG_BLOCK) := bio.o elevator.o blk-core.o blk-sysfs.o \<br>
+ 			blk-mq-sysfs.o blk-mq-cpumap.o blk-mq-sched.o ioctl.o \<br>
+ 			genhd.o ioprio.o badblocks.o partitions/ blk-rq-qos.o<br>
+ <br>
++CFLAGS_blk-mq.o := $(call cc-disable-warning, align-mismatch)<br>
+ obj-$(CONFIG_BOUNCE)		+= bounce.o<br>
+ obj-$(CONFIG_BLK_SCSI_REQUEST)	+= scsi_ioctl.o<br>
+ obj-$(CONFIG_BLK_DEV_BSG)	+= bsg.o<br>
+<br>
+base-commit: e49d033bddf5b565044e2abe4241353959bc9120<br>
+-- <br>
+2.31.1.189.g2e36527f23<br>
+<br>
+<br>
+

@@ -1,0 +1,32 @@
+Add device tree binding to support MT7530 interrupt controller.<br>
+<br>
+Signed-off-by: DENG Qingfang <dqfext@xxxxxxxxx><br>
+Reviewed-by: Andrew Lunn <andrew@xxxxxxx><br>
+---<br>
+RFC v2 -> RFC v3:<br>
+- No changes.<br>
+<br>
+ Documentation/devicetree/bindings/net/dsa/mt7530.txt | 5 +++++<br>
+ 1 file changed, 5 insertions(+)<br>
+<br>
+diff --git a/Documentation/devicetree/bindings/net/dsa/mt7530.txt b/Documentation/devicetree/bindings/net/dsa/mt7530.txt<br>
+index de04626a8e9d..26b34888eb62 100644<br>
+--- a/Documentation/devicetree/bindings/net/dsa/mt7530.txt<br>
++++ b/Documentation/devicetree/bindings/net/dsa/mt7530.txt<br>
+@@ -81,6 +81,11 @@ Optional properties:<br>
+ - gpio-controller: Boolean; if defined, MT7530's LED controller will run on<br>
+ 	GPIO mode.<br>
+ - #gpio-cells: Must be 2 if gpio-controller is defined.<br>
++- interrupt-controller: Boolean; Enables the internal interrupt controller.<br>
++<br>
++If interrupt-controller is defined, the following property is required.<br>
++<br>
++- interrupts: Parent interrupt for the interrupt controller.<br>
+ <br>
+ See Documentation/devicetree/bindings/net/dsa/dsa.txt for a list of additional<br>
+ required, optional properties and how the integrated switch subnodes must<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

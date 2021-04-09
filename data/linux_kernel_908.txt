@@ -1,0 +1,66 @@
+On Thu, Apr 08, 2021 at 11:20:11AM +0200, David Hildenbrand wrote:<br>
+><i> Random drivers should not override a user configuration of core knobs</i><br>
+><i> (e.g., CONFIG_DMA_CMA=n). Use "imply" instead, to still respect</i><br>
+><i> dependencies and manual overrides.</i><br>
+><i> </i><br>
+><i> "This is similar to "select" as it enforces a lower limit on another</i><br>
+><i>  symbol except that the "implied" symbol's value may still be set to n</i><br>
+><i>  from a direct dependency or with a visible prompt."</i><br>
+><i> </i><br>
+><i> Implying DRM_CMA should be sufficient, as that depends on CMA.</i><br>
+<br>
+          ^ DMA_CMA<br>
+><i> </i><br>
+><i> Note: If this is a real dependency, we should use "depends on DMA_CMA"</i><br>
+><i> instead -  but I assume the driver can work without CMA just fine --</i><br>
+><i> esp. when we wouldn't have HAVE_DMA_CONTIGUOUS right now.</i><br>
+><i> </i><br>
+><i> Signed-off-by: David Hildenbrand <david@xxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  drivers/gpu/drm/aspeed/Kconfig  | 3 +--</i><br>
+><i>  drivers/gpu/drm/etnaviv/Kconfig | 3 +--</i><br>
+><i>  2 files changed, 2 insertions(+), 4 deletions(-)</i><br>
+><i> </i><br>
+><i> diff --git a/drivers/gpu/drm/aspeed/Kconfig b/drivers/gpu/drm/aspeed/Kconfig</i><br>
+><i> index 5e95bcea43e9..a055f763d230 100644</i><br>
+><i> --- a/drivers/gpu/drm/aspeed/Kconfig</i><br>
+><i> +++ b/drivers/gpu/drm/aspeed/Kconfig</i><br>
+><i> @@ -6,9 +6,8 @@ config DRM_ASPEED_GFX</i><br>
+><i>  	depends on MMU</i><br>
+><i>  	select DRM_KMS_HELPER</i><br>
+><i>  	select DRM_KMS_CMA_HELPER</i><br>
+><i> -	select DMA_CMA if HAVE_DMA_CONTIGUOUS</i><br>
+><i> -	select CMA if HAVE_DMA_CONTIGUOUS</i><br>
+><i>  	select MFD_SYSCON</i><br>
+><i> +	imply DRM_CMA</i><br>
+<br>
+Ditto<br>
+<br>
+><i>  	help</i><br>
+><i>  	  Chose this option if you have an ASPEED AST2500 SOC Display</i><br>
+><i>  	  Controller (aka GFX).</i><br>
+><i> diff --git a/drivers/gpu/drm/etnaviv/Kconfig b/drivers/gpu/drm/etnaviv/Kconfig</i><br>
+><i> index faa7fc68b009..5f5576b7221a 100644</i><br>
+><i> --- a/drivers/gpu/drm/etnaviv/Kconfig</i><br>
+><i> +++ b/drivers/gpu/drm/etnaviv/Kconfig</i><br>
+><i> @@ -9,9 +9,8 @@ config DRM_ETNAVIV</i><br>
+><i>  	select THERMAL if DRM_ETNAVIV_THERMAL</i><br>
+><i>  	select TMPFS</i><br>
+><i>  	select WANT_DEV_COREDUMP</i><br>
+><i> -	select CMA if HAVE_DMA_CONTIGUOUS</i><br>
+><i> -	select DMA_CMA if HAVE_DMA_CONTIGUOUS</i><br>
+><i>  	select DRM_SCHED</i><br>
+><i> +	imply DMA_CMA</i><br>
+><i>  	help</i><br>
+><i>  	  DRM driver for Vivante GPUs.</i><br>
+><i>  </i><br>
+><i> -- </i><br>
+><i> 2.30.2</i><br>
+><i> </i><br>
+<br>
+-- <br>
+Sincerely yours,<br>
+Mike.<br>
+<br>
+<br>
+

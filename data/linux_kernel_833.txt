@@ -1,0 +1,128 @@
+Adds flow of entering Partial Power Down in<br>
+"dwc2_port_suspend()" function when core receives suspend.<br>
+<br>
+NOTE: Switch case statement is used for hibernation partial<br>
+power down and clock gating mode determination. In this patch<br>
+only Partial Power Down is implemented the Hibernation and<br>
+clock gating implementations are planned to be added.<br>
+<br>
+Signed-off-by: Artur Petrosyan <Arthur.Petrosyan@xxxxxxxxxxxx><br>
+---<br>
+ Changes in v3:<br>
+ - None<br>
+ Changes in v2:<br>
+ - None<br>
+<br>
+ drivers/usb/dwc2/core.h |  5 +++--<br>
+ drivers/usb/dwc2/hcd.c  | 48 ++++++++++++++++++++++++++---------------<br>
+ 2 files changed, 34 insertions(+), 19 deletions(-)<br>
+<br>
+diff --git a/drivers/usb/dwc2/core.h b/drivers/usb/dwc2/core.h<br>
+index b7d99cf9e84c..76807abd753b 100644<br>
+--- a/drivers/usb/dwc2/core.h<br>
++++ b/drivers/usb/dwc2/core.h<br>
+@@ -1470,7 +1470,7 @@ void dwc2_hcd_connect(struct dwc2_hsotg *hsotg);<br>
+ void dwc2_hcd_disconnect(struct dwc2_hsotg *hsotg, bool force);<br>
+ void dwc2_hcd_start(struct dwc2_hsotg *hsotg);<br>
+ int dwc2_core_init(struct dwc2_hsotg *hsotg, bool initial_setup);<br>
+-void dwc2_port_suspend(struct dwc2_hsotg *hsotg, u16 windex);<br>
++int dwc2_port_suspend(struct dwc2_hsotg *hsotg, u16 windex);<br>
+ void dwc2_port_resume(struct dwc2_hsotg *hsotg);<br>
+ int dwc2_backup_host_registers(struct dwc2_hsotg *hsotg);<br>
+ int dwc2_restore_host_registers(struct dwc2_hsotg *hsotg);<br>
+@@ -1495,7 +1495,8 @@ static inline void dwc2_hcd_start(struct dwc2_hsotg *hsotg) {}<br>
+ static inline void dwc2_hcd_remove(struct dwc2_hsotg *hsotg) {}<br>
+ static inline int dwc2_core_init(struct dwc2_hsotg *hsotg, bool initial_setup)<br>
+ { return 0; }<br>
+-static inline void dwc2_port_suspend(struct dwc2_hsotg *hsotg, u16 windex) {}<br>
++static inline int dwc2_port_suspend(struct dwc2_hsotg *hsotg, u16 windex)<br>
++{ return 0; }<br>
+ static inline void dwc2_port_resume(struct dwc2_hsotg *hsotg) {}<br>
+ static inline int dwc2_hcd_init(struct dwc2_hsotg *hsotg)<br>
+ { return 0; }<br>
+diff --git a/drivers/usb/dwc2/hcd.c b/drivers/usb/dwc2/hcd.c<br>
+index f4247a66c2b2..e7fb0d5940bc 100644<br>
+--- a/drivers/usb/dwc2/hcd.c<br>
++++ b/drivers/usb/dwc2/hcd.c<br>
+@@ -3281,15 +3281,18 @@ static int dwc2_host_is_b_hnp_enabled(struct dwc2_hsotg *hsotg)<br>
+  * @hsotg: Programming view of the DWC_otg controller<br>
+  * @windex: The control request wIndex field<br>
+  *<br>
++ * Return: non-zero if failed to enter suspend mode for host.<br>
++ *<br>
+  * This function is for entering Host mode suspend.<br>
+  * Must NOT be called with interrupt disabled or spinlock held.<br>
+  */<br>
+-void dwc2_port_suspend(struct dwc2_hsotg *hsotg, u16 windex)<br>
++int dwc2_port_suspend(struct dwc2_hsotg *hsotg, u16 windex)<br>
+ {<br>
+ 	unsigned long flags;<br>
+ 	u32 hprt0;<br>
+ 	u32 pcgctl;<br>
+ 	u32 gotgctl;<br>
++	int ret = 0;<br>
+ <br>
+ 	dev_dbg(hsotg->dev, "%s()\n", __func__);<br>
+ <br>
+@@ -3302,22 +3305,31 @@ void dwc2_port_suspend(struct dwc2_hsotg *hsotg, u16 windex)<br>
+ 		hsotg->op_state = OTG_STATE_A_SUSPEND;<br>
+ 	}<br>
+ <br>
+-	hprt0 = dwc2_read_hprt0(hsotg);<br>
+-	hprt0 |= HPRT0_SUSP;<br>
+-	dwc2_writel(hsotg, hprt0, HPRT0);<br>
+-<br>
+-	hsotg->bus_suspended = true;<br>
+-<br>
+-	/*<br>
+-	 * If power_down is supported, Phy clock will be suspended<br>
+-	 * after registers are backuped.<br>
+-	 */<br>
+-	if (!hsotg->params.power_down) {<br>
+-		/* Suspend the Phy Clock */<br>
+-		pcgctl = dwc2_readl(hsotg, PCGCTL);<br>
+-		pcgctl |= PCGCTL_STOPPCLK;<br>
+-		dwc2_writel(hsotg, pcgctl, PCGCTL);<br>
+-		udelay(10);<br>
++	switch (hsotg->params.power_down) {<br>
++	case DWC2_POWER_DOWN_PARAM_PARTIAL:<br>
++		ret = dwc2_enter_partial_power_down(hsotg);<br>
++		if (ret)<br>
++			dev_err(hsotg->dev,<br>
++				"enter partial_power_down failed.\n");<br>
++		break;<br>
++	case DWC2_POWER_DOWN_PARAM_HIBERNATION:<br>
++	case DWC2_POWER_DOWN_PARAM_NONE:<br>
++	default:<br>
++		hprt0 = dwc2_read_hprt0(hsotg);<br>
++		hprt0 |= HPRT0_SUSP;<br>
++		dwc2_writel(hsotg, hprt0, HPRT0);<br>
++		hsotg->bus_suspended = true;<br>
++		/*<br>
++		 * If power_down is supported, Phy clock will be suspended<br>
++		 * after registers are backuped.<br>
++		 */<br>
++		if (!hsotg->params.power_down) {<br>
++			/* Suspend the Phy Clock */<br>
++			pcgctl = dwc2_readl(hsotg, PCGCTL);<br>
++			pcgctl |= PCGCTL_STOPPCLK;<br>
++			dwc2_writel(hsotg, pcgctl, PCGCTL);<br>
++			udelay(10);<br>
++		}<br>
+ 	}<br>
+ <br>
+ 	/* For HNP the bus must be suspended for at least 200ms */<br>
+@@ -3332,6 +3344,8 @@ void dwc2_port_suspend(struct dwc2_hsotg *hsotg, u16 windex)<br>
+ 	} else {<br>
+ 		spin_unlock_irqrestore(&hsotg->lock, flags);<br>
+ 	}<br>
++<br>
++	return ret;<br>
+ }<br>
+ <br>
+ /**<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

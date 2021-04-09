@@ -1,0 +1,45 @@
+On Thu, 8 Apr 2021 at 04:21, Andy Shevchenko <andy.shevchenko@xxxxxxxxx> wrote:<br>
+><i></i><br>
+><i> On Thu, Apr 8, 2021 at 12:38 AM Naresh Kamboju</i><br>
+><i> <naresh.kamboju@xxxxxxxxxx> wrote:</i><br>
+><i> ></i><br>
+><i> > While running kselftest recently added gpio gpio-sim.sh test case the following</i><br>
+><i> > warning was triggered on Linux next tag 20210330 tag running on arm64 juno</i><br>
+><i> > and hikey devices.</i><br>
+><i> ></i><br>
+><i> > GOOD: next-20210326</i><br>
+><i> > BAD: next-20210330</i><br>
+><i> ></i><br>
+><i> > This is still happening today on Linux next tag 20210407.</i><br>
+><i></i><br>
+><i> Can you add the following</i><br>
+><i></i><br>
+><i>   sysfs_attr_init(attrs[i]);</i><br>
+><i></i><br>
+><i> to the end of the loop in gpio_sim_setup_sysfs()?</i><br>
+<br>
+Do you mean like this,<br>
+<br>
+diff --git a/drivers/gpio/gpio-sim.c b/drivers/gpio/gpio-sim.c<br>
+index ea17289a869c..5fe67ccf45f7 100644<br>
+--- a/drivers/gpio/gpio-sim.c<br>
++++ b/drivers/gpio/gpio-sim.c<br>
+@@ -296,6 +296,7 @@ static int gpio_sim_setup_sysfs(struct gpio_sim_chip *chip)<br>
+                dev_attr->store = gpio_sim_sysfs_line_store;<br>
+<br>
+                attrs[i] = &dev_attr->attr;<br>
++               sysfs_attr_init(attrs[i]);<br>
+        }<br>
+<br>
+        chip->attr_group.name = "line-ctrl";<br>
+<br>
+<br>
+><i></i><br>
+><i> If it fixes an issue I'll send a formal patch.</i><br>
+<br>
+I will build and test this and report here.<br>
+<br>
+- Naresh<br>
+<br>
+<br>
+

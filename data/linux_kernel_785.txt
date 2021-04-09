@@ -1,0 +1,104 @@
+On Thu, Apr 01, 2021 at 11:32:23AM -0700, Dave Hansen wrote:<br>
+><i> </i><br>
+><i> From: Yang Shi <yang.shi@xxxxxxxxxxxxxxxxx></i><br>
+><i> </i><br>
+><i> The migrate_pages() returns the number of pages that were not migrated,</i><br>
+><i> or an error code.  When returning an error code, there is no way to know</i><br>
+><i> how many pages were migrated or not migrated.</i><br>
+><i> </i><br>
+><i> In the following patch, migrate_pages() is used to demote pages to PMEM</i><br>
+><i> node, we need account how many pages are reclaimed (demoted) since page</i><br>
+><i> reclaim behavior depends on this.  Add *nr_succeeded parameter to make</i><br>
+><i> migrate_pages() return how many pages are demoted successfully for all</i><br>
+><i> cases.</i><br>
+><i> </i><br>
+><i> Signed-off-by: Yang Shi <yang.shi@xxxxxxxxxxxxxxxxx></i><br>
+><i> Signed-off-by: Dave Hansen <dave.hansen@xxxxxxxxxxxxxxx></i><br>
+><i> Reviewed-by: Yang Shi <shy828301@xxxxxxxxx></i><br>
+><i> Cc: Wei Xu <weixugc@xxxxxxxxxx></i><br>
+><i> Cc: Huang Ying <ying.huang@xxxxxxxxx></i><br>
+><i> Cc: Dan Williams <dan.j.williams@xxxxxxxxx></i><br>
+><i> Cc: David Hildenbrand <david@xxxxxxxxxx></i><br>
+><i> Cc: osalvador <osalvador@xxxxxxx></i><br>
+><i> </i><br>
+<br>
+...<br>
+><i>  int migrate_pages(struct list_head *from, new_page_t get_new_page,</i><br>
+><i>  		free_page_t put_new_page, unsigned long private,</i><br>
+><i> -		enum migrate_mode mode, int reason)</i><br>
+><i> +		enum migrate_mode mode, int reason, unsigned int *nr_succeeded)</i><br>
+><i>  {</i><br>
+><i>  	int retry = 1;</i><br>
+><i>  	int thp_retry = 1;</i><br>
+><i>  	int nr_failed = 0;</i><br>
+><i> -	int nr_succeeded = 0;</i><br>
+><i>  	int nr_thp_succeeded = 0;</i><br>
+><i>  	int nr_thp_failed = 0;</i><br>
+><i>  	int nr_thp_split = 0;</i><br>
+><i> @@ -1611,10 +1611,10 @@ retry:</i><br>
+><i>  			case MIGRATEPAGE_SUCCESS:</i><br>
+><i>  				if (is_thp) {</i><br>
+><i>  					nr_thp_succeeded++;</i><br>
+><i> -					nr_succeeded += nr_subpages;</i><br>
+><i> +					*nr_succeeded += nr_subpages;</i><br>
+><i>  					break;</i><br>
+><i>  				}</i><br>
+><i> -				nr_succeeded++;</i><br>
+><i> +				(*nr_succeeded)++;</i><br>
+><i>  				break;</i><br>
+><i>  			default:</i><br>
+><i>  				/*</i><br>
+><i> @@ -1643,12 +1643,12 @@ out:</i><br>
+><i>  	 */</i><br>
+><i>  	list_splice(&ret_pages, from);</i><br>
+><i>  </i><br>
+><i> -	count_vm_events(PGMIGRATE_SUCCESS, nr_succeeded);</i><br>
+><i> +	count_vm_events(PGMIGRATE_SUCCESS, *nr_succeeded);</i><br>
+><i>  	count_vm_events(PGMIGRATE_FAIL, nr_failed);</i><br>
+><i>  	count_vm_events(THP_MIGRATION_SUCCESS, nr_thp_succeeded);</i><br>
+><i>  	count_vm_events(THP_MIGRATION_FAIL, nr_thp_failed);</i><br>
+><i>  	count_vm_events(THP_MIGRATION_SPLIT, nr_thp_split);</i><br>
+><i> -	trace_mm_migrate_pages(nr_succeeded, nr_failed, nr_thp_succeeded,</i><br>
+><i> +	trace_mm_migrate_pages(*nr_succeeded, nr_failed, nr_thp_succeeded,</i><br>
+><i>  			       nr_thp_failed, nr_thp_split, mode, reason);</i><br>
+<br>
+It seems that reclaiming is the only user who cared about how many pages<br>
+could we migrated, could not do the following instead:<br>
+<br>
+diff --git a/mm/migrate.c b/mm/migrate.c<br>
+index 695a594e5860..d4170b7ea2fe 100644<br>
+--- a/mm/migrate.c<br>
++++ b/mm/migrate.c<br>
+@@ -1503,7 +1503,7 @@ static inline int try_split_thp(struct page *page, struct page **page2,<br>
+  */<br>
+ int migrate_pages(struct list_head *from, new_page_t get_new_page,<br>
+                free_page_t put_new_page, unsigned long private,<br>
+-               enum migrate_mode mode, int reason)<br>
++               enum migrate_mode mode, int reason, unsigned int *ret_succeeded)<br>
+ {<br>
+        int retry = 1;<br>
+        int thp_retry = 1;<br>
+@@ -1654,6 +1654,9 @@ int migrate_pages(struct list_head *from, new_page_t get_new_page,<br>
+        if (!swapwrite)<br>
+                current->flags &= ~PF_SWAPWRITE;<br>
+<br>
++       if (ret_succedded)<br>
++               *ret_succedded = nr_succedded;<br>
++<br>
+        return rc;<br>
+ }<br>
+<br>
+ And pass only a valid pointer from demote_page_list() and NULL from all<br>
+ the others?<br>
+ I was just wondered after all those "unsigned int nr_succedded" in all<br>
+ other functions.<br>
+ This would also solve the "be careful to initialize nr_succedded"<br>
+ problem?<br>
+<br>
+<br>
+-- <br>
+Oscar Salvador<br>
+SUSE L3<br>
+<br>
+<br>
+

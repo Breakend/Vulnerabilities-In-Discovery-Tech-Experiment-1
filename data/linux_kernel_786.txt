@@ -1,0 +1,43 @@
+On Sat, Apr 03, 2021 at 12:43:02PM +0200, Michal Suchánek wrote:<br>
+><i> Hello,</i><br>
+><i> </i><br>
+><i> thanks for the fix.</i><br>
+><i> </i><br>
+><i> On Fri, Apr 02, 2021 at 01:26:38AM +0900, Masahiro Yamada wrote:</i><br>
+><i> > On Thu, Apr 1, 2021 at 9:39 PM Michal Suchánek <msuchanek@xxxxxxx> wrote:</i><br>
+><i> > I squashed the following. Please wait for tomorrow's linux-next.</i><br>
+><i> </i><br>
+><i> > diff --git a/scripts/dummy-tools/gcc b/scripts/dummy-tools/gcc</i><br>
+><i> > index 39e65fee59bd..f6d543725f1e 100755</i><br>
+><i> > --- a/scripts/dummy-tools/gcc</i><br>
+><i> > +++ b/scripts/dummy-tools/gcc</i><br>
+><i> > @@ -67,6 +67,12 @@ if arg_contain -E "$@"; then</i><br>
+><i> >   fi</i><br>
+><i> >  fi</i><br>
+><i> > </i><br>
+><i> > +# To set CONFIG_AS_IS_GNU</i><br>
+><i> > +if arg_contain -Wa,--version "$@"; then</i><br>
+><i> > + echo "GNU assembler (scripts/dummy-tools) 2.50"</i><br>
+><i> > + exit 0</i><br>
+><i> > +fi</i><br>
+><i> > +</i><br>
+><i> >  if arg_contain -S "$@"; then</i><br>
+><i> >   # For scripts/gcc-x86-*-has-stack-protector.sh</i><br>
+><i> >   if arg_contain -fstack-protector "$@"; then</i><br>
+><i> </i><br>
+><i> Looks like this did not make it to linux-next (0104 does not have it,</i><br>
+><i> 0204 does not exist).</i><br>
+The fixup still applies locally so it loooks like it is still not<br>
+upstream.<br>
+><i> </i><br>
+><i> Nonetheless, applying the fixup resolves the problem.</i><br>
+Mostly, I still get:<br>
+<br>
+which: no elfedit in (./scripts/dummy-tools)<br>
+><i> </i><br>
+><i> Thanks</i><br>
+><i> </i><br>
+><i> Michal</i><br>
+<br>
+<br>
+

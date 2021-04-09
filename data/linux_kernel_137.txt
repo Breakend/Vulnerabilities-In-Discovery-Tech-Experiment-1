@@ -1,0 +1,29 @@
+Add SCM node to enable SCM functionality on SDX55 platform.<br>
+<br>
+Signed-off-by: Manivannan Sadhasivam <manivannan.sadhasivam@xxxxxxxxxx><br>
+---<br>
+ arch/arm/boot/dts/qcom-sdx55.dtsi | 6 ++++++<br>
+ 1 file changed, 6 insertions(+)<br>
+<br>
+diff --git a/arch/arm/boot/dts/qcom-sdx55.dtsi b/arch/arm/boot/dts/qcom-sdx55.dtsi<br>
+index 4ca871735025..daf34f24a5d3 100644<br>
+--- a/arch/arm/boot/dts/qcom-sdx55.dtsi<br>
++++ b/arch/arm/boot/dts/qcom-sdx55.dtsi<br>
+@@ -85,6 +85,12 @@ opp-1555200000 {<br>
+ 		};<br>
+ 	};<br>
+ <br>
++	firmware {<br>
++		scm {<br>
++			compatible = "qcom,scm-sdx55", "qcom,scm";<br>
++		};<br>
++	};<br>
++<br>
+ 	psci {<br>
+ 		compatible = "arm,psci-1.0";<br>
+ 		method = "smc";<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

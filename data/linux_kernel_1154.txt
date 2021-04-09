@@ -1,0 +1,20 @@
+On Thu, Apr 08, 2021 at 05:26:40PM +0000, Min Li wrote:<br>
+><i> > </i><br>
+><i> > Again, please make this only one file.</i><br>
+><i> > </i><br>
+><i> Hi Greg, the 2 boards have some same named registers in idt82p33_reg.h and idt8a340_reg.h</i><br>
+><i> so if I put them all in the same file, there will be name conflicts. </i><br>
+<br>
+That does not make sense, this is only one kernel module, with one .h<br>
+file in this patch, I do not see those other files you are talking<br>
+about...<br>
+<br>
+And if you have named registers that are identical, and yet you only<br>
+work on one device, that feels like a design flaw somewhere :)<br>
+<br>
+thanks,<br>
+<br>
+greg k-h<br>
+<br>
+<br>
+

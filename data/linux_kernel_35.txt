@@ -1,0 +1,35 @@
+<br>
+<br>
+On 4/8/2021 11:38 AM, Martin Blumenstingl wrote:<br>
+><i> There are a few more bits in the GSWIP_MII_CFG register for which we</i><br>
+><i> did rely on the boot-loader (or the hardware defaults) to set them up</i><br>
+><i> properly.</i><br>
+><i> </i><br>
+><i> For some external RMII PHYs we need to select the GSWIP_MII_CFG_RMII_CLK</i><br>
+><i> bit and also we should un-set it for non-RMII PHYs. The</i><br>
+><i> GSWIP_MII_CFG_RMII_CLK bit is ignored for other PHY connection modes.</i><br>
+><i> </i><br>
+><i> The GSWIP IP also supports in-band auto-negotiation for RGMII PHYs when</i><br>
+><i> the GSWIP_MII_CFG_RGMII_IBS bit is set. Clear this bit always as there's</i><br>
+><i> no known hardware which uses this (so it is not tested yet).</i><br>
+><i> </i><br>
+><i> Clear the xMII isolation bit when set at initialization time if it was</i><br>
+><i> previously set by the bootloader. Not doing so could lead to no traffic</i><br>
+><i> (neither RX nor TX) on a port with this bit set.</i><br>
+><i> </i><br>
+><i> While here, also add the GSWIP_MII_CFG_RESET bit. We don't need to</i><br>
+><i> manage it because this bit is self-clearning when set. We still add it</i><br>
+><i> here to get a better overview of the GSWIP_MII_CFG register.</i><br>
+><i> </i><br>
+><i> Fixes: 14fceff4771e51 ("net: dsa: Add Lantiq / Intel DSA driver for vrx200")</i><br>
+><i> Cc: stable@xxxxxxxxxxxxxxx</i><br>
+><i> Suggested-by: Hauke Mehrtens <hauke@xxxxxxxxxx></i><br>
+><i> Acked-by: Hauke Mehrtens <hauke@xxxxxxxxxx></i><br>
+><i> Signed-off-by: Martin Blumenstingl <martin.blumenstingl@xxxxxxxxxxxxxx></i><br>
+<br>
+Reviewed-by: Florian Fainelli <f.fainelli@xxxxxxxxx><br>
+-- <br>
+Florian<br>
+<br>
+<br>
+

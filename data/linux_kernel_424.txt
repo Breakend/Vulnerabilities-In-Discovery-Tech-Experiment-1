@@ -1,0 +1,253 @@
+From: Matthew Wilcox (Oracle) <willy@xxxxxxxxxxxxx><br>
+<br>
+For readahead_expand(), we need to modify the file ra_state, so pass it<br>
+down by adding it to the ractl.  We have to do this because it's not always<br>
+the same as f_ra in the struct file that is already being passed.<br>
+<br>
+Signed-off-by: Matthew Wilcox (Oracle) <willy@xxxxxxxxxxxxx><br>
+Signed-off-by: David Howells <dhowells@xxxxxxxxxx><br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/20210407201857.3582797-2-willy@xxxxxxxxxxxxx/">https://lore.kernel.org/r/20210407201857.3582797-2-willy@xxxxxxxxxxxxx/</a><br>
+---<br>
+<br>
+ fs/ext4/verity.c        |    2 +-<br>
+ fs/f2fs/file.c          |    2 +-<br>
+ fs/f2fs/verity.c        |    2 +-<br>
+ include/linux/pagemap.h |   20 +++++++++++---------<br>
+ mm/filemap.c            |    4 ++--<br>
+ mm/internal.h           |    7 +++----<br>
+ mm/readahead.c          |   22 +++++++++++-----------<br>
+ 7 files changed, 30 insertions(+), 29 deletions(-)<br>
+<br>
+diff --git a/fs/ext4/verity.c b/fs/ext4/verity.c<br>
+index 00e3cbde472e..07438f46b558 100644<br>
+--- a/fs/ext4/verity.c<br>
++++ b/fs/ext4/verity.c<br>
+@@ -370,7 +370,7 @@ static struct page *ext4_read_merkle_tree_page(struct inode *inode,<br>
+ 					       pgoff_t index,<br>
+ 					       unsigned long num_ra_pages)<br>
+ {<br>
+-	DEFINE_READAHEAD(ractl, NULL, inode->i_mapping, index);<br>
++	DEFINE_READAHEAD(ractl, NULL, NULL, inode->i_mapping, index);<br>
+ 	struct page *page;<br>
+ <br>
+ 	index += ext4_verity_metadata_pos(inode) >> PAGE_SHIFT;<br>
+diff --git a/fs/f2fs/file.c b/fs/f2fs/file.c<br>
+index d26ff2ae3f5e..c1e6f669a0c4 100644<br>
+--- a/fs/f2fs/file.c<br>
++++ b/fs/f2fs/file.c<br>
+@@ -4051,7 +4051,7 @@ static int f2fs_ioc_set_compress_option(struct file *filp, unsigned long arg)<br>
+ <br>
+ static int redirty_blocks(struct inode *inode, pgoff_t page_idx, int len)<br>
+ {<br>
+-	DEFINE_READAHEAD(ractl, NULL, inode->i_mapping, page_idx);<br>
++	DEFINE_READAHEAD(ractl, NULL, NULL, inode->i_mapping, page_idx);<br>
+ 	struct address_space *mapping = inode->i_mapping;<br>
+ 	struct page *page;<br>
+ 	pgoff_t redirty_idx = page_idx;<br>
+diff --git a/fs/f2fs/verity.c b/fs/f2fs/verity.c<br>
+index 054ec852b5ea..a7beff28a3c5 100644<br>
+--- a/fs/f2fs/verity.c<br>
++++ b/fs/f2fs/verity.c<br>
+@@ -228,7 +228,7 @@ static struct page *f2fs_read_merkle_tree_page(struct inode *inode,<br>
+ 					       pgoff_t index,<br>
+ 					       unsigned long num_ra_pages)<br>
+ {<br>
+-	DEFINE_READAHEAD(ractl, NULL, inode->i_mapping, index);<br>
++	DEFINE_READAHEAD(ractl, NULL, NULL, inode->i_mapping, index);<br>
+ 	struct page *page;<br>
+ <br>
+ 	index += f2fs_verity_metadata_pos(inode) >> PAGE_SHIFT;<br>
+diff --git a/include/linux/pagemap.h b/include/linux/pagemap.h<br>
+index 4a7c916abb5c..9a9e558ce4c7 100644<br>
+--- a/include/linux/pagemap.h<br>
++++ b/include/linux/pagemap.h<br>
+@@ -811,20 +811,23 @@ static inline int add_to_page_cache(struct page *page,<br>
+  * @file: The file, used primarily by network filesystems for authentication.<br>
+  *	  May be NULL if invoked internally by the filesystem.<br>
+  * @mapping: Readahead this filesystem object.<br>
++ * @ra: File readahead state.  May be NULL.<br>
+  */<br>
+ struct readahead_control {<br>
+ 	struct file *file;<br>
+ 	struct address_space *mapping;<br>
++	struct file_ra_state *ra;<br>
+ /* private: use the readahead_* accessors instead */<br>
+ 	pgoff_t _index;<br>
+ 	unsigned int _nr_pages;<br>
+ 	unsigned int _batch_count;<br>
+ };<br>
+ <br>
+-#define DEFINE_READAHEAD(rac, f, m, i)					\<br>
+-	struct readahead_control rac = {				\<br>
++#define DEFINE_READAHEAD(ractl, f, r, m, i)				\<br>
++	struct readahead_control ractl = {				\<br>
+ 		.file = f,						\<br>
+ 		.mapping = m,						\<br>
++		.ra = r,						\<br>
+ 		._index = i,						\<br>
+ 	}<br>
+ <br>
+@@ -832,10 +835,9 @@ struct readahead_control {<br>
+ <br>
+ void page_cache_ra_unbounded(struct readahead_control *,<br>
+ 		unsigned long nr_to_read, unsigned long lookahead_count);<br>
+-void page_cache_sync_ra(struct readahead_control *, struct file_ra_state *,<br>
++void page_cache_sync_ra(struct readahead_control *, unsigned long req_count);<br>
++void page_cache_async_ra(struct readahead_control *, struct page *,<br>
+ 		unsigned long req_count);<br>
+-void page_cache_async_ra(struct readahead_control *, struct file_ra_state *,<br>
+-		struct page *, unsigned long req_count);<br>
+ <br>
+ /**<br>
+  * page_cache_sync_readahead - generic file readahead<br>
+@@ -855,8 +857,8 @@ void page_cache_sync_readahead(struct address_space *mapping,<br>
+ 		struct file_ra_state *ra, struct file *file, pgoff_t index,<br>
+ 		unsigned long req_count)<br>
+ {<br>
+-	DEFINE_READAHEAD(ractl, file, mapping, index);<br>
+-	page_cache_sync_ra(&ractl, ra, req_count);<br>
++	DEFINE_READAHEAD(ractl, file, ra, mapping, index);<br>
++	page_cache_sync_ra(&ractl, req_count);<br>
+ }<br>
+ <br>
+ /**<br>
+@@ -878,8 +880,8 @@ void page_cache_async_readahead(struct address_space *mapping,<br>
+ 		struct file_ra_state *ra, struct file *file,<br>
+ 		struct page *page, pgoff_t index, unsigned long req_count)<br>
+ {<br>
+-	DEFINE_READAHEAD(ractl, file, mapping, index);<br>
+-	page_cache_async_ra(&ractl, ra, page, req_count);<br>
++	DEFINE_READAHEAD(ractl, file, ra, mapping, index);<br>
++	page_cache_async_ra(&ractl, page, req_count);<br>
+ }<br>
+ <br>
+ /**<br>
+diff --git a/mm/filemap.c b/mm/filemap.c<br>
+index 788b71e8a72d..0ce93c8799ca 100644<br>
+--- a/mm/filemap.c<br>
++++ b/mm/filemap.c<br>
+@@ -2830,7 +2830,7 @@ static struct file *do_sync_mmap_readahead(struct vm_fault *vmf)<br>
+ 	struct file *file = vmf->vma->vm_file;<br>
+ 	struct file_ra_state *ra = &file->f_ra;<br>
+ 	struct address_space *mapping = file->f_mapping;<br>
+-	DEFINE_READAHEAD(ractl, file, mapping, vmf->pgoff);<br>
++	DEFINE_READAHEAD(ractl, file, ra, mapping, vmf->pgoff);<br>
+ 	struct file *fpin = NULL;<br>
+ 	unsigned int mmap_miss;<br>
+ <br>
+@@ -2842,7 +2842,7 @@ static struct file *do_sync_mmap_readahead(struct vm_fault *vmf)<br>
+ <br>
+ 	if (vmf->vma->vm_flags & VM_SEQ_READ) {<br>
+ 		fpin = maybe_unlock_mmap_for_io(vmf, fpin);<br>
+-		page_cache_sync_ra(&ractl, ra, ra->ra_pages);<br>
++		page_cache_sync_ra(&ractl, ra->ra_pages);<br>
+ 		return fpin;<br>
+ 	}<br>
+ <br>
+diff --git a/mm/internal.h b/mm/internal.h<br>
+index 1432feec62df..83a07b2a7b1f 100644<br>
+--- a/mm/internal.h<br>
++++ b/mm/internal.h<br>
+@@ -51,13 +51,12 @@ void unmap_page_range(struct mmu_gather *tlb,<br>
+ <br>
+ void do_page_cache_ra(struct readahead_control *, unsigned long nr_to_read,<br>
+ 		unsigned long lookahead_size);<br>
+-void force_page_cache_ra(struct readahead_control *, struct file_ra_state *,<br>
+-		unsigned long nr);<br>
++void force_page_cache_ra(struct readahead_control *, unsigned long nr);<br>
+ static inline void force_page_cache_readahead(struct address_space *mapping,<br>
+ 		struct file *file, pgoff_t index, unsigned long nr_to_read)<br>
+ {<br>
+-	DEFINE_READAHEAD(ractl, file, mapping, index);<br>
+-	force_page_cache_ra(&ractl, &file->f_ra, nr_to_read);<br>
++	DEFINE_READAHEAD(ractl, file, &file->f_ra, mapping, index);<br>
++	force_page_cache_ra(&ractl, nr_to_read);<br>
+ }<br>
+ <br>
+ unsigned find_lock_entries(struct address_space *mapping, pgoff_t start,<br>
+diff --git a/mm/readahead.c b/mm/readahead.c<br>
+index c5b0457415be..2088569a947e 100644<br>
+--- a/mm/readahead.c<br>
++++ b/mm/readahead.c<br>
+@@ -272,9 +272,10 @@ void do_page_cache_ra(struct readahead_control *ractl,<br>
+  * memory at once.<br>
+  */<br>
+ void force_page_cache_ra(struct readahead_control *ractl,<br>
+-		struct file_ra_state *ra, unsigned long nr_to_read)<br>
++		unsigned long nr_to_read)<br>
+ {<br>
+ 	struct address_space *mapping = ractl->mapping;<br>
++	struct file_ra_state *ra = ractl->ra;<br>
+ 	struct backing_dev_info *bdi = inode_to_bdi(mapping->host);<br>
+ 	unsigned long max_pages, index;<br>
+ <br>
+@@ -433,10 +434,10 @@ static int try_context_readahead(struct address_space *mapping,<br>
+  * A minimal readahead algorithm for trivial sequential/random reads.<br>
+  */<br>
+ static void ondemand_readahead(struct readahead_control *ractl,<br>
+-		struct file_ra_state *ra, bool hit_readahead_marker,<br>
+-		unsigned long req_size)<br>
++		bool hit_readahead_marker, unsigned long req_size)<br>
+ {<br>
+ 	struct backing_dev_info *bdi = inode_to_bdi(ractl->mapping->host);<br>
++	struct file_ra_state *ra = ractl->ra;<br>
+ 	unsigned long max_pages = ra->ra_pages;<br>
+ 	unsigned long add_pages;<br>
+ 	unsigned long index = readahead_index(ractl);<br>
+@@ -550,7 +551,7 @@ static void ondemand_readahead(struct readahead_control *ractl,<br>
+ }<br>
+ <br>
+ void page_cache_sync_ra(struct readahead_control *ractl,<br>
+-		struct file_ra_state *ra, unsigned long req_count)<br>
++		unsigned long req_count)<br>
+ {<br>
+ 	bool do_forced_ra = ractl->file && (ractl->file->f_mode & FMODE_RANDOM);<br>
+ <br>
+@@ -560,7 +561,7 @@ void page_cache_sync_ra(struct readahead_control *ractl,<br>
+ 	 * read-ahead will do the right thing and limit the read to just the<br>
+ 	 * requested range, which we'll set to 1 page for this case.<br>
+ 	 */<br>
+-	if (!ra->ra_pages || blk_cgroup_congested()) {<br>
++	if (!ractl->ra->ra_pages || blk_cgroup_congested()) {<br>
+ 		if (!ractl->file)<br>
+ 			return;<br>
+ 		req_count = 1;<br>
+@@ -569,21 +570,20 @@ void page_cache_sync_ra(struct readahead_control *ractl,<br>
+ <br>
+ 	/* be dumb */<br>
+ 	if (do_forced_ra) {<br>
+-		force_page_cache_ra(ractl, ra, req_count);<br>
++		force_page_cache_ra(ractl, req_count);<br>
+ 		return;<br>
+ 	}<br>
+ <br>
+ 	/* do read-ahead */<br>
+-	ondemand_readahead(ractl, ra, false, req_count);<br>
++	ondemand_readahead(ractl, false, req_count);<br>
+ }<br>
+ EXPORT_SYMBOL_GPL(page_cache_sync_ra);<br>
+ <br>
+ void page_cache_async_ra(struct readahead_control *ractl,<br>
+-		struct file_ra_state *ra, struct page *page,<br>
+-		unsigned long req_count)<br>
++		struct page *page, unsigned long req_count)<br>
+ {<br>
+ 	/* no read-ahead */<br>
+-	if (!ra->ra_pages)<br>
++	if (!ractl->ra->ra_pages)<br>
+ 		return;<br>
+ <br>
+ 	/*<br>
+@@ -604,7 +604,7 @@ void page_cache_async_ra(struct readahead_control *ractl,<br>
+ 		return;<br>
+ <br>
+ 	/* do read-ahead */<br>
+-	ondemand_readahead(ractl, ra, true, req_count);<br>
++	ondemand_readahead(ractl, true, req_count);<br>
+ }<br>
+ EXPORT_SYMBOL_GPL(page_cache_async_ra);<br>
+ <br>
+<br>
+<br>
+<br>
+

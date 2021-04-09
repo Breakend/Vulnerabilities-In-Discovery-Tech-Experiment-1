@@ -1,0 +1,46 @@
+When the unsigned page_counter underflows, even just by a few pages, a<br>
+cgroup will not be able to run anything afterwards and trigger the OOM<br>
+killer in a loop.<br>
+<br>
+Underflows shouldn't happen, but when they do in practice, we may just<br>
+be off by a small amount that doesn't interfere with the normal<br>
+operation - consequences don't need to be that dire.<br>
+<br>
+Reset the page_counter to 0 upon underflow. We'll issue a warning that<br>
+the accounting will be off and then try to keep limping along.<br>
+<br>
+[ We used to do this with the original res_counter, where it was a<br>
+  more straight-forward correction inside the spinlock section. I<br>
+  didn't carry it forward into the lockless page counters for<br>
+  simplicity, but it turns out this is quite useful in practice. ]<br>
+<br>
+Signed-off-by: Johannes Weiner <hannes@xxxxxxxxxxx><br>
+---<br>
+ mm/page_counter.c | 8 ++++++--<br>
+ 1 file changed, 6 insertions(+), 2 deletions(-)<br>
+<br>
+diff --git a/mm/page_counter.c b/mm/page_counter.c<br>
+index c6860f51b6c6..7d83641eb86b 100644<br>
+--- a/mm/page_counter.c<br>
++++ b/mm/page_counter.c<br>
+@@ -52,9 +52,13 @@ void page_counter_cancel(struct page_counter *counter, unsigned long nr_pages)<br>
+ 	long new;<br>
+ <br>
+ 	new = atomic_long_sub_return(nr_pages, &counter->usage);<br>
+-	propagate_protected_usage(counter, new);<br>
+ 	/* More uncharges than charges? */<br>
+-	WARN_ON_ONCE(new < 0);<br>
++	if (WARN_ONCE(new < 0, "page_counter underflow: %ld nr_pages=%lu\n",<br>
++		      new, nr_pages)) {<br>
++		new = 0;<br>
++		atomic_long_set(&counter->usage, new);<br>
++	}<br>
++	propagate_protected_usage(counter, new);<br>
+ }<br>
+ <br>
+ /**<br>
+-- <br>
+2.31.1<br>
+<br>
+<br>
+

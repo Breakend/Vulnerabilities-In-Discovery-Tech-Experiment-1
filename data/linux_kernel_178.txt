@@ -1,0 +1,37 @@
+
+<br>
+<br>
+On 4/8/2021 9:40 AM, Peter Zijlstra wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em"><blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+@@ -4330,7 +4347,7 @@ static int intel_pmu_check_period(struct perf_event *event, u64 value)<br>
+  
+  static int intel_pmu_aux_output_match(struct perf_event *event)
+<br>
+  {<br>
+-	if (!x86_pmu.intel_cap.pebs_output_pt_available)<br>
++	if (!intel_pmu_has_cap(event, PERF_CAP_PT_IDX))<br>
+  		return 0;<br>
+  
+  	return is_intel_pt_event(event);
+<br></blockquote>
+these sites can have !event->pmu ?<br>
+</blockquote>
+<br>
+<br>
+I don't think the event->pmu can be NULL, but it could be pt_pmu.pmu.<br>
+If so, it should be a problem.<br>
+<br>
+I think I will still use the x86_pmu.intel_cap.pebs_output_pt_available 
+here in V6. The worst case is that we lost the PEBS via PT support on 
+the small core for now.
+<br>
+<br>
+I guess Alexander may provide a separate patch later to enable the PEBS 
+via PT support on the ADL small core.
+<br>
+<br>
+Thanks,<br>
+Kan<br>
+<br>
+<br>
+

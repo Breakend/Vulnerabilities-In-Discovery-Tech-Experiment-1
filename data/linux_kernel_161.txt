@@ -1,0 +1,86 @@
+Hi,<br>
+<br>
+This patchset continues my work to to add P2PDMA support to the common<br>
+dma map operations. This allows for creating SGLs that have both P2PDMA<br>
+and regular pages which is a necessary step to allowing P2PDMA pages in<br>
+userspace.<br>
+<br>
+The earlier RFC[1] generated a lot of great feedback and I heard no show<br>
+stopping objections. Thus, I've incorporated all the feedback and have<br>
+decided to post this as a proper patch series with hopes of eventually<br>
+getting it in mainline.<br>
+<br>
+I'm happy to do a few more passes if anyone has any further feedback<br>
+or better ideas.<br>
+<br>
+This series is based on v5.12-rc6 and a git branch can be found here:<br>
+<br>
+  <a  rel="nofollow" href="https://github.com/sbates130272/linux-p2pmem/">https://github.com/sbates130272/linux-p2pmem/</a>  p2pdma_map_ops_v1<br>
+<br>
+Thanks,<br>
+<br>
+Logan<br>
+<br>
+[1] <a  rel="nofollow" href="https://lore.kernel.org/linux-block/20210311233142.7900-1-logang@xxxxxxxxxxxx/">https://lore.kernel.org/linux-block/20210311233142.7900-1-logang@xxxxxxxxxxxx/</a><br>
+<br>
+<br>
+Changes since the RFC:<br>
+ * Added comment and fixed up the pci_get_slot patch. (per Bjorn)<br>
+ * Fixed glaring sg_phys() double offset bug. (per Robin)<br>
+ * Created a new map operation (dma_map_sg_p2pdma()) with a new calling<br>
+   convention instead of modifying the calling convention of<br>
+   dma_map_sg(). (per Robin)<br>
+ * Integrated the two similar pci_p2pdma_dma_map_type() and<br>
+   pci_p2pdma_map_type() functions into one (per Ira)<br>
+ * Reworked some of the logic in the map_sg() implementations into<br>
+   helpers in the p2pdma code. (per Christoph)<br>
+ * Dropped a bunch of unnecessary symbol exports (per Christoph)<br>
+ * Expanded the code in dma_pci_p2pdma_supported() for clarity. (per<br>
+   Ira and Christoph)<br>
+ * Finished off using the new dma_map_sg_p2pdma() call in rdma_rw<br>
+   and removed the old pci_p2pdma_[un]map_sg(). (per Jason)<br>
+<br>
+--<br>
+<br>
+Logan Gunthorpe (16):<br>
+  PCI/P2PDMA: Pass gfp_mask flags to upstream_bridge_distance_warn()<br>
+  PCI/P2PDMA: Avoid pci_get_slot() which sleeps<br>
+  PCI/P2PDMA: Attempt to set map_type if it has not been set<br>
+  PCI/P2PDMA: Refactor pci_p2pdma_map_type() to take pagmap and device<br>
+  dma-mapping: Introduce dma_map_sg_p2pdma()<br>
+  lib/scatterlist: Add flag for indicating P2PDMA segments in an SGL<br>
+  PCI/P2PDMA: Make pci_p2pdma_map_type() non-static<br>
+  PCI/P2PDMA: Introduce helpers for dma_map_sg implementations<br>
+  dma-direct: Support PCI P2PDMA pages in dma-direct map_sg<br>
+  dma-mapping: Add flags to dma_map_ops to indicate PCI P2PDMA support<br>
+  iommu/dma: Support PCI P2PDMA pages in dma-iommu map_sg<br>
+  nvme-pci: Check DMA ops when indicating support for PCI P2PDMA<br>
+  nvme-pci: Convert to using dma_map_sg_p2pdma for p2pdma pages<br>
+  nvme-rdma: Ensure dma support when using p2pdma<br>
+  RDMA/rw: use dma_map_sg_p2pdma()<br>
+  PCI/P2PDMA: Remove pci_p2pdma_[un]map_sg()<br>
+<br>
+ drivers/infiniband/core/rw.c |  50 +++-------<br>
+ drivers/iommu/dma-iommu.c    |  66 ++++++++++--<br>
+ drivers/nvme/host/core.c     |   3 +-<br>
+ drivers/nvme/host/nvme.h     |   2 +-<br>
+ drivers/nvme/host/pci.c      |  39 ++++----<br>
+ drivers/nvme/target/rdma.c   |   3 +-<br>
+ drivers/pci/Kconfig          |   2 +-<br>
+ drivers/pci/p2pdma.c         | 188 +++++++++++++++++++----------------<br>
+ include/linux/dma-map-ops.h  |   3 +<br>
+ include/linux/dma-mapping.h  |  20 ++++<br>
+ include/linux/pci-p2pdma.h   |  53 ++++++----<br>
+ include/linux/scatterlist.h  |  49 ++++++++-<br>
+ include/rdma/ib_verbs.h      |  32 ++++++<br>
+ kernel/dma/direct.c          |  25 ++++-<br>
+ kernel/dma/mapping.c         |  70 +++++++++++--<br>
+ 15 files changed, 416 insertions(+), 189 deletions(-)<br>
+<br>
+<br>
+base-commit: e49d033bddf5b565044e2abe4241353959bc9120<br>
+--<br>
+2.20.1<br>
+<br>
+<br>
+

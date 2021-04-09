@@ -1,0 +1,50 @@
+Subsequent patches will make the GIC irqchips use a flow handler that<br>
+issues an ->irq_ack(). irqchips of child domains need to handle this.<br>
+<br>
+Note: I'm very much not fond of this; this is treacherous and explodes if<br>
+any parent chip doesn't have an ->ack() callback. It turns out okay with<br>
+EOImode=0 because handle_fasteoi_irq() doesn't issue any ->ack(), but that<br>
+is very fragile at best.<br>
+<br>
+An alternative would be to<br>
+o make irq_chip_ack_parent() check the callback against NULL<br>
+o make irq_chip_ack_parent() the default chip->irq_ack() via<br>
+  MSI_FLAG_USE_DEF_CHIP_OPS.<br>
+<br>
+XXX: what about pMSI and fMSI ?<br>
+<br>
+Signed-off-by: Valentin Schneider <valentin.schneider@xxxxxxx><br>
+---<br>
+ drivers/irqchip/irq-gic-v3-its-pci-msi.c | 1 +<br>
+ drivers/irqchip/irq-gic-v3-its.c         | 1 +<br>
+ 2 files changed, 2 insertions(+)<br>
+<br>
+diff --git a/drivers/irqchip/irq-gic-v3-its-pci-msi.c b/drivers/irqchip/irq-gic-v3-its-pci-msi.c<br>
+index ad2810c017ed..5bc2787ee86a 100644<br>
+--- a/drivers/irqchip/irq-gic-v3-its-pci-msi.c<br>
++++ b/drivers/irqchip/irq-gic-v3-its-pci-msi.c<br>
+@@ -27,6 +27,7 @@ static struct irq_chip its_msi_irq_chip = {<br>
+ 	.name			= "ITS-MSI",<br>
+ 	.irq_unmask		= its_unmask_msi_irq,<br>
+ 	.irq_mask		= its_mask_msi_irq,<br>
++	.irq_ack		= irq_chip_ack_parent,<br>
+ 	.irq_eoi		= irq_chip_eoi_parent,<br>
+ 	.irq_write_msi_msg	= pci_msi_domain_write_msg,<br>
+ };<br>
+diff --git a/drivers/irqchip/irq-gic-v3-its.c b/drivers/irqchip/irq-gic-v3-its.c<br>
+index c3485b230d70..d6856750c084 100644<br>
+--- a/drivers/irqchip/irq-gic-v3-its.c<br>
++++ b/drivers/irqchip/irq-gic-v3-its.c<br>
+@@ -1971,6 +1971,7 @@ static struct irq_chip its_irq_chip = {<br>
+ 	.name			= "ITS",<br>
+ 	.irq_mask		= its_mask_irq,<br>
+ 	.irq_unmask		= its_unmask_irq,<br>
++	.irq_ack		= irq_chip_ack_parent,<br>
+ 	.irq_eoi		= irq_chip_eoi_parent,<br>
+ 	.irq_set_affinity	= its_set_affinity,<br>
+ 	.irq_compose_msi_msg	= its_irq_compose_msi_msg,<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

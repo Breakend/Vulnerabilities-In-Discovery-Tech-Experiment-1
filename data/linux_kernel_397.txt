@@ -1,0 +1,166 @@
+Extract writeback extension into its own function to break up the writeback<br>
+function a bit.<br>
+<br>
+Signed-off-by: David Howells <dhowells@xxxxxxxxxx><br>
+cc: linux-afs@xxxxxxxxxxxxxxxxxxx<br>
+cc: linux-cachefs@xxxxxxxxxx<br>
+cc: linux-fsdevel@xxxxxxxxxxxxxxx<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/160588538471.3465195.782513375683399583.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/160588538471.3465195.782513375683399583.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # rfc<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161118154610.1232039.1765365632920504822.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161118154610.1232039.1765365632920504822.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # rfc<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161161050546.2537118.2202554806419189453.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161161050546.2537118.2202554806419189453.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v2<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161340414102.1303470.9078891484034668985.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161340414102.1303470.9078891484034668985.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v3<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161539558417.286939.2879469588895925399.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161539558417.286939.2879469588895925399.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v4<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161653813972.2770958.12671731209438112378.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161653813972.2770958.12671731209438112378.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v5<br>
+---<br>
+<br>
+ fs/afs/write.c |  109 ++++++++++++++++++++++++++++++++++----------------------<br>
+ 1 file changed, 67 insertions(+), 42 deletions(-)<br>
+<br>
+diff --git a/fs/afs/write.c b/fs/afs/write.c<br>
+index 1b8cabf5ac92..4ccd2c263983 100644<br>
+--- a/fs/afs/write.c<br>
++++ b/fs/afs/write.c<br>
+@@ -490,47 +490,25 @@ static int afs_store_data(struct afs_vnode *vnode, struct iov_iter *iter,<br>
+ }<br>
+ <br>
+ /*<br>
+- * Synchronously write back the locked page and any subsequent non-locked dirty<br>
+- * pages.<br>
++ * Extend the region to be written back to include subsequent contiguously<br>
++ * dirty pages if possible, but don't sleep while doing so.<br>
++ *<br>
++ * If this page holds new content, then we can include filler zeros in the<br>
++ * writeback.<br>
+  */<br>
+-static int afs_write_back_from_locked_page(struct address_space *mapping,<br>
+-					   struct writeback_control *wbc,<br>
+-					   struct page *primary_page,<br>
+-					   pgoff_t final_page)<br>
++static void afs_extend_writeback(struct address_space *mapping,<br>
++				 struct afs_vnode *vnode,<br>
++				 long *_count,<br>
++				 pgoff_t start,<br>
++				 pgoff_t final_page,<br>
++				 unsigned *_offset,<br>
++				 unsigned *_to,<br>
++				 bool new_content)<br>
+ {<br>
+-	struct afs_vnode *vnode = AFS_FS_I(mapping->host);<br>
+-	struct iov_iter iter;<br>
+ 	struct page *pages[8], *page;<br>
+-	unsigned long count, priv;<br>
+-	unsigned n, offset, to, f, t;<br>
+-	pgoff_t start, first, last;<br>
+-	loff_t i_size, pos, end;<br>
+-	int loop, ret;<br>
+-<br>
+-	_enter(",%lx", primary_page->index);<br>
+-<br>
+-	count = 1;<br>
+-	if (test_set_page_writeback(primary_page))<br>
+-		BUG();<br>
+-<br>
+-	/* Find all consecutive lockable dirty pages that have contiguous<br>
+-	 * written regions, stopping when we find a page that is not<br>
+-	 * immediately lockable, is not dirty or is missing, or we reach the<br>
+-	 * end of the range.<br>
+-	 */<br>
+-	start = primary_page->index;<br>
+-	priv = page_private(primary_page);<br>
+-	offset = afs_page_dirty_from(primary_page, priv);<br>
+-	to = afs_page_dirty_to(primary_page, priv);<br>
+-	trace_afs_page_dirty(vnode, tracepoint_string("store"), primary_page);<br>
+-<br>
+-	WARN_ON(offset == to);<br>
+-	if (offset == to)<br>
+-		trace_afs_page_dirty(vnode, tracepoint_string("WARN"), primary_page);<br>
+-<br>
+-	if (start >= final_page ||<br>
+-	    (to < PAGE_SIZE && !test_bit(AFS_VNODE_NEW_CONTENT, &vnode->flags)))<br>
+-		goto no_more;<br>
++	unsigned long count = *_count, priv;<br>
++	unsigned offset = *_offset, to = *_to, n, f, t;<br>
++	int loop;<br>
+ <br>
+ 	start++;<br>
+ 	do {<br>
+@@ -551,8 +529,7 @@ static int afs_write_back_from_locked_page(struct address_space *mapping,<br>
+ <br>
+ 		for (loop = 0; loop < n; loop++) {<br>
+ 			page = pages[loop];<br>
+-			if (to != PAGE_SIZE &&<br>
+-			    !test_bit(AFS_VNODE_NEW_CONTENT, &vnode->flags))<br>
++			if (to != PAGE_SIZE && !new_content)<br>
+ 				break;<br>
+ 			if (page->index > final_page)<br>
+ 				break;<br>
+@@ -566,8 +543,7 @@ static int afs_write_back_from_locked_page(struct address_space *mapping,<br>
+ 			priv = page_private(page);<br>
+ 			f = afs_page_dirty_from(page, priv);<br>
+ 			t = afs_page_dirty_to(page, priv);<br>
+-			if (f != 0 &&<br>
+-			    !test_bit(AFS_VNODE_NEW_CONTENT, &vnode->flags)) {<br>
++			if (f != 0 && !new_content) {<br>
+ 				unlock_page(page);<br>
+ 				break;<br>
+ 			}<br>
+@@ -593,6 +569,55 @@ static int afs_write_back_from_locked_page(struct address_space *mapping,<br>
+ 	} while (start <= final_page && count < 65536);<br>
+ <br>
+ no_more:<br>
++	*_count = count;<br>
++	*_offset = offset;<br>
++	*_to = to;<br>
++}<br>
++<br>
++/*<br>
++ * Synchronously write back the locked page and any subsequent non-locked dirty<br>
++ * pages.<br>
++ */<br>
++static int afs_write_back_from_locked_page(struct address_space *mapping,<br>
++					   struct writeback_control *wbc,<br>
++					   struct page *primary_page,<br>
++					   pgoff_t final_page)<br>
++{<br>
++	struct afs_vnode *vnode = AFS_FS_I(mapping->host);<br>
++	struct iov_iter iter;<br>
++	unsigned long count, priv;<br>
++	unsigned offset, to;<br>
++	pgoff_t start, first, last;<br>
++	loff_t i_size, pos, end;<br>
++	bool new_content = test_bit(AFS_VNODE_NEW_CONTENT, &vnode->flags);<br>
++	int ret;<br>
++<br>
++	_enter(",%lx", primary_page->index);<br>
++<br>
++	count = 1;<br>
++	if (test_set_page_writeback(primary_page))<br>
++		BUG();<br>
++<br>
++	/* Find all consecutive lockable dirty pages that have contiguous<br>
++	 * written regions, stopping when we find a page that is not<br>
++	 * immediately lockable, is not dirty or is missing, or we reach the<br>
++	 * end of the range.<br>
++	 */<br>
++	start = primary_page->index;<br>
++	priv = page_private(primary_page);<br>
++	offset = afs_page_dirty_from(primary_page, priv);<br>
++	to = afs_page_dirty_to(primary_page, priv);<br>
++	trace_afs_page_dirty(vnode, tracepoint_string("store"), primary_page);<br>
++<br>
++	WARN_ON(offset == to);<br>
++	if (offset == to)<br>
++		trace_afs_page_dirty(vnode, tracepoint_string("WARN"), primary_page);<br>
++<br>
++	if (start < final_page &&<br>
++	    (to == PAGE_SIZE || new_content))<br>
++		afs_extend_writeback(mapping, vnode, &count, start, final_page,<br>
++				     &offset, &to, new_content);<br>
++<br>
+ 	/* We now have a contiguous set of dirty pages, each with writeback<br>
+ 	 * set; the first page is still locked at this point, but all the rest<br>
+ 	 * have been unlocked.<br>
+<br>
+<br>
+<br>
+

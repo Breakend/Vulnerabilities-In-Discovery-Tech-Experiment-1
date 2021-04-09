@@ -1,0 +1,259 @@
+On Wed, 2021-04-07 at 00:24 +0530, Pratyush Yadav wrote:<br>
+><i> On 31/03/21 05:24PM, Chunfeng Yun wrote:</i><br>
+><i> > On Tue, 2021-03-30 at 23:03 +0530, Pratyush Yadav wrote:</i><br>
+><i> > > Some platforms like TI's J721E can have the CSI2RX paired with an</i><br>
+><i> > > external DPHY. Add support to enable and configure the DPHY using the</i><br>
+><i> > > generic PHY framework.</i><br>
+><i> > > </i><br>
+><i> > > Get the pixel rate and bpp from the subdev and pass them on to the DPHY</i><br>
+><i> > > along with the number of lanes. All other settings are left to their</i><br>
+><i> > > default values.</i><br>
+><i> > > </i><br>
+><i> > > Signed-off-by: Pratyush Yadav <p.yadav@xxxxxx></i><br>
+><i> > > ---</i><br>
+><i> > >  drivers/media/platform/cadence/cdns-csi2rx.c | 147 +++++++++++++++++--</i><br>
+><i> > >  1 file changed, 137 insertions(+), 10 deletions(-)</i><br>
+><i> > > </i><br>
+><i> > > diff --git a/drivers/media/platform/cadence/cdns-csi2rx.c b/drivers/media/platform/cadence/cdns-csi2rx.c</i><br>
+><i> > > index c68a3eac62cd..31bd80e3f780 100644</i><br>
+><i> > > --- a/drivers/media/platform/cadence/cdns-csi2rx.c</i><br>
+><i> > > +++ b/drivers/media/platform/cadence/cdns-csi2rx.c</i><br>
+><i> > > @@ -30,6 +30,12 @@</i><br>
+><i> > >  #define CSI2RX_STATIC_CFG_DLANE_MAP(llane, plane)	((plane) << (16 + (llane) * 4))</i><br>
+><i> > >  #define CSI2RX_STATIC_CFG_LANES_MASK			GENMASK(11, 8)</i><br>
+><i> > >  </i><br>
+><i> > > +#define CSI2RX_DPHY_LANE_CTRL_REG		0x40</i><br>
+><i> > > +#define CSI2RX_DPHY_CL_RST			BIT(16)</i><br>
+><i> > > +#define CSI2RX_DPHY_DL_RST(i)			BIT((i) + 12)</i><br>
+><i> > > +#define CSI2RX_DPHY_CL_EN			BIT(4)</i><br>
+><i> > > +#define CSI2RX_DPHY_DL_EN(i)			BIT(i)</i><br>
+><i> > > +</i><br>
+><i> > >  #define CSI2RX_STREAM_BASE(n)		(((n) + 1) * 0x100)</i><br>
+><i> > >  </i><br>
+><i> > >  #define CSI2RX_STREAM_CTRL_REG(n)		(CSI2RX_STREAM_BASE(n) + 0x000)</i><br>
+><i> > > @@ -54,6 +60,11 @@ enum csi2rx_pads {</i><br>
+><i> > >  	CSI2RX_PAD_MAX,</i><br>
+><i> > >  };</i><br>
+><i> > >  </i><br>
+><i> > > +struct csi2rx_fmt {</i><br>
+><i> > > +	u32				code;</i><br>
+><i> > > +	u8				bpp;</i><br>
+><i> > > +};</i><br>
+><i> > > +</i><br>
+><i> > >  struct csi2rx_priv {</i><br>
+><i> > >  	struct device			*dev;</i><br>
+><i> > >  	unsigned int			count;</i><br>
+><i> > > @@ -85,6 +96,52 @@ struct csi2rx_priv {</i><br>
+><i> > >  	int				source_pad;</i><br>
+><i> > >  };</i><br>
+><i> > >  </i><br>
+><i> > > +static const struct csi2rx_fmt formats[] = {</i><br>
+><i> > > +	{</i><br>
+><i> > > +		.code	= MEDIA_BUS_FMT_YUYV8_2X8,</i><br>
+><i> > > +		.bpp	= 16,</i><br>
+><i> > > +	},</i><br>
+><i> > > +	{</i><br>
+><i> > > +		.code	= MEDIA_BUS_FMT_UYVY8_2X8,</i><br>
+><i> > > +		.bpp	= 16,</i><br>
+><i> > > +	},</i><br>
+><i> > > +	{</i><br>
+><i> > > +		.code	= MEDIA_BUS_FMT_YVYU8_2X8,</i><br>
+><i> > > +		.bpp	= 16,</i><br>
+><i> > > +	},</i><br>
+><i> > > +	{</i><br>
+><i> > > +		.code	= MEDIA_BUS_FMT_VYUY8_2X8,</i><br>
+><i> > > +		.bpp	= 16,</i><br>
+><i> > > +	},</i><br>
+><i> > > +};</i><br>
+><i> > > +</i><br>
+><i> > > +static u8 csi2rx_get_bpp(u32 code)</i><br>
+><i> > > +{</i><br>
+><i> > > +	int i;</i><br>
+><i> > > +</i><br>
+><i> > > +	for (i = 0; i < ARRAY_SIZE(formats); i++) {</i><br>
+><i> > > +		if (formats[i].code == code)</i><br>
+><i> > > +			return formats[i].bpp;</i><br>
+><i> > > +	}</i><br>
+><i> > > +</i><br>
+><i> > > +	return 0;</i><br>
+><i> > > +}</i><br>
+><i> > > +</i><br>
+><i> > > +static s64 csi2rx_get_pixel_rate(struct csi2rx_priv *csi2rx)</i><br>
+><i> > > +{</i><br>
+><i> > > +	struct v4l2_ctrl *ctrl;</i><br>
+><i> > > +</i><br>
+><i> > > +	ctrl = v4l2_ctrl_find(csi2rx->source_subdev->ctrl_handler,</i><br>
+><i> > > +			      V4L2_CID_PIXEL_RATE);</i><br>
+><i> > > +	if (!ctrl) {</i><br>
+><i> > > +		dev_err(csi2rx->dev, "no pixel rate control in subdev: %s\n",</i><br>
+><i> > > +			csi2rx->source_subdev->name);</i><br>
+><i> > > +		return -EINVAL;</i><br>
+><i> > > +	}</i><br>
+><i> > > +</i><br>
+><i> > > +	return v4l2_ctrl_g_ctrl_int64(ctrl);</i><br>
+><i> > > +}</i><br>
+><i> > > +</i><br>
+><i> > >  static inline</i><br>
+><i> > >  struct csi2rx_priv *v4l2_subdev_to_csi2rx(struct v4l2_subdev *subdev)</i><br>
+><i> > >  {</i><br>
+><i> > > @@ -101,6 +158,55 @@ static void csi2rx_reset(struct csi2rx_priv *csi2rx)</i><br>
+><i> > >  	writel(0, csi2rx->base + CSI2RX_SOFT_RESET_REG);</i><br>
+><i> > >  }</i><br>
+><i> > >  </i><br>
+><i> > > +static int csi2rx_configure_external_dphy(struct csi2rx_priv *csi2rx)</i><br>
+><i> > > +{</i><br>
+><i> > > +	union phy_configure_opts opts = { };</i><br>
+><i> > > +	struct phy_configure_opts_mipi_dphy *cfg = &opts.mipi_dphy;</i><br>
+><i> > > +	struct v4l2_subdev_format sd_fmt;</i><br>
+><i> > > +	s64 pixel_rate;</i><br>
+><i> > > +	int ret;</i><br>
+><i> > > +	u8 bpp;</i><br>
+><i> > > +</i><br>
+><i> > > +	sd_fmt.which = V4L2_SUBDEV_FORMAT_ACTIVE;</i><br>
+><i> > > +	sd_fmt.pad = 0;</i><br>
+><i> > > +</i><br>
+><i> > > +	ret = v4l2_subdev_call(csi2rx->source_subdev, pad, get_fmt, NULL,</i><br>
+><i> > > +			       &sd_fmt);</i><br>
+><i> > > +	if (ret)</i><br>
+><i> > > +		return ret;</i><br>
+><i> > > +</i><br>
+><i> > > +	bpp = csi2rx_get_bpp(sd_fmt.format.code);</i><br>
+><i> > > +	if (!bpp)</i><br>
+><i> > > +		return -EINVAL;</i><br>
+><i> > > +</i><br>
+><i> > > +	pixel_rate = csi2rx_get_pixel_rate(csi2rx);</i><br>
+><i> > > +	if (pixel_rate < 0)</i><br>
+><i> > > +		return pixel_rate;</i><br>
+><i> > > +</i><br>
+><i> > > +	ret = phy_mipi_dphy_get_default_config(pixel_rate, bpp,</i><br>
+><i> > > +					       csi2rx->num_lanes, cfg);</i><br>
+><i> > > +	if (ret)</i><br>
+><i> > > +		return ret;</i><br>
+><i> > > +</i><br>
+><i> > > +	ret = phy_set_mode_ext(csi2rx->dphy, PHY_MODE_MIPI_DPHY,</i><br>
+><i> > > +			       PHY_MIPI_DPHY_SUBMODE_RX);</i><br>
+><i> > > +	if (ret)</i><br>
+><i> > > +		return ret;</i><br>
+><i> > > +</i><br>
+><i> > > +	ret = phy_power_on(csi2rx->dphy);</i><br>
+><i> > > +	if (ret)</i><br>
+><i> > > +		return ret;</i><br>
+><i> > Seems phy_power_on, then phy_set_mode_ext?</i><br>
+><i> </i><br>
+><i> Shouldn't the mode be set before the PHY is powered on so the correct </i><br>
+><i> power on procedure can be performed based on the mode of operation?</i><br>
+Of course, it is fine for cnds-dphy.<br>
+But it depends on HW design and also phy driver;<br>
+if the mode is controlled in PHY IP register, we can't access it before<br>
+phy_power_on if no phy_init called (e.g. clock/power is not enabled).<br>
+<br>
+Just let you pay attention on the phy sequence.<br>
+<br>
+Thanks<br>
+><i> </i><br>
+><i> > </i><br>
+><i> > > +</i><br>
+><i> > > +	ret = phy_configure(csi2rx->dphy, &opts);</i><br>
+><i> > > +	if (ret) {</i><br>
+><i> > > +		/* Can't do anything if it fails. Ignore the return value. */</i><br>
+><i> > > +		phy_power_off(csi2rx->dphy);</i><br>
+><i> > > +		return ret;</i><br>
+><i> > > +	}</i><br>
+><i> > > +</i><br>
+><i> > > +	return 0;</i><br>
+><i> > > +}</i><br>
+><i> > > +</i><br>
+><i> > >  static int csi2rx_start(struct csi2rx_priv *csi2rx)</i><br>
+><i> > >  {</i><br>
+><i> > >  	unsigned int i;</i><br>
+><i> > > @@ -139,6 +245,17 @@ static int csi2rx_start(struct csi2rx_priv *csi2rx)</i><br>
+><i> > >  	if (ret)</i><br>
+><i> > >  		goto err_disable_pclk;</i><br>
+><i> > >  </i><br>
+><i> > > +	/* Enable DPHY clk and data lanes. */</i><br>
+><i> > > +	if (csi2rx->dphy) {</i><br>
+><i> > > +		reg = CSI2RX_DPHY_CL_EN | CSI2RX_DPHY_CL_RST;</i><br>
+><i> > > +		for (i = 0; i < csi2rx->num_lanes; i++) {</i><br>
+><i> > > +			reg |= CSI2RX_DPHY_DL_EN(csi2rx->lanes[i] - 1);</i><br>
+><i> > > +			reg |= CSI2RX_DPHY_DL_RST(csi2rx->lanes[i] - 1);</i><br>
+><i> > > +		}</i><br>
+><i> > > +</i><br>
+><i> > > +		writel(reg, csi2rx->base + CSI2RX_DPHY_LANE_CTRL_REG);</i><br>
+><i> > > +	}</i><br>
+><i> > > +</i><br>
+><i> > >  	/*</i><br>
+><i> > >  	 * Create a static mapping between the CSI virtual channels</i><br>
+><i> > >  	 * and the output stream.</i><br>
+><i> > > @@ -169,10 +286,21 @@ static int csi2rx_start(struct csi2rx_priv *csi2rx)</i><br>
+><i> > >  	if (ret)</i><br>
+><i> > >  		goto err_disable_pixclk;</i><br>
+><i> > >  </i><br>
+><i> > > +	if (csi2rx->dphy) {</i><br>
+><i> > > +		ret = csi2rx_configure_external_dphy(csi2rx);</i><br>
+><i> > > +		if (ret) {</i><br>
+><i> > > +			dev_err(csi2rx->dev,</i><br>
+><i> > > +				"Failed to configure external DPHY: %d\n", ret);</i><br>
+><i> > > +			goto err_disable_sysclk;</i><br>
+><i> > > +		}</i><br>
+><i> > > +	}</i><br>
+><i> > > +</i><br>
+><i> > >  	clk_disable_unprepare(csi2rx->p_clk);</i><br>
+><i> > >  </i><br>
+><i> > >  	return 0;</i><br>
+><i> > >  </i><br>
+><i> > > +err_disable_sysclk:</i><br>
+><i> > > +	clk_disable_unprepare(csi2rx->sys_clk);</i><br>
+><i> > >  err_disable_pixclk:</i><br>
+><i> > >  	for (; i > 0; i--)</i><br>
+><i> > >  		clk_disable_unprepare(csi2rx->pixel_clk[i - 1]);</i><br>
+><i> > > @@ -200,6 +328,13 @@ static void csi2rx_stop(struct csi2rx_priv *csi2rx)</i><br>
+><i> > >  </i><br>
+><i> > >  	if (v4l2_subdev_call(csi2rx->source_subdev, video, s_stream, false))</i><br>
+><i> > >  		dev_warn(csi2rx->dev, "Couldn't disable our subdev\n");</i><br>
+><i> > > +</i><br>
+><i> > > +	if (csi2rx->dphy) {</i><br>
+><i> > > +		writel(0, csi2rx->base + CSI2RX_DPHY_LANE_CTRL_REG);</i><br>
+><i> > > +</i><br>
+><i> > > +		if (phy_power_off(csi2rx->dphy))</i><br>
+><i> > > +			dev_warn(csi2rx->dev, "Couldn't power off DPHY\n");</i><br>
+><i> > > +	}</i><br>
+><i> > >  }</i><br>
+><i> > >  </i><br>
+><i> > >  static int csi2rx_s_stream(struct v4l2_subdev *subdev, int enable)</i><br>
+><i> > > @@ -306,15 +441,6 @@ static int csi2rx_get_resources(struct csi2rx_priv *csi2rx,</i><br>
+><i> > >  		return PTR_ERR(csi2rx->dphy);</i><br>
+><i> > >  	}</i><br>
+><i> > >  </i><br>
+><i> > > -	/*</i><br>
+><i> > > -	 * FIXME: Once we'll have external D-PHY support, the check</i><br>
+><i> > > -	 * will need to be removed.</i><br>
+><i> > > -	 */</i><br>
+><i> > > -	if (csi2rx->dphy) {</i><br>
+><i> > > -		dev_err(&pdev->dev, "External D-PHY not supported yet\n");</i><br>
+><i> > > -		return -EINVAL;</i><br>
+><i> > > -	}</i><br>
+><i> > > -</i><br>
+><i> > >  	clk_prepare_enable(csi2rx->p_clk);</i><br>
+><i> > >  	dev_cfg = readl(csi2rx->base + CSI2RX_DEVICE_CFG_REG);</i><br>
+><i> > >  	clk_disable_unprepare(csi2rx->p_clk);</i><br>
+><i> > > @@ -339,7 +465,7 @@ static int csi2rx_get_resources(struct csi2rx_priv *csi2rx,</i><br>
+><i> > >  	 * FIXME: Once we'll have internal D-PHY support, the check</i><br>
+><i> > >  	 * will need to be removed.</i><br>
+><i> > >  	 */</i><br>
+><i> > > -	if (csi2rx->has_internal_dphy) {</i><br>
+><i> > > +	if (!csi2rx->dphy && csi2rx->has_internal_dphy) {</i><br>
+><i> > >  		dev_err(&pdev->dev, "Internal D-PHY not supported yet\n");</i><br>
+><i> > >  		return -EINVAL;</i><br>
+><i> > >  	}</i><br>
+><i> > > @@ -460,6 +586,7 @@ static int csi2rx_probe(struct platform_device *pdev)</i><br>
+><i> > >  	dev_info(&pdev->dev,</i><br>
+><i> > >  		 "Probed CSI2RX with %u/%u lanes, %u streams, %s D-PHY\n",</i><br>
+><i> > >  		 csi2rx->num_lanes, csi2rx->max_lanes, csi2rx->max_streams,</i><br>
+><i> > > +		 csi2rx->dphy ? "external" :</i><br>
+><i> > >  		 csi2rx->has_internal_dphy ? "internal" : "no");</i><br>
+><i> > >  </i><br>
+><i> > >  	return 0;</i><br>
+><i> > </i><br>
+><i> </i><br>
+<br>
+

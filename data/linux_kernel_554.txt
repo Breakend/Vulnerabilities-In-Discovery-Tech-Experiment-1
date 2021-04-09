@@ -1,0 +1,36 @@
+module_virtio_driver() makes the code simpler by eliminating<br>
+boilerplate code.<br>
+<br>
+Signed-off-by: Chen Huang <chenhuang5@xxxxxxxxxx><br>
+---<br>
+ sound/virtio/virtio_card.c | 12 +-----------<br>
+ 1 file changed, 1 insertion(+), 11 deletions(-)<br>
+<br>
+diff --git a/sound/virtio/virtio_card.c b/sound/virtio/virtio_card.c<br>
+index ae9128063917..150ab3e37013 100644<br>
+--- a/sound/virtio/virtio_card.c<br>
++++ b/sound/virtio/virtio_card.c<br>
+@@ -432,17 +432,7 @@ static struct virtio_driver virtsnd_driver = {<br>
+ #endif<br>
+ };<br>
+ <br>
+-static int __init init(void)<br>
+-{<br>
+-	return register_virtio_driver(&virtsnd_driver);<br>
+-}<br>
+-module_init(init);<br>
+-<br>
+-static void __exit fini(void)<br>
+-{<br>
+-	unregister_virtio_driver(&virtsnd_driver);<br>
+-}<br>
+-module_exit(fini);<br>
++module_virtio_driver(virtsnd_driver);<br>
+ <br>
+ MODULE_DEVICE_TABLE(virtio, id_table);<br>
+ MODULE_DESCRIPTION("Virtio sound card driver");<br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+

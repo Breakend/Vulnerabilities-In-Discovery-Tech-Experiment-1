@@ -1,0 +1,21 @@
+On Wed, Apr 07, 2021 at 03:50:06AM +0100, Matthew Wilcox wrote:<br>
+><i> On Tue, Apr 06, 2021 at 06:44:59PM -0700, Michel Lespinasse wrote:</i><br>
+><i> > Performance tuning: as single threaded userspace does not use</i><br>
+><i> > speculative page faults, it does not require rcu safe vma freeing.</i><br>
+><i> > Turn this off to avoid the related (small) extra overheads.</i><br>
+><i> > </i><br>
+><i> > For multi threaded userspace, we often see a performance benefit from</i><br>
+><i> > the rcu safe vma freeing - even in tests that do not have any frequent</i><br>
+><i> > concurrent page faults ! This is because rcu safe vma freeing prevents</i><br>
+><i> > recently released vmas from being immediately reused in a new thread.</i><br>
+><i> </i><br>
+><i> Why does that provide a performance benefit?  Recently released</i><br>
+><i> VMAs are cache-hot, and NUMA-local.  I'd expect the RCU delay to be</i><br>
+><i> performance-negative.</i><br>
+<br>
+I only have the observation and no full explanation for it.<br>
+Just try it on wis-mmap and wis-malloc threaded cases. Of course this<br>
+all washes away when dealing with more realistic macro benchmarks.<br>
+<br>
+<br>
+

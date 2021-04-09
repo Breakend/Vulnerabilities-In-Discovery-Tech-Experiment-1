@@ -1,0 +1,25 @@
+
+On 08/04/21 18:04, Tom Lendacky wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em"><blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em"><blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em"><blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
++       if (!err || !sev_es_guest(vcpu->kvm) || !WARN_ON_ONCE(svm->ghcb))<br>
+</blockquote>
+This should be WARN_ON_ONCE(!svm->ghcb), otherwise you'll get the right<br>
+result, but get a stack trace immediately.<br>
+</blockquote>
+Doh, yep.<br>
+</blockquote>
+Actually, because of the "or's", this needs to be:<br>
+<br>
+if (!err || !sev_es_guest(vcpu->kvm) || (sev_es_guest(vcpu->kvm) && WARN_ON_ONCE(!svm->ghcb)))<br>
+</blockquote>
+<br>
+No, || cuts the right-hand side if the left-hand side is true.  So:<br>
+<br>
+- if err == 0, the rest is not evaluated<br>
+<br>
+- if !sev_es_guest(vcpu->kvm), WARN_ON_ONCE(!svm->ghcb) is not evaluated<br>
+<br>
+Paolo<br>
+<br>
+<br>
+

@@ -1,0 +1,175 @@
+Drop the use of pci_p2pdma_map_sg() in favour of dma_map_sg_p2pdma().<br>
+<br>
+The new interface allows mapping scatterlists that mix both regular<br>
+and P2PDMA pages and will verify that the dma device can communicate<br>
+with the device the pages are on.<br>
+<br>
+Signed-off-by: Logan Gunthorpe <logang@xxxxxxxxxxxx><br>
+---<br>
+ drivers/infiniband/core/rw.c | 50 ++++++++++--------------------------<br>
+ include/rdma/ib_verbs.h      | 32 +++++++++++++++++++++++<br>
+ 2 files changed, 46 insertions(+), 36 deletions(-)<br>
+<br>
+diff --git a/drivers/infiniband/core/rw.c b/drivers/infiniband/core/rw.c<br>
+index 31156e22d3e7..0c6213d9b044 100644<br>
+--- a/drivers/infiniband/core/rw.c<br>
++++ b/drivers/infiniband/core/rw.c<br>
+@@ -273,26 +273,6 @@ static int rdma_rw_init_single_wr(struct rdma_rw_ctx *ctx, struct ib_qp *qp,<br>
+ 	return 1;<br>
+ }<br>
+ <br>
+-static void rdma_rw_unmap_sg(struct ib_device *dev, struct scatterlist *sg,<br>
+-			     u32 sg_cnt, enum dma_data_direction dir)<br>
+-{<br>
+-	if (is_pci_p2pdma_page(sg_page(sg)))<br>
+-		pci_p2pdma_unmap_sg(dev->dma_device, sg, sg_cnt, dir);<br>
+-	else<br>
+-		ib_dma_unmap_sg(dev, sg, sg_cnt, dir);<br>
+-}<br>
+-<br>
+-static int rdma_rw_map_sg(struct ib_device *dev, struct scatterlist *sg,<br>
+-			  u32 sg_cnt, enum dma_data_direction dir)<br>
+-{<br>
+-	if (is_pci_p2pdma_page(sg_page(sg))) {<br>
+-		if (WARN_ON_ONCE(ib_uses_virt_dma(dev)))<br>
+-			return 0;<br>
+-		return pci_p2pdma_map_sg(dev->dma_device, sg, sg_cnt, dir);<br>
+-	}<br>
+-	return ib_dma_map_sg(dev, sg, sg_cnt, dir);<br>
+-}<br>
+-<br>
+ /**<br>
+  * rdma_rw_ctx_init - initialize a RDMA READ/WRITE context<br>
+  * @ctx:	context to initialize<br>
+@@ -315,9 +295,9 @@ int rdma_rw_ctx_init(struct rdma_rw_ctx *ctx, struct ib_qp *qp, u8 port_num,<br>
+ 	struct ib_device *dev = qp->pd->device;<br>
+ 	int ret;<br>
+ <br>
+-	ret = rdma_rw_map_sg(dev, sg, sg_cnt, dir);<br>
+-	if (!ret)<br>
+-		return -ENOMEM;<br>
++	ret = ib_dma_map_sg_p2pdma(dev, sg, sg_cnt, dir);<br>
++	if (ret < 0)<br>
++		return ret;<br>
+ 	sg_cnt = ret;<br>
+ <br>
+ 	/*<br>
+@@ -354,7 +334,7 @@ int rdma_rw_ctx_init(struct rdma_rw_ctx *ctx, struct ib_qp *qp, u8 port_num,<br>
+ 	return ret;<br>
+ <br>
+ out_unmap_sg:<br>
+-	rdma_rw_unmap_sg(dev, sg, sg_cnt, dir);<br>
++	ib_dma_unmap_sg(dev, sg, sg_cnt, dir);<br>
+ 	return ret;<br>
+ }<br>
+ EXPORT_SYMBOL(rdma_rw_ctx_init);<br>
+@@ -394,17 +374,15 @@ int rdma_rw_ctx_signature_init(struct rdma_rw_ctx *ctx, struct ib_qp *qp,<br>
+ 		return -EINVAL;<br>
+ 	}<br>
+ <br>
+-	ret = rdma_rw_map_sg(dev, sg, sg_cnt, dir);<br>
+-	if (!ret)<br>
+-		return -ENOMEM;<br>
++	ret = ib_dma_map_sg_p2pdma(dev, sg, sg_cnt, dir);<br>
++	if (ret < 0)<br>
++		return ret;<br>
+ 	sg_cnt = ret;<br>
+ <br>
+ 	if (prot_sg_cnt) {<br>
+-		ret = rdma_rw_map_sg(dev, prot_sg, prot_sg_cnt, dir);<br>
+-		if (!ret) {<br>
+-			ret = -ENOMEM;<br>
++		ret = ib_dma_map_sg_p2pdma(dev, prot_sg, prot_sg_cnt, dir);<br>
++		if (ret < 0)<br>
+ 			goto out_unmap_sg;<br>
+-		}<br>
+ 		prot_sg_cnt = ret;<br>
+ 	}<br>
+ <br>
+@@ -469,9 +447,9 @@ int rdma_rw_ctx_signature_init(struct rdma_rw_ctx *ctx, struct ib_qp *qp,<br>
+ 	kfree(ctx->reg);<br>
+ out_unmap_prot_sg:<br>
+ 	if (prot_sg_cnt)<br>
+-		rdma_rw_unmap_sg(dev, prot_sg, prot_sg_cnt, dir);<br>
++		ib_dma_unmap_sg(dev, prot_sg, prot_sg_cnt, dir);<br>
+ out_unmap_sg:<br>
+-	rdma_rw_unmap_sg(dev, sg, sg_cnt, dir);<br>
++	ib_dma_unmap_sg(dev, sg, sg_cnt, dir);<br>
+ 	return ret;<br>
+ }<br>
+ EXPORT_SYMBOL(rdma_rw_ctx_signature_init);<br>
+@@ -603,7 +581,7 @@ void rdma_rw_ctx_destroy(struct rdma_rw_ctx *ctx, struct ib_qp *qp, u8 port_num,<br>
+ 		break;<br>
+ 	}<br>
+ <br>
+-	rdma_rw_unmap_sg(qp->pd->device, sg, sg_cnt, dir);<br>
++	ib_dma_unmap_sg(qp->pd->device, sg, sg_cnt, dir);<br>
+ }<br>
+ EXPORT_SYMBOL(rdma_rw_ctx_destroy);<br>
+ <br>
+@@ -631,8 +609,8 @@ void rdma_rw_ctx_destroy_signature(struct rdma_rw_ctx *ctx, struct ib_qp *qp,<br>
+ 	kfree(ctx->reg);<br>
+ <br>
+ 	if (prot_sg_cnt)<br>
+-		rdma_rw_unmap_sg(qp->pd->device, prot_sg, prot_sg_cnt, dir);<br>
+-	rdma_rw_unmap_sg(qp->pd->device, sg, sg_cnt, dir);<br>
++		ib_dma_unmap_sg(qp->pd->device, prot_sg, prot_sg_cnt, dir);<br>
++	ib_dma_unmap_sg(qp->pd->device, sg, sg_cnt, dir);<br>
+ }<br>
+ EXPORT_SYMBOL(rdma_rw_ctx_destroy_signature);<br>
+ <br>
+diff --git a/include/rdma/ib_verbs.h b/include/rdma/ib_verbs.h<br>
+index ca28fca5736b..a541ed1702f5 100644<br>
+--- a/include/rdma/ib_verbs.h<br>
++++ b/include/rdma/ib_verbs.h<br>
+@@ -4028,6 +4028,17 @@ static inline int ib_dma_map_sg_attrs(struct ib_device *dev,<br>
+ 				dma_attrs);<br>
+ }<br>
+ <br>
++static inline int ib_dma_map_sg_p2pdma_attrs(struct ib_device *dev,<br>
++					     struct scatterlist *sg, int nents,<br>
++					     enum dma_data_direction direction,<br>
++					     unsigned long dma_attrs)<br>
++{<br>
++	if (ib_uses_virt_dma(dev))<br>
++		return ib_dma_virt_map_sg(dev, sg, nents);<br>
++	return dma_map_sg_p2pdma_attrs(dev->dma_device, sg, nents, direction,<br>
++				       dma_attrs);<br>
++}<br>
++<br>
+ static inline void ib_dma_unmap_sg_attrs(struct ib_device *dev,<br>
+ 					 struct scatterlist *sg, int nents,<br>
+ 					 enum dma_data_direction direction,<br>
+@@ -4052,6 +4063,27 @@ static inline int ib_dma_map_sg(struct ib_device *dev,<br>
+ 	return ib_dma_map_sg_attrs(dev, sg, nents, direction, 0);<br>
+ }<br>
+ <br>
++/**<br>
++ * ib_dma_map_sg_p2pdma - Map a scatter/gather list to DMA addresses<br>
++ * @dev: The device for which the DMA addresses are to be created<br>
++ * @sg: The array of scatter/gather entries<br>
++ * @nents: The number of scatter/gather entries<br>
++ * @direction: The direction of the DMA<br>
++ *<br>
++ * Map an scatter/gather list that might contain P2PDMA pages.<br>
++ * Unlike ib_dma_map_sg() it will return either a negative errno or<br>
++ * a positive value indicating the number of dma segments. See<br>
++ * dma_map_sg_p2pdma_attrs() for details.<br>
++ *<br>
++ * The resulting list should be unmapped with ib_dma_unmap_sg().<br>
++ */<br>
++static inline int ib_dma_map_sg_p2pdma(struct ib_device *dev,<br>
++				       struct scatterlist *sg, int nents,<br>
++				       enum dma_data_direction direction)<br>
++{<br>
++	return ib_dma_map_sg_p2pdma_attrs(dev, sg, nents, direction, 0);<br>
++}<br>
++<br>
+ /**<br>
+  * ib_dma_unmap_sg - Unmap a scatter/gather list of DMA addresses<br>
+  * @dev: The device for which the DMA addresses were created<br>
+-- <br>
+2.20.1<br>
+<br>
+<br>
+

@@ -1,0 +1,39 @@
+On Thu, Apr 8, 2021 at 12:46 PM Sven Van Asbroeck <thesven73@xxxxxxxxx> wrote:<br>
+><i></i><br>
+><i> Hi George,</i><br>
+><i></i><br>
+><i> On Thu, Apr 8, 2021 at 1:36 PM George McCollister</i><br>
+><i> <george.mccollister@xxxxxxxxx> wrote:</i><br>
+><i> ></i><br>
+><i> > Can you explain the difference in behavior with what I was observing</i><br>
+><i> > on the LAN7431?</i><br>
+><i></i><br>
+><i> I'm not using DSA in my application, so I cannot test or replicate</i><br>
+><i> what you were observing. It would be great if we could work together</i><br>
+><i> and settle on a solution that is acceptable to both of us.</i><br>
+<br>
+Sounds good.<br>
+<br>
+><i></i><br>
+><i> > I'll retest but if this is reverted I'm going to start</i><br>
+><i> > seeing 2 extra bytes on the end of frames and it's going to break DSA</i><br>
+><i> > with the LAN7431 again.</i><br>
+><i> ></i><br>
+><i></i><br>
+><i> Seen from my point of view, your patch is a regression. But perhaps my</i><br>
+><i> patch set is a regression for you? Catch 22...</i><br>
+><i></i><br>
+><i> Would you be able to identify which patch broke your DSA behaviour?</i><br>
+><i> Was it one of mine? Perhaps we can start from there.</i><br>
+<br>
+Yes, first I'm going to confirm that what is in the net branch still<br>
+works (unlikely but perhaps something else could have broken it since<br>
+last I tried it).<br>
+Then I'll confirm the patch which I believe broke it actually did and<br>
+report back.<br>
+<br>
+><i></i><br>
+><i> Sven</i><br>
+<br>
+<br>
+

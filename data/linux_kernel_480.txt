@@ -1,0 +1,47 @@
+There is a error message within devm_ioremap_resource<br>
+already, so remove the dev_err calls to avoid redundant<br>
+error messages.<br>
+<br>
+Signed-off-by: Chen Hui <clare.chenhui@xxxxxxxxxx><br>
+---<br>
+ drivers/gpu/drm/mediatek/mtk_disp_color.c | 4 +---<br>
+ drivers/gpu/drm/mediatek/mtk_disp_gamma.c | 4 +---<br>
+ 2 files changed, 2 insertions(+), 6 deletions(-)<br>
+<br>
+diff --git a/drivers/gpu/drm/mediatek/mtk_disp_color.c b/drivers/gpu/drm/mediatek/mtk_disp_color.c<br>
+index 63f411ab393b..d9b6f3b100dc 100644<br>
+--- a/drivers/gpu/drm/mediatek/mtk_disp_color.c<br>
++++ b/drivers/gpu/drm/mediatek/mtk_disp_color.c<br>
+@@ -112,10 +112,8 @@ static int mtk_disp_color_probe(struct platform_device *pdev)<br>
+ <br>
+ 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);<br>
+ 	priv->regs = devm_ioremap_resource(dev, res);<br>
+-	if (IS_ERR(priv->regs)) {<br>
+-		dev_err(dev, "failed to ioremap color\n");<br>
++	if (IS_ERR(priv->regs))<br>
+ 		return PTR_ERR(priv->regs);<br>
+-	}<br>
+ #if IS_REACHABLE(CONFIG_MTK_CMDQ)<br>
+ 	ret = cmdq_dev_get_client_reg(dev, &priv->cmdq_reg, 0);<br>
+ 	if (ret)<br>
+diff --git a/drivers/gpu/drm/mediatek/mtk_disp_gamma.c b/drivers/gpu/drm/mediatek/mtk_disp_gamma.c<br>
+index 3ebf91e0ab41..ad5df3f9d477 100644<br>
+--- a/drivers/gpu/drm/mediatek/mtk_disp_gamma.c<br>
++++ b/drivers/gpu/drm/mediatek/mtk_disp_gamma.c<br>
+@@ -146,10 +146,8 @@ static int mtk_disp_gamma_probe(struct platform_device *pdev)<br>
+ <br>
+ 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);<br>
+ 	priv->regs = devm_ioremap_resource(dev, res);<br>
+-	if (IS_ERR(priv->regs)) {<br>
+-		dev_err(dev, "failed to ioremap gamma\n");<br>
++	if (IS_ERR(priv->regs))<br>
+ 		return PTR_ERR(priv->regs);<br>
+-	}<br>
+ <br>
+ #if IS_REACHABLE(CONFIG_MTK_CMDQ)<br>
+ 	ret = cmdq_dev_get_client_reg(dev, &priv->cmdq_reg, 0);<br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+

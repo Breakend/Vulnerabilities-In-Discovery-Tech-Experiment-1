@@ -1,0 +1,45 @@
+
++++ Stephen Boyd [30/03/21 20:05 -0700]:<br>
+[snipped]<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+diff --git a/kernel/module.c b/kernel/module.c<br>
+index 30479355ab85..6f5bc1b046a5 100644<br>
+--- a/kernel/module.c<br>
++++ b/kernel/module.c<br>
+@@ -13,6 +13,7 @@<br>
+#include <linux/trace_events.h><br>
+#include <linux/init.h><br>
+#include <linux/kallsyms.h><br>
++#include <linux/buildid.h><br>
+#include <linux/file.h><br>
+#include <linux/fs.h><br>
+#include <linux/sysfs.h><br>
+@@ -2770,6 +2771,20 @@ static void add_kallsyms(struct module *mod, const struct load_info *info)<br>
+	}<br>
+	mod->core_kallsyms.num_symtab = ndst;<br>
+}<br>
++<br>
++static void init_build_id(struct module *mod, const struct load_info *info)<br>
++{<br>
++	const Elf_Shdr *sechdr;<br>
++	unsigned int i;<br>
++<br>
++	for (i = 0; i < info->hdr->e_shnum; i++) {<br>
++		sechdr = &info->sechdrs[i];<br>
++		if (!sect_empty(sechdr) && sechdr->sh_type == SHT_NOTE &&<br>
++		    !build_id_parse_buf((void *)sechdr->sh_addr, mod->build_id,<br>
++					sechdr->sh_size))<br>
++			break;<br>
++	}<br>
++}<br>
+</blockquote>
+<br>
+Why not just look for the .note.gnu.build-id section instead of trying<br>
+to parse each note section? Doesn't it always contain the build id? At<br>
+least the ld man page seems to suggest this section name should be<br>
+consistent.<br>
+<br>
+Jessica<br>
+<br>
+<br>
+

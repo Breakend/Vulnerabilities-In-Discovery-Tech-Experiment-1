@@ -1,0 +1,9 @@
+><i> +	err = write(thread->pipes.ack[1], &msg, sizeof(msg));</i><br>
+><i> +	if (err == -1)</i><br>
+><i> +		pr_err("threads[%d]: failed to notify on start. Error %m", thread->tid);</i><br>
+<br>
+It might be safer to not use %m. I'm not sure if all the non glibc<br>
+libcs that people use support it.<br>
+<br>
+<br>
+

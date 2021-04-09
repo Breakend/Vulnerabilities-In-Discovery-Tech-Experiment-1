@@ -1,0 +1,25 @@
+Enable interconnect driver for SDX55 platform to manage the interconnect<br>
+providers.<br>
+<br>
+Signed-off-by: Manivannan Sadhasivam <manivannan.sadhasivam@xxxxxxxxxx><br>
+---<br>
+ arch/arm/configs/qcom_defconfig | 1 +<br>
+ 1 file changed, 1 insertion(+)<br>
+<br>
+diff --git a/arch/arm/configs/qcom_defconfig b/arch/arm/configs/qcom_defconfig<br>
+index 695612829503..5955aeb0646e 100644<br>
+--- a/arch/arm/configs/qcom_defconfig<br>
++++ b/arch/arm/configs/qcom_defconfig<br>
+@@ -277,6 +277,7 @@ CONFIG_QCOM_QFPROM=y<br>
+ CONFIG_INTERCONNECT=y<br>
+ CONFIG_INTERCONNECT_QCOM=y<br>
+ CONFIG_INTERCONNECT_QCOM_MSM8974=m<br>
++CONFIG_INTERCONNECT_QCOM_SDX55=m<br>
+ CONFIG_EXT2_FS=y<br>
+ CONFIG_EXT2_FS_XATTR=y<br>
+ CONFIG_EXT3_FS=y<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

@@ -1,0 +1,24 @@
+On Thu, Apr 8, 2021 at 7:31 AM Johannes Weiner <hannes@xxxxxxxxxxx> wrote:<br>
+><i></i><br>
+><i> When the unsigned page_counter underflows, even just by a few pages, a</i><br>
+><i> cgroup will not be able to run anything afterwards and trigger the OOM</i><br>
+><i> killer in a loop.</i><br>
+><i></i><br>
+><i> Underflows shouldn't happen, but when they do in practice, we may just</i><br>
+><i> be off by a small amount that doesn't interfere with the normal</i><br>
+><i> operation - consequences don't need to be that dire.</i><br>
+><i></i><br>
+><i> Reset the page_counter to 0 upon underflow. We'll issue a warning that</i><br>
+><i> the accounting will be off and then try to keep limping along.</i><br>
+><i></i><br>
+><i> [ We used to do this with the original res_counter, where it was a</i><br>
+><i>   more straight-forward correction inside the spinlock section. I</i><br>
+><i>   didn't carry it forward into the lockless page counters for</i><br>
+><i>   simplicity, but it turns out this is quite useful in practice. ]</i><br>
+><i></i><br>
+><i> Signed-off-by: Johannes Weiner <hannes@xxxxxxxxxxx></i><br>
+<br>
+Reviewed-by: Shakeel Butt <shakeelb@xxxxxxxxxx><br>
+<br>
+<br>
+

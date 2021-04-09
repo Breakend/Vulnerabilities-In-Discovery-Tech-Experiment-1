@@ -1,0 +1,30 @@
+To ensure we take the actual address of a function in kernel text,<br>
+use function_nocfi. Otherwise, with CONFIG_CFI_CLANG, the compiler<br>
+replaces the address with a pointer to the CFI jump table, which is<br>
+actually in the module when compiled with CONFIG_LKDTM=m.<br>
+<br>
+Signed-off-by: Sami Tolvanen <samitolvanen@xxxxxxxxxx><br>
+Acked-by: Kees Cook <keescook@xxxxxxxxxxxx><br>
+Tested-by: Nathan Chancellor <nathan@xxxxxxxxxx><br>
+---<br>
+ drivers/misc/lkdtm/usercopy.c | 2 +-<br>
+ 1 file changed, 1 insertion(+), 1 deletion(-)<br>
+<br>
+diff --git a/drivers/misc/lkdtm/usercopy.c b/drivers/misc/lkdtm/usercopy.c<br>
+index 109e8d4302c1..15d220ef35a5 100644<br>
+--- a/drivers/misc/lkdtm/usercopy.c<br>
++++ b/drivers/misc/lkdtm/usercopy.c<br>
+@@ -314,7 +314,7 @@ void lkdtm_USERCOPY_KERNEL(void)<br>
+ <br>
+ 	pr_info("attempting bad copy_to_user from kernel text: %px\n",<br>
+ 		vm_mmap);<br>
+-	if (copy_to_user((void __user *)user_addr, vm_mmap,<br>
++	if (copy_to_user((void __user *)user_addr, function_nocfi(vm_mmap),<br>
+ 			 unconst + PAGE_SIZE)) {<br>
+ 		pr_warn("copy_to_user failed, but lacked Oops\n");<br>
+ 		goto free_user;<br>
+-- <br>
+2.31.1.295.g9ea45b61b8-goog<br>
+<br>
+<br>
+

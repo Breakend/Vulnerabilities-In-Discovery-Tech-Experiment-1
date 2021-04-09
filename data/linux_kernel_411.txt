@@ -1,0 +1,301 @@
+Gather statistics from the netfs interface that can be exported through a<br>
+seqfile.  This is intended to be called by a later patch when viewing<br>
+/proc/fs/fscache/stats.<br>
+<br>
+Signed-off-by: David Howells <dhowells@xxxxxxxxxx><br>
+Reviewed-by: Jeff Layton <jlayton@xxxxxxxxxx><br>
+cc: Matthew Wilcox <willy@xxxxxxxxxxxxx><br>
+cc: linux-mm@xxxxxxxxx<br>
+cc: linux-cachefs@xxxxxxxxxx<br>
+cc: linux-afs@xxxxxxxxxxxxxxxxxxx<br>
+cc: linux-nfs@xxxxxxxxxxxxxxx<br>
+cc: linux-cifs@xxxxxxxxxxxxxxx<br>
+cc: ceph-devel@xxxxxxxxxxxxxxx<br>
+cc: v9fs-developer@xxxxxxxxxxxxxxxxxxxxx<br>
+cc: linux-fsdevel@xxxxxxxxxxxxxxx<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161118139247.1232039.10556850937548511068.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161118139247.1232039.10556850937548511068.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # rfc<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161161034669.2537118.2761232524997091480.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161161034669.2537118.2761232524997091480.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v2<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161340397101.1303470.17581910581108378458.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161340397101.1303470.17581910581108378458.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v3<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161539539959.286939.6794352576462965914.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161539539959.286939.6794352576462965914.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v4<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161653797700.2770958.5801990354413178228.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161653797700.2770958.5801990354413178228.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v5<br>
+---<br>
+<br>
+ fs/netfs/Kconfig       |   15 +++++++++++++<br>
+ fs/netfs/Makefile      |    3 +--<br>
+ fs/netfs/internal.h    |   34 ++++++++++++++++++++++++++++++<br>
+ fs/netfs/read_helper.c |   23 ++++++++++++++++++++<br>
+ fs/netfs/stats.c       |   54 ++++++++++++++++++++++++++++++++++++++++++++++++<br>
+ include/linux/netfs.h  |    1 +<br>
+ 6 files changed, 128 insertions(+), 2 deletions(-)<br>
+ create mode 100644 fs/netfs/stats.c<br>
+<br>
+diff --git a/fs/netfs/Kconfig b/fs/netfs/Kconfig<br>
+index 2ebf90e6ca95..578112713703 100644<br>
+--- a/fs/netfs/Kconfig<br>
++++ b/fs/netfs/Kconfig<br>
+@@ -6,3 +6,18 @@ config NETFS_SUPPORT<br>
+ 	  This option enables support for network filesystems, including<br>
+ 	  helpers for high-level buffered I/O, abstracting out read<br>
+ 	  segmentation, local caching and transparent huge page support.<br>
++<br>
++config NETFS_STATS<br>
++	bool "Gather statistical information on local caching"<br>
++	depends on NETFS_SUPPORT && PROC_FS<br>
++	help<br>
++	  This option causes statistical information to be gathered on local<br>
++	  caching and exported through file:<br>
++<br>
++		/proc/fs/fscache/stats<br>
++<br>
++	  The gathering of statistics adds a certain amount of overhead to<br>
++	  execution as there are a quite a few stats gathered, and on a<br>
++	  multi-CPU system these may be on cachelines that keep bouncing<br>
++	  between CPUs.  On the other hand, the stats are very useful for<br>
++	  debugging purposes.  Saying 'Y' here is recommended.<br>
+diff --git a/fs/netfs/Makefile b/fs/netfs/Makefile<br>
+index 4b4eff2ba369..c15bfc966d96 100644<br>
+--- a/fs/netfs/Makefile<br>
++++ b/fs/netfs/Makefile<br>
+@@ -1,6 +1,5 @@<br>
+ # SPDX-License-Identifier: GPL-2.0<br>
+ <br>
+-netfs-y := \<br>
+-	read_helper.o<br>
++netfs-y := read_helper.o stats.o<br>
+ <br>
+ obj-$(CONFIG_NETFS_SUPPORT) := netfs.o<br>
+diff --git a/fs/netfs/internal.h b/fs/netfs/internal.h<br>
+index ee665c0e7dc8..98b6f4516da1 100644<br>
+--- a/fs/netfs/internal.h<br>
++++ b/fs/netfs/internal.h<br>
+@@ -16,8 +16,42 @@<br>
+  */<br>
+ extern unsigned int netfs_debug;<br>
+ <br>
++/*<br>
++ * stats.c<br>
++ */<br>
++#ifdef CONFIG_NETFS_STATS<br>
++extern atomic_t netfs_n_rh_readahead;<br>
++extern atomic_t netfs_n_rh_readpage;<br>
++extern atomic_t netfs_n_rh_rreq;<br>
++extern atomic_t netfs_n_rh_sreq;<br>
++extern atomic_t netfs_n_rh_download;<br>
++extern atomic_t netfs_n_rh_download_done;<br>
++extern atomic_t netfs_n_rh_download_failed;<br>
++extern atomic_t netfs_n_rh_download_instead;<br>
++extern atomic_t netfs_n_rh_read;<br>
++extern atomic_t netfs_n_rh_read_done;<br>
++extern atomic_t netfs_n_rh_read_failed;<br>
++extern atomic_t netfs_n_rh_zero;<br>
++extern atomic_t netfs_n_rh_short_read;<br>
++extern atomic_t netfs_n_rh_write;<br>
++extern atomic_t netfs_n_rh_write_done;<br>
++extern atomic_t netfs_n_rh_write_failed;<br>
++<br>
++<br>
++static inline void netfs_stat(atomic_t *stat)<br>
++{<br>
++	atomic_inc(stat);<br>
++}<br>
++<br>
++static inline void netfs_stat_d(atomic_t *stat)<br>
++{<br>
++	atomic_dec(stat);<br>
++}<br>
++<br>
++#else<br>
+ #define netfs_stat(x) do {} while(0)<br>
+ #define netfs_stat_d(x) do {} while(0)<br>
++#endif<br>
+ <br>
+ /*****************************************************************************/<br>
+ /*<br>
+diff --git a/fs/netfs/read_helper.c b/fs/netfs/read_helper.c<br>
+index 799eee7f4ee6..6d6ed30f417e 100644<br>
+--- a/fs/netfs/read_helper.c<br>
++++ b/fs/netfs/read_helper.c<br>
+@@ -56,6 +56,7 @@ static struct netfs_read_request *netfs_alloc_read_request(<br>
+ 		refcount_set(&rreq->usage, 1);<br>
+ 		__set_bit(NETFS_RREQ_IN_PROGRESS, &rreq->flags);<br>
+ 		ops->init_rreq(rreq, file);<br>
++		netfs_stat(&netfs_n_rh_rreq);<br>
+ 	}<br>
+ <br>
+ 	return rreq;<br>
+@@ -88,6 +89,7 @@ static void netfs_free_read_request(struct work_struct *work)<br>
+ 		rreq->netfs_ops->cleanup(rreq->mapping, rreq->netfs_priv);<br>
+ 	trace_netfs_rreq(rreq, netfs_rreq_trace_free);<br>
+ 	kfree(rreq);<br>
++	netfs_stat_d(&netfs_n_rh_rreq);<br>
+ }<br>
+ <br>
+ static void netfs_put_read_request(struct netfs_read_request *rreq, bool was_async)<br>
+@@ -117,6 +119,7 @@ static struct netfs_read_subrequest *netfs_alloc_subrequest(<br>
+ 		refcount_set(&subreq->usage, 2);<br>
+ 		subreq->rreq = rreq;<br>
+ 		netfs_get_read_request(rreq);<br>
++		netfs_stat(&netfs_n_rh_sreq);<br>
+ 	}<br>
+ <br>
+ 	return subreq;<br>
+@@ -134,6 +137,7 @@ static void __netfs_put_subrequest(struct netfs_read_subrequest *subreq,<br>
+ <br>
+ 	trace_netfs_sreq(subreq, netfs_sreq_trace_free);<br>
+ 	kfree(subreq);<br>
++	netfs_stat_d(&netfs_n_rh_sreq);<br>
+ 	netfs_put_read_request(rreq, was_async);<br>
+ }<br>
+ <br>
+@@ -156,6 +160,7 @@ static void netfs_clear_unread(struct netfs_read_subrequest *subreq)<br>
+ static void netfs_fill_with_zeroes(struct netfs_read_request *rreq,<br>
+ 				   struct netfs_read_subrequest *subreq)<br>
+ {<br>
++	netfs_stat(&netfs_n_rh_zero);<br>
+ 	__set_bit(NETFS_SREQ_CLEAR_TAIL, &subreq->flags);<br>
+ 	netfs_subreq_terminated(subreq, 0, false);<br>
+ }<br>
+@@ -179,6 +184,7 @@ static void netfs_fill_with_zeroes(struct netfs_read_request *rreq,<br>
+ static void netfs_read_from_server(struct netfs_read_request *rreq,<br>
+ 				   struct netfs_read_subrequest *subreq)<br>
+ {<br>
++	netfs_stat(&netfs_n_rh_download);<br>
+ 	rreq->netfs_ops->issue_op(subreq);<br>
+ }<br>
+ <br>
+@@ -288,6 +294,7 @@ static void netfs_rreq_short_read(struct netfs_read_request *rreq,<br>
+ 	__clear_bit(NETFS_SREQ_SHORT_READ, &subreq->flags);<br>
+ 	__set_bit(NETFS_SREQ_SEEK_DATA_READ, &subreq->flags);<br>
+ <br>
++	netfs_stat(&netfs_n_rh_short_read);<br>
+ 	trace_netfs_sreq(subreq, netfs_sreq_trace_resubmit_short);<br>
+ <br>
+ 	netfs_get_read_subrequest(subreq);<br>
+@@ -319,6 +326,7 @@ static bool netfs_rreq_perform_resubmissions(struct netfs_read_request *rreq)<br>
+ 				break;<br>
+ 			subreq->source = NETFS_DOWNLOAD_FROM_SERVER;<br>
+ 			subreq->error = 0;<br>
++			netfs_stat(&netfs_n_rh_download_instead);<br>
+ 			trace_netfs_sreq(subreq, netfs_sreq_trace_download_instead);<br>
+ 			netfs_get_read_subrequest(subreq);<br>
+ 			atomic_inc(&rreq->nr_rd_ops);<br>
+@@ -414,6 +422,17 @@ void netfs_subreq_terminated(struct netfs_read_subrequest *subreq,<br>
+ 	       subreq->debug_index, subreq->start, subreq->flags,<br>
+ 	       transferred_or_error);<br>
+ <br>
++	switch (subreq->source) {<br>
++	case NETFS_READ_FROM_CACHE:<br>
++		netfs_stat(&netfs_n_rh_read_done);<br>
++		break;<br>
++	case NETFS_DOWNLOAD_FROM_SERVER:<br>
++		netfs_stat(&netfs_n_rh_download_done);<br>
++		break;<br>
++	default:<br>
++		break;<br>
++	}<br>
++<br>
+ 	if (IS_ERR_VALUE(transferred_or_error)) {<br>
+ 		subreq->error = transferred_or_error;<br>
+ 		goto failed;<br>
+@@ -470,8 +489,10 @@ void netfs_subreq_terminated(struct netfs_read_subrequest *subreq,<br>
+ <br>
+ failed:<br>
+ 	if (subreq->source == NETFS_READ_FROM_CACHE) {<br>
++		netfs_stat(&netfs_n_rh_read_failed);<br>
+ 		set_bit(NETFS_RREQ_INCOMPLETE_IO, &rreq->flags);<br>
+ 	} else {<br>
++		netfs_stat(&netfs_n_rh_download_failed);<br>
+ 		set_bit(NETFS_RREQ_FAILED, &rreq->flags);<br>
+ 		rreq->error = subreq->error;<br>
+ 	}<br>
+@@ -653,6 +674,7 @@ void netfs_readahead(struct readahead_control *ractl,<br>
+ 	rreq->start	= readahead_pos(ractl);<br>
+ 	rreq->len	= readahead_length(ractl);<br>
+ <br>
++	netfs_stat(&netfs_n_rh_readahead);<br>
+ 	trace_netfs_read(rreq, readahead_pos(ractl), readahead_length(ractl),<br>
+ 			 netfs_read_trace_readahead);<br>
+ <br>
+@@ -722,6 +744,7 @@ int netfs_readpage(struct file *file,<br>
+ 	rreq->start	= page_index(page) * PAGE_SIZE;<br>
+ 	rreq->len	= thp_size(page);<br>
+ <br>
++	netfs_stat(&netfs_n_rh_readpage);<br>
+ 	trace_netfs_read(rreq, rreq->start, rreq->len, netfs_read_trace_readpage);<br>
+ <br>
+ 	netfs_get_read_request(rreq);<br>
+diff --git a/fs/netfs/stats.c b/fs/netfs/stats.c<br>
+new file mode 100644<br>
+index 000000000000..df6ff5718f25<br>
+--- /dev/null<br>
++++ b/fs/netfs/stats.c<br>
+@@ -0,0 +1,54 @@<br>
++// SPDX-License-Identifier: GPL-2.0-or-later<br>
++/* Netfs support statistics<br>
++ *<br>
++ * Copyright (C) 2021 Red Hat, Inc. All Rights Reserved.<br>
++ * Written by David Howells (dhowells@xxxxxxxxxx)<br>
++ */<br>
++<br>
++#include <linux/export.h><br>
++#include <linux/seq_file.h><br>
++#include <linux/netfs.h><br>
++#include "internal.h"<br>
++<br>
++atomic_t netfs_n_rh_readahead;<br>
++atomic_t netfs_n_rh_readpage;<br>
++atomic_t netfs_n_rh_rreq;<br>
++atomic_t netfs_n_rh_sreq;<br>
++atomic_t netfs_n_rh_download;<br>
++atomic_t netfs_n_rh_download_done;<br>
++atomic_t netfs_n_rh_download_failed;<br>
++atomic_t netfs_n_rh_download_instead;<br>
++atomic_t netfs_n_rh_read;<br>
++atomic_t netfs_n_rh_read_done;<br>
++atomic_t netfs_n_rh_read_failed;<br>
++atomic_t netfs_n_rh_zero;<br>
++atomic_t netfs_n_rh_short_read;<br>
++atomic_t netfs_n_rh_write;<br>
++atomic_t netfs_n_rh_write_done;<br>
++atomic_t netfs_n_rh_write_failed;<br>
++<br>
++void netfs_stats_show(struct seq_file *m)<br>
++{<br>
++	seq_printf(m, "RdHelp : RA=%u RP=%u rr=%u sr=%u\n",<br>
++		   atomic_read(&netfs_n_rh_readahead),<br>
++		   atomic_read(&netfs_n_rh_readpage),<br>
++		   atomic_read(&netfs_n_rh_rreq),<br>
++		   atomic_read(&netfs_n_rh_sreq));<br>
++	seq_printf(m, "RdHelp : ZR=%u sh=%u\n",<br>
++		   atomic_read(&netfs_n_rh_zero),<br>
++		   atomic_read(&netfs_n_rh_short_read));<br>
++	seq_printf(m, "RdHelp : DL=%u ds=%u df=%u di=%u\n",<br>
++		   atomic_read(&netfs_n_rh_download),<br>
++		   atomic_read(&netfs_n_rh_download_done),<br>
++		   atomic_read(&netfs_n_rh_download_failed),<br>
++		   atomic_read(&netfs_n_rh_download_instead));<br>
++	seq_printf(m, "RdHelp : RD=%u rs=%u rf=%u\n",<br>
++		   atomic_read(&netfs_n_rh_read),<br>
++		   atomic_read(&netfs_n_rh_read_done),<br>
++		   atomic_read(&netfs_n_rh_read_failed));<br>
++	seq_printf(m, "RdHelp : WR=%u ws=%u wf=%u\n",<br>
++		   atomic_read(&netfs_n_rh_write),<br>
++		   atomic_read(&netfs_n_rh_write_done),<br>
++		   atomic_read(&netfs_n_rh_write_failed));<br>
++}<br>
++EXPORT_SYMBOL(netfs_stats_show);<br>
+diff --git a/include/linux/netfs.h b/include/linux/netfs.h<br>
+index 8e8c6a4e4dde..db4af80cbae3 100644<br>
+--- a/include/linux/netfs.h<br>
++++ b/include/linux/netfs.h<br>
+@@ -166,5 +166,6 @@ extern int netfs_readpage(struct file *,<br>
+ 			  void *);<br>
+ <br>
+ extern void netfs_subreq_terminated(struct netfs_read_subrequest *, ssize_t, bool);<br>
++extern void netfs_stats_show(struct seq_file *);<br>
+ <br>
+ #endif /* _LINUX_NETFS_H */<br>
+<br>
+<br>
+<br>
+

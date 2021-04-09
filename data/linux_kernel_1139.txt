@@ -1,0 +1,22 @@
+Hi all,<br>
+<br>
+After merging the irqchip tree, today's linux-next build (x86_64<br>
+allmodconfig) failed like this:<br>
+<br>
+drivers/irqchip/irq-wpcm450-aic.c:9:10: fatal error: asm/exception.h: No such file or directory<br>
+    9 | #include <asm/exception.h><br>
+      |          ^~~~~~~~~~~~~~~~~<br>
+<br>
+Caused by commit<br>
+<br>
+  fead4dd49663 ("irqchip: Add driver for WPCM450 interrupt controller")<br>
+<br>
+I have used the irqchip tree from next-20210407 for today.<br>
+<br>
+-- <br>
+Cheers,<br>
+Stephen Rothwell<br>
+<p><strong>Attachment:
+<a href="00105/pgprlTIZz963k.pgp" ><tt>pgprlTIZz963k.pgp</tt></a></strong><br>
+<em>Description:</em> OpenPGP digital signature</p>
+

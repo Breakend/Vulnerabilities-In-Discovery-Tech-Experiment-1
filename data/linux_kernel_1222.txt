@@ -1,0 +1,34 @@
+Quoting Petr Mladek (2021-04-07 07:03:19)<br>
+><i> # readelf -Wn vmlinux-5.12.0-rc6-default+ </i><br>
+><i> </i><br>
+><i> Displaying notes found in: .notes</i><br>
+><i>   Owner                 Data size       Description</i><br>
+><i>   Xen                  0x00000006       Unknown note type: (0x00000006)    description data: 6c 69 6e 75 78 00 </i><br>
+><i>   Xen                  0x00000004       Unknown note type: (0x00000007)    description data: 32 2e 36 00 </i><br>
+><i>   Xen                  0x00000008       Unknown note type: (0x00000005)    description data: 78 65 6e 2d 33 2e 30 00 </i><br>
+><i>   Xen                  0x00000008       Unknown note type: (0x00000003)    description data: 00 00 00 ffffff80 ffffffff ffffffff ffffffff ffffffff </i><br>
+><i> </i><br>
+<br>
+Thanks for the readelf output. That was most helpful to see what's going<br>
+on. The buildid code isn't prepared for this it seems. We'll need to<br>
+check the note data to see if it starts with "GNU\0" and if it does then<br>
+we use it as the buildid. I'm not sure what this Xen note is that has a<br>
+type of 3 but I think that's OK, it won't have "GNU" in there so we<br>
+should ignore it. Does this patch work?<br>
+<br>
+----8<----<br>
+diff --git a/lib/buildid.c b/lib/buildid.c<br>
+index 483abf71eeec..f281dbe6fb83 100644<br>
+--- a/lib/buildid.c<br>
++++ b/lib/buildid.c<br>
+@@ -25,6 +25,7 @@ static int parse_build_id_buf(unsigned char *build_id,<br>
+ <br>
+ 		if (nhdr->n_type == BUILD_ID &&<br>
+ 		    nhdr->n_namesz == sizeof("GNU") &&<br>
++		    !strcmp((char *)(nhdr + 1), "GNU") &&<br>
+ 		    nhdr->n_descsz > 0 &&<br>
+ 		    nhdr->n_descsz <= BUILD_ID_SIZE_MAX) {<br>
+ 			memcpy(build_id,<br>
+<br>
+<br>
+

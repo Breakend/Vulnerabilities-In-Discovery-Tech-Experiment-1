@@ -1,0 +1,101 @@
+On Wed, Apr 7, 2021 at 12:11 PM AngeloGioacchino Del Regno<br>
+<angelogioacchino.delregno@xxxxxxxxxxxxxx> wrote:<br>
+><i></i><br>
+><i> Il 07/04/21 20:19, abhinavk@xxxxxxxxxxxxxx ha scritto:</i><br>
+><i> > Hi Marijn</i><br>
+><i> ></i><br>
+><i> > On 2021-04-06 14:47, Marijn Suijten wrote:</i><br>
+><i> >> Leaving this at a close-to-maximum register value 0xFFF0 means it takes</i><br>
+><i> >> very long for the MDSS to generate a software vsync interrupt when the</i><br>
+><i> >> hardware TE interrupt doesn't arrive.  Configuring this to double the</i><br>
+><i> >> vtotal (like some downstream kernels) leads to a frame to take at most</i><br>
+><i> >> twice before the vsync signal, until hardware TE comes up.</i><br>
+><i> >></i><br>
+><i> >> In this case the hardware interrupt responsible for providing this</i><br>
+><i> >> signal - "disp-te" gpio - is not hooked up to the mdp5 vsync/pp logic at</i><br>
+><i> >> all.  This solves severe panel update issues observed on at least the</i><br>
+><i> >> Xperia Loire and Tone series, until said gpio is properly hooked up to</i><br>
+><i> >> an irq.</i><br>
+><i> ></i><br>
+><i> > The reason the CONFIG_HEIGHT was at such a high value is to make sure that</i><br>
+><i> > we always get the TE only from the panel vsync and not false positives</i><br>
+><i> > coming</i><br>
+><i> > from the tear check logic itself.</i><br>
+><i> ></i><br>
+><i> > When you say that disp-te gpio is not hooked up, is it something</i><br>
+><i> > incorrect with</i><br>
+><i> > the schematic OR panel is not generating the TE correctly?</i><br>
+><i> ></i><br>
+><i></i><br>
+><i> Sometimes, some panels aren't getting correctly configured by the</i><br>
+><i> OEM/ODM in the first place: especially when porting devices from</i><br>
+><i> downstream to upstream, developers often get in a situation in which</i><br>
+><i> their TE line is either misconfigured or the DriverIC is not configured</i><br>
+><i> to raise V-Sync interrupts.</i><br>
+><i> Please remember: some DDICs need a "commands sequence" to enable</i><br>
+><i> generating the TE interrupts, sometimes this is not standard, and</i><br>
+><i> sometimes OEMs/ODMs are not even doing that in their downstream code</i><br>
+><i> (but instead they work around it in creative ways "for reasons", even</i><br>
+><i> though their DDIC supports indeed sending TE events).</i><br>
+><i></i><br>
+><i> This mostly happens when bringing up devices that have autorefresh</i><br>
+><i> enabled from the bootloader (when the bootloader sets up the splash</i><br>
+><i> screen) by using simple-panel as a (hopefully) temporary solution to get</i><br>
+><i> through the initial stages of porting.</i><br>
+><i></i><br>
+><i> We are not trying to cover cases related to incorrect schematics or</i><br>
+><i> hardware mistakes here, as the fix for that - as you know - is to just</i><br>
+><i> fix your hardware.</i><br>
+><i> What we're trying to do here is to stop freezes and, in some cases,</i><br>
+><i> lockups, other than false positives making the developer go offroad when</i><br>
+><i> the platform shows that something is wrong during early porting.</i><br>
+><i></i><br>
+><i> Also, sometimes, some DDICs will not generate TE interrupts when</i><br>
+><i> expected... in these cases we get a PP timeout and a MDP5 recovery: this</i><br>
+><i> is totally avoidable if we rely on the 2*vtotal, as we wouldn't get</i><br>
+><i> through the very time consuming task of recovering the entire MDP.</i><br>
+><i></i><br>
+><i> Of course, if something is wrong in the MDP and the block really needs</i><br>
+><i> recovery, this "trick" won't save anyone and the recovery will anyway be</i><br>
+><i> triggered, as the PP-done will anyway timeout.</i><br>
+<br>
+So, is this (mostly) a workaround due to TE not wired up?  In which<br>
+case I think it is ok, but maybe should have a comment about the<br>
+interaction with TE?<br>
+<br>
+Currently I have this patch in msm-next-staging but I guess we need to<br>
+decide in the next day or so whether to drop it or smash in a comment?<br>
+<br>
+BR,<br>
+-R<br>
+<br>
+><i> >></i><br>
+><i> >> Suggested-by: AngeloGioacchino Del Regno</i><br>
+><i> >> <angelogioacchino.delregno@xxxxxxxxxxxxxx></i><br>
+><i> >> Signed-off-by: Marijn Suijten <marijn.suijten@xxxxxxxxxxxxxx></i><br>
+><i> >> Reviewed-by: AngeloGioacchino Del Regno</i><br>
+><i> >> <angelogioacchino.delregno@xxxxxxxxxxxxxx></i><br>
+><i> >> ---</i><br>
+><i> >>  drivers/gpu/drm/msm/disp/mdp5/mdp5_cmd_encoder.c | 2 +-</i><br>
+><i> >>  1 file changed, 1 insertion(+), 1 deletion(-)</i><br>
+><i> >></i><br>
+><i> >> diff --git a/drivers/gpu/drm/msm/disp/mdp5/mdp5_cmd_encoder.c</i><br>
+><i> >> b/drivers/gpu/drm/msm/disp/mdp5/mdp5_cmd_encoder.c</i><br>
+><i> >> index ff2c1d583c79..2d5ac03dbc17 100644</i><br>
+><i> >> --- a/drivers/gpu/drm/msm/disp/mdp5/mdp5_cmd_encoder.c</i><br>
+><i> >> +++ b/drivers/gpu/drm/msm/disp/mdp5/mdp5_cmd_encoder.c</i><br>
+><i> >> @@ -51,7 +51,7 @@ static int pingpong_tearcheck_setup(struct</i><br>
+><i> >> drm_encoder *encoder,</i><br>
+><i> >></i><br>
+><i> >>      mdp5_write(mdp5_kms, REG_MDP5_PP_SYNC_CONFIG_VSYNC(pp_id), cfg);</i><br>
+><i> >>      mdp5_write(mdp5_kms,</i><br>
+><i> >> -        REG_MDP5_PP_SYNC_CONFIG_HEIGHT(pp_id), 0xfff0);</i><br>
+><i> >> +        REG_MDP5_PP_SYNC_CONFIG_HEIGHT(pp_id), (2 * mode->vtotal));</i><br>
+><i> >>      mdp5_write(mdp5_kms,</i><br>
+><i> >>          REG_MDP5_PP_VSYNC_INIT_VAL(pp_id), mode->vdisplay);</i><br>
+><i> >>      mdp5_write(mdp5_kms, REG_MDP5_PP_RD_PTR_IRQ(pp_id),</i><br>
+><i> >> mode->vdisplay + 1);</i><br>
+><i></i><br>
+<br>
+<br>
+

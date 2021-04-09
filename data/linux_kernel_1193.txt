@@ -1,0 +1,52 @@
+On Thu, Apr 08, 2021 at 10:35:17AM +0200, Jiri Kosina wrote:<br>
+><i> On Thu, 8 Apr 2021, Greg KH wrote:</i><br>
+><i> </i><br>
+><i> > > If there is a driver/subsystem code that can't handle the reverse </i><br>
+><i> > > operation to modprobe, it clearly can't handle error handling during </i><br>
+><i> > > modprobe (which, one would hope, is supported), and should be fixed.</i><br>
+><i> > </i><br>
+><i> > Huh?  No, that's not the issue here, it's the issue of different</i><br>
+><i> > userspace code paths into the module at the same time that it is trying</i><br>
+><i> > to be unloaded.  That has nothing to do with loading the module the</i><br>
+><i> > first time as userspace is not touching those apis yet.</i><br>
+><i> </i><br>
+><i> So do you claim that once the first (out of possibly many) </i><br>
+><i> userspace-visible sysfs entry has been created during module insertion and </i><br>
+><i> made available to userspace, there is never going to be rollback happening </i><br>
+><i> that'd be removing that first sysfs entry again?</i><br>
+<br>
+{sigh}<br>
+<br>
+I'm not trying to argue that, no.<br>
+<br>
+What I am arguing is that the complexity that the original patch was<br>
+not worth the low probablity of this actually being an issue hit in<br>
+real-life operations.<br>
+<br>
+That's all, messing around with sysfs entries and module reference<br>
+counts is tricky and complex and a total mess.  We have a separation<br>
+between normal sysfs files and devices being removed that should handle<br>
+the normal operations but there are still some crazy corner cases, of<br>
+which this seems to be one.<br>
+<br>
+Module removal is not a "normal" operation that can be triggered by a<br>
+system automatically without a user asking for it.  As someone reminded<br>
+me on IRC, we used to do this "automatically" for many problematic<br>
+drivers years ago for suspend/resume, that should all now be long fixed<br>
+up.<br>
+<br>
+So to add crazy complexity to the kernel, for an operation that can only<br>
+be triggered manually by a root user, is not worth it in my opinion, as<br>
+the maintainer of that code the complexity was asked to be made to.<br>
+<br>
+My throw-away comment of "module unloading is not supported" was an<br>
+attempt to summarize all of the above into one single sentence that<br>
+seems to have struck a nerve with a lot of people, and I appologize for<br>
+that :(<br>
+<br>
+thanks,<br>
+<br>
+greg k-h<br>
+<br>
+<br>
+

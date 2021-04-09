@@ -1,0 +1,29 @@
+pm_runtime_get_sync will increment pm usage counter even it failed.<br>
+thus a pairing decrement is needed.<br>
+Fix it by replacing it with pm_runtime_resume_and_get to keep usage<br>
+counter balanced.<br>
+<br>
+Reported-by: Hulk Robot <hulkci@xxxxxxxxxx><br>
+Signed-off-by: Bixuan Cui <cuibixuan@xxxxxxxxxx><br>
+---<br>
+ drivers/usb/core/hub.c | 2 +-<br>
+ 1 file changed, 1 insertion(+), 1 deletion(-)<br>
+<br>
+diff --git a/drivers/usb/core/hub.c b/drivers/usb/core/hub.c<br>
+index 9a83390072da..b2bc4b7c4289 100644<br>
+--- a/drivers/usb/core/hub.c<br>
++++ b/drivers/usb/core/hub.c<br>
+@@ -3605,7 +3605,7 @@ int usb_port_resume(struct usb_device *udev, pm_message_t msg)<br>
+ 	u16		portchange, portstatus;<br>
+ <br>
+ 	if (!test_and_set_bit(port1, hub->child_usage_bits)) {<br>
+-		status = pm_runtime_get_sync(&port_dev->dev);<br>
++		status = pm_runtime_resume_and_get(&port_dev->dev);<br>
+ 		if (status < 0) {<br>
+ 			dev_dbg(&udev->dev, "can't resume usb port, status %d\n",<br>
+ 					status);<br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+

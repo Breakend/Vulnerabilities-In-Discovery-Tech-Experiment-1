@@ -1,0 +1,63 @@
+On Mon, Apr 05, 2021 at 10:45:23AM -0700, Rob Clark wrote:<br>
+><i> From: Rob Clark <robdclark@xxxxxxxxxxxx></i><br>
+><i> </i><br>
+><i> One would normally hope not to be under enough memory pressure to need</i><br>
+><i> to swap GEM objects to disk backed swap.  But memory backed zram swap</i><br>
+><i> (as enabled on chromebooks, for example) can actually be quite fast</i><br>
+><i> and useful on devices with less RAM.  On a 4GB device, opening up ~4</i><br>
+><i> memory intensive web pages (in separate windows rather than tabs, to try</i><br>
+><i> and prevent tab discard), I see ~500MB worth of GEM objects, of which</i><br>
+><i> maybe only 10% are active at any time, and with unpin/evict enabled,</i><br>
+><i> only about half resident (which is a number that gets much lower if you</i><br>
+><i> simulate extreme memory pressure).  Assuming a 2:1 compression ratio (I</i><br>
+><i> see a bit higher in practice, but cannot isolate swapped out GEM pages</i><br>
+><i> vs other), that is like having an extra 100+MB of RAM, or more under</i><br>
+><i> higher memory pressure.</i><br>
+><i> </i><br>
+><i> Rob Clark (8):</i><br>
+><i>   drm/msm: ratelimit GEM related WARN_ON()s</i><br>
+><i>   drm/msm: Reorganize msm_gem_shrinker_scan()</i><br>
+><i>   drm/msm: Clear msm_obj->sgt in put_pages()</i><br>
+><i>   drm/msm: Split iova purge and close</i><br>
+><i>   drm/msm: Add $debugfs/gem stats on resident objects</i><br>
+><i>   drm/msm: Track potentially evictable objects</i><br>
+><i>   drm/msm: Small msm_gem_purge() fix</i><br>
+><i>   drm/msm: Support evicting GEM objects to swap</i><br>
+<br>
+Given how much entertainement shrinkers are, should we aim for more common<br>
+code here?<br>
+<br>
+Christian has tons of fun with adding something like this for ttm (well<br>
+different shades of grey). i915 is going to adopt ttm, at least for<br>
+discrete.<br>
+<br>
+The locking is also an utter pain, and msm seems to still live a lot in<br>
+its own land here. I think as much as possible a standard approach here<br>
+would be really good, ideally maybe as building blocks shared between ttm<br>
+and gem-shmem drivers ...<br>
+-Daniel<br>
+<br>
+><i> </i><br>
+><i>  drivers/gpu/drm/msm/msm_drv.c          |   2 +-</i><br>
+><i>  drivers/gpu/drm/msm/msm_drv.h          |  13 ++-</i><br>
+><i>  drivers/gpu/drm/msm/msm_gem.c          | 155 +++++++++++++++++--------</i><br>
+><i>  drivers/gpu/drm/msm/msm_gem.h          |  68 +++++++++--</i><br>
+><i>  drivers/gpu/drm/msm/msm_gem_shrinker.c | 129 ++++++++++++--------</i><br>
+><i>  drivers/gpu/drm/msm/msm_gpu_trace.h    |  13 +++</i><br>
+><i>  6 files changed, 272 insertions(+), 108 deletions(-)</i><br>
+><i> </i><br>
+><i> -- </i><br>
+><i> 2.30.2</i><br>
+><i> </i><br>
+><i> _______________________________________________</i><br>
+><i> dri-devel mailing list</i><br>
+><i> dri-devel@xxxxxxxxxxxxxxxxxxxxx</i><br>
+><i> <a  rel="nofollow" href="https://lists.freedesktop.org/mailman/listinfo/dri-devel">https://lists.freedesktop.org/mailman/listinfo/dri-devel</a></i><br>
+<br>
+-- <br>
+Daniel Vetter<br>
+Software Engineer, Intel Corporation<br>
+<a  rel="nofollow" href="http://blog.ffwll.ch">http://blog.ffwll.ch</a><br>
+<br>
+<br>
+

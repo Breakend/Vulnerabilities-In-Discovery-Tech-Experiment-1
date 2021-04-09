@@ -1,0 +1,44 @@
+"mhi_controller_config" struct is not modified inside "mhi_pci_dev_info"<br>
+struct. So constify the instances.<br>
+<br>
+Signed-off-by: Manivannan Sadhasivam <manivannan.sadhasivam@xxxxxxxxxx><br>
+---<br>
+ drivers/bus/mhi/pci_generic.c | 6 +++---<br>
+ 1 file changed, 3 insertions(+), 3 deletions(-)<br>
+<br>
+diff --git a/drivers/bus/mhi/pci_generic.c b/drivers/bus/mhi/pci_generic.c<br>
+index 8f715519ba08..7c810f02a2ef 100644<br>
+--- a/drivers/bus/mhi/pci_generic.c<br>
++++ b/drivers/bus/mhi/pci_generic.c<br>
+@@ -227,7 +227,7 @@ static struct mhi_event_config modem_qcom_v1_mhi_events[] = {<br>
+ 	MHI_EVENT_CONFIG_HW_DATA(3, 2048, 101)<br>
+ };<br>
+ <br>
+-static struct mhi_controller_config modem_qcom_v1_mhiv_config = {<br>
++static const struct mhi_controller_config modem_qcom_v1_mhiv_config = {<br>
+ 	.max_channels = 128,<br>
+ 	.timeout_ms = 8000,<br>
+ 	.num_channels = ARRAY_SIZE(modem_qcom_v1_mhi_channels),<br>
+@@ -287,7 +287,7 @@ static struct mhi_event_config mhi_quectel_em1xx_events[] = {<br>
+ 	MHI_EVENT_CONFIG_HW_DATA(3, 1024, 101)<br>
+ };<br>
+ <br>
+-static struct mhi_controller_config modem_quectel_em1xx_config = {<br>
++static const struct mhi_controller_config modem_quectel_em1xx_config = {<br>
+ 	.max_channels = 128,<br>
+ 	.timeout_ms = 20000,<br>
+ 	.num_channels = ARRAY_SIZE(mhi_quectel_em1xx_channels),<br>
+@@ -324,7 +324,7 @@ static struct mhi_event_config mhi_foxconn_sdx55_events[] = {<br>
+ 	MHI_EVENT_CONFIG_HW_DATA(3, 1024, 101)<br>
+ };<br>
+ <br>
+-static struct mhi_controller_config modem_foxconn_sdx55_config = {<br>
++static const struct mhi_controller_config modem_foxconn_sdx55_config = {<br>
+ 	.max_channels = 128,<br>
+ 	.timeout_ms = 20000,<br>
+ 	.num_channels = ARRAY_SIZE(mhi_foxconn_sdx55_channels),<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

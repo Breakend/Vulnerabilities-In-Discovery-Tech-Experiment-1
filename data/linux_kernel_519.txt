@@ -1,0 +1,39 @@
+module_w1_family() makes the code simpler by eliminating<br>
+boilerplate code.<br>
+<br>
+Signed-off-by: Chen Huang <chenhuang5@xxxxxxxxxx><br>
+---<br>
+ drivers/w1/slaves/w1_ds2805.c | 15 +--------------<br>
+ 1 file changed, 1 insertion(+), 14 deletions(-)<br>
+<br>
+diff --git a/drivers/w1/slaves/w1_ds2805.c b/drivers/w1/slaves/w1_ds2805.c<br>
+index 206186db727d..6b5d12ba1b65 100644<br>
+--- a/drivers/w1/slaves/w1_ds2805.c<br>
++++ b/drivers/w1/slaves/w1_ds2805.c<br>
+@@ -291,20 +291,7 @@ static struct w1_family w1_family_0d = {<br>
+ 	.fops = &w1_f0d_fops,<br>
+ };<br>
+ <br>
+-static int __init w1_f0d_init(void)<br>
+-{<br>
+-	pr_info("%s()\n", __func__);<br>
+-	return w1_register_family(&w1_family_0d);<br>
+-}<br>
+-<br>
+-static void __exit w1_f0d_fini(void)<br>
+-{<br>
+-	pr_info("%s()\n", __func__);<br>
+-	w1_unregister_family(&w1_family_0d);<br>
+-}<br>
+-<br>
+-module_init(w1_f0d_init);<br>
+-module_exit(w1_f0d_fini);<br>
++module_w1_family(w1_family_0d);<br>
+ <br>
+ MODULE_LICENSE("GPL");<br>
+ MODULE_AUTHOR("Andrew Worsley amworsley@xxxxxxxxx");<br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+

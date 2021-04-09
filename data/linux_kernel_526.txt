@@ -1,0 +1,27 @@
+Several error is reported by checkpatch.pl, here are two patches to clean<br>
+them up.<br>
+<br>
+---<br>
+   v1->v2:<br>
+          1. modify AAP1_MEMMAP() to inline function<br>
+          2. set flash_command_table and flash_error_table as const<br>
+   v2->v3:<br>
+	  1. use lower case names for AAP1_MEMMAP<br>
+---<br>
+Luo Jiaxing (2):<br>
+  scsi: pm8001: clean up for white space<br>
+  scsi: pm8001: clean up for open brace<br>
+<br>
+ drivers/scsi/pm8001/pm8001_ctl.c | 26 +++++++++++---------------<br>
+ drivers/scsi/pm8001/pm8001_ctl.h |  5 +++++<br>
+ drivers/scsi/pm8001/pm8001_hwi.c | 14 +++++++-------<br>
+ drivers/scsi/pm8001/pm8001_sas.c | 20 ++++++++++----------<br>
+ drivers/scsi/pm8001/pm8001_sas.h |  2 +-<br>
+ drivers/scsi/pm8001/pm80xx_hwi.c | 14 +++++++-------<br>
+ 6 files changed, 41 insertions(+), 40 deletions(-)<br>
+<br>
+-- <br>
+2.7.4<br>
+<br>
+<br>
+

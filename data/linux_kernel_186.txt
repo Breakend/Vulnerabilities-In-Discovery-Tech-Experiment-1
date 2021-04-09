@@ -1,0 +1,14 @@
+On 4/8/21 3:46 AM, Peter Zijlstra wrote:<br>
+><i> </i><br>
+><i> do_each_pid_thread() { } while_each_pid_thread() is a double loop and</i><br>
+><i> thus break doesn't work as expected. Also, it should be used under</i><br>
+><i> tasklist_lock because otherwise we can race against change_pid() for</i><br>
+><i> PGID/SID.</i><br>
+<br>
+Applied, thanks.<br>
+<br>
+-- <br>
+Jens Axboe<br>
+<br>
+<br>
+

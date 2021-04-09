@@ -1,0 +1,68 @@
+
+On 08.04.21 13:44, Arnd Bergmann wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+On Thu, Apr 8, 2021 at 1:00 PM David Hildenbrand <david@xxxxxxxxxx> wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em"><blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+<br>
+It is a somewhat awkward way to say "prevent this symbol from<br>
+being =y if the dependency is =m".<br>
+</blockquote>
+<br>
+What would be the right thing to do in the case here then to achieve the<br>
+"if DRMA_ASPEED_GFX is enabled, also enable DMA_CMA id possible"?<br>
+<br>
+One approach could be to have for DMA_CMA<br>
+<br>
+default y if DRMA_ASPEED_GFX<br>
+<br>
+but it feels like the wrong way to tackle this.<br>
+</blockquote>
+<br>
+I'm still not sure what you are trying to achieve. Is the idea only to provide<br>
+a useful default for DMA_CMA depending on which drivers are enabled?<br>
+</blockquote>
+<br>
+"Random drivers should not override a user configuration of core knobs<br>
+(e.g., CONFIG_DMA_CMA=n)."<br>
+<br>
+Let's assume I'm a distribution and want to set CONFIG_CMA=n or want to 
+set CONFIG_DMA_CMA=n with CONFIG_CMA=y; there is no way to do that with 
+e.g., DRMA_ASPEED_GFX=y because it will always override my (user!) 
+setting -- even though it doesn't really always need it. Using "select" 
+is the problem here.
+<br>
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+<br>
+This is something you could do using a hidden helper symbol like<br>
+<br>
+config DRMA_ASPEED_GFX<br>
+        bool "Aspeed display driver"<br>
+        select DRM_WANT_CMA<br>
+<br>
+config DRM_WANT_CMA<br>
+        bool<br>
+        help<br>
+           Select this from any driver that benefits from CMA being enabled<br>
+<br>
+config DMA_CMA<br>
+        bool "Use CMA helpers for DRM"<br>
+        default DRM_WANT_CMA<br>
+<br>
+          Arnd<br>
+<br>
+</blockquote>
+<br>
+That's precisely what I had first, with an additional "WANT_CMA" --  but 
+looking at the number of such existing options (I was able to spot 1 !) 
+I wondered if there is a better approach to achieve the same; "imply" 
+sounded like a good candidate.
+<br>
+<br>
+--<br>
+Thanks,<br>
+<br>
+David / dhildenb<br>
+<br>
+<br>
+

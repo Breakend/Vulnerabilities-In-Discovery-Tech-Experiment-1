@@ -1,0 +1,166 @@
+Hi Kunkun,<br>
+<br>
+On 4/1/21 2:37 PM, Kunkun Jiang wrote:<br>
+><i> Hi Eric,</i><br>
+><i> </i><br>
+><i> On 2021/2/24 4:56, Eric Auger wrote:</i><br>
+><i>> With nested stage support, soon we will need to invalidate</i><br>
+><i>> S1 contexts and ranges tagged with an unmanaged asid, this</i><br>
+><i>> latter being managed by the guest. So let's introduce 2 helpers</i><br>
+><i>> that allow to invalidate with externally managed ASIDs</i><br>
+><i>></i><br>
+><i>> Signed-off-by: Eric Auger <eric.auger@xxxxxxxxxx></i><br>
+><i>></i><br>
+><i>> ---</i><br>
+><i>></i><br>
+><i>> v13 -> v14</i><br>
+><i>> - Actually send the NH_ASID command (reported by Xingang Wang)</i><br>
+><i>> ---</i><br>
+><i>>   drivers/iommu/arm/arm-smmu-v3/arm-smmu-v3.c | 38 ++++++++++++++++-----</i><br>
+><i>>   1 file changed, 29 insertions(+), 9 deletions(-)</i><br>
+><i>></i><br>
+><i>> diff --git a/drivers/iommu/arm/arm-smmu-v3/arm-smmu-v3.c</i><br>
+><i>> b/drivers/iommu/arm/arm-smmu-v3/arm-smmu-v3.c</i><br>
+><i>> index 5579ec4fccc8..4c19a1114de4 100644</i><br>
+><i>> --- a/drivers/iommu/arm/arm-smmu-v3/arm-smmu-v3.c</i><br>
+><i>> +++ b/drivers/iommu/arm/arm-smmu-v3/arm-smmu-v3.c</i><br>
+><i>> @@ -1843,9 +1843,9 @@ int arm_smmu_atc_inv_domain(struct</i><br>
+><i>> arm_smmu_domain *smmu_domain, int ssid,</i><br>
+><i>>   }</i><br>
+><i>>     /* IO_PGTABLE API */</i><br>
+><i>> -static void arm_smmu_tlb_inv_context(void *cookie)</i><br>
+><i>> +static void __arm_smmu_tlb_inv_context(struct arm_smmu_domain</i><br>
+><i>> *smmu_domain,</i><br>
+><i>> +                       int ext_asid)</i><br>
+><i>>   {</i><br>
+><i>> -    struct arm_smmu_domain *smmu_domain = cookie;</i><br>
+><i>>       struct arm_smmu_device *smmu = smmu_domain->smmu;</i><br>
+><i>>       struct arm_smmu_cmdq_ent cmd;</i><br>
+><i>>   @@ -1856,7 +1856,13 @@ static void arm_smmu_tlb_inv_context(void</i><br>
+><i>> *cookie)</i><br>
+><i>>        * insertion to guarantee those are observed before the TLBI. Do be</i><br>
+><i>>        * careful, 007.</i><br>
+><i>>        */</i><br>
+><i>> -    if (smmu_domain->stage == ARM_SMMU_DOMAIN_S1) {</i><br>
+><i>> +    if (ext_asid >= 0) { /* guest stage 1 invalidation */</i><br>
+><i>> +        cmd.opcode    = CMDQ_OP_TLBI_NH_ASID;</i><br>
+><i>> +        cmd.tlbi.asid    = ext_asid;</i><br>
+><i>> +        cmd.tlbi.vmid    = smmu_domain->s2_cfg.vmid;</i><br>
+><i>> +        arm_smmu_cmdq_issue_cmd(smmu, &cmd);</i><br>
+><i>> +        arm_smmu_cmdq_issue_sync(smmu);</i><br>
+><i>> +    } else if (smmu_domain->stage == ARM_SMMU_DOMAIN_S1) {</i><br>
+><i>>           arm_smmu_tlb_inv_asid(smmu, smmu_domain->s1_cfg.cd.asid);</i><br>
+><i>>       } else {</i><br>
+><i>>           cmd.opcode    = CMDQ_OP_TLBI_S12_VMALL;</i><br>
+><i>> @@ -1867,6 +1873,13 @@ static void arm_smmu_tlb_inv_context(void *cookie)</i><br>
+><i>>       arm_smmu_atc_inv_domain(smmu_domain, 0, 0, 0);</i><br>
+><i>>   }</i><br>
+><i>>   +static void arm_smmu_tlb_inv_context(void *cookie)</i><br>
+><i>> +{</i><br>
+><i>> +    struct arm_smmu_domain *smmu_domain = cookie;</i><br>
+><i>> +</i><br>
+><i>> +    __arm_smmu_tlb_inv_context(smmu_domain, -1);</i><br>
+><i>> +}</i><br>
+><i>> +</i><br>
+><i>>   static void __arm_smmu_tlb_inv_range(struct arm_smmu_cmdq_ent *cmd,</i><br>
+><i>>                        unsigned long iova, size_t size,</i><br>
+><i>>                        size_t granule,</i><br>
+><i>> @@ -1926,9 +1939,10 @@ static void __arm_smmu_tlb_inv_range(struct</i><br>
+><i>> arm_smmu_cmdq_ent *cmd,</i><br>
+><i>>       arm_smmu_cmdq_batch_submit(smmu, &cmds);</i><br>
+><i>>   }</i><br>
+><i>>   </i><br>
+><i> Here is the part of code in __arm_smmu_tlb_inv_range():</i><br>
+><i>>         if (smmu->features & ARM_SMMU_FEAT_RANGE_INV) {</i><br>
+><i>>                 /* Get the leaf page size */</i><br>
+><i>>                 tg = __ffs(smmu_domain->domain.pgsize_bitmap);</i><br>
+><i>></i><br>
+><i>>                 /* Convert page size of 12,14,16 (log2) to 1,2,3 */</i><br>
+><i>>                 cmd->tlbi.tg = (tg - 10) / 2;</i><br>
+><i>></i><br>
+><i>>                 /* Determine what level the granule is at */</i><br>
+><i>>                 cmd->tlbi.ttl = 4 - ((ilog2(granule) - 3) / (tg - 3));</i><br>
+><i>></i><br>
+><i>>                 num_pages = size >> tg;</i><br>
+><i>>         }</i><br>
+><i> When pSMMU supports RIL, we get the leaf page size by __ffs(smmu_domain-></i><br>
+><i> domain.pgsize_bitmap). In nested mode, it is determined by host</i><br>
+><i> PAGE_SIZE. If</i><br>
+><i> the host kernel and guest kernel has different translation granule (e.g.</i><br>
+><i> host 16K,</i><br>
+><i> guest 4K), __arm_smmu_tlb_inv_range() will issue an incorrect tlbi command.</i><br>
+><i> </i><br>
+><i> Do you have any idea about this issue?</i><br>
+<br>
+I think this is the same issue as the one reported by Chenxiang<br>
+<br>
+<a  rel="nofollow" href="https://lore.kernel.org/lkml/15938ed5-2095-e903-a290-333c299015a2@xxxxxxxxxxxxx/">https://lore.kernel.org/lkml/15938ed5-2095-e903-a290-333c299015a2@xxxxxxxxxxxxx/</a><br>
+<br>
+In case RIL is not supported by the host, next version will use the<br>
+smallest pSMMU supported page size, as done in __arm_smmu_tlb_inv_range<br>
+<br>
+Thanks<br>
+<br>
+Eric<br>
+<br>
+><i> </i><br>
+><i> Best Regards,</i><br>
+><i> Kunkun Jiang</i><br>
+><i>> -static void arm_smmu_tlb_inv_range_domain(unsigned long iova, size_t</i><br>
+><i>> size,</i><br>
+><i>> -                      size_t granule, bool leaf,</i><br>
+><i>> -                      struct arm_smmu_domain *smmu_domain)</i><br>
+><i>> +static void</i><br>
+><i>> +arm_smmu_tlb_inv_range_domain(unsigned long iova, size_t size,</i><br>
+><i>> +                  size_t granule, bool leaf, int ext_asid,</i><br>
+><i>> +                  struct arm_smmu_domain *smmu_domain)</i><br>
+><i>>   {</i><br>
+><i>>       struct arm_smmu_cmdq_ent cmd = {</i><br>
+><i>>           .tlbi = {</i><br>
+><i>> @@ -1936,7 +1950,12 @@ static void</i><br>
+><i>> arm_smmu_tlb_inv_range_domain(unsigned long iova, size_t size,</i><br>
+><i>>           },</i><br>
+><i>>       };</i><br>
+><i>>   -    if (smmu_domain->stage == ARM_SMMU_DOMAIN_S1) {</i><br>
+><i>> +    if (ext_asid >= 0) {  /* guest stage 1 invalidation */</i><br>
+><i>> +        cmd.opcode    = smmu_domain->smmu->features &</i><br>
+><i>> ARM_SMMU_FEAT_E2H ?</i><br>
+><i>> +                  CMDQ_OP_TLBI_EL2_VA : CMDQ_OP_TLBI_NH_VA;</i><br>
+><i>> +        cmd.tlbi.asid    = ext_asid;</i><br>
+><i>> +        cmd.tlbi.vmid    = smmu_domain->s2_cfg.vmid;</i><br>
+><i>> +    } else if (smmu_domain->stage == ARM_SMMU_DOMAIN_S1) {</i><br>
+><i>>           cmd.opcode    = smmu_domain->smmu->features &</i><br>
+><i>> ARM_SMMU_FEAT_E2H ?</i><br>
+><i>>                     CMDQ_OP_TLBI_EL2_VA : CMDQ_OP_TLBI_NH_VA;</i><br>
+><i>>           cmd.tlbi.asid    = smmu_domain->s1_cfg.cd.asid;</i><br>
+><i>> @@ -1944,6 +1963,7 @@ static void</i><br>
+><i>> arm_smmu_tlb_inv_range_domain(unsigned long iova, size_t size,</i><br>
+><i>>           cmd.opcode    = CMDQ_OP_TLBI_S2_IPA;</i><br>
+><i>>           cmd.tlbi.vmid    = smmu_domain->s2_cfg.vmid;</i><br>
+><i>>       }</i><br>
+><i>> +</i><br>
+><i>>       __arm_smmu_tlb_inv_range(&cmd, iova, size, granule, smmu_domain);</i><br>
+><i>>         /*</i><br>
+><i>> @@ -1982,7 +2002,7 @@ static void arm_smmu_tlb_inv_page_nosync(struct</i><br>
+><i>> iommu_iotlb_gather *gather,</i><br>
+><i>>   static void arm_smmu_tlb_inv_walk(unsigned long iova, size_t size,</i><br>
+><i>>                     size_t granule, void *cookie)</i><br>
+><i>>   {</i><br>
+><i>> -    arm_smmu_tlb_inv_range_domain(iova, size, granule, false, cookie);</i><br>
+><i>> +    arm_smmu_tlb_inv_range_domain(iova, size, granule, false, -1,</i><br>
+><i>> cookie);</i><br>
+><i>>   }</i><br>
+><i>>     static const struct iommu_flush_ops arm_smmu_flush_ops = {</i><br>
+><i>> @@ -2523,7 +2543,7 @@ static void arm_smmu_iotlb_sync(struct</i><br>
+><i>> iommu_domain *domain,</i><br>
+><i>>         arm_smmu_tlb_inv_range_domain(gather->start,</i><br>
+><i>>                         gather->end - gather->start + 1,</i><br>
+><i>> -                      gather->pgsize, true, smmu_domain);</i><br>
+><i>> +                      gather->pgsize, true, -1, smmu_domain);</i><br>
+><i>>   }</i><br>
+><i>>     static phys_addr_t</i><br>
+><i> </i><br>
+><i> </i><br>
+<br>
+<br>
+

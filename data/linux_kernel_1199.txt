@@ -1,0 +1,117 @@
+On Thu, Apr 08, 2021 at 07:14:01AM +0100, Matthew Wilcox wrote:<br>
+><i> On Wed, Apr 07, 2021 at 02:46:11PM -0700, Daniel Xu wrote:</i><br>
+><i> > +struct bpf_iter_seq_pagecache_info {</i><br>
+><i> > +	struct mnt_namespace *ns;</i><br>
+><i> > +	struct radix_tree_root superblocks;</i><br>
+><i> </i><br>
+><i> Why are you adding a new radix tree?  Use an XArray instead.</i><br>
+<br>
+Ah right, sorry. Will do.<br>
+<br>
+><i> > +static struct page *goto_next_page(struct bpf_iter_seq_pagecache_info *info)</i><br>
+><i> > +{</i><br>
+><i> > +	struct page *page, *ret = NULL;</i><br>
+><i> > +	unsigned long idx;</i><br>
+><i> > +</i><br>
+><i> > +	rcu_read_lock();</i><br>
+><i> > +retry:</i><br>
+><i> > +	BUG_ON(!info->cur_inode);</i><br>
+><i> > +	ret = NULL;</i><br>
+><i> > +	xa_for_each_start(&info->cur_inode->i_data.i_pages, idx, page,</i><br>
+><i> > +			  info->cur_page_idx) {</i><br>
+><i> > +		if (!page_cache_get_speculative(page))</i><br>
+><i> > +			continue;</i><br>
+><i> </i><br>
+><i> Why do you feel the need to poke around in i_pages directly?  Is there</i><br>
+><i> something wrong with find_get_entries()?</i><br>
+<br>
+No reason other than I didn't know about the latter. Thanks for the<br>
+hint. find_get_entries() seems to return a pagevec of entries which<br>
+would complicate the iteration (a 4th layer of things to iterate over).<br>
+<br>
+But I did find find_get_pages_range() which I think can be used to find<br>
+1 page at a time. I'll look into it further.<br>
+<br>
+><i> > +static int __pagecache_seq_show(struct seq_file *seq, struct page *page,</i><br>
+><i> > +				bool in_stop)</i><br>
+><i> > +{</i><br>
+><i> > +	struct bpf_iter_meta meta;</i><br>
+><i> > +	struct bpf_iter__pagecache ctx;</i><br>
+><i> > +	struct bpf_prog *prog;</i><br>
+><i> > +</i><br>
+><i> > +	meta.seq = seq;</i><br>
+><i> > +	prog = bpf_iter_get_info(&meta, in_stop);</i><br>
+><i> > +	if (!prog)</i><br>
+><i> > +		return 0;</i><br>
+><i> > +</i><br>
+><i> > +	meta.seq = seq;</i><br>
+><i> > +	ctx.meta = &meta;</i><br>
+><i> > +	ctx.page = page;</i><br>
+><i> > +	return bpf_iter_run_prog(prog, &ctx);</i><br>
+><i> </i><br>
+><i> I'm not really keen on the idea of random BPF programs being able to poke</i><br>
+><i> at pages in the page cache like this.  From your initial description,</i><br>
+><i> it sounded like all you needed was a list of which pages are present.</i><br>
+<br>
+Could you elaborate on what "list of which pages are present" implies?<br>
+The overall goal with this patch is to detect duplicate content in the<br>
+page cache. So anything that helps achieve that goal I would (in theory)<br>
+be OK with.<br>
+<br>
+My understanding is the user would need to hash the contents<br>
+of each page in the page cache. And BPF provides the flexibility such<br>
+that this work could be reused for currently unanticipated use cases.<br>
+<br>
+Furthermore, bpf programs could already look at all the pages in the<br>
+page cache by hooking into tracepoint:filemap:mm_filemap_add_to_page_cache,<br>
+albeit at a much slower rate. I figure the downside of adding this<br>
+page cache iterator is we're explicitly condoning the behavior.<br>
+<br>
+><i> > +	INIT_RADIX_TREE(&info->superblocks, GFP_KERNEL);</i><br>
+><i> > +</i><br>
+><i> > +	spin_lock(&info->ns->ns_lock);</i><br>
+><i> > +	list_for_each_entry(mnt, &info->ns->list, mnt_list) {</i><br>
+><i> > +		sb = mnt->mnt.mnt_sb;</i><br>
+><i> > +</i><br>
+><i> > +		/* The same mount may be mounted in multiple places */</i><br>
+><i> > +		if (radix_tree_lookup(&info->superblocks, (unsigned long)sb))</i><br>
+><i> > +			continue;</i><br>
+><i> > +</i><br>
+><i> > +		err = radix_tree_insert(&info->superblocks,</i><br>
+><i> > +				        (unsigned long)sb, (void *)1);</i><br>
+><i> > +		if (err)</i><br>
+><i> > +			goto out;</i><br>
+><i> > +	}</i><br>
+><i> > +</i><br>
+><i> > +	radix_tree_for_each_slot(slot, &info->superblocks, &iter, 0) {</i><br>
+><i> > +		sb = (struct super_block *)iter.index;</i><br>
+><i> > +		atomic_inc(&sb->s_active);</i><br>
+><i> > +	}</i><br>
+><i> </i><br>
+><i> Uh.  What on earth made you think this was a good way to use the radix</i><br>
+><i> tree?  And, no, the XArray doesn't change that.</i><br>
+<br>
+The idea behind the radix tree was to deduplicate the mounts by<br>
+superblock. Because a single filesystem may be mounted in different<br>
+locations. I didn't find a set data structure I could reuse so I<br>
+figured radix tree / xarray would work too.<br>
+<br>
+Happy to take any better ideas too.<br>
+<br>
+><i> If you don't understand why this is so bad, call xa_dump() on it after</i><br>
+><i> constructing it.  I'll wait.</i><br>
+<br>
+I did a dump and got the following results: <a  rel="nofollow" href="http://ix.io/2VpY">http://ix.io/2VpY</a> .<br>
+<br>
+I receieved a hint that you may be referring to how the xarray/radix<br>
+tree would be as large as the largest pointer. To my uneducated eye it<br>
+doesn't look like that's the case in this dump. Could you please<br>
+clarify?<br>
+<br>
+<...><br>
+<br>
+Thanks,<br>
+Daniel<br>
+<br>
+<br>
+

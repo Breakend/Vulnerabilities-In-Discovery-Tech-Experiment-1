@@ -1,0 +1,114 @@
+With CONFIG_CFI_CLANG, the compiler replaces function address<br>
+references with the address of the function's CFI jump table<br>
+entry. This means that __pa_symbol(function) returns the physical<br>
+address of the jump table entry, which can lead to address space<br>
+confusion as the jump table points to the function's virtual<br>
+address. Therefore, use the function_nocfi() macro to ensure we are<br>
+always taking the address of the actual function instead.<br>
+<br>
+Signed-off-by: Sami Tolvanen <samitolvanen@xxxxxxxxxx><br>
+Reviewed-by: Kees Cook <keescook@xxxxxxxxxxxx><br>
+Acked-by: Mark Rutland <mark.rutland@xxxxxxx><br>
+Tested-by: Nathan Chancellor <nathan@xxxxxxxxxx><br>
+---<br>
+ arch/arm64/include/asm/mmu_context.h      | 2 +-<br>
+ arch/arm64/kernel/acpi_parking_protocol.c | 3 ++-<br>
+ arch/arm64/kernel/cpu-reset.h             | 2 +-<br>
+ arch/arm64/kernel/cpufeature.c            | 2 +-<br>
+ arch/arm64/kernel/psci.c                  | 3 ++-<br>
+ arch/arm64/kernel/smp_spin_table.c        | 3 ++-<br>
+ 6 files changed, 9 insertions(+), 6 deletions(-)<br>
+<br>
+diff --git a/arch/arm64/include/asm/mmu_context.h b/arch/arm64/include/asm/mmu_context.h<br>
+index bd02e99b1a4c..386b96400a57 100644<br>
+--- a/arch/arm64/include/asm/mmu_context.h<br>
++++ b/arch/arm64/include/asm/mmu_context.h<br>
+@@ -140,7 +140,7 @@ static inline void cpu_replace_ttbr1(pgd_t *pgdp)<br>
+ 		ttbr1 |= TTBR_CNP_BIT;<br>
+ 	}<br>
+ <br>
+-	replace_phys = (void *)__pa_symbol(idmap_cpu_replace_ttbr1);<br>
++	replace_phys = (void *)__pa_symbol(function_nocfi(idmap_cpu_replace_ttbr1));<br>
+ <br>
+ 	cpu_install_idmap();<br>
+ 	replace_phys(ttbr1);<br>
+diff --git a/arch/arm64/kernel/acpi_parking_protocol.c b/arch/arm64/kernel/acpi_parking_protocol.c<br>
+index e7c941d8340d..bfeeb5319abf 100644<br>
+--- a/arch/arm64/kernel/acpi_parking_protocol.c<br>
++++ b/arch/arm64/kernel/acpi_parking_protocol.c<br>
+@@ -99,7 +99,8 @@ static int acpi_parking_protocol_cpu_boot(unsigned int cpu)<br>
+ 	 * that read this address need to convert this address to the<br>
+ 	 * Boot-Loader's endianness before jumping.<br>
+ 	 */<br>
+-	writeq_relaxed(__pa_symbol(secondary_entry), &mailbox->entry_point);<br>
++	writeq_relaxed(__pa_symbol(function_nocfi(secondary_entry)),<br>
++		       &mailbox->entry_point);<br>
+ 	writel_relaxed(cpu_entry->gic_cpu_id, &mailbox->cpu_id);<br>
+ <br>
+ 	arch_send_wakeup_ipi_mask(cpumask_of(cpu));<br>
+diff --git a/arch/arm64/kernel/cpu-reset.h b/arch/arm64/kernel/cpu-reset.h<br>
+index ed50e9587ad8..f3adc574f969 100644<br>
+--- a/arch/arm64/kernel/cpu-reset.h<br>
++++ b/arch/arm64/kernel/cpu-reset.h<br>
+@@ -22,7 +22,7 @@ static inline void __noreturn cpu_soft_restart(unsigned long entry,<br>
+ <br>
+ 	unsigned long el2_switch = !is_kernel_in_hyp_mode() &&<br>
+ 		is_hyp_mode_available();<br>
+-	restart = (void *)__pa_symbol(__cpu_soft_restart);<br>
++	restart = (void *)__pa_symbol(function_nocfi(__cpu_soft_restart));<br>
+ <br>
+ 	cpu_install_idmap();<br>
+ 	restart(el2_switch, entry, arg0, arg1, arg2);<br>
+diff --git a/arch/arm64/kernel/cpufeature.c b/arch/arm64/kernel/cpufeature.c<br>
+index e5281e1c8f1d..0b2e0d7b13ec 100644<br>
+--- a/arch/arm64/kernel/cpufeature.c<br>
++++ b/arch/arm64/kernel/cpufeature.c<br>
+@@ -1462,7 +1462,7 @@ kpti_install_ng_mappings(const struct arm64_cpu_capabilities *__unused)<br>
+ 	if (arm64_use_ng_mappings)<br>
+ 		return;<br>
+ <br>
+-	remap_fn = (void *)__pa_symbol(idmap_kpti_install_ng_mappings);<br>
++	remap_fn = (void *)__pa_symbol(function_nocfi(idmap_kpti_install_ng_mappings));<br>
+ <br>
+ 	cpu_install_idmap();<br>
+ 	remap_fn(cpu, num_online_cpus(), __pa_symbol(swapper_pg_dir));<br>
+diff --git a/arch/arm64/kernel/psci.c b/arch/arm64/kernel/psci.c<br>
+index 62d2bda7adb8..ab7f4c476104 100644<br>
+--- a/arch/arm64/kernel/psci.c<br>
++++ b/arch/arm64/kernel/psci.c<br>
+@@ -38,7 +38,8 @@ static int __init cpu_psci_cpu_prepare(unsigned int cpu)<br>
+ <br>
+ static int cpu_psci_cpu_boot(unsigned int cpu)<br>
+ {<br>
+-	int err = psci_ops.cpu_on(cpu_logical_map(cpu), __pa_symbol(secondary_entry));<br>
++	phys_addr_t pa_secondary_entry = __pa_symbol(function_nocfi(secondary_entry));<br>
++	int err = psci_ops.cpu_on(cpu_logical_map(cpu), pa_secondary_entry);<br>
+ 	if (err)<br>
+ 		pr_err("failed to boot CPU%d (%d)\n", cpu, err);<br>
+ <br>
+diff --git a/arch/arm64/kernel/smp_spin_table.c b/arch/arm64/kernel/smp_spin_table.c<br>
+index 056772c26098..c45a83512805 100644<br>
+--- a/arch/arm64/kernel/smp_spin_table.c<br>
++++ b/arch/arm64/kernel/smp_spin_table.c<br>
+@@ -66,6 +66,7 @@ static int smp_spin_table_cpu_init(unsigned int cpu)<br>
+ static int smp_spin_table_cpu_prepare(unsigned int cpu)<br>
+ {<br>
+ 	__le64 __iomem *release_addr;<br>
++	phys_addr_t pa_holding_pen = __pa_symbol(function_nocfi(secondary_holding_pen));<br>
+ <br>
+ 	if (!cpu_release_addr[cpu])<br>
+ 		return -ENODEV;<br>
+@@ -88,7 +89,7 @@ static int smp_spin_table_cpu_prepare(unsigned int cpu)<br>
+ 	 * boot-loader's endianness before jumping. This is mandated by<br>
+ 	 * the boot protocol.<br>
+ 	 */<br>
+-	writeq_relaxed(__pa_symbol(secondary_holding_pen), release_addr);<br>
++	writeq_relaxed(pa_holding_pen, release_addr);<br>
+ 	__flush_dcache_area((__force void *)release_addr,<br>
+ 			    sizeof(*release_addr));<br>
+ <br>
+-- <br>
+2.31.1.295.g9ea45b61b8-goog<br>
+<br>
+<br>
+

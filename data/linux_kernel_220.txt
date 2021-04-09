@@ -1,0 +1,130 @@
+Fixed multiple bare uses of 'unsigned' without 'int'.<br>
+Fixed space around "*" operator.<br>
+Fixed function parameter alignment to opening parenthesis.<br>
+Reported by checkpatch.<br>
+<br>
+Signed-off-by: Barney Goette <barneygoette@xxxxxxxxx><br>
+Acked-by: William Breathitt Gray <vilhelm.gray@xxxxxxxxx><br>
+---<br>
+ drivers/gpio/gpio-104-dio-48e.c | 50 ++++++++++++++++-----------------<br>
+ 1 file changed, 25 insertions(+), 25 deletions(-)<br>
+<br>
+diff --git a/drivers/gpio/gpio-104-dio-48e.c b/drivers/gpio/gpio-104-dio-48e.c<br>
+index 7a9021c4fa48..71c0bea34d7b 100644<br>
+--- a/drivers/gpio/gpio-104-dio-48e.c<br>
++++ b/drivers/gpio/gpio-104-dio-48e.c<br>
+@@ -49,15 +49,15 @@ struct dio48e_gpio {<br>
+ 	unsigned char out_state[6];<br>
+ 	unsigned char control[2];<br>
+ 	raw_spinlock_t lock;<br>
+-	unsigned base;<br>
++	unsigned int base;<br>
+ 	unsigned char irq_mask;<br>
+ };<br>
+ <br>
+-static int dio48e_gpio_get_direction(struct gpio_chip *chip, unsigned offset)<br>
++static int dio48e_gpio_get_direction(struct gpio_chip *chip, unsigned int offset)<br>
+ {<br>
+ 	struct dio48e_gpio *const dio48egpio = gpiochip_get_data(chip);<br>
+-	const unsigned port = offset / 8;<br>
+-	const unsigned mask = BIT(offset % 8);<br>
++	const unsigned int port = offset / 8;<br>
++	const unsigned int mask = BIT(offset % 8);<br>
+ <br>
+ 	if (dio48egpio->io_state[port] & mask)<br>
+ 		return  GPIO_LINE_DIRECTION_IN;<br>
+@@ -65,14 +65,14 @@ static int dio48e_gpio_get_direction(struct gpio_chip *chip, unsigned offset)<br>
+ 	return GPIO_LINE_DIRECTION_OUT;<br>
+ }<br>
+ <br>
+-static int dio48e_gpio_direction_input(struct gpio_chip *chip, unsigned offset)<br>
++static int dio48e_gpio_direction_input(struct gpio_chip *chip, unsigned int offset)<br>
+ {<br>
+ 	struct dio48e_gpio *const dio48egpio = gpiochip_get_data(chip);<br>
+-	const unsigned io_port = offset / 8;<br>
++	const unsigned int io_port = offset / 8;<br>
+ 	const unsigned int control_port = io_port / 3;<br>
+-	const unsigned control_addr = dio48egpio->base + 3 + control_port*4;<br>
++	const unsigned int control_addr = dio48egpio->base + 3 + control_port * 4;<br>
+ 	unsigned long flags;<br>
+-	unsigned control;<br>
++	unsigned int control;<br>
+ <br>
+ 	raw_spin_lock_irqsave(&dio48egpio->lock, flags);<br>
+ <br>
+@@ -104,17 +104,17 @@ static int dio48e_gpio_direction_input(struct gpio_chip *chip, unsigned offset)<br>
+ 	return 0;<br>
+ }<br>
+ <br>
+-static int dio48e_gpio_direction_output(struct gpio_chip *chip, unsigned offset,<br>
+-	int value)<br>
++static int dio48e_gpio_direction_output(struct gpio_chip *chip, unsigned int offset,<br>
++					int value)<br>
+ {<br>
+ 	struct dio48e_gpio *const dio48egpio = gpiochip_get_data(chip);<br>
+-	const unsigned io_port = offset / 8;<br>
++	const unsigned int io_port = offset / 8;<br>
+ 	const unsigned int control_port = io_port / 3;<br>
+-	const unsigned mask = BIT(offset % 8);<br>
+-	const unsigned control_addr = dio48egpio->base + 3 + control_port*4;<br>
+-	const unsigned out_port = (io_port > 2) ? io_port + 1 : io_port;<br>
++	const unsigned int mask = BIT(offset % 8);<br>
++	const unsigned int control_addr = dio48egpio->base + 3 + control_port * 4;<br>
++	const unsigned int out_port = (io_port > 2) ? io_port + 1 : io_port;<br>
+ 	unsigned long flags;<br>
+-	unsigned control;<br>
++	unsigned int control;<br>
+ <br>
+ 	raw_spin_lock_irqsave(&dio48egpio->lock, flags);<br>
+ <br>
+@@ -154,14 +154,14 @@ static int dio48e_gpio_direction_output(struct gpio_chip *chip, unsigned offset,<br>
+ 	return 0;<br>
+ }<br>
+ <br>
+-static int dio48e_gpio_get(struct gpio_chip *chip, unsigned offset)<br>
++static int dio48e_gpio_get(struct gpio_chip *chip, unsigned int offset)<br>
+ {<br>
+ 	struct dio48e_gpio *const dio48egpio = gpiochip_get_data(chip);<br>
+-	const unsigned port = offset / 8;<br>
+-	const unsigned mask = BIT(offset % 8);<br>
+-	const unsigned in_port = (port > 2) ? port + 1 : port;<br>
++	const unsigned int port = offset / 8;<br>
++	const unsigned int mask = BIT(offset % 8);<br>
++	const unsigned int in_port = (port > 2) ? port + 1 : port;<br>
+ 	unsigned long flags;<br>
+-	unsigned port_state;<br>
++	unsigned int port_state;<br>
+ <br>
+ 	raw_spin_lock_irqsave(&dio48egpio->lock, flags);<br>
+ <br>
+@@ -202,12 +202,12 @@ static int dio48e_gpio_get_multiple(struct gpio_chip *chip, unsigned long *mask,<br>
+ 	return 0;<br>
+ }<br>
+ <br>
+-static void dio48e_gpio_set(struct gpio_chip *chip, unsigned offset, int value)<br>
++static void dio48e_gpio_set(struct gpio_chip *chip, unsigned int offset, int value)<br>
+ {<br>
+ 	struct dio48e_gpio *const dio48egpio = gpiochip_get_data(chip);<br>
+-	const unsigned port = offset / 8;<br>
+-	const unsigned mask = BIT(offset % 8);<br>
+-	const unsigned out_port = (port > 2) ? port + 1 : port;<br>
++	const unsigned int port = offset / 8;<br>
++	const unsigned int mask = BIT(offset % 8);<br>
++	const unsigned int out_port = (port > 2) ? port + 1 : port;<br>
+ 	unsigned long flags;<br>
+ <br>
+ 	raw_spin_lock_irqsave(&dio48egpio->lock, flags);<br>
+@@ -306,7 +306,7 @@ static void dio48e_irq_unmask(struct irq_data *data)<br>
+ 	raw_spin_unlock_irqrestore(&dio48egpio->lock, flags);<br>
+ }<br>
+ <br>
+-static int dio48e_irq_set_type(struct irq_data *data, unsigned flow_type)<br>
++static int dio48e_irq_set_type(struct irq_data *data, unsigned int flow_type)<br>
+ {<br>
+ 	const unsigned long offset = irqd_to_hwirq(data);<br>
+ <br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

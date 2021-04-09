@@ -1,0 +1,198 @@
+From: David Collins <collinsd@xxxxxxxxxxxxxx><br>
+<br>
+On Qualcomm Technologies, Inc. PMIC PMK8350, the PON peripheral<br>
+is split into two peripherals: PON_HLOS and PON_PBS.  The<br>
+application processor only has write access to PON_HLOS which<br>
+limits it to only receiving PON interrupts.<br>
+<br>
+Add support for the PMK8350 PON_HLOS peripheral so that its<br>
+KPDPWR_N and RESIN_N interrupts can be used to detect key<br>
+presses.<br>
+<br>
+Signed-off-by: David Collins <collinsd@xxxxxxxxxxxxxx><br>
+Signed-off-by: satya priya <skakit@xxxxxxxxxxxxxx><br>
+---<br>
+Changes in V2:<br>
+ - No change.<br>
+<br>
+ drivers/input/misc/pm8941-pwrkey.c | 103 ++++++++++++++++++++++++++-----------<br>
+ 1 file changed, 72 insertions(+), 31 deletions(-)<br>
+<br>
+diff --git a/drivers/input/misc/pm8941-pwrkey.c b/drivers/input/misc/pm8941-pwrkey.c<br>
+index cf81044..10e3fc0 100644<br>
+--- a/drivers/input/misc/pm8941-pwrkey.c<br>
++++ b/drivers/input/misc/pm8941-pwrkey.c<br>
+@@ -1,6 +1,6 @@<br>
+ // SPDX-License-Identifier: GPL-2.0-only<br>
+ /*<br>
+- * Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.<br>
++ * Copyright (c) 2010-2011, 2020-2021, The Linux Foundation. All rights reserved.<br>
+  * Copyright (c) 2014, Sony Mobile Communications Inc.<br>
+  */<br>
+ <br>
+@@ -22,6 +22,8 @@<br>
+ #define PON_RT_STS			0x10<br>
+ #define  PON_KPDPWR_N_SET		BIT(0)<br>
+ #define  PON_RESIN_N_SET		BIT(1)<br>
++#define  PON_GEN3_RESIN_N_SET		BIT(6)<br>
++#define  PON_GEN3_KPDPWR_N_SET		BIT(7)<br>
+ <br>
+ #define PON_PS_HOLD_RST_CTL		0x5a<br>
+ #define PON_PS_HOLD_RST_CTL2		0x5b<br>
+@@ -38,8 +40,12 @@<br>
+ #define  PON_DBC_DELAY_MASK		0x7<br>
+ <br>
+ struct pm8941_data {<br>
+-	unsigned int pull_up_bit;<br>
+-	unsigned int status_bit;<br>
++	unsigned int	pull_up_bit;<br>
++	unsigned int	status_bit;<br>
++	bool		supports_ps_hold_poff_config;<br>
++	bool		supports_debounce_config;<br>
++	const char	*name;<br>
++	const char	*phys;<br>
+ };<br>
+ <br>
+ struct pm8941_pwrkey {<br>
+@@ -231,34 +237,40 @@ static int pm8941_pwrkey_probe(struct platform_device *pdev)<br>
+ <br>
+ 	input_set_capability(pwrkey->input, EV_KEY, pwrkey->code);<br>
+ <br>
+-	pwrkey->input->name = "pm8941_pwrkey";<br>
+-	pwrkey->input->phys = "pm8941_pwrkey/input0";<br>
+-<br>
+-	req_delay = (req_delay << 6) / USEC_PER_SEC;<br>
+-	req_delay = ilog2(req_delay);<br>
+-<br>
+-	error = regmap_update_bits(pwrkey->regmap,<br>
+-				   pwrkey->baseaddr + PON_DBC_CTL,<br>
+-				   PON_DBC_DELAY_MASK,<br>
+-				   req_delay);<br>
+-	if (error) {<br>
+-		dev_err(&pdev->dev, "failed to set debounce: %d\n", error);<br>
+-		return error;<br>
++	pwrkey->input->name = pwrkey->data->name;<br>
++	pwrkey->input->phys = pwrkey->data->phys;<br>
++<br>
++	if (pwrkey->data->supports_debounce_config) {<br>
++		req_delay = (req_delay << 6) / USEC_PER_SEC;<br>
++		req_delay = ilog2(req_delay);<br>
++<br>
++		error = regmap_update_bits(pwrkey->regmap,<br>
++					   pwrkey->baseaddr + PON_DBC_CTL,<br>
++					   PON_DBC_DELAY_MASK,<br>
++					   req_delay);<br>
++		if (error) {<br>
++			dev_err(&pdev->dev, "failed to set debounce: %d\n",<br>
++				error);<br>
++			return error;<br>
++		}<br>
+ 	}<br>
+ <br>
+-	error = regmap_update_bits(pwrkey->regmap,<br>
+-				   pwrkey->baseaddr + PON_PULL_CTL,<br>
+-				   pwrkey->data->pull_up_bit,<br>
+-				   pull_up ? pwrkey->data->pull_up_bit : 0);<br>
+-	if (error) {<br>
+-		dev_err(&pdev->dev, "failed to set pull: %d\n", error);<br>
+-		return error;<br>
++	if (pwrkey->data->pull_up_bit) {<br>
++		error = regmap_update_bits(pwrkey->regmap,<br>
++					   pwrkey->baseaddr + PON_PULL_CTL,<br>
++					   pwrkey->data->pull_up_bit,<br>
++					   pull_up ? pwrkey->data->pull_up_bit :<br>
++						     0);<br>
++		if (error) {<br>
++			dev_err(&pdev->dev, "failed to set pull: %d\n", error);<br>
++			return error;<br>
++		}<br>
+ 	}<br>
+ <br>
+ 	error = devm_request_threaded_irq(&pdev->dev, pwrkey->irq,<br>
+ 					  NULL, pm8941_pwrkey_irq,<br>
+ 					  IRQF_ONESHOT,<br>
+-					  "pm8941_pwrkey", pwrkey);<br>
++					  pwrkey->data->name, pwrkey);<br>
+ 	if (error) {<br>
+ 		dev_err(&pdev->dev, "failed requesting IRQ: %d\n", error);<br>
+ 		return error;<br>
+@@ -271,12 +283,14 @@ static int pm8941_pwrkey_probe(struct platform_device *pdev)<br>
+ 		return error;<br>
+ 	}<br>
+ <br>
+-	pwrkey->reboot_notifier.notifier_call = pm8941_reboot_notify,<br>
+-	error = register_reboot_notifier(&pwrkey->reboot_notifier);<br>
+-	if (error) {<br>
+-		dev_err(&pdev->dev, "failed to register reboot notifier: %d\n",<br>
+-			error);<br>
+-		return error;<br>
++	if (pwrkey->data->supports_ps_hold_poff_config) {<br>
++		pwrkey->reboot_notifier.notifier_call = pm8941_reboot_notify,<br>
++		error = register_reboot_notifier(&pwrkey->reboot_notifier);<br>
++		if (error) {<br>
++			dev_err(&pdev->dev, "failed to register reboot notifier: %d\n",<br>
++				error);<br>
++			return error;<br>
++		}<br>
+ 	}<br>
+ <br>
+ 	platform_set_drvdata(pdev, pwrkey);<br>
+@@ -289,7 +303,8 @@ static int pm8941_pwrkey_remove(struct platform_device *pdev)<br>
+ {<br>
+ 	struct pm8941_pwrkey *pwrkey = platform_get_drvdata(pdev);<br>
+ <br>
+-	unregister_reboot_notifier(&pwrkey->reboot_notifier);<br>
++	if (pwrkey->data->supports_ps_hold_poff_config)<br>
++		unregister_reboot_notifier(&pwrkey->reboot_notifier);<br>
+ <br>
+ 	return 0;<br>
+ }<br>
+@@ -297,16 +312,42 @@ static int pm8941_pwrkey_remove(struct platform_device *pdev)<br>
+ static const struct pm8941_data pwrkey_data = {<br>
+ 	.pull_up_bit = PON_KPDPWR_PULL_UP,<br>
+ 	.status_bit = PON_KPDPWR_N_SET,<br>
++	.name = "pm8941_pwrkey",<br>
++	.phys = "pm8941_pwrkey/input0",<br>
++	.supports_ps_hold_poff_config = true,<br>
++	.supports_debounce_config = true,<br>
+ };<br>
+ <br>
+ static const struct pm8941_data resin_data = {<br>
+ 	.pull_up_bit = PON_RESIN_PULL_UP,<br>
+ 	.status_bit = PON_RESIN_N_SET,<br>
++	.name = "pm8941_resin",<br>
++	.phys = "pm8941_resin/input0",<br>
++	.supports_ps_hold_poff_config = true,<br>
++	.supports_debounce_config = true,<br>
++};<br>
++<br>
++static const struct pm8941_data pon_gen3_pwrkey_data = {<br>
++	.status_bit = PON_GEN3_KPDPWR_N_SET,<br>
++	.name = "pmic_pwrkey",<br>
++	.phys = "pmic_pwrkey/input0",<br>
++	.supports_ps_hold_poff_config = false,<br>
++	.supports_debounce_config = false,<br>
++};<br>
++<br>
++static const struct pm8941_data pon_gen3_resin_data = {<br>
++	.status_bit = PON_GEN3_RESIN_N_SET,<br>
++	.name = "pmic_resin",<br>
++	.phys = "pmic_resin/input0",<br>
++	.supports_ps_hold_poff_config = false,<br>
++	.supports_debounce_config = false,<br>
+ };<br>
+ <br>
+ static const struct of_device_id pm8941_pwr_key_id_table[] = {<br>
+ 	{ .compatible = "qcom,pm8941-pwrkey", .data = &pwrkey_data },<br>
+ 	{ .compatible = "qcom,pm8941-resin", .data = &resin_data },<br>
++	{ .compatible = "qcom,pmk8350-pwrkey", .data = &pon_gen3_pwrkey_data },<br>
++	{ .compatible = "qcom,pmk8350-resin", .data = &pon_gen3_resin_data },<br>
+ 	{ }<br>
+ };<br>
+ MODULE_DEVICE_TABLE(of, pm8941_pwr_key_id_table);<br>
+-- <br>
+QUALCOMM INDIA, on behalf of Qualcomm Innovation Center, Inc. is a member <br>
+of Code Aurora Forum, hosted by The Linux Foundation<br>
+<br>
+<br>
+

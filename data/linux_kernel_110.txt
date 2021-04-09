@@ -1,0 +1,138 @@
+Hi Babu,<br>
+<br>
+On 06/04/2021 22:37, Babu Moger wrote:<br>
+><i> On 4/6/21 12:19 PM, James Morse wrote:</i><br>
+><i>> On 30/03/2021 21:36, Babu Moger wrote:</i><br>
+><i>>> On 3/12/21 11:58 AM, James Morse wrote:</i><br>
+><i>>>> This series re-folds the resctrl code so the CDP resources (L3CODE et al)</i><br>
+><i>>>> behaviour is all contained in the filesystem parts, with a minimum amount</i><br>
+><i>>>> of arch specific code.</i><br>
+<br>
+><i>>>> This series collapses the CODE/DATA resources, moving all the user-visible</i><br>
+><i>>>> resctrl ABI into what becomes the filesystem code. CDP becomes the type of</i><br>
+><i>>>> configuration being applied to a cache. This is done by adding a</i><br>
+><i>>>> struct resctrl_schema to the parts of resctrl that will move to fs. This</i><br>
+><i>>>> holds the arch-code resource that is in use for this schema, along with</i><br>
+><i>>>> other properties like the name, and whether the configuration being applied</i><br>
+><i>>>> is CODE/DATA/BOTH.</i><br>
+><i>></i><br>
+><i>></i><br>
+><i>>> I applied your patches on my AMD box.</i><br>
+><i>></i><br>
+><i>> Great! Thanks for taking a look,</i><br>
+><i>></i><br>
+><i>></i><br>
+><i>>> Seeing some difference in the behavior.</i><br>
+><i>></i><br>
+><i>> Ooer,</i><br>
+><i>></i><br>
+><i>></i><br>
+><i>>> Before these patches.</i><br>
+><i>>></i><br>
+><i>>> # dmesg |grep -i resctrl</i><br>
+><i>>> [   13.076973] resctrl: L3 allocation detected</i><br>
+><i>>> [   13.087835] resctrl: L3DATA allocation detected</i><br>
+><i>>> [   13.092886] resctrl: L3CODE allocation detected</i><br>
+><i>>> [   13.097936] resctrl: MB allocation detected</i><br>
+><i>>> [   13.102599] resctrl: L3 monitoring detected</i><br>
+><i>>></i><br>
+><i>>></i><br>
+><i>>> After the patches.</i><br>
+><i>>></i><br>
+><i>>> # dmesg |grep -i resctrl</i><br>
+><i>>> [   13.076973] resctrl: L3 allocation detected</i><br>
+><i>>> [   13.097936] resctrl: MB allocation detected</i><br>
+><i>>> [   13.102599] resctrl: L3 monitoring detected</i><br>
+><i>>></i><br>
+><i>>> You can see that L3DATA and L3CODE disappeared. I think we should keep the</i><br>
+><i>>> behavior same for x86(at least).</i><br>
+><i>></i><br>
+><i>> This is the kernel log ... what user-space software is parsing that for an expected value?</i><br>
+><i>> What happens if the resctrl strings have been overwritten by more kernel log?</i><br>
+><i>></i><br>
+><i>> I don't think user-space should be relying on this. I'd argue any user-space doing this is</i><br>
+><i>> already broken. Is it just the kernel selftest's filter_dmesg()? It doesn't seem to do</i><br>
+><i>> anything useful</i><br>
+><i>></i><br>
+><i>> Whether resctrl is support can be read from /proc/filesystems. CDP is probably a</i><br>
+><i>> try-it-and-see. User-space could parse /proc/cpuinfo, but its probably not a good idea.</i><br>
+<br>
+><i> Yes. Agree. Looking at the dmesg may no be right way to figure out all the</i><br>
+><i> support details. As a normal practice, I searched for these texts and</i><br>
+><i> noticed difference. That is why I felt it is best to keep those texts same</i><br>
+><i> as before.</i><br>
+<br>
+><i>> Its easy to fix, but it seems odd that the kernel has to print things for user-space to</i><br>
+><i>> try and parse. (I'd like to point at the user-space software that depends on this)</i><br>
+><i> </i><br>
+><i> I dont think there is any software that parses the dmesg for these</i><br>
+><i> details. These are info messages for the developers.</i><br>
+<br>
+The kernel log changes all the time, messages at boot aren't something you can depend on<br>
+seeing later. Unless there is some user-space software broken by this, I'm afraid I don't<br>
+think its a good idea to add extra code to keep it the same.<br>
+<br>
+Printing 'CDP supported by Lx' would be more useful to developers perusing the log. Even<br>
+more useful would be exposing feature attributes via sysfs to say what resctrl supports<br>
+without having to mount-it-and-see. This can then be used by user-space too.<br>
+e.g.:<br>
+| cat /sys/fs/ext4/features/fast_commit<br>
+<br>
+<br>
+><i>>> I am still not clear why we needed resctrl_conf_type</i><br>
+><i>>></i><br>
+><i>>> enum resctrl_conf_type {</i><br>
+><i>>>         CDP_BOTH,</i><br>
+><i>>>         CDP_CODE,</i><br>
+><i>>>         CDP_DATA,</i><br>
+><i>>> };</i><br>
+><i>>></i><br>
+><i>>> Right now, I see all the resources are initialized as CDP_BOTH.</i><br>
+><i>>></i><br>
+><i>>>  [RDT_RESOURCE_L3] =</i><br>
+><i>>>         {</i><br>
+><i>>>                 .conf_type                      = CDP_BOTH,</i><br>
+><i>>>  [RDT_RESOURCE_L2] =</i><br>
+><i>>>         {</i><br>
+><i>>>                 .conf_type                      = CDP_BOTH,</i><br>
+><i>>>  [RDT_RESOURCE_MBA] =</i><br>
+><i>>>         {</i><br>
+><i>>>                 .conf_type                      = CDP_BOTH,</i><br>
+><i>></i><br>
+><i>> Ah, those should have been removed in patch 24. Once all the resources are the same, the</i><br>
+><i>> resource doesn't need to describe what kind it is.</i><br>
+><i>></i><br>
+><i>></i><br>
+><i>>> If all the resources are CDP_BOTH, then why we need separate CDP_CODE and</i><br>
+><i>>> CDP_DATA?</i><br>
+><i>></i><br>
+><i>> The filesystem code for resctrl that will eventually move out of arch/x86 needs to be able</i><br>
+><i>> to describe the type of configuration change being made back to the arch code. The enum</i><br>
+><i>> gets used for that.</i><br>
+><i>></i><br>
+><i>> x86 needs this as it affects which MSRs the configuration value is written to.</i><br>
+><i>></i><br>
+><i>></i><br>
+><i>>> Are these going to be different for ARM?</i><br>
+><i>></i><br>
+><i>> Nope. Arm's MPAM ends up emulating CDP with the closid values that get applied to</i><br>
+><i>> transactions.</i><br>
+><i>></i><br>
+><i>></i><br>
+><i>>> Also initializing RDT_RESOURCE_MBA as CDP_BOTH does not seem right. I dont</i><br>
+><i>>> think there will CDP support in MBA in future.</i><br>
+><i>></i><br>
+><i>> Its not code or data, which makes it both. 'BOTH' is more of a 'do nothing special', there</i><br>
+><i>> may be a better name, but I'm not very good at naming things. (any suggestions?)</i><br>
+<br>
+><i> Do you think CDP_NONE will make some sense?</i><br>
+<br>
+If you think that is clearer, sure.<br>
+<br>
+<br>
+Thanks,<br>
+<br>
+James<br>
+<br>
+<br>
+

@@ -1,0 +1,53 @@
+The following commit has been merged into the x86/sgx branch of tip:<br>
+<br>
+Commit-ID:     ae40aaf6bdbf0354a75b8284a0de453fcf5f4d32<br>
+Gitweb:        <a  rel="nofollow" href="https://git.kernel.org/tip/ae40aaf6bdbf0354a75b8284a0de453fcf5f4d32">https://git.kernel.org/tip/ae40aaf6bdbf0354a75b8284a0de453fcf5f4d32</a><br>
+Author:        Jarkko Sakkinen <jarkko@xxxxxxxxxx><br>
+AuthorDate:    Thu, 08 Apr 2021 12:29:24 +03:00<br>
+Committer:     Borislav Petkov <bp@xxxxxxx><br>
+CommitterDate: Thu, 08 Apr 2021 17:24:42 +02:00<br>
+<br>
+x86/sgx: Do not update sgx_nr_free_pages in sgx_setup_epc_section()<br>
+<br>
+The commit in Fixes: changed the SGX EPC page sanitization to end up in<br>
+sgx_free_epc_page() which puts clean and sanitized pages on the free<br>
+list.<br>
+<br>
+This was done for the reason that it is best to keep the logic to assign<br>
+available-for-use EPC pages to the correct NUMA lists in a single<br>
+location.<br>
+<br>
+sgx_nr_free_pages is also incremented by sgx_free_epc_pages() but those<br>
+pages which are being added there per EPC section do not belong to the<br>
+free list yet because they haven't been sanitized yet - they land on the<br>
+dirty list first and the sanitization happens later when ksgxd starts<br>
+massaging them.<br>
+<br>
+So remove that addition there and have sgx_free_epc_page() do that<br>
+solely.<br>
+<br>
+ [ bp: Sanitize commit message too. ]<br>
+<br>
+Fixes: 51ab30eb2ad4 ("x86/sgx: Replace section->init_laundry_list with sgx_dirty_page_list")<br>
+Signed-off-by: Jarkko Sakkinen <jarkko@xxxxxxxxxx><br>
+Signed-off-by: Borislav Petkov <bp@xxxxxxx><br>
+Link: <a  rel="nofollow" href="https://lkml.kernel.org/r/20210408092924.7032-1-jarkko@xxxxxxxxxx">https://lkml.kernel.org/r/20210408092924.7032-1-jarkko@xxxxxxxxxx</a><br>
+---<br>
+ arch/x86/kernel/cpu/sgx/main.c | 1 -<br>
+ 1 file changed, 1 deletion(-)<br>
+<br>
+diff --git a/arch/x86/kernel/cpu/sgx/main.c b/arch/x86/kernel/cpu/sgx/main.c<br>
+index 92cb11d..ad90474 100644<br>
+--- a/arch/x86/kernel/cpu/sgx/main.c<br>
++++ b/arch/x86/kernel/cpu/sgx/main.c<br>
+@@ -656,7 +656,6 @@ static bool __init sgx_setup_epc_section(u64 phys_addr, u64 size,<br>
+ 		list_add_tail(&section->pages[i].list, &sgx_dirty_page_list);<br>
+ 	}<br>
+ <br>
+-	sgx_nr_free_pages += nr_pages;<br>
+ 	return true;<br>
+ }<br>
+ <br>
+<br>
+<br>
+

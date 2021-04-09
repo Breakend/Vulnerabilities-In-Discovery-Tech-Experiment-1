@@ -1,0 +1,130 @@
+Make use of the third free LSB in scatterlist's page_link on 64bit systems.<br>
+<br>
+The extra bit will be used by dma_[un]map_sg_p2pdma() to determine when a<br>
+given SGL segments dma_address points to a PCI bus address.<br>
+dma_unmap_sg_p2pdma() will need to perform different cleanup when a<br>
+segment is marked as P2PDMA.<br>
+<br>
+Using this bit requires adding an additional dependency on CONFIG_64BIT to<br>
+CONFIG_PCI_P2PDMA. This should be acceptable as the majority of P2PDMA<br>
+use cases are restricted to newer root complexes and roughly require the<br>
+extra address space for memory BARs used in the transactions.<br>
+<br>
+Signed-off-by: Logan Gunthorpe <logang@xxxxxxxxxxxx><br>
+---<br>
+ drivers/pci/Kconfig         |  2 +-<br>
+ include/linux/scatterlist.h | 49 ++++++++++++++++++++++++++++++++++---<br>
+ 2 files changed, 46 insertions(+), 5 deletions(-)<br>
+<br>
+diff --git a/drivers/pci/Kconfig b/drivers/pci/Kconfig<br>
+index 0c473d75e625..90b4bddb3300 100644<br>
+--- a/drivers/pci/Kconfig<br>
++++ b/drivers/pci/Kconfig<br>
+@@ -163,7 +163,7 @@ config PCI_PASID<br>
+ <br>
+ config PCI_P2PDMA<br>
+ 	bool "PCI peer-to-peer transfer support"<br>
+-	depends on ZONE_DEVICE<br>
++	depends on ZONE_DEVICE && 64BIT<br>
+ 	select GENERIC_ALLOCATOR<br>
+ 	help<br>
+ 	  Enableѕ drivers to do PCI peer-to-peer transactions to and from<br>
+diff --git a/include/linux/scatterlist.h b/include/linux/scatterlist.h<br>
+index 6f70572b2938..5525d3ebf36f 100644<br>
+--- a/include/linux/scatterlist.h<br>
++++ b/include/linux/scatterlist.h<br>
+@@ -58,6 +58,21 @@ struct sg_table {<br>
+ #define SG_CHAIN	0x01UL<br>
+ #define SG_END		0x02UL<br>
+ <br>
++/*<br>
++ * bit 2 is the third free bit in the page_link on 64bit systems which<br>
++ * is used by dma_unmap_sg() to determine if the dma_address is a PCI<br>
++ * bus address when doing P2PDMA.<br>
++ * Note: CONFIG_PCI_P2PDMA depends on CONFIG_64BIT because of this.<br>
++ */<br>
++<br>
++#ifdef CONFIG_PCI_P2PDMA<br>
++#define SG_PCI_P2PDMA	0x04UL<br>
++#else<br>
++#define SG_PCI_P2PDMA	0x00UL<br>
++#endif<br>
++<br>
++#define SG_PAGE_LINK_MASK (SG_CHAIN | SG_END | SG_PCI_P2PDMA)<br>
++<br>
+ /*<br>
+  * We overload the LSB of the page pointer to indicate whether it's<br>
+  * a valid sg entry, or whether it points to the start of a new scatterlist.<br>
+@@ -65,8 +80,9 @@ struct sg_table {<br>
+  */<br>
+ #define sg_is_chain(sg)		((sg)->page_link & SG_CHAIN)<br>
+ #define sg_is_last(sg)		((sg)->page_link & SG_END)<br>
++#define sg_is_pci_p2pdma(sg)	((sg)->page_link & SG_PCI_P2PDMA)<br>
+ #define sg_chain_ptr(sg)	\<br>
+-	((struct scatterlist *) ((sg)->page_link & ~(SG_CHAIN | SG_END)))<br>
++	((struct scatterlist *) ((sg)->page_link & ~SG_PAGE_LINK_MASK))<br>
+ <br>
+ /**<br>
+  * sg_assign_page - Assign a given page to an SG entry<br>
+@@ -80,13 +96,13 @@ struct sg_table {<br>
+  **/<br>
+ static inline void sg_assign_page(struct scatterlist *sg, struct page *page)<br>
+ {<br>
+-	unsigned long page_link = sg->page_link & (SG_CHAIN | SG_END);<br>
++	unsigned long page_link = sg->page_link & SG_PAGE_LINK_MASK;<br>
+ <br>
+ 	/*<br>
+ 	 * In order for the low bit stealing approach to work, pages<br>
+ 	 * must be aligned at a 32-bit boundary as a minimum.<br>
+ 	 */<br>
+-	BUG_ON((unsigned long) page & (SG_CHAIN | SG_END));<br>
++	BUG_ON((unsigned long) page & SG_PAGE_LINK_MASK);<br>
+ #ifdef CONFIG_DEBUG_SG<br>
+ 	BUG_ON(sg_is_chain(sg));<br>
+ #endif<br>
+@@ -120,7 +136,7 @@ static inline struct page *sg_page(struct scatterlist *sg)<br>
+ #ifdef CONFIG_DEBUG_SG<br>
+ 	BUG_ON(sg_is_chain(sg));<br>
+ #endif<br>
+-	return (struct page *)((sg)->page_link & ~(SG_CHAIN | SG_END));<br>
++	return (struct page *)((sg)->page_link & ~SG_PAGE_LINK_MASK);<br>
+ }<br>
+ <br>
+ /**<br>
+@@ -222,6 +238,31 @@ static inline void sg_unmark_end(struct scatterlist *sg)<br>
+ 	sg->page_link &= ~SG_END;<br>
+ }<br>
+ <br>
++/**<br>
++ * sg_mark_pci_p2pdma - Mark the scatterlist entry for PCI p2pdma<br>
++ * @sg:		 SG entryScatterlist<br>
++ *<br>
++ * Description:<br>
++ *   Marks the passed in sg entry to indicate that the dma_address is<br>
++ *   a PCI bus address.<br>
++ **/<br>
++static inline void sg_mark_pci_p2pdma(struct scatterlist *sg)<br>
++{<br>
++	sg->page_link |= SG_PCI_P2PDMA;<br>
++}<br>
++<br>
++/**<br>
++ * sg_unmark_pci_p2pdma - Unmark the scatterlist entry for PCI p2pdma<br>
++ * @sg:		 SG entryScatterlist<br>
++ *<br>
++ * Description:<br>
++ *   Clears the PCI P2PDMA mark<br>
++ **/<br>
++static inline void sg_unmark_pci_p2pdma(struct scatterlist *sg)<br>
++{<br>
++	sg->page_link &= ~SG_PCI_P2PDMA;<br>
++}<br>
++<br>
+ /**<br>
+  * sg_phys - Return physical address of an sg entry<br>
+  * @sg:	     SG entry<br>
+-- <br>
+2.20.1<br>
+<br>
+<br>
+

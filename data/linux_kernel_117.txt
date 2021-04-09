@@ -1,0 +1,26 @@
+Not all platforms are able to allocate CMA size of 256MB. One such<br>
+platform is SDX55. Hence, use the standard 64MB size for CMA.<br>
+<br>
+Signed-off-by: Manivannan Sadhasivam <manivannan.sadhasivam@xxxxxxxxxx><br>
+---<br>
+ arch/arm/configs/qcom_defconfig | 2 +-<br>
+ 1 file changed, 1 insertion(+), 1 deletion(-)<br>
+<br>
+diff --git a/arch/arm/configs/qcom_defconfig b/arch/arm/configs/qcom_defconfig<br>
+index 4e4c49c29aa5..26353cbfa968 100644<br>
+--- a/arch/arm/configs/qcom_defconfig<br>
++++ b/arch/arm/configs/qcom_defconfig<br>
+@@ -296,7 +296,7 @@ CONFIG_NLS_ASCII=y<br>
+ CONFIG_NLS_ISO8859_1=y<br>
+ CONFIG_NLS_UTF8=y<br>
+ CONFIG_DMA_CMA=y<br>
+-CONFIG_CMA_SIZE_MBYTES=256<br>
++CONFIG_CMA_SIZE_MBYTES=64<br>
+ CONFIG_PRINTK_TIME=y<br>
+ CONFIG_DYNAMIC_DEBUG=y<br>
+ CONFIG_DEBUG_INFO=y<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

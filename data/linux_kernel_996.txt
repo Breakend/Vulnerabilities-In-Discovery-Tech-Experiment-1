@@ -1,0 +1,55 @@
+On Thu, Apr 08, 2021 at 04:26:48PM +0800, Jason Wang wrote:<br>
+><i> This patch mandates 1.0 for vDPA devices. The goal is to have the</i><br>
+><i> semantic of normative statement in the virtio spec and eliminate the</i><br>
+><i> burden of transitional device for both vDPA bus and vDPA parent.</i><br>
+><i> </i><br>
+><i> uAPI seems fine since all the vDPA parent mandates</i><br>
+><i> VIRTIO_F_ACCESS_PLATFORM which implies 1.0 devices.</i><br>
+><i> </i><br>
+><i> For legacy guests, it can still work since Qemu will mediate when</i><br>
+><i> necessary (e.g doing the endian conversion).</i><br>
+><i> </i><br>
+><i> Signed-off-by: Jason Wang <jasowang@xxxxxxxxxx></i><br>
+<br>
+Hmm. If we do this, don't we still have a problem with<br>
+legacy drivers which don't ack 1.0?<br>
+Note 1.0 affects ring endianness which is not mediated in QEMU<br>
+so QEMU can't pretend to device guest is 1.0.<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+><i> ---</i><br>
+><i>  include/linux/vdpa.h | 6 ++++++</i><br>
+><i>  1 file changed, 6 insertions(+)</i><br>
+><i> </i><br>
+><i> diff --git a/include/linux/vdpa.h b/include/linux/vdpa.h</i><br>
+><i> index 0fefeb976877..cfde4ec999b4 100644</i><br>
+><i> --- a/include/linux/vdpa.h</i><br>
+><i> +++ b/include/linux/vdpa.h</i><br>
+><i> @@ -6,6 +6,7 @@</i><br>
+><i>  #include <linux/device.h></i><br>
+><i>  #include <linux/interrupt.h></i><br>
+><i>  #include <linux/vhost_iotlb.h></i><br>
+><i> +#include <uapi/linux/virtio_config.h></i><br>
+><i>  </i><br>
+><i>  /**</i><br>
+><i>   * vDPA callback definition.</i><br>
+><i> @@ -317,6 +318,11 @@ static inline int vdpa_set_features(struct vdpa_device *vdev, u64 features)</i><br>
+><i>  {</i><br>
+><i>          const struct vdpa_config_ops *ops = vdev->config;</i><br>
+><i>  </i><br>
+><i> +        /* Mandating 1.0 to have semantics of normative statements in</i><br>
+><i> +         * the spec. */</i><br>
+><i> +        if (!(features & BIT_ULL(VIRTIO_F_VERSION_1)))</i><br>
+><i> +		return -EINVAL;</i><br>
+><i> +</i><br>
+><i>  	vdev->features_valid = true;</i><br>
+><i>          return ops->set_features(vdev, features);</i><br>
+><i>  }</i><br>
+><i> -- </i><br>
+><i> 2.25.1</i><br>
+<br>
+<br>
+

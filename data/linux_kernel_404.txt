@@ -1,0 +1,217 @@
+Stash the key used to authenticate read operations in the afs_read struct.<br>
+This will be necessary to reissue the operation against the server if a<br>
+read from the cache fails in upcoming cache changes.<br>
+<br>
+Signed-off-by: David Howells <dhowells@xxxxxxxxxx><br>
+cc: linux-afs@xxxxxxxxxxxxxxxxxxx<br>
+cc: linux-cachefs@xxxxxxxxxx<br>
+cc: linux-fsdevel@xxxxxxxxxxxxxxx<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/158861248336.340223.1851189950710196001.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/158861248336.340223.1851189950710196001.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # rfc<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/159465823899.1377938.11925978022348532049.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/159465823899.1377938.11925978022348532049.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a><br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/160588529557.3465195.7303323479305254243.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/160588529557.3465195.7303323479305254243.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # rfc<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161118147693.1232039.13780672951838643842.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161118147693.1232039.13780672951838643842.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # rfc<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161161043340.2537118.511899217704140722.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161161043340.2537118.511899217704140722.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v2<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161340406678.1303470.12676824086429446370.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161340406678.1303470.12676824086429446370.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v3<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161539550819.286939.1268332875889175195.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161539550819.286939.1268332875889175195.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v4<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161653806683.2770958.11300984379283401542.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161653806683.2770958.11300984379283401542.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v5<br>
+---<br>
+<br>
+ fs/afs/dir.c      |    3 ++-<br>
+ fs/afs/file.c     |   16 +++++++++-------<br>
+ fs/afs/internal.h |    3 ++-<br>
+ fs/afs/write.c    |   12 ++++++------<br>
+ 4 files changed, 19 insertions(+), 15 deletions(-)<br>
+<br>
+diff --git a/fs/afs/dir.c b/fs/afs/dir.c<br>
+index 17548c1faf02..d8825ce63eba 100644<br>
+--- a/fs/afs/dir.c<br>
++++ b/fs/afs/dir.c<br>
+@@ -241,6 +241,7 @@ static struct afs_read *afs_read_dir(struct afs_vnode *dvnode, struct key *key)<br>
+ 		return ERR_PTR(-ENOMEM);<br>
+ <br>
+ 	refcount_set(&req->usage, 1);<br>
++	req->key = key_get(key);<br>
+ 	req->nr_pages = nr_pages;<br>
+ 	req->actual_len = i_size; /* May change */<br>
+ 	req->len = nr_pages * PAGE_SIZE; /* We can ask for more than there is */<br>
+@@ -305,7 +306,7 @@ static struct afs_read *afs_read_dir(struct afs_vnode *dvnode, struct key *key)<br>
+ <br>
+ 	if (!test_bit(AFS_VNODE_DIR_VALID, &dvnode->flags)) {<br>
+ 		trace_afs_reload_dir(dvnode);<br>
+-		ret = afs_fetch_data(dvnode, key, req);<br>
++		ret = afs_fetch_data(dvnode, req);<br>
+ 		if (ret < 0)<br>
+ 			goto error_unlock;<br>
+ <br>
+diff --git a/fs/afs/file.c b/fs/afs/file.c<br>
+index f1bae0b0a9c0..af6471defec3 100644<br>
+--- a/fs/afs/file.c<br>
++++ b/fs/afs/file.c<br>
+@@ -198,6 +198,7 @@ void afs_put_read(struct afs_read *req)<br>
+ 			if (req->pages != req->array)<br>
+ 				kfree(req->pages);<br>
+ 		}<br>
++		key_put(req->key);<br>
+ 		kfree(req);<br>
+ 	}<br>
+ }<br>
+@@ -228,7 +229,7 @@ static const struct afs_operation_ops afs_fetch_data_operation = {<br>
+ /*<br>
+  * Fetch file data from the volume.<br>
+  */<br>
+-int afs_fetch_data(struct afs_vnode *vnode, struct key *key, struct afs_read *req)<br>
++int afs_fetch_data(struct afs_vnode *vnode, struct afs_read *req)<br>
+ {<br>
+ 	struct afs_operation *op;<br>
+ <br>
+@@ -237,9 +238,9 @@ int afs_fetch_data(struct afs_vnode *vnode, struct key *key, struct afs_read *re<br>
+ 	       vnode->fid.vid,<br>
+ 	       vnode->fid.vnode,<br>
+ 	       vnode->fid.unique,<br>
+-	       key_serial(key));<br>
++	       key_serial(req->key));<br>
+ <br>
+-	op = afs_alloc_operation(key, vnode->volume);<br>
++	op = afs_alloc_operation(req->key, vnode->volume);<br>
+ 	if (IS_ERR(op))<br>
+ 		return PTR_ERR(op);<br>
+ <br>
+@@ -278,6 +279,7 @@ int afs_page_filler(void *data, struct page *page)<br>
+ 	 * unmarshalling code will clear the unfilled space.<br>
+ 	 */<br>
+ 	refcount_set(&req->usage, 1);<br>
++	req->key = key_get(key);<br>
+ 	req->pos = (loff_t)page->index << PAGE_SHIFT;<br>
+ 	req->len = PAGE_SIZE;<br>
+ 	req->nr_pages = 1;<br>
+@@ -287,7 +289,7 @@ int afs_page_filler(void *data, struct page *page)<br>
+ <br>
+ 	/* read the contents of the file from the server into the<br>
+ 	 * page */<br>
+-	ret = afs_fetch_data(vnode, key, req);<br>
++	ret = afs_fetch_data(vnode, req);<br>
+ 	afs_put_read(req);<br>
+ <br>
+ 	if (ret < 0) {<br>
+@@ -372,7 +374,6 @@ static int afs_readpages_one(struct file *file, struct address_space *mapping,<br>
+ 	struct afs_read *req;<br>
+ 	struct list_head *p;<br>
+ 	struct page *first, *page;<br>
+-	struct key *key = afs_file_key(file);<br>
+ 	pgoff_t index;<br>
+ 	int ret, n, i;<br>
+ <br>
+@@ -396,6 +397,7 @@ static int afs_readpages_one(struct file *file, struct address_space *mapping,<br>
+ <br>
+ 	refcount_set(&req->usage, 1);<br>
+ 	req->vnode = vnode;<br>
++	req->key = key_get(afs_file_key(file));<br>
+ 	req->page_done = afs_readpages_page_done;<br>
+ 	req->pos = first->index;<br>
+ 	req->pos <<= PAGE_SHIFT;<br>
+@@ -425,11 +427,11 @@ static int afs_readpages_one(struct file *file, struct address_space *mapping,<br>
+ 	} while (req->nr_pages < n);<br>
+ <br>
+ 	if (req->nr_pages == 0) {<br>
+-		kfree(req);<br>
++		afs_put_read(req);<br>
+ 		return 0;<br>
+ 	}<br>
+ <br>
+-	ret = afs_fetch_data(vnode, key, req);<br>
++	ret = afs_fetch_data(vnode, req);<br>
+ 	if (ret < 0)<br>
+ 		goto error;<br>
+ <br>
+diff --git a/fs/afs/internal.h b/fs/afs/internal.h<br>
+index fd437d4722b5..995fef267be7 100644<br>
+--- a/fs/afs/internal.h<br>
++++ b/fs/afs/internal.h<br>
+@@ -204,6 +204,7 @@ struct afs_read {<br>
+ 	loff_t			actual_len;	/* How much we're actually getting */<br>
+ 	loff_t			remain;		/* Amount remaining */<br>
+ 	loff_t			file_size;	/* File size returned by server */<br>
++	struct key		*key;		/* The key to use to reissue the read */<br>
+ 	afs_dataversion_t	data_version;	/* Version number returned by server */<br>
+ 	refcount_t		usage;<br>
+ 	unsigned int		index;		/* Which page we're reading into */<br>
+@@ -1045,7 +1046,7 @@ extern int afs_cache_wb_key(struct afs_vnode *, struct afs_file *);<br>
+ extern void afs_put_wb_key(struct afs_wb_key *);<br>
+ extern int afs_open(struct inode *, struct file *);<br>
+ extern int afs_release(struct inode *, struct file *);<br>
+-extern int afs_fetch_data(struct afs_vnode *, struct key *, struct afs_read *);<br>
++extern int afs_fetch_data(struct afs_vnode *, struct afs_read *);<br>
+ extern int afs_page_filler(void *, struct page *);<br>
+ extern void afs_put_read(struct afs_read *);<br>
+ <br>
+diff --git a/fs/afs/write.c b/fs/afs/write.c<br>
+index babc84dd9719..a91da2e680da 100644<br>
+--- a/fs/afs/write.c<br>
++++ b/fs/afs/write.c<br>
+@@ -25,9 +25,10 @@ int afs_set_page_dirty(struct page *page)<br>
+ /*<br>
+  * partly or wholly fill a page that's under preparation for writing<br>
+  */<br>
+-static int afs_fill_page(struct afs_vnode *vnode, struct key *key,<br>
++static int afs_fill_page(struct file *file,<br>
+ 			 loff_t pos, unsigned int len, struct page *page)<br>
+ {<br>
++	struct afs_vnode *vnode = AFS_FS_I(file_inode(file));<br>
+ 	struct afs_read *req;<br>
+ 	size_t p;<br>
+ 	void *data;<br>
+@@ -49,6 +50,7 @@ static int afs_fill_page(struct afs_vnode *vnode, struct key *key,<br>
+ 		return -ENOMEM;<br>
+ <br>
+ 	refcount_set(&req->usage, 1);<br>
++	req->key = key_get(afs_file_key(file));<br>
+ 	req->pos = pos;<br>
+ 	req->len = len;<br>
+ 	req->nr_pages = 1;<br>
+@@ -56,7 +58,7 @@ static int afs_fill_page(struct afs_vnode *vnode, struct key *key,<br>
+ 	req->pages[0] = page;<br>
+ 	get_page(page);<br>
+ <br>
+-	ret = afs_fetch_data(vnode, key, req);<br>
++	ret = afs_fetch_data(vnode, req);<br>
+ 	afs_put_read(req);<br>
+ 	if (ret < 0) {<br>
+ 		if (ret == -ENOENT) {<br>
+@@ -80,7 +82,6 @@ int afs_write_begin(struct file *file, struct address_space *mapping,<br>
+ {<br>
+ 	struct afs_vnode *vnode = AFS_FS_I(file_inode(file));<br>
+ 	struct page *page;<br>
+-	struct key *key = afs_file_key(file);<br>
+ 	unsigned long priv;<br>
+ 	unsigned f, from = pos & (PAGE_SIZE - 1);<br>
+ 	unsigned t, to = from + len;<br>
+@@ -95,7 +96,7 @@ int afs_write_begin(struct file *file, struct address_space *mapping,<br>
+ 		return -ENOMEM;<br>
+ <br>
+ 	if (!PageUptodate(page) && len != PAGE_SIZE) {<br>
+-		ret = afs_fill_page(vnode, key, pos & PAGE_MASK, PAGE_SIZE, page);<br>
++		ret = afs_fill_page(file, pos & PAGE_MASK, PAGE_SIZE, page);<br>
+ 		if (ret < 0) {<br>
+ 			unlock_page(page);<br>
+ 			put_page(page);<br>
+@@ -163,7 +164,6 @@ int afs_write_end(struct file *file, struct address_space *mapping,<br>
+ 		  struct page *page, void *fsdata)<br>
+ {<br>
+ 	struct afs_vnode *vnode = AFS_FS_I(file_inode(file));<br>
+-	struct key *key = afs_file_key(file);<br>
+ 	unsigned long priv;<br>
+ 	unsigned int f, from = pos & (PAGE_SIZE - 1);<br>
+ 	unsigned int t, to = from + copied;<br>
+@@ -193,7 +193,7 @@ int afs_write_end(struct file *file, struct address_space *mapping,<br>
+ 			 * unmarshalling routine will take care of clearing any<br>
+ 			 * bits that are beyond the EOF.<br>
+ 			 */<br>
+-			ret = afs_fill_page(vnode, key, pos + copied,<br>
++			ret = afs_fill_page(file, pos + copied,<br>
+ 					    len - copied, page);<br>
+ 			if (ret < 0)<br>
+ 				goto out;<br>
+<br>
+<br>
+<br>
+

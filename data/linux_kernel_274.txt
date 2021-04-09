@@ -1,0 +1,192 @@
+From: Ofir Bitton <obitton@xxxxxxxxx><br>
+<br>
+As F/ security indication must be available before driver approaches<br>
+PCI bus, F/W security should be derived from PCI id rather than be<br>
+fetched during boot handshake with F/W.<br>
+<br>
+Signed-off-by: Ofir Bitton <obitton@xxxxxxxxx><br>
+Reviewed-by: Oded Gabbay <ogabbay@xxxxxxxxxx><br>
+Signed-off-by: Oded Gabbay <ogabbay@xxxxxxxxxx><br>
+---<br>
+ drivers/misc/habanalabs/common/device.c       |  4 ++++<br>
+ drivers/misc/habanalabs/common/firmware_if.c  |  6 +++---<br>
+ drivers/misc/habanalabs/common/habanalabs.h   |  4 +++-<br>
+ .../misc/habanalabs/common/habanalabs_drv.c   | 21 +++++++++++++++++++<br>
+ drivers/misc/habanalabs/common/mmu/mmu.c      |  1 +<br>
+ drivers/misc/habanalabs/common/sysfs.c        |  3 +++<br>
+ drivers/misc/habanalabs/gaudi/gaudi.c         |  2 --<br>
+ drivers/misc/habanalabs/goya/goya.c           |  2 --<br>
+ 8 files changed, 35 insertions(+), 8 deletions(-)<br>
+<br>
+diff --git a/drivers/misc/habanalabs/common/device.c b/drivers/misc/habanalabs/common/device.c<br>
+index 2ed4f2bedc08..00e92b678828 100644<br>
+--- a/drivers/misc/habanalabs/common/device.c<br>
++++ b/drivers/misc/habanalabs/common/device.c<br>
+@@ -327,6 +327,10 @@ static int device_early_init(struct hl_device *hdev)<br>
+ 		gaudi_set_asic_funcs(hdev);<br>
+ 		strscpy(hdev->asic_name, "GAUDI", sizeof(hdev->asic_name));<br>
+ 		break;<br>
++	case ASIC_GAUDI_SEC:<br>
++		gaudi_set_asic_funcs(hdev);<br>
++		strscpy(hdev->asic_name, "GAUDI SEC", sizeof(hdev->asic_name));<br>
++		break;<br>
+ 	default:<br>
+ 		dev_err(hdev->dev, "Unrecognized ASIC type %d\n",<br>
+ 			hdev->asic_type);<br>
+diff --git a/drivers/misc/habanalabs/common/firmware_if.c b/drivers/misc/habanalabs/common/firmware_if.c<br>
+index 532a2fd7bfb4..652571d3b8e6 100644<br>
+--- a/drivers/misc/habanalabs/common/firmware_if.c<br>
++++ b/drivers/misc/habanalabs/common/firmware_if.c<br>
+@@ -819,16 +819,16 @@ int hl_fw_read_preboot_status(struct hl_device *hdev, u32 cpu_boot_status_reg,<br>
+ 	if (security_status & CPU_BOOT_DEV_STS0_ENABLED) {<br>
+ 		prop->fw_security_status_valid = 1;<br>
+ <br>
++		/* FW security should be derived from PCI ID, we keep this<br>
++		 * check for backward compatibility<br>
++		 */<br>
+ 		if (security_status & CPU_BOOT_DEV_STS0_SECURITY_EN)<br>
+ 			prop->fw_security_disabled = false;<br>
+-		else<br>
+-			prop->fw_security_disabled = true;<br>
+ <br>
+ 		if (security_status & CPU_BOOT_DEV_STS0_FW_HARD_RST_EN)<br>
+ 			prop->hard_reset_done_by_fw = true;<br>
+ 	} else {<br>
+ 		prop->fw_security_status_valid = 0;<br>
+-		prop->fw_security_disabled = true;<br>
+ 	}<br>
+ <br>
+ 	dev_dbg(hdev->dev, "Firmware preboot security status %#x\n",<br>
+diff --git a/drivers/misc/habanalabs/common/habanalabs.h b/drivers/misc/habanalabs/common/habanalabs.h<br>
+index 867986ef4588..c1b46126c522 100644<br>
+--- a/drivers/misc/habanalabs/common/habanalabs.h<br>
++++ b/drivers/misc/habanalabs/common/habanalabs.h<br>
+@@ -766,11 +766,13 @@ struct hl_eq {<br>
+  * @ASIC_INVALID: Invalid ASIC type.<br>
+  * @ASIC_GOYA: Goya device.<br>
+  * @ASIC_GAUDI: Gaudi device.<br>
++ * @ASIC_GAUDI_SEC: Gaudi secured device (HL-2000).<br>
+  */<br>
+ enum hl_asic_type {<br>
+ 	ASIC_INVALID,<br>
+ 	ASIC_GOYA,<br>
+-	ASIC_GAUDI<br>
++	ASIC_GAUDI,<br>
++	ASIC_GAUDI_SEC<br>
+ };<br>
+ <br>
+ struct hl_cs_parser;<br>
+diff --git a/drivers/misc/habanalabs/common/habanalabs_drv.c b/drivers/misc/habanalabs/common/habanalabs_drv.c<br>
+index 59896566dca1..7135f1e03864 100644<br>
+--- a/drivers/misc/habanalabs/common/habanalabs_drv.c<br>
++++ b/drivers/misc/habanalabs/common/habanalabs_drv.c<br>
+@@ -47,10 +47,12 @@ MODULE_PARM_DESC(memory_scrub,<br>
+ <br>
+ #define PCI_IDS_GOYA			0x0001<br>
+ #define PCI_IDS_GAUDI			0x1000<br>
++#define PCI_IDS_GAUDI_SEC		0x1010<br>
+ <br>
+ static const struct pci_device_id ids[] = {<br>
+ 	{ PCI_DEVICE(PCI_VENDOR_ID_HABANALABS, PCI_IDS_GOYA), },<br>
+ 	{ PCI_DEVICE(PCI_VENDOR_ID_HABANALABS, PCI_IDS_GAUDI), },<br>
++	{ PCI_DEVICE(PCI_VENDOR_ID_HABANALABS, PCI_IDS_GAUDI_SEC), },<br>
+ 	{ 0, }<br>
+ };<br>
+ MODULE_DEVICE_TABLE(pci, ids);<br>
+@@ -74,6 +76,9 @@ static enum hl_asic_type get_asic_type(u16 device)<br>
+ 	case PCI_IDS_GAUDI:<br>
+ 		asic_type = ASIC_GAUDI;<br>
+ 		break;<br>
++	case PCI_IDS_GAUDI_SEC:<br>
++		asic_type = ASIC_GAUDI_SEC;<br>
++		break;<br>
+ 	default:<br>
+ 		asic_type = ASIC_INVALID;<br>
+ 		break;<br>
+@@ -82,6 +87,16 @@ static enum hl_asic_type get_asic_type(u16 device)<br>
+ 	return asic_type;<br>
+ }<br>
+ <br>
++static bool is_asic_secured(enum hl_asic_type asic_type)<br>
++{<br>
++	switch (asic_type) {<br>
++	case ASIC_GAUDI_SEC:<br>
++		return true;<br>
++	default:<br>
++		return false;<br>
++	}<br>
++}<br>
++<br>
+ /*<br>
+  * hl_device_open - open function for habanalabs device<br>
+  *<br>
+@@ -287,6 +302,12 @@ int create_hdev(struct hl_device **dev, struct pci_dev *pdev,<br>
+ 		hdev->asic_type = asic_type;<br>
+ 	}<br>
+ <br>
++	if (pdev)<br>
++		hdev->asic_prop.fw_security_disabled =<br>
++				!is_asic_secured(pdev->device);<br>
++	else<br>
++		hdev->asic_prop.fw_security_disabled = true;<br>
++<br>
+ 	/* Assign status description string */<br>
+ 	strncpy(hdev->status[HL_DEVICE_STATUS_MALFUNCTION],<br>
+ 					"disabled", HL_STR_MAX);<br>
+diff --git a/drivers/misc/habanalabs/common/mmu/mmu.c b/drivers/misc/habanalabs/common/mmu/mmu.c<br>
+index ae1778103e23..b37189956b14 100644<br>
+--- a/drivers/misc/habanalabs/common/mmu/mmu.c<br>
++++ b/drivers/misc/habanalabs/common/mmu/mmu.c<br>
+@@ -591,6 +591,7 @@ int hl_mmu_if_set_funcs(struct hl_device *hdev)<br>
+ 	switch (hdev->asic_type) {<br>
+ 	case ASIC_GOYA:<br>
+ 	case ASIC_GAUDI:<br>
++	case ASIC_GAUDI_SEC:<br>
+ 		hl_mmu_v1_set_funcs(hdev, &hdev->mmu_func[MMU_DR_PGT]);<br>
+ 		break;<br>
+ 	default:<br>
+diff --git a/drivers/misc/habanalabs/common/sysfs.c b/drivers/misc/habanalabs/common/sysfs.c<br>
+index c7ac5dc0cda4..9fa61573a89d 100644<br>
+--- a/drivers/misc/habanalabs/common/sysfs.c<br>
++++ b/drivers/misc/habanalabs/common/sysfs.c<br>
+@@ -257,6 +257,9 @@ static ssize_t device_type_show(struct device *dev,<br>
+ 	case ASIC_GAUDI:<br>
+ 		str = "GAUDI";<br>
+ 		break;<br>
++	case ASIC_GAUDI_SEC:<br>
++		str = "GAUDI SEC";<br>
++		break;<br>
+ 	default:<br>
+ 		dev_err(hdev->dev, "Unrecognized ASIC type %d\n",<br>
+ 				hdev->asic_type);<br>
+diff --git a/drivers/misc/habanalabs/gaudi/gaudi.c b/drivers/misc/habanalabs/gaudi/gaudi.c<br>
+index 62e3c63bec20..841748392e49 100644<br>
+--- a/drivers/misc/habanalabs/gaudi/gaudi.c<br>
++++ b/drivers/misc/habanalabs/gaudi/gaudi.c<br>
+@@ -575,8 +575,6 @@ static int gaudi_get_fixed_properties(struct hl_device *hdev)<br>
+ 	for (i = 0 ; i < HL_MAX_DCORES ; i++)<br>
+ 		prop->first_available_cq[i] = USHRT_MAX;<br>
+ <br>
+-	/* disable fw security for now, set it in a later stage */<br>
+-	prop->fw_security_disabled = true;<br>
+ 	prop->fw_security_status_valid = false;<br>
+ 	prop->hard_reset_done_by_fw = false;<br>
+ <br>
+diff --git a/drivers/misc/habanalabs/goya/goya.c b/drivers/misc/habanalabs/goya/goya.c<br>
+index 9d49ba649db0..44dd4d8d8822 100644<br>
+--- a/drivers/misc/habanalabs/goya/goya.c<br>
++++ b/drivers/misc/habanalabs/goya/goya.c<br>
+@@ -484,8 +484,6 @@ int goya_get_fixed_properties(struct hl_device *hdev)<br>
+ 	for (i = 0 ; i < HL_MAX_DCORES ; i++)<br>
+ 		prop->first_available_cq[i] = USHRT_MAX;<br>
+ <br>
+-	/* disable fw security for now, set it in a later stage */<br>
+-	prop->fw_security_disabled = true;<br>
+ 	prop->fw_security_status_valid = false;<br>
+ 	prop->hard_reset_done_by_fw = false;<br>
+ <br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

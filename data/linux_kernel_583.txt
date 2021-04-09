@@ -1,0 +1,96 @@
+Self stored memmap leads to a sparse memory situation which is unsuitable<br>
+for workloads that requires large contiguous memory chunks, so make this<br>
+an opt-in which needs to be explicitly enabled.<br>
+<br>
+To control this, let memory_hotplug have its own memory space, as suggested<br>
+by David, so we can add memory_hotplug.memmap_on_memory parameter.<br>
+<br>
+Signed-off-by: Oscar Salvador <osalvador@xxxxxxx><br>
+Reviewed-by: David Hildenbrand <david@xxxxxxxxxx><br>
+Acked-by: Michal Hocko <mhocko@xxxxxxxx><br>
+---<br>
+ Documentation/admin-guide/kernel-parameters.txt | 17 +++++++++++++++++<br>
+ mm/Makefile                                     |  5 ++++-<br>
+ mm/memory_hotplug.c                             | 10 +++++++++-<br>
+ 3 files changed, 30 insertions(+), 2 deletions(-)<br>
+<br>
+diff --git a/Documentation/admin-guide/kernel-parameters.txt b/Documentation/admin-guide/kernel-parameters.txt<br>
+index 04545725f187..af32c17cd4eb 100644<br>
+--- a/Documentation/admin-guide/kernel-parameters.txt<br>
++++ b/Documentation/admin-guide/kernel-parameters.txt<br>
+@@ -2794,6 +2794,23 @@<br>
+ 			seconds.  Use this parameter to check at some<br>
+ 			other rate.  0 disables periodic checking.<br>
+ <br>
++	memory_hotplug.memmap_on_memory<br>
++			[KNL,X86,ARM] Boolean flag to enable this feature.<br>
++			Format: {on | off (default)}<br>
++			When enabled, runtime hotplugged memory will<br>
++			allocate its internal metadata (struct pages)<br>
++			from the hotadded memory which will allow to<br>
++			hotadd a lot of memory without requiring<br>
++			additional memory to do so.<br>
++			This feature is disabled by default because it<br>
++			has some implication on large (e.g. GB)<br>
++			allocations in some configurations (e.g. small<br>
++			memory blocks).<br>
++			The state of the flag can be read in<br>
++			/sys/module/memory_hotplug/parameters/memmap_on_memory.<br>
++			Note that even when enabled, there are a few cases where<br>
++			the feature is not effective.<br>
++<br>
+ 	memtest=	[KNL,X86,ARM,PPC] Enable memtest<br>
+ 			Format: <integer><br>
+ 			default : 0 <disable><br>
+diff --git a/mm/Makefile b/mm/Makefile<br>
+index 72227b24a616..82ae9482f5e3 100644<br>
+--- a/mm/Makefile<br>
++++ b/mm/Makefile<br>
+@@ -58,9 +58,13 @@ obj-y			:= filemap.o mempool.o oom_kill.o fadvise.o \<br>
+ page-alloc-y := page_alloc.o<br>
+ page-alloc-$(CONFIG_SHUFFLE_PAGE_ALLOCATOR) += shuffle.o<br>
+ <br>
++# Give 'memory_hotplug' its own module-parameter namespace<br>
++memory-hotplug-$(CONFIG_MEMORY_HOTPLUG) += memory_hotplug.o<br>
++<br>
+ obj-y += page-alloc.o<br>
+ obj-y += init-mm.o<br>
+ obj-y += memblock.o<br>
++obj-y += $(memory-hotplug-y)<br>
+ <br>
+ ifdef CONFIG_MMU<br>
+ 	obj-$(CONFIG_ADVISE_SYSCALLS)	+= madvise.o<br>
+@@ -83,7 +87,6 @@ obj-$(CONFIG_SLUB) += slub.o<br>
+ obj-$(CONFIG_KASAN)	+= kasan/<br>
+ obj-$(CONFIG_KFENCE) += kfence/<br>
+ obj-$(CONFIG_FAILSLAB) += failslab.o<br>
+-obj-$(CONFIG_MEMORY_HOTPLUG) += memory_hotplug.o<br>
+ obj-$(CONFIG_MEMTEST)		+= memtest.o<br>
+ obj-$(CONFIG_MIGRATION) += migrate.o<br>
+ obj-$(CONFIG_TRANSPARENT_HUGEPAGE) += huge_memory.o khugepaged.o<br>
+diff --git a/mm/memory_hotplug.c b/mm/memory_hotplug.c<br>
+index b48067839f90..ccbdde94c488 100644<br>
+--- a/mm/memory_hotplug.c<br>
++++ b/mm/memory_hotplug.c<br>
+@@ -42,7 +42,15 @@<br>
+ #include "internal.h"<br>
+ #include "shuffle.h"<br>
+ <br>
+-static bool memmap_on_memory;<br>
++<br>
++/*<br>
++ * memory_hotplug.memmap_on_memory parameter<br>
++ */<br>
++static bool memmap_on_memory __ro_after_init;<br>
++#ifdef CONFIG_MHP_MEMMAP_ON_MEMORY<br>
++module_param(memmap_on_memory, bool, 0444);<br>
++MODULE_PARM_DESC(memmap_on_memory, "Enable memmap on memory for memory hotplug");<br>
++#endif<br>
+ <br>
+ /*<br>
+  * online_page_callback contains pointer to current page onlining function.<br>
+-- <br>
+2.16.3<br>
+<br>
+<br>
+

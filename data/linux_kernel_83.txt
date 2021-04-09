@@ -1,0 +1,27 @@
+Masanari Iida <standby24x7@xxxxxxxxx> writes:<br>
+<br>
+><i> This patch fixes a spelling typo in kernel-chktaint</i><br>
+><i></i><br>
+><i> Signed-off-by: Masanari Iida <standby24x7@xxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  tools/debugging/kernel-chktaint | 2 +-</i><br>
+><i>  1 file changed, 1 insertion(+), 1 deletion(-)</i><br>
+><i></i><br>
+><i> diff --git a/tools/debugging/kernel-chktaint b/tools/debugging/kernel-chktaint</i><br>
+><i> index 607b2b280945..719f18b1edf0 100755</i><br>
+><i> --- a/tools/debugging/kernel-chktaint</i><br>
+><i> +++ b/tools/debugging/kernel-chktaint</i><br>
+><i> @@ -25,7 +25,7 @@ if [ "$1"x != "x" ]; then</i><br>
+><i>  	elif  [ $1 -ge 0 ] 2>/dev/null ; then</i><br>
+><i>  		taint=$1</i><br>
+><i>  	else</i><br>
+><i> -		echo "Error: Parameter '$1' not a positive interger. Aborting." >&2</i><br>
+><i> +		echo "Error: Parameter '$1' not a positive integer. Aborting." >&2</i><br>
+><i>  		exit 1</i><br>
+<br>
+Applied, thanks.<br>
+<br>
+jon<br>
+<br>
+<br>
+

@@ -1,0 +1,70 @@
+For certain signature encoding schemes (eg. RSASSA-PSS), the<br>
+verify/sign operation behavior depends on information contained in<br>
+the signature blob. Allow passing this down to the crypto_template by<br>
+introducing a crypto_akcipher_set_sig_params() call.<br>
+<br>
+Signed-off-by: Varad Gautam <varad.gautam@xxxxxxxx><br>
+---<br>
+ crypto/rsa-common.c       |  1 +<br>
+ include/crypto/akcipher.h | 26 ++++++++++++++++++++++++++<br>
+ 2 files changed, 27 insertions(+)<br>
+<br>
+diff --git a/crypto/rsa-common.c b/crypto/rsa-common.c<br>
+index 6ed258a782875..f80cdfcc1f9ee 100644<br>
+--- a/crypto/rsa-common.c<br>
++++ b/crypto/rsa-common.c<br>
+@@ -277,6 +277,7 @@ int rsapad_akcipher_create(struct crypto_template *tmpl, struct rtattr **tb,<br>
+ 	inst->alg.set_pub_key = alg->set_pub_key;<br>
+ 	inst->alg.set_priv_key = alg->set_priv_key;<br>
+ 	inst->alg.max_size = alg->max_size;<br>
++	inst->alg.set_sig_params = alg->set_sig_params;<br>
+ 	inst->alg.reqsize = sizeof(struct rsapad_akciper_req_ctx) + rsa_alg->reqsize;<br>
+ <br>
+ 	inst->free = rsapad_akcipher_free;<br>
+diff --git a/include/crypto/akcipher.h b/include/crypto/akcipher.h<br>
+index 1d3aa252cabaf..a0e8720294293 100644<br>
+--- a/include/crypto/akcipher.h<br>
++++ b/include/crypto/akcipher.h<br>
+@@ -101,6 +101,8 @@ struct akcipher_alg {<br>
+ 	unsigned int (*max_size)(struct crypto_akcipher *tfm);<br>
+ 	int (*init)(struct crypto_akcipher *tfm);<br>
+ 	void (*exit)(struct crypto_akcipher *tfm);<br>
++	int (*set_sig_params)(struct crypto_akcipher *tfm, const void *sig,<br>
++			      unsigned int sig_len);<br>
+ <br>
+ 	unsigned int reqsize;<br>
+ 	struct crypto_alg base;<br>
+@@ -413,4 +415,28 @@ static inline int crypto_akcipher_set_priv_key(struct crypto_akcipher *tfm,<br>
+ <br>
+ 	return alg->set_priv_key(tfm, key, keylen);<br>
+ }<br>
++<br>
++/**<br>
++ * crypto_akcipher_set_sig_params() - Invoke set sig params operation<br>
++ *<br>
++ * Use this if the verification/signing operation behavior depends on<br>
++ * parameters contained in the signature.<br>
++ *<br>
++ * @tfm:	tfm handle<br>
++ * @sig:	ptr to a struct public_key_signature to extract info from<br>
++ * @siglen:	Length of sig - should be unnecessary if you pass the struct.<br>
++ *<br>
++ * Return: zero on success; error code in case of error<br>
++ */<br>
++static inline int crypto_akcipher_set_sig_params(struct crypto_akcipher *tfm,<br>
++						 const void *sig,<br>
++						 unsigned int siglen)<br>
++{<br>
++	struct akcipher_alg *alg = crypto_akcipher_alg(tfm);<br>
++<br>
++	if (alg->set_sig_params)<br>
++		return alg->set_sig_params(tfm, sig, siglen);<br>
++	else<br>
++		return -EOPNOTSUPP;<br>
++}<br>
+ #endif<br>
+-- <br>
+2.30.2<br>
+<br>
+<br>
+

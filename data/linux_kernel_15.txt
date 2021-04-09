@@ -1,0 +1,391 @@
+Extend memfd_create() system call with the ability to create memory areas<br>
+visible only in the context of the owning process and not mapped not only<br>
+to other processes but in the kernel page tables as well.<br>
+<br>
+The user will create a file descriptor using the memfd_create system call.<br>
+The user than has to use ioctl() to define the desired protection mode for<br>
+the memory associated with that file descriptor and only when the mode is<br>
+set it is possible to mmap() the memory. For instance, the following<br>
+exapmple will create an uncached mapping (error handling is omitted):<br>
+<br>
+        fd = memfd_create("secret", MFD_SECRET);<br>
+        ioctl(fd, MFD_SECRET_UNCACHED);<br>
+	ftruncate(fd. MAP_SIZE);<br>
+        ptr = mmap(NULL, MAP_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED,<br>
+		   fd, 0);<br>
+<br>
+Signed-off-by: Mike Rapoport <rppt@xxxxxxxxxxxxx><br>
+---<br>
+ include/linux/memfd.h      |   9 ++<br>
+ include/uapi/linux/magic.h |   1 +<br>
+ include/uapi/linux/memfd.h |   6 +<br>
+ mm/Kconfig                 |   4 +<br>
+ mm/Makefile                |   1 +<br>
+ mm/memfd.c                 |  10 +-<br>
+ mm/secretmem.c             | 244 +++++++++++++++++++++++++++++++++++++<br>
+ 7 files changed, 273 insertions(+), 2 deletions(-)<br>
+ create mode 100644 mm/secretmem.c<br>
+<br>
+diff --git a/include/linux/memfd.h b/include/linux/memfd.h<br>
+index 4f1600413f91..d3ca7285f51a 100644<br>
+--- a/include/linux/memfd.h<br>
++++ b/include/linux/memfd.h<br>
+@@ -13,4 +13,13 @@ static inline long memfd_fcntl(struct file *f, unsigned int c, unsigned long a)<br>
+ }<br>
+ #endif<br>
+ <br>
++#ifdef CONFIG_MEMFD_SECRETMEM<br>
++extern struct file *secretmem_file_create(const char *name, unsigned int flags);<br>
++#else<br>
++static inline struct file *secretmem_file_create(const char *name, unsigned int flags)<br>
++{<br>
++	return ERR_PTR(-EINVAL);<br>
++}<br>
++#endif<br>
++<br>
+ #endif /* __LINUX_MEMFD_H */<br>
+diff --git a/include/uapi/linux/magic.h b/include/uapi/linux/magic.h<br>
+index 3ac436376d79..c0104e6da894 100644<br>
+--- a/include/uapi/linux/magic.h<br>
++++ b/include/uapi/linux/magic.h<br>
+@@ -95,5 +95,6 @@<br>
+ #define DMA_BUF_MAGIC		0x444d4142	/* "DMAB" */<br>
+ #define Z3FOLD_MAGIC		0x33<br>
+ #define PPC_CMM_MAGIC		0xc7571590<br>
++#define SECRETMEM_MAGIC		0x5345434d	/* "SECM" */<br>
+ <br>
+ #endif /* __LINUX_MAGIC_H__ */<br>
+diff --git a/include/uapi/linux/memfd.h b/include/uapi/linux/memfd.h<br>
+index 7a8a26751c23..3320a79b638d 100644<br>
+--- a/include/uapi/linux/memfd.h<br>
++++ b/include/uapi/linux/memfd.h<br>
+@@ -8,6 +8,12 @@<br>
+ #define MFD_CLOEXEC		0x0001U<br>
+ #define MFD_ALLOW_SEALING	0x0002U<br>
+ #define MFD_HUGETLB		0x0004U<br>
++#define MFD_SECRET		0x0008U<br>
++<br>
++/* ioctls for secret memory */<br>
++#define MFD_SECRET_IOCTL '-'<br>
++#define MFD_SECRET_EXCLUSIVE	_IOW(MFD_SECRET_IOCTL, 0x13, unsigned long)<br>
++#define MFD_SECRET_UNCACHED	_IOW(MFD_SECRET_IOCTL, 0x14, unsigned long)<br>
+ <br>
+ /*<br>
+  * Huge page size encoding when MFD_HUGETLB is specified, and a huge page<br>
+diff --git a/mm/Kconfig b/mm/Kconfig<br>
+index ab80933be65f..2a8956d9048d 100644<br>
+--- a/mm/Kconfig<br>
++++ b/mm/Kconfig<br>
+@@ -739,4 +739,8 @@ config ARCH_HAS_HUGEPD<br>
+ config MAPPING_DIRTY_HELPERS<br>
+         bool<br>
+ <br>
++config MEMFD_SECRETMEM<br>
++        def_bool MEMFD_CREATE && ARCH_HAS_SET_DIRECT_MAP<br>
++<br>
++<br>
+ endmenu<br>
+diff --git a/mm/Makefile b/mm/Makefile<br>
+index 1937cc251883..9399e823ccdb 100644<br>
+--- a/mm/Makefile<br>
++++ b/mm/Makefile<br>
+@@ -108,3 +108,4 @@ obj-$(CONFIG_ZONE_DEVICE) += memremap.o<br>
+ obj-$(CONFIG_HMM_MIRROR) += hmm.o<br>
+ obj-$(CONFIG_MEMFD_CREATE) += memfd.o<br>
+ obj-$(CONFIG_MAPPING_DIRTY_HELPERS) += mapping_dirty_helpers.o<br>
++obj-$(CONFIG_MEMFD_SECRETMEM) += secretmem.o<br>
+diff --git a/mm/memfd.c b/mm/memfd.c<br>
+index 2647c898990c..3e1cc37e0389 100644<br>
+--- a/mm/memfd.c<br>
++++ b/mm/memfd.c<br>
+@@ -245,7 +245,8 @@ long memfd_fcntl(struct file *file, unsigned int cmd, unsigned long arg)<br>
+ #define MFD_NAME_PREFIX_LEN (sizeof(MFD_NAME_PREFIX) - 1)<br>
+ #define MFD_NAME_MAX_LEN (NAME_MAX - MFD_NAME_PREFIX_LEN)<br>
+ <br>
+-#define MFD_ALL_FLAGS (MFD_CLOEXEC | MFD_ALLOW_SEALING | MFD_HUGETLB)<br>
++#define MFD_SECRET_MASK (MFD_CLOEXEC | MFD_SECRET)<br>
++#define MFD_ALL_FLAGS (MFD_CLOEXEC | MFD_ALLOW_SEALING | MFD_HUGETLB | MFD_SECRET)<br>
+ <br>
+ SYSCALL_DEFINE2(memfd_create,<br>
+ 		const char __user *, uname,<br>
+@@ -257,6 +258,9 @@ SYSCALL_DEFINE2(memfd_create,<br>
+ 	char *name;<br>
+ 	long len;<br>
+ <br>
++	if (flags & ~(unsigned int)MFD_SECRET_MASK)<br>
++		return -EINVAL;<br>
++<br>
+ 	if (!(flags & MFD_HUGETLB)) {<br>
+ 		if (flags & ~(unsigned int)MFD_ALL_FLAGS)<br>
+ 			return -EINVAL;<br>
+@@ -296,7 +300,9 @@ SYSCALL_DEFINE2(memfd_create,<br>
+ 		goto err_name;<br>
+ 	}<br>
+ <br>
+-	if (flags & MFD_HUGETLB) {<br>
++	if (flags & MFD_SECRET) {<br>
++		file = secretmem_file_create(name, flags);<br>
++	} else if (flags & MFD_HUGETLB) {<br>
+ 		struct user_struct *user = NULL;<br>
+ <br>
+ 		file = hugetlb_file_setup(name, 0, VM_NORESERVE, &user,<br>
+diff --git a/mm/secretmem.c b/mm/secretmem.c<br>
+new file mode 100644<br>
+index 000000000000..ac67a67aa29c<br>
+--- /dev/null<br>
++++ b/mm/secretmem.c<br>
+@@ -0,0 +1,244 @@<br>
++// SPDX-License-Identifier: GPL-2.0<br>
++#include <linux/mm.h><br>
++#include <linux/fs.h><br>
++#include <linux/mount.h><br>
++#include <linux/memfd.h><br>
++#include <linux/printk.h><br>
++#include <linux/pagemap.h><br>
++#include <linux/pseudo_fs.h><br>
++#include <linux/set_memory.h><br>
++#include <linux/sched/signal.h><br>
++<br>
++#include <uapi/linux/memfd.h><br>
++#include <uapi/linux/magic.h><br>
++<br>
++#include <asm/tlbflush.h><br>
++<br>
++#define SECRETMEM_EXCLUSIVE	0x1<br>
++#define SECRETMEM_UNCACHED	0x2<br>
++<br>
++struct secretmem_state {<br>
++	unsigned int mode;<br>
++	unsigned long nr_pages;<br>
++};<br>
++<br>
++static struct page *secretmem_alloc_page(gfp_t gfp)<br>
++{<br>
++	/*<br>
++	 * FIXME: use a cache of large pages to reduce the direct map<br>
++	 * fragmentation<br>
++	 */<br>
++	return alloc_page(gfp);<br>
++}<br>
++<br>
++static int secretmem_check_limits(struct vm_fault *vmf)<br>
++{<br>
++	struct secretmem_state *state = vmf->vma->vm_file->private_data;<br>
++	struct inode *inode = file_inode(vmf->vma->vm_file);<br>
++	unsigned long limit;<br>
++<br>
++	if (((loff_t)vmf->pgoff << PAGE_SHIFT) >= i_size_read(inode))<br>
++		return -EINVAL;<br>
++<br>
++	limit = rlimit(RLIMIT_MEMLOCK) >> PAGE_SHIFT;<br>
++	if (state->nr_pages + 1 >= limit)<br>
++		return -EPERM;<br>
++<br>
++	return 0;<br>
++}<br>
++<br>
++static vm_fault_t secretmem_fault(struct vm_fault *vmf)<br>
++{<br>
++	struct secretmem_state *state = vmf->vma->vm_file->private_data;<br>
++	struct address_space *mapping = vmf->vma->vm_file->f_mapping;<br>
++	pgoff_t offset = vmf->pgoff;<br>
++	unsigned long addr;<br>
++	struct page *page;<br>
++	int ret;<br>
++<br>
++	ret = secretmem_check_limits(vmf);<br>
++	if (ret)<br>
++		return vmf_error(ret);<br>
++<br>
++	page = find_get_entry(mapping, offset);<br>
++	if (!page) {<br>
++		page = secretmem_alloc_page(vmf->gfp_mask);<br>
++		if (!page)<br>
++			return vmf_error(-ENOMEM);<br>
++<br>
++		ret = add_to_page_cache_lru(page, mapping, offset, vmf->gfp_mask);<br>
++		if (unlikely(ret)) {<br>
++			put_page(page);<br>
++			return vmf_error(ret);<br>
++		}<br>
++<br>
++		ret = set_direct_map_invalid_noflush(page);<br>
++		if (ret) {<br>
++			delete_from_page_cache(page);<br>
++			return vmf_error(ret);<br>
++		}<br>
++<br>
++		addr = (unsigned long)page_address(page);<br>
++		flush_tlb_kernel_range(addr, addr + PAGE_SIZE);<br>
++<br>
++		__SetPageUptodate(page);<br>
++<br>
++		state->nr_pages++;<br>
++		ret = VM_FAULT_LOCKED;<br>
++	}<br>
++<br>
++	vmf->page = page;<br>
++	return ret;<br>
++}<br>
++<br>
++static const struct vm_operations_struct secretmem_vm_ops = {<br>
++	.fault = secretmem_fault,<br>
++};<br>
++<br>
++static int secretmem_mmap(struct file *file, struct vm_area_struct *vma)<br>
++{<br>
++	struct secretmem_state *state = file->private_data;<br>
++	unsigned long mode = state->mode;<br>
++<br>
++	if (!mode)<br>
++		return -EINVAL;<br>
++<br>
++	switch (mode) {<br>
++	case SECRETMEM_UNCACHED:<br>
++		vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);<br>
++		/* fallthrough */<br>
++	case SECRETMEM_EXCLUSIVE:<br>
++		vma->vm_ops = &secretmem_vm_ops;<br>
++		break;<br>
++	default:<br>
++		return -EINVAL;<br>
++	}<br>
++<br>
++	return 0;<br>
++}<br>
++<br>
++static long secretmem_ioctl(struct file *file, unsigned cmd, unsigned long arg)<br>
++{<br>
++	struct secretmem_state *state = file->private_data;<br>
++	unsigned long mode = state->mode;<br>
++<br>
++	if (mode)<br>
++		return -EINVAL;<br>
++<br>
++	switch (cmd) {<br>
++	case MFD_SECRET_EXCLUSIVE:<br>
++		mode = SECRETMEM_EXCLUSIVE;<br>
++		break;<br>
++	case MFD_SECRET_UNCACHED:<br>
++		mode = SECRETMEM_UNCACHED;<br>
++		break;<br>
++	default:<br>
++		return -EINVAL;<br>
++	}<br>
++<br>
++	state->mode = mode;<br>
++<br>
++	return 0;<br>
++}<br>
++<br>
++static int secretmem_release(struct inode *inode, struct file *file)<br>
++{<br>
++	struct secretmem_state *state = file->private_data;<br>
++<br>
++	kfree(state);<br>
++<br>
++	return 0;<br>
++}<br>
++<br>
++const struct file_operations secretmem_fops = {<br>
++	.release	= secretmem_release,<br>
++	.mmap		= secretmem_mmap,<br>
++	.unlocked_ioctl = secretmem_ioctl,<br>
++	.compat_ioctl	= secretmem_ioctl,<br>
++};<br>
++<br>
++static bool secretmem_isolate_page(struct page *page, isolate_mode_t mode)<br>
++{<br>
++	return false;<br>
++}<br>
++<br>
++static int secretmem_migratepage(struct address_space *mapping,<br>
++				 struct page *newpage, struct page *page,<br>
++				 enum migrate_mode mode)<br>
++{<br>
++	return -EBUSY;<br>
++}<br>
++<br>
++static void secretmem_freepage(struct page *page)<br>
++{<br>
++	set_direct_map_default_noflush(page);<br>
++}<br>
++<br>
++static const struct address_space_operations secretmem_aops = {<br>
++	.freepage	= secretmem_freepage,<br>
++	.migratepage	= secretmem_migratepage,<br>
++	.isolate_page	= secretmem_isolate_page,<br>
++};<br>
++<br>
++static struct vfsmount *secretmem_mnt;<br>
++<br>
++struct file *secretmem_file_create(const char *name, unsigned int flags)<br>
++{<br>
++	struct inode *inode = alloc_anon_inode(secretmem_mnt->mnt_sb);<br>
++	struct file *file = ERR_PTR(-ENOMEM);<br>
++	struct secretmem_state *state;<br>
++<br>
++	if (IS_ERR(inode))<br>
++		return ERR_CAST(inode);<br>
++<br>
++	state = kzalloc(sizeof(*state), GFP_KERNEL);<br>
++	if (!state)<br>
++		goto err_free_inode;<br>
++<br>
++	file = alloc_file_pseudo(inode, secretmem_mnt, "secretmem",<br>
++				 O_RDWR, &secretmem_fops);<br>
++	if (IS_ERR(file))<br>
++		goto err_free_state;<br>
++<br>
++	mapping_set_unevictable(inode->i_mapping);<br>
++<br>
++	inode->i_mapping->private_data = state;<br>
++	inode->i_mapping->a_ops = &secretmem_aops;<br>
++<br>
++	/* pretend we are a normal file with zero size */<br>
++	inode->i_mode |= S_IFREG;<br>
++	inode->i_size = 0;<br>
++<br>
++	file->private_data = state;<br>
++<br>
++	return file;<br>
++<br>
++err_free_state:<br>
++	kfree(state);<br>
++err_free_inode:<br>
++	iput(inode);<br>
++	return file;<br>
++}<br>
++<br>
++static int secretmem_init_fs_context(struct fs_context *fc)<br>
++{<br>
++	return init_pseudo(fc, SECRETMEM_MAGIC) ? 0 : -ENOMEM;<br>
++}<br>
++<br>
++static struct file_system_type secretmem_fs = {<br>
++	.name		= "secretmem",<br>
++	.init_fs_context = secretmem_init_fs_context,<br>
++	.kill_sb	= kill_anon_super,<br>
++};<br>
++<br>
++static int secretmem_init(void)<br>
++{<br>
++	int ret = 0;<br>
++<br>
++	secretmem_mnt = kern_mount(&secretmem_fs);<br>
++	if (IS_ERR(secretmem_mnt))<br>
++		ret = PTR_ERR(secretmem_mnt);<br>
++<br>
++	return ret;<br>
++}<br>
++fs_initcall(secretmem_init);<br>
+-- <br>
+2.24.0<br>
+<br>
+<br>
+-- <br>
+Sincerely yours,<br>
+Mike.<br>
+<br>
+<br>
+

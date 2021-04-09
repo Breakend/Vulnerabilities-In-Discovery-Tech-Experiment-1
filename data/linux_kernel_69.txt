@@ -1,0 +1,19 @@
+On Wed, 7 Apr 2021 14:38:17 +0100, Vincenzo Frascino wrote:<br>
+><i> mte_assign_mem_tag_range() was added in commit 85f49cae4dfc</i><br>
+><i> ("arm64: mte: add in-kernel MTE helpers") in 5.11 but moved out of</i><br>
+><i> mte.S by commit 2cb34276427a ("arm64: kasan: simplify and inline</i><br>
+><i> MTE functions") in 5.12 and renamed to mte_set_mem_tag_range().</i><br>
+><i> 2cb34276427a did not delete the old function prototypes in mte.h.</i><br>
+><i> </i><br>
+><i> Remove the unused prototype from mte.h.</i><br>
+<br>
+Applied to arm64 (for-next/misc), thanks!<br>
+<br>
+[1/1] arm64: mte: Remove unused mte_assign_mem_tag_range()<br>
+      <a  rel="nofollow" href="https://git.kernel.org/arm64/c/df652a16a657">https://git.kernel.org/arm64/c/df652a16a657</a><br>
+<br>
+-- <br>
+Catalin<br>
+<br>
+<br>
+

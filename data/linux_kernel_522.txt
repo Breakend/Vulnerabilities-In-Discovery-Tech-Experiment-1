@@ -1,0 +1,43 @@
+There are few error about open brace is reported by checkpatch.pl:<br>
+<br>
+ERROR: that open brace { should be on the previous line<br>
++static struct error_fw flash_error_table[] =<br>
++{<br>
+<br>
+So fix them all.<br>
+<br>
+Signed-off-by: Jianqin Xie <xiejianqin@xxxxxxxxxxxxx><br>
+Signed-off-by: Luo Jiaxing <luojiaxing@xxxxxxxxxx><br>
+---<br>
+ drivers/scsi/pm8001/pm8001_ctl.c | 6 ++----<br>
+ 1 file changed, 2 insertions(+), 4 deletions(-)<br>
+<br>
+diff --git a/drivers/scsi/pm8001/pm8001_ctl.c b/drivers/scsi/pm8001/pm8001_ctl.c<br>
+index 90b816f..8c253b0 100644<br>
+--- a/drivers/scsi/pm8001/pm8001_ctl.c<br>
++++ b/drivers/scsi/pm8001/pm8001_ctl.c<br>
+@@ -645,8 +645,7 @@ struct flash_command {<br>
+      int     code;<br>
+ };<br>
+ <br>
+-static struct flash_command flash_command_table[] =<br>
+-{<br>
++static const struct flash_command flash_command_table[] = {<br>
+      {"set_nvmd",    FLASH_CMD_SET_NVMD},<br>
+      {"update",      FLASH_CMD_UPDATE},<br>
+      {"",            FLASH_CMD_NONE} /* Last entry should be NULL. */<br>
+@@ -657,8 +656,7 @@ struct error_fw {<br>
+      int     err_code;<br>
+ };<br>
+ <br>
+-static struct error_fw flash_error_table[] =<br>
+-{<br>
++static const struct error_fw flash_error_table[] = {<br>
+      {"Failed to open fw image file",	FAIL_OPEN_BIOS_FILE},<br>
+      {"image header mismatch",		FLASH_UPDATE_HDR_ERR},<br>
+      {"image offset mismatch",		FLASH_UPDATE_OFFSET_ERR},<br>
+-- <br>
+2.7.4<br>
+<br>
+<br>
+

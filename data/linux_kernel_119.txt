@@ -1,0 +1,25 @@
+Enable the Qualcomm GLINK SMEM driver to support GLINK protocol over<br>
+shared memory.<br>
+<br>
+Signed-off-by: Manivannan Sadhasivam <manivannan.sadhasivam@xxxxxxxxxx><br>
+---<br>
+ arch/arm/configs/qcom_defconfig | 1 +<br>
+ 1 file changed, 1 insertion(+)<br>
+<br>
+diff --git a/arch/arm/configs/qcom_defconfig b/arch/arm/configs/qcom_defconfig<br>
+index 5955aeb0646e..4e4c49c29aa5 100644<br>
+--- a/arch/arm/configs/qcom_defconfig<br>
++++ b/arch/arm/configs/qcom_defconfig<br>
+@@ -241,6 +241,7 @@ CONFIG_QCOM_Q6V5_PAS=y<br>
+ CONFIG_QCOM_Q6V5_PIL=y<br>
+ CONFIG_QCOM_WCNSS_PIL=y<br>
+ CONFIG_RPMSG_CHAR=y<br>
++CONFIG_RPMSG_QCOM_GLINK_SMEM=y<br>
+ CONFIG_RPMSG_QCOM_SMD=y<br>
+ CONFIG_QCOM_COMMAND_DB=y<br>
+ CONFIG_QCOM_GSBI=y<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

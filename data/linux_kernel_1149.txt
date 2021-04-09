@@ -1,0 +1,42 @@
+On Wed, Apr 07, 2021 at 09:32:14PM +0200, Sergei Krainov wrote:<br>
+><i> Remove unused variable from rtl871x_mlme.c</i><br>
+><i> </i><br>
+><i> Signed-off-by: Sergei Krainov <sergei.krainov.lkd@xxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  drivers/staging/rtl8712/rtl871x_mlme.c | 9 +--------</i><br>
+><i>  1 file changed, 1 insertion(+), 8 deletions(-)</i><br>
+><i> </i><br>
+><i> diff --git a/drivers/staging/rtl8712/rtl871x_mlme.c b/drivers/staging/rtl8712/rtl871x_mlme.c</i><br>
+><i> index 8a97307fbbd6..4f41e321ea63 100644</i><br>
+><i> --- a/drivers/staging/rtl8712/rtl871x_mlme.c</i><br>
+><i> +++ b/drivers/staging/rtl8712/rtl871x_mlme.c</i><br>
+><i> @@ -656,7 +656,7 @@ void r8712_joinbss_event_callback(struct _adapter *adapter, u8 *pbuf)</i><br>
+><i>  	struct sta_priv	*pstapriv = &adapter->stapriv;</i><br>
+><i>  	struct mlme_priv	*pmlmepriv = &adapter->mlmepriv;</i><br>
+><i>  	struct wlan_network	*cur_network = &pmlmepriv->cur_network;</i><br>
+><i> -	struct wlan_network	*pcur_wlan = NULL, *ptarget_wlan = NULL;</i><br>
+><i> +	struct wlan_network	*ptarget_wlan = NULL;</i><br>
+><i>  	unsigned int		the_same_macaddr = false;</i><br>
+><i>  	struct wlan_network *pnetwork;</i><br>
+><i>  </i><br>
+><i> @@ -721,13 +721,6 @@ void r8712_joinbss_event_callback(struct _adapter *adapter, u8 *pbuf)</i><br>
+><i>  					    scanned_queue,</i><br>
+><i>  					    cur_network->network.MacAddress);</i><br>
+><i>  				} else {</i><br>
+><i> -					pcur_wlan =</i><br>
+><i> -					     r8712_find_network(&pmlmepriv-></i><br>
+><i> -					     scanned_queue,</i><br>
+><i> -					     cur_network->network.MacAddress);</i><br>
+><i> -					if (pcur_wlan)</i><br>
+><i> -						pcur_wlan->fixed = false;</i><br>
+><i> -</i><br>
+<br>
+Are you sure that r8712_find_network() does not have some other<br>
+side-affect here?  Please doucment that in the changelog text.<br>
+<br>
+thanks,<br>
+<br>
+greg k-h<br>
+<br>
+<br>
+

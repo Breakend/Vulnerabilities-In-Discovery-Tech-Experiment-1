@@ -1,0 +1,18 @@
+On 4/8/21 3:44 AM, Peter Zijlstra wrote:<br>
+><i> </i><br>
+><i> Do not include private headers and do not frob in internals.</i><br>
+><i> </i><br>
+><i> On top of that, while the previous code restores the affinity, it</i><br>
+><i> doesn't ensure the task actually moves there if it was running,</i><br>
+><i> leading to the fun situation that it can be observed running outside</i><br>
+><i> of its allowed mask for potentially significant time.</i><br>
+><i> </i><br>
+><i> Use the proper API instead.</i><br>
+<br>
+Applied, thanks Peter.<br>
+<br>
+-- <br>
+Jens Axboe<br>
+<br>
+<br>
+

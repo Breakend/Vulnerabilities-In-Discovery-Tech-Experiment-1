@@ -1,0 +1,728 @@
+list_sort() internally casts the comparison function passed to it<br>
+to a different type with constant struct list_head pointers, and<br>
+uses this pointer to call the functions, which trips indirect call<br>
+Control-Flow Integrity (CFI) checking.<br>
+<br>
+Instead of removing the consts, this change defines the<br>
+list_cmp_func_t type and changes the comparison function types of<br>
+all list_sort() callers to use const pointers, thus avoiding type<br>
+mismatches.<br>
+<br>
+Suggested-by: Nick Desaulniers <ndesaulniers@xxxxxxxxxx><br>
+Signed-off-by: Sami Tolvanen <samitolvanen@xxxxxxxxxx><br>
+Reviewed-by: Nick Desaulniers <ndesaulniers@xxxxxxxxxx><br>
+Reviewed-by: Christoph Hellwig <hch@xxxxxx><br>
+Reviewed-by: Kees Cook <keescook@xxxxxxxxxxxx><br>
+Tested-by: Nick Desaulniers <ndesaulniers@xxxxxxxxxx><br>
+Tested-by: Nathan Chancellor <nathan@xxxxxxxxxx><br>
+---<br>
+ arch/arm64/kvm/vgic/vgic-its.c                  |  8 ++++----<br>
+ arch/arm64/kvm/vgic/vgic.c                      |  3 ++-<br>
+ block/blk-mq-sched.c                            |  3 ++-<br>
+ block/blk-mq.c                                  |  3 ++-<br>
+ drivers/acpi/nfit/core.c                        |  3 ++-<br>
+ drivers/acpi/numa/hmat.c                        |  3 ++-<br>
+ drivers/clk/keystone/sci-clk.c                  |  4 ++--<br>
+ drivers/gpu/drm/drm_modes.c                     |  3 ++-<br>
+ drivers/gpu/drm/i915/gt/intel_engine_user.c     |  3 ++-<br>
+ drivers/gpu/drm/i915/gvt/debugfs.c              |  2 +-<br>
+ drivers/gpu/drm/i915/selftests/i915_gem_gtt.c   |  3 ++-<br>
+ drivers/gpu/drm/radeon/radeon_cs.c              |  4 ++--<br>
+ .../hw/usnic/usnic_uiom_interval_tree.c         |  3 ++-<br>
+ drivers/interconnect/qcom/bcm-voter.c           |  2 +-<br>
+ drivers/md/raid5.c                              |  3 ++-<br>
+ drivers/misc/sram.c                             |  4 ++--<br>
+ drivers/nvme/host/core.c                        |  3 ++-<br>
+ .../pci/controller/cadence/pcie-cadence-host.c  |  3 ++-<br>
+ drivers/spi/spi-loopback-test.c                 |  3 ++-<br>
+ fs/btrfs/raid56.c                               |  3 ++-<br>
+ fs/btrfs/tree-log.c                             |  3 ++-<br>
+ fs/btrfs/volumes.c                              |  3 ++-<br>
+ fs/ext4/fsmap.c                                 |  4 ++--<br>
+ fs/gfs2/glock.c                                 |  3 ++-<br>
+ fs/gfs2/log.c                                   |  2 +-<br>
+ fs/gfs2/lops.c                                  |  3 ++-<br>
+ fs/iomap/buffered-io.c                          |  3 ++-<br>
+ fs/ubifs/gc.c                                   |  7 ++++---<br>
+ fs/ubifs/replay.c                               |  4 ++--<br>
+ fs/xfs/scrub/bitmap.c                           |  4 ++--<br>
+ fs/xfs/xfs_bmap_item.c                          |  4 ++--<br>
+ fs/xfs/xfs_buf.c                                |  6 +++---<br>
+ fs/xfs/xfs_extent_busy.c                        |  4 ++--<br>
+ fs/xfs/xfs_extent_busy.h                        |  3 ++-<br>
+ fs/xfs/xfs_extfree_item.c                       |  4 ++--<br>
+ fs/xfs/xfs_refcount_item.c                      |  4 ++--<br>
+ fs/xfs/xfs_rmap_item.c                          |  4 ++--<br>
+ include/linux/list_sort.h                       |  7 ++++---<br>
+ lib/list_sort.c                                 | 17 ++++++-----------<br>
+ lib/test_list_sort.c                            |  3 ++-<br>
+ net/tipc/name_table.c                           |  4 ++--<br>
+ 41 files changed, 90 insertions(+), 72 deletions(-)<br>
+<br>
+diff --git a/arch/arm64/kvm/vgic/vgic-its.c b/arch/arm64/kvm/vgic/vgic-its.c<br>
+index 40cbaca81333..b9518f94bd43 100644<br>
+--- a/arch/arm64/kvm/vgic/vgic-its.c<br>
++++ b/arch/arm64/kvm/vgic/vgic-its.c<br>
+@@ -2190,8 +2190,8 @@ static int vgic_its_restore_ite(struct vgic_its *its, u32 event_id,<br>
+ 	return offset;<br>
+ }<br>
+ <br>
+-static int vgic_its_ite_cmp(void *priv, struct list_head *a,<br>
+-			    struct list_head *b)<br>
++static int vgic_its_ite_cmp(void *priv, const struct list_head *a,<br>
++			    const struct list_head *b)<br>
+ {<br>
+ 	struct its_ite *itea = container_of(a, struct its_ite, ite_list);<br>
+ 	struct its_ite *iteb = container_of(b, struct its_ite, ite_list);<br>
+@@ -2329,8 +2329,8 @@ static int vgic_its_restore_dte(struct vgic_its *its, u32 id,<br>
+ 	return offset;<br>
+ }<br>
+ <br>
+-static int vgic_its_device_cmp(void *priv, struct list_head *a,<br>
+-			       struct list_head *b)<br>
++static int vgic_its_device_cmp(void *priv, const struct list_head *a,<br>
++			       const struct list_head *b)<br>
+ {<br>
+ 	struct its_device *deva = container_of(a, struct its_device, dev_list);<br>
+ 	struct its_device *devb = container_of(b, struct its_device, dev_list);<br>
+diff --git a/arch/arm64/kvm/vgic/vgic.c b/arch/arm64/kvm/vgic/vgic.c<br>
+index 1c597c9885fa..15b666200f0b 100644<br>
+--- a/arch/arm64/kvm/vgic/vgic.c<br>
++++ b/arch/arm64/kvm/vgic/vgic.c<br>
+@@ -255,7 +255,8 @@ static struct kvm_vcpu *vgic_target_oracle(struct vgic_irq *irq)<br>
+  * Return negative if "a" sorts before "b", 0 to preserve order, and positive<br>
+  * to sort "b" before "a".<br>
+  */<br>
+-static int vgic_irq_cmp(void *priv, struct list_head *a, struct list_head *b)<br>
++static int vgic_irq_cmp(void *priv, const struct list_head *a,<br>
++			const struct list_head *b)<br>
+ {<br>
+ 	struct vgic_irq *irqa = container_of(a, struct vgic_irq, ap_list);<br>
+ 	struct vgic_irq *irqb = container_of(b, struct vgic_irq, ap_list);<br>
+diff --git a/block/blk-mq-sched.c b/block/blk-mq-sched.c<br>
+index e1e997af89a0..3ebd6f10f728 100644<br>
+--- a/block/blk-mq-sched.c<br>
++++ b/block/blk-mq-sched.c<br>
+@@ -75,7 +75,8 @@ void blk_mq_sched_restart(struct blk_mq_hw_ctx *hctx)<br>
+ 	blk_mq_run_hw_queue(hctx, true);<br>
+ }<br>
+ <br>
+-static int sched_rq_cmp(void *priv, struct list_head *a, struct list_head *b)<br>
++static int sched_rq_cmp(void *priv, const struct list_head *a,<br>
++			const struct list_head *b)<br>
+ {<br>
+ 	struct request *rqa = container_of(a, struct request, queuelist);<br>
+ 	struct request *rqb = container_of(b, struct request, queuelist);<br>
+diff --git a/block/blk-mq.c b/block/blk-mq.c<br>
+index d4d7c1caa439..4e3a70ab5be1 100644<br>
+--- a/block/blk-mq.c<br>
++++ b/block/blk-mq.c<br>
+@@ -1895,7 +1895,8 @@ void blk_mq_insert_requests(struct blk_mq_hw_ctx *hctx, struct blk_mq_ctx *ctx,<br>
+ 	spin_unlock(&ctx->lock);<br>
+ }<br>
+ <br>
+-static int plug_rq_cmp(void *priv, struct list_head *a, struct list_head *b)<br>
++static int plug_rq_cmp(void *priv, const struct list_head *a,<br>
++		       const struct list_head *b)<br>
+ {<br>
+ 	struct request *rqa = container_of(a, struct request, queuelist);<br>
+ 	struct request *rqb = container_of(b, struct request, queuelist);<br>
+diff --git a/drivers/acpi/nfit/core.c b/drivers/acpi/nfit/core.c<br>
+index 8c5dde628405..d15e3ee93b5b 100644<br>
+--- a/drivers/acpi/nfit/core.c<br>
++++ b/drivers/acpi/nfit/core.c<br>
+@@ -1195,7 +1195,8 @@ static int __nfit_mem_init(struct acpi_nfit_desc *acpi_desc,<br>
+ 	return 0;<br>
+ }<br>
+ <br>
+-static int nfit_mem_cmp(void *priv, struct list_head *_a, struct list_head *_b)<br>
++static int nfit_mem_cmp(void *priv, const struct list_head *_a,<br>
++		const struct list_head *_b)<br>
+ {<br>
+ 	struct nfit_mem *a = container_of(_a, typeof(*a), list);<br>
+ 	struct nfit_mem *b = container_of(_b, typeof(*b), list);<br>
+diff --git a/drivers/acpi/numa/hmat.c b/drivers/acpi/numa/hmat.c<br>
+index cb73a5d6ea76..137a5dd880c2 100644<br>
+--- a/drivers/acpi/numa/hmat.c<br>
++++ b/drivers/acpi/numa/hmat.c<br>
+@@ -558,7 +558,8 @@ static bool hmat_update_best(u8 type, u32 value, u32 *best)<br>
+ 	return updated;<br>
+ }<br>
+ <br>
+-static int initiator_cmp(void *priv, struct list_head *a, struct list_head *b)<br>
++static int initiator_cmp(void *priv, const struct list_head *a,<br>
++			 const struct list_head *b)<br>
+ {<br>
+ 	struct memory_initiator *ia;<br>
+ 	struct memory_initiator *ib;<br>
+diff --git a/drivers/clk/keystone/sci-clk.c b/drivers/clk/keystone/sci-clk.c<br>
+index aaf31abe1c8f..7e1b136e71ae 100644<br>
+--- a/drivers/clk/keystone/sci-clk.c<br>
++++ b/drivers/clk/keystone/sci-clk.c<br>
+@@ -503,8 +503,8 @@ static int ti_sci_scan_clocks_from_fw(struct sci_clk_provider *provider)<br>
+ <br>
+ #else<br>
+ <br>
+-static int _cmp_sci_clk_list(void *priv, struct list_head *a,<br>
+-			     struct list_head *b)<br>
++static int _cmp_sci_clk_list(void *priv, const struct list_head *a,<br>
++			     const struct list_head *b)<br>
+ {<br>
+ 	struct sci_clk *ca = container_of(a, struct sci_clk, node);<br>
+ 	struct sci_clk *cb = container_of(b, struct sci_clk, node);<br>
+diff --git a/drivers/gpu/drm/drm_modes.c b/drivers/gpu/drm/drm_modes.c<br>
+index 1ac67d4505e0..6662d0457ad6 100644<br>
+--- a/drivers/gpu/drm/drm_modes.c<br>
++++ b/drivers/gpu/drm/drm_modes.c<br>
+@@ -1290,7 +1290,8 @@ EXPORT_SYMBOL(drm_mode_prune_invalid);<br>
+  * Negative if @lh_a is better than @lh_b, zero if they're equivalent, or<br>
+  * positive if @lh_b is better than @lh_a.<br>
+  */<br>
+-static int drm_mode_compare(void *priv, struct list_head *lh_a, struct list_head *lh_b)<br>
++static int drm_mode_compare(void *priv, const struct list_head *lh_a,<br>
++			    const struct list_head *lh_b)<br>
+ {<br>
+ 	struct drm_display_mode *a = list_entry(lh_a, struct drm_display_mode, head);<br>
+ 	struct drm_display_mode *b = list_entry(lh_b, struct drm_display_mode, head);<br>
+diff --git a/drivers/gpu/drm/i915/gt/intel_engine_user.c b/drivers/gpu/drm/i915/gt/intel_engine_user.c<br>
+index 34e6096f196e..da21d2a10cc9 100644<br>
+--- a/drivers/gpu/drm/i915/gt/intel_engine_user.c<br>
++++ b/drivers/gpu/drm/i915/gt/intel_engine_user.c<br>
+@@ -49,7 +49,8 @@ static const u8 uabi_classes[] = {<br>
+ 	[VIDEO_ENHANCEMENT_CLASS] = I915_ENGINE_CLASS_VIDEO_ENHANCE,<br>
+ };<br>
+ <br>
+-static int engine_cmp(void *priv, struct list_head *A, struct list_head *B)<br>
++static int engine_cmp(void *priv, const struct list_head *A,<br>
++		      const struct list_head *B)<br>
+ {<br>
+ 	const struct intel_engine_cs *a =<br>
+ 		container_of((struct rb_node *)A, typeof(*a), uabi_node);<br>
+diff --git a/drivers/gpu/drm/i915/gvt/debugfs.c b/drivers/gpu/drm/i915/gvt/debugfs.c<br>
+index 62e6a14ad58e..9f1c209d9251 100644<br>
+--- a/drivers/gpu/drm/i915/gvt/debugfs.c<br>
++++ b/drivers/gpu/drm/i915/gvt/debugfs.c<br>
+@@ -41,7 +41,7 @@ struct diff_mmio {<br>
+ <br>
+ /* Compare two diff_mmio items. */<br>
+ static int mmio_offset_compare(void *priv,<br>
+-	struct list_head *a, struct list_head *b)<br>
++	const struct list_head *a, const struct list_head *b)<br>
+ {<br>
+ 	struct diff_mmio *ma;<br>
+ 	struct diff_mmio *mb;<br>
+diff --git a/drivers/gpu/drm/i915/selftests/i915_gem_gtt.c b/drivers/gpu/drm/i915/selftests/i915_gem_gtt.c<br>
+index c1adea8765a9..52b9c39e0155 100644<br>
+--- a/drivers/gpu/drm/i915/selftests/i915_gem_gtt.c<br>
++++ b/drivers/gpu/drm/i915/selftests/i915_gem_gtt.c<br>
+@@ -1076,7 +1076,8 @@ static int igt_ppgtt_shrink_boom(void *arg)<br>
+ 	return exercise_ppgtt(arg, shrink_boom);<br>
+ }<br>
+ <br>
+-static int sort_holes(void *priv, struct list_head *A, struct list_head *B)<br>
++static int sort_holes(void *priv, const struct list_head *A,<br>
++		      const struct list_head *B)<br>
+ {<br>
+ 	struct drm_mm_node *a = list_entry(A, typeof(*a), hole_stack);<br>
+ 	struct drm_mm_node *b = list_entry(B, typeof(*b), hole_stack);<br>
+diff --git a/drivers/gpu/drm/radeon/radeon_cs.c b/drivers/gpu/drm/radeon/radeon_cs.c<br>
+index 35e937d39b51..1a5c3db1d53b 100644<br>
+--- a/drivers/gpu/drm/radeon/radeon_cs.c<br>
++++ b/drivers/gpu/drm/radeon/radeon_cs.c<br>
+@@ -393,8 +393,8 @@ int radeon_cs_parser_init(struct radeon_cs_parser *p, void *data)<br>
+ 	return 0;<br>
+ }<br>
+ <br>
+-static int cmp_size_smaller_first(void *priv, struct list_head *a,<br>
+-				  struct list_head *b)<br>
++static int cmp_size_smaller_first(void *priv, const struct list_head *a,<br>
++				  const struct list_head *b)<br>
+ {<br>
+ 	struct radeon_bo_list *la = list_entry(a, struct radeon_bo_list, tv.head);<br>
+ 	struct radeon_bo_list *lb = list_entry(b, struct radeon_bo_list, tv.head);<br>
+diff --git a/drivers/infiniband/hw/usnic/usnic_uiom_interval_tree.c b/drivers/infiniband/hw/usnic/usnic_uiom_interval_tree.c<br>
+index d399523206c7..29d71267af78 100644<br>
+--- a/drivers/infiniband/hw/usnic/usnic_uiom_interval_tree.c<br>
++++ b/drivers/infiniband/hw/usnic/usnic_uiom_interval_tree.c<br>
+@@ -83,7 +83,8 @@ usnic_uiom_interval_node_alloc(long int start, long int last, int ref_cnt,<br>
+ 	return interval;<br>
+ }<br>
+ <br>
+-static int interval_cmp(void *priv, struct list_head *a, struct list_head *b)<br>
++static int interval_cmp(void *priv, const struct list_head *a,<br>
++			const struct list_head *b)<br>
+ {<br>
+ 	struct usnic_uiom_interval_node *node_a, *node_b;<br>
+ <br>
+diff --git a/drivers/interconnect/qcom/bcm-voter.c b/drivers/interconnect/qcom/bcm-voter.c<br>
+index 1cc565bce2f4..d1591a28b743 100644<br>
+--- a/drivers/interconnect/qcom/bcm-voter.c<br>
++++ b/drivers/interconnect/qcom/bcm-voter.c<br>
+@@ -39,7 +39,7 @@ struct bcm_voter {<br>
+ 	u32 tcs_wait;<br>
+ };<br>
+ <br>
+-static int cmp_vcd(void *priv, struct list_head *a, struct list_head *b)<br>
++static int cmp_vcd(void *priv, const struct list_head *a, const struct list_head *b)<br>
+ {<br>
+ 	const struct qcom_icc_bcm *bcm_a = list_entry(a, struct qcom_icc_bcm, list);<br>
+ 	const struct qcom_icc_bcm *bcm_b = list_entry(b, struct qcom_icc_bcm, list);<br>
+diff --git a/drivers/md/raid5.c b/drivers/md/raid5.c<br>
+index 5d57a5bd171f..841e1c1aa5e6 100644<br>
+--- a/drivers/md/raid5.c<br>
++++ b/drivers/md/raid5.c<br>
+@@ -953,7 +953,8 @@ static void dispatch_bio_list(struct bio_list *tmp)<br>
+ 		submit_bio_noacct(bio);<br>
+ }<br>
+ <br>
+-static int cmp_stripe(void *priv, struct list_head *a, struct list_head *b)<br>
++static int cmp_stripe(void *priv, const struct list_head *a,<br>
++		      const struct list_head *b)<br>
+ {<br>
+ 	const struct r5pending_data *da = list_entry(a,<br>
+ 				struct r5pending_data, sibling);<br>
+diff --git a/drivers/misc/sram.c b/drivers/misc/sram.c<br>
+index 6c1a23cb3e8c..202bf951e909 100644<br>
+--- a/drivers/misc/sram.c<br>
++++ b/drivers/misc/sram.c<br>
+@@ -144,8 +144,8 @@ static void sram_free_partitions(struct sram_dev *sram)<br>
+ 	}<br>
+ }<br>
+ <br>
+-static int sram_reserve_cmp(void *priv, struct list_head *a,<br>
+-					struct list_head *b)<br>
++static int sram_reserve_cmp(void *priv, const struct list_head *a,<br>
++					const struct list_head *b)<br>
+ {<br>
+ 	struct sram_reserve *ra = list_entry(a, struct sram_reserve, list);<br>
+ 	struct sram_reserve *rb = list_entry(b, struct sram_reserve, list);<br>
+diff --git a/drivers/nvme/host/core.c b/drivers/nvme/host/core.c<br>
+index 0896e21642be..5eaaa51a5e30 100644<br>
+--- a/drivers/nvme/host/core.c<br>
++++ b/drivers/nvme/host/core.c<br>
+@@ -3855,7 +3855,8 @@ static int nvme_init_ns_head(struct nvme_ns *ns, unsigned nsid,<br>
+ 	return ret;<br>
+ }<br>
+ <br>
+-static int ns_cmp(void *priv, struct list_head *a, struct list_head *b)<br>
++static int ns_cmp(void *priv, const struct list_head *a,<br>
++		const struct list_head *b)<br>
+ {<br>
+ 	struct nvme_ns *nsa = container_of(a, struct nvme_ns, list);<br>
+ 	struct nvme_ns *nsb = container_of(b, struct nvme_ns, list);<br>
+diff --git a/drivers/pci/controller/cadence/pcie-cadence-host.c b/drivers/pci/controller/cadence/pcie-cadence-host.c<br>
+index 73dcf8cf98fb..ae1c55503513 100644<br>
+--- a/drivers/pci/controller/cadence/pcie-cadence-host.c<br>
++++ b/drivers/pci/controller/cadence/pcie-cadence-host.c<br>
+@@ -345,7 +345,8 @@ static int cdns_pcie_host_bar_config(struct cdns_pcie_rc *rc,<br>
+ 	return 0;<br>
+ }<br>
+ <br>
+-static int cdns_pcie_host_dma_ranges_cmp(void *priv, struct list_head *a, struct list_head *b)<br>
++static int cdns_pcie_host_dma_ranges_cmp(void *priv, const struct list_head *a,<br>
++					 const struct list_head *b)<br>
+ {<br>
+ 	struct resource_entry *entry1, *entry2;<br>
+ <br>
+diff --git a/drivers/spi/spi-loopback-test.c b/drivers/spi/spi-loopback-test.c<br>
+index df981e55c24c..f1cf2232f0b5 100644<br>
+--- a/drivers/spi/spi-loopback-test.c<br>
++++ b/drivers/spi/spi-loopback-test.c<br>
+@@ -454,7 +454,8 @@ struct rx_ranges {<br>
+ 	u8 *end;<br>
+ };<br>
+ <br>
+-static int rx_ranges_cmp(void *priv, struct list_head *a, struct list_head *b)<br>
++static int rx_ranges_cmp(void *priv, const struct list_head *a,<br>
++			 const struct list_head *b)<br>
+ {<br>
+ 	struct rx_ranges *rx_a = list_entry(a, struct rx_ranges, list);<br>
+ 	struct rx_ranges *rx_b = list_entry(b, struct rx_ranges, list);<br>
+diff --git a/fs/btrfs/raid56.c b/fs/btrfs/raid56.c<br>
+index 8c31357f08ed..f4139de63b2e 100644<br>
+--- a/fs/btrfs/raid56.c<br>
++++ b/fs/btrfs/raid56.c<br>
+@@ -1634,7 +1634,8 @@ struct btrfs_plug_cb {<br>
+ /*<br>
+  * rbios on the plug list are sorted for easier merging.<br>
+  */<br>
+-static int plug_cmp(void *priv, struct list_head *a, struct list_head *b)<br>
++static int plug_cmp(void *priv, const struct list_head *a,<br>
++		    const struct list_head *b)<br>
+ {<br>
+ 	struct btrfs_raid_bio *ra = container_of(a, struct btrfs_raid_bio,<br>
+ 						 plug_list);<br>
+diff --git a/fs/btrfs/tree-log.c b/fs/btrfs/tree-log.c<br>
+index 92a368627791..00a88bd8105e 100644<br>
+--- a/fs/btrfs/tree-log.c<br>
++++ b/fs/btrfs/tree-log.c<br>
+@@ -4136,7 +4136,8 @@ static noinline int copy_items(struct btrfs_trans_handle *trans,<br>
+ 	return ret;<br>
+ }<br>
+ <br>
+-static int extent_cmp(void *priv, struct list_head *a, struct list_head *b)<br>
++static int extent_cmp(void *priv, const struct list_head *a,<br>
++		      const struct list_head *b)<br>
+ {<br>
+ 	struct extent_map *em1, *em2;<br>
+ <br>
+diff --git a/fs/btrfs/volumes.c b/fs/btrfs/volumes.c<br>
+index 1c6810bbaf8b..912dd8b9f156 100644<br>
+--- a/fs/btrfs/volumes.c<br>
++++ b/fs/btrfs/volumes.c<br>
+@@ -1224,7 +1224,8 @@ static int open_fs_devices(struct btrfs_fs_devices *fs_devices,<br>
+ 	return 0;<br>
+ }<br>
+ <br>
+-static int devid_cmp(void *priv, struct list_head *a, struct list_head *b)<br>
++static int devid_cmp(void *priv, const struct list_head *a,<br>
++		     const struct list_head *b)<br>
+ {<br>
+ 	struct btrfs_device *dev1, *dev2;<br>
+ <br>
+diff --git a/fs/ext4/fsmap.c b/fs/ext4/fsmap.c<br>
+index 4c2a9fe30067..4493ef0c715e 100644<br>
+--- a/fs/ext4/fsmap.c<br>
++++ b/fs/ext4/fsmap.c<br>
+@@ -354,8 +354,8 @@ static unsigned int ext4_getfsmap_find_sb(struct super_block *sb,<br>
+ <br>
+ /* Compare two fsmap items. */<br>
+ static int ext4_getfsmap_compare(void *priv,<br>
+-				 struct list_head *a,<br>
+-				 struct list_head *b)<br>
++				 const struct list_head *a,<br>
++				 const struct list_head *b)<br>
+ {<br>
+ 	struct ext4_fsmap *fa;<br>
+ 	struct ext4_fsmap *fb;<br>
+diff --git a/fs/gfs2/glock.c b/fs/gfs2/glock.c<br>
+index 9567520d79f7..c06a6cdf05de 100644<br>
+--- a/fs/gfs2/glock.c<br>
++++ b/fs/gfs2/glock.c<br>
+@@ -1732,7 +1732,8 @@ void gfs2_glock_complete(struct gfs2_glock *gl, int ret)<br>
+ 	spin_unlock(&gl->gl_lockref.lock);<br>
+ }<br>
+ <br>
+-static int glock_cmp(void *priv, struct list_head *a, struct list_head *b)<br>
++static int glock_cmp(void *priv, const struct list_head *a,<br>
++		     const struct list_head *b)<br>
+ {<br>
+ 	struct gfs2_glock *gla, *glb;<br>
+ <br>
+diff --git a/fs/gfs2/log.c b/fs/gfs2/log.c<br>
+index 6410281546f9..88649b43fcff 100644<br>
+--- a/fs/gfs2/log.c<br>
++++ b/fs/gfs2/log.c<br>
+@@ -695,7 +695,7 @@ void log_flush_wait(struct gfs2_sbd *sdp)<br>
+ 	}<br>
+ }<br>
+ <br>
+-static int ip_cmp(void *priv, struct list_head *a, struct list_head *b)<br>
++static int ip_cmp(void *priv, const struct list_head *a, const struct list_head *b)<br>
+ {<br>
+ 	struct gfs2_inode *ipa, *ipb;<br>
+ <br>
+diff --git a/fs/gfs2/lops.c b/fs/gfs2/lops.c<br>
+index a82f4747aa8d..b4809967efc6 100644<br>
+--- a/fs/gfs2/lops.c<br>
++++ b/fs/gfs2/lops.c<br>
+@@ -634,7 +634,8 @@ static void gfs2_check_magic(struct buffer_head *bh)<br>
+ 	kunmap_atomic(kaddr);<br>
+ }<br>
+ <br>
+-static int blocknr_cmp(void *priv, struct list_head *a, struct list_head *b)<br>
++static int blocknr_cmp(void *priv, const struct list_head *a,<br>
++		       const struct list_head *b)<br>
+ {<br>
+ 	struct gfs2_bufdata *bda, *bdb;<br>
+ <br>
+diff --git a/fs/iomap/buffered-io.c b/fs/iomap/buffered-io.c<br>
+index 414769a6ad11..0129e6bab985 100644<br>
+--- a/fs/iomap/buffered-io.c<br>
++++ b/fs/iomap/buffered-io.c<br>
+@@ -1155,7 +1155,8 @@ iomap_ioend_try_merge(struct iomap_ioend *ioend, struct list_head *more_ioends,<br>
+ EXPORT_SYMBOL_GPL(iomap_ioend_try_merge);<br>
+ <br>
+ static int<br>
+-iomap_ioend_compare(void *priv, struct list_head *a, struct list_head *b)<br>
++iomap_ioend_compare(void *priv, const struct list_head *a,<br>
++		const struct list_head *b)<br>
+ {<br>
+ 	struct iomap_ioend *ia = container_of(a, struct iomap_ioend, io_list);<br>
+ 	struct iomap_ioend *ib = container_of(b, struct iomap_ioend, io_list);<br>
+diff --git a/fs/ubifs/gc.c b/fs/ubifs/gc.c<br>
+index a4aaeea63893..dc3e26e9ed7b 100644<br>
+--- a/fs/ubifs/gc.c<br>
++++ b/fs/ubifs/gc.c<br>
+@@ -102,7 +102,8 @@ static int switch_gc_head(struct ubifs_info *c)<br>
+  * This function compares data nodes @a and @b. Returns %1 if @a has greater<br>
+  * inode or block number, and %-1 otherwise.<br>
+  */<br>
+-static int data_nodes_cmp(void *priv, struct list_head *a, struct list_head *b)<br>
++static int data_nodes_cmp(void *priv, const struct list_head *a,<br>
++			  const struct list_head *b)<br>
+ {<br>
+ 	ino_t inuma, inumb;<br>
+ 	struct ubifs_info *c = priv;<br>
+@@ -145,8 +146,8 @@ static int data_nodes_cmp(void *priv, struct list_head *a, struct list_head *b)<br>
+  * first and sorted by length in descending order. Directory entry nodes go<br>
+  * after inode nodes and are sorted in ascending hash valuer order.<br>
+  */<br>
+-static int nondata_nodes_cmp(void *priv, struct list_head *a,<br>
+-			     struct list_head *b)<br>
++static int nondata_nodes_cmp(void *priv, const struct list_head *a,<br>
++			     const struct list_head *b)<br>
+ {<br>
+ 	ino_t inuma, inumb;<br>
+ 	struct ubifs_info *c = priv;<br>
+diff --git a/fs/ubifs/replay.c b/fs/ubifs/replay.c<br>
+index 0f8a6a16421b..4d17e5382b74 100644<br>
+--- a/fs/ubifs/replay.c<br>
++++ b/fs/ubifs/replay.c<br>
+@@ -298,8 +298,8 @@ static int apply_replay_entry(struct ubifs_info *c, struct replay_entry *r)<br>
+  * entries @a and @b by comparing their sequence numer.  Returns %1 if @a has<br>
+  * greater sequence number and %-1 otherwise.<br>
+  */<br>
+-static int replay_entries_cmp(void *priv, struct list_head *a,<br>
+-			      struct list_head *b)<br>
++static int replay_entries_cmp(void *priv, const struct list_head *a,<br>
++			      const struct list_head *b)<br>
+ {<br>
+ 	struct ubifs_info *c = priv;<br>
+ 	struct replay_entry *ra, *rb;<br>
+diff --git a/fs/xfs/scrub/bitmap.c b/fs/xfs/scrub/bitmap.c<br>
+index f88694f22d05..813b5f219113 100644<br>
+--- a/fs/xfs/scrub/bitmap.c<br>
++++ b/fs/xfs/scrub/bitmap.c<br>
+@@ -63,8 +63,8 @@ xbitmap_init(<br>
+ static int<br>
+ xbitmap_range_cmp(<br>
+ 	void			*priv,<br>
+-	struct list_head	*a,<br>
+-	struct list_head	*b)<br>
++	const struct list_head	*a,<br>
++	const struct list_head	*b)<br>
+ {<br>
+ 	struct xbitmap_range	*ap;<br>
+ 	struct xbitmap_range	*bp;<br>
+diff --git a/fs/xfs/xfs_bmap_item.c b/fs/xfs/xfs_bmap_item.c<br>
+index 2344757ede63..e3a691937e92 100644<br>
+--- a/fs/xfs/xfs_bmap_item.c<br>
++++ b/fs/xfs/xfs_bmap_item.c<br>
+@@ -265,8 +265,8 @@ xfs_trans_log_finish_bmap_update(<br>
+ static int<br>
+ xfs_bmap_update_diff_items(<br>
+ 	void				*priv,<br>
+-	struct list_head		*a,<br>
+-	struct list_head		*b)<br>
++	const struct list_head		*a,<br>
++	const struct list_head		*b)<br>
+ {<br>
+ 	struct xfs_bmap_intent		*ba;<br>
+ 	struct xfs_bmap_intent		*bb;<br>
+diff --git a/fs/xfs/xfs_buf.c b/fs/xfs/xfs_buf.c<br>
+index 37a1d12762d8..592800c8852f 100644<br>
+--- a/fs/xfs/xfs_buf.c<br>
++++ b/fs/xfs/xfs_buf.c<br>
+@@ -2124,9 +2124,9 @@ xfs_buf_delwri_queue(<br>
+  */<br>
+ static int<br>
+ xfs_buf_cmp(<br>
+-	void		*priv,<br>
+-	struct list_head *a,<br>
+-	struct list_head *b)<br>
++	void			*priv,<br>
++	const struct list_head	*a,<br>
++	const struct list_head	*b)<br>
+ {<br>
+ 	struct xfs_buf	*ap = container_of(a, struct xfs_buf, b_list);<br>
+ 	struct xfs_buf	*bp = container_of(b, struct xfs_buf, b_list);<br>
+diff --git a/fs/xfs/xfs_extent_busy.c b/fs/xfs/xfs_extent_busy.c<br>
+index ef17c1f6db32..a4075685d9eb 100644<br>
+--- a/fs/xfs/xfs_extent_busy.c<br>
++++ b/fs/xfs/xfs_extent_busy.c<br>
+@@ -629,8 +629,8 @@ xfs_extent_busy_wait_all(<br>
+ int<br>
+ xfs_extent_busy_ag_cmp(<br>
+ 	void			*priv,<br>
+-	struct list_head	*l1,<br>
+-	struct list_head	*l2)<br>
++	const struct list_head	*l1,<br>
++	const struct list_head	*l2)<br>
+ {<br>
+ 	struct xfs_extent_busy	*b1 =<br>
+ 		container_of(l1, struct xfs_extent_busy, list);<br>
+diff --git a/fs/xfs/xfs_extent_busy.h b/fs/xfs/xfs_extent_busy.h<br>
+index 990ab3891971..8aea07100092 100644<br>
+--- a/fs/xfs/xfs_extent_busy.h<br>
++++ b/fs/xfs/xfs_extent_busy.h<br>
+@@ -58,7 +58,8 @@ void<br>
+ xfs_extent_busy_wait_all(struct xfs_mount *mp);<br>
+ <br>
+ int<br>
+-xfs_extent_busy_ag_cmp(void *priv, struct list_head *a, struct list_head *b);<br>
++xfs_extent_busy_ag_cmp(void *priv, const struct list_head *a,<br>
++	const struct list_head *b);<br>
+ <br>
+ static inline void xfs_extent_busy_sort(struct list_head *list)<br>
+ {<br>
+diff --git a/fs/xfs/xfs_extfree_item.c b/fs/xfs/xfs_extfree_item.c<br>
+index 93223ebb3372..2424230ca2c3 100644<br>
+--- a/fs/xfs/xfs_extfree_item.c<br>
++++ b/fs/xfs/xfs_extfree_item.c<br>
+@@ -397,8 +397,8 @@ xfs_trans_free_extent(<br>
+ static int<br>
+ xfs_extent_free_diff_items(<br>
+ 	void				*priv,<br>
+-	struct list_head		*a,<br>
+-	struct list_head		*b)<br>
++	const struct list_head		*a,<br>
++	const struct list_head		*b)<br>
+ {<br>
+ 	struct xfs_mount		*mp = priv;<br>
+ 	struct xfs_extent_free_item	*ra;<br>
+diff --git a/fs/xfs/xfs_refcount_item.c b/fs/xfs/xfs_refcount_item.c<br>
+index 07ebccbbf4df..746f4eda724c 100644<br>
+--- a/fs/xfs/xfs_refcount_item.c<br>
++++ b/fs/xfs/xfs_refcount_item.c<br>
+@@ -269,8 +269,8 @@ xfs_trans_log_finish_refcount_update(<br>
+ static int<br>
+ xfs_refcount_update_diff_items(<br>
+ 	void				*priv,<br>
+-	struct list_head		*a,<br>
+-	struct list_head		*b)<br>
++	const struct list_head		*a,<br>
++	const struct list_head		*b)<br>
+ {<br>
+ 	struct xfs_mount		*mp = priv;<br>
+ 	struct xfs_refcount_intent	*ra;<br>
+diff --git a/fs/xfs/xfs_rmap_item.c b/fs/xfs/xfs_rmap_item.c<br>
+index 49cebd68b672..dc4f0c9f0897 100644<br>
+--- a/fs/xfs/xfs_rmap_item.c<br>
++++ b/fs/xfs/xfs_rmap_item.c<br>
+@@ -337,8 +337,8 @@ xfs_trans_log_finish_rmap_update(<br>
+ static int<br>
+ xfs_rmap_update_diff_items(<br>
+ 	void				*priv,<br>
+-	struct list_head		*a,<br>
+-	struct list_head		*b)<br>
++	const struct list_head		*a,<br>
++	const struct list_head		*b)<br>
+ {<br>
+ 	struct xfs_mount		*mp = priv;<br>
+ 	struct xfs_rmap_intent		*ra;<br>
+diff --git a/include/linux/list_sort.h b/include/linux/list_sort.h<br>
+index 20f178c24e9d..453105f74e05 100644<br>
+--- a/include/linux/list_sort.h<br>
++++ b/include/linux/list_sort.h<br>
+@@ -6,8 +6,9 @@<br>
+ <br>
+ struct list_head;<br>
+ <br>
++typedef int __attribute__((nonnull(2,3))) (*list_cmp_func_t)(void *,<br>
++		const struct list_head *, const struct list_head *);<br>
++<br>
+ __attribute__((nonnull(2,3)))<br>
+-void list_sort(void *priv, struct list_head *head,<br>
+-	       int (*cmp)(void *priv, struct list_head *a,<br>
+-			  struct list_head *b));<br>
++void list_sort(void *priv, struct list_head *head, list_cmp_func_t cmp);<br>
+ #endif<br>
+diff --git a/lib/list_sort.c b/lib/list_sort.c<br>
+index 52f0c258c895..a926d96ffd44 100644<br>
+--- a/lib/list_sort.c<br>
++++ b/lib/list_sort.c<br>
+@@ -7,16 +7,13 @@<br>
+ #include <linux/list_sort.h><br>
+ #include <linux/list.h><br>
+ <br>
+-typedef int __attribute__((nonnull(2,3))) (*cmp_func)(void *,<br>
+-		struct list_head const *, struct list_head const *);<br>
+-<br>
+ /*<br>
+  * Returns a list organized in an intermediate format suited<br>
+  * to chaining of merge() calls: null-terminated, no reserved or<br>
+  * sentinel head node, "prev" links not maintained.<br>
+  */<br>
+ __attribute__((nonnull(2,3,4)))<br>
+-static struct list_head *merge(void *priv, cmp_func cmp,<br>
++static struct list_head *merge(void *priv, list_cmp_func_t cmp,<br>
+ 				struct list_head *a, struct list_head *b)<br>
+ {<br>
+ 	struct list_head *head, **tail = &head;<br>
+@@ -52,7 +49,7 @@ static struct list_head *merge(void *priv, cmp_func cmp,<br>
+  * throughout.<br>
+  */<br>
+ __attribute__((nonnull(2,3,4,5)))<br>
+-static void merge_final(void *priv, cmp_func cmp, struct list_head *head,<br>
++static void merge_final(void *priv, list_cmp_func_t cmp, struct list_head *head,<br>
+ 			struct list_head *a, struct list_head *b)<br>
+ {<br>
+ 	struct list_head *tail = head;<br>
+@@ -185,9 +182,7 @@ static void merge_final(void *priv, cmp_func cmp, struct list_head *head,<br>
+  * 2^(k+1) - 1 (second merge of case 5 when x == 2^(k-1) - 1).<br>
+  */<br>
+ __attribute__((nonnull(2,3)))<br>
+-void list_sort(void *priv, struct list_head *head,<br>
+-		int (*cmp)(void *priv, struct list_head *a,<br>
+-			struct list_head *b))<br>
++void list_sort(void *priv, struct list_head *head, list_cmp_func_t cmp)<br>
+ {<br>
+ 	struct list_head *list = head->next, *pending = NULL;<br>
+ 	size_t count = 0;	/* Count of pending */<br>
+@@ -227,7 +222,7 @@ void list_sort(void *priv, struct list_head *head,<br>
+ 		if (likely(bits)) {<br>
+ 			struct list_head *a = *tail, *b = a->prev;<br>
+ <br>
+-			a = merge(priv, (cmp_func)cmp, b, a);<br>
++			a = merge(priv, cmp, b, a);<br>
+ 			/* Install the merged result in place of the inputs */<br>
+ 			a->prev = b->prev;<br>
+ 			*tail = a;<br>
+@@ -249,10 +244,10 @@ void list_sort(void *priv, struct list_head *head,<br>
+ <br>
+ 		if (!next)<br>
+ 			break;<br>
+-		list = merge(priv, (cmp_func)cmp, pending, list);<br>
++		list = merge(priv, cmp, pending, list);<br>
+ 		pending = next;<br>
+ 	}<br>
+ 	/* The final merge, rebuilding prev links */<br>
+-	merge_final(priv, (cmp_func)cmp, head, pending, list);<br>
++	merge_final(priv, cmp, head, pending, list);<br>
+ }<br>
+ EXPORT_SYMBOL(list_sort);<br>
+diff --git a/lib/test_list_sort.c b/lib/test_list_sort.c<br>
+index 1f017d3b610e..00daaf23316f 100644<br>
+--- a/lib/test_list_sort.c<br>
++++ b/lib/test_list_sort.c<br>
+@@ -56,7 +56,8 @@ static int __init check(struct debug_el *ela, struct debug_el *elb)<br>
+ 	return 0;<br>
+ }<br>
+ <br>
+-static int __init cmp(void *priv, struct list_head *a, struct list_head *b)<br>
++static int __init cmp(void *priv, const struct list_head *a,<br>
++		      const struct list_head *b)<br>
+ {<br>
+ 	struct debug_el *ela, *elb;<br>
+ <br>
+diff --git a/net/tipc/name_table.c b/net/tipc/name_table.c<br>
+index ee5ac40ea2b6..f8141443f2e2 100644<br>
+--- a/net/tipc/name_table.c<br>
++++ b/net/tipc/name_table.c<br>
+@@ -397,8 +397,8 @@ static struct publication *tipc_service_remove_publ(struct service_range *sr,<br>
+  * Code reused: time_after32() for the same purpose<br>
+  */<br>
+ #define publication_after(pa, pb) time_after32((pa)->id, (pb)->id)<br>
+-static int tipc_publ_sort(void *priv, struct list_head *a,<br>
+-			  struct list_head *b)<br>
++static int tipc_publ_sort(void *priv, const struct list_head *a,<br>
++			  const struct list_head *b)<br>
+ {<br>
+ 	struct publication *pa, *pb;<br>
+ <br>
+-- <br>
+2.31.1.295.g9ea45b61b8-goog<br>
+<br>
+<br>
+

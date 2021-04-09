@@ -1,0 +1,88 @@
+Signed-off-by: Ahmad Fatoum <a.fatoum@xxxxxxxxxxxxxx><br>
+---<br>
+ drivers/fpga/fpga-region.c | 50 +++++++++++++++++++++++++++++++++++++-<br>
+ 1 file changed, 49 insertions(+), 1 deletion(-)<br>
+<br>
+diff --git a/drivers/fpga/fpga-region.c b/drivers/fpga/fpga-region.c<br>
+index bde5a9d460c5..ca6dc830fadf 100644<br>
+--- a/drivers/fpga/fpga-region.c<br>
++++ b/drivers/fpga/fpga-region.c<br>
+@@ -5,6 +5,7 @@<br>
+  *  Copyright (C) 2013-2016 Altera Corporation<br>
+  *  Copyright (C) 2017 Intel Corporation<br>
+  */<br>
++#include <linux/device.h><br>
+ #include <linux/fpga/fpga-bridge.h><br>
+ #include <linux/fpga/fpga-mgr.h><br>
+ #include <linux/fpga/fpga-region.h><br>
+@@ -170,11 +171,58 @@ static ssize_t compat_id_show(struct device *dev,<br>
+ 		       (unsigned long long)region->compat_id->id_h,<br>
+ 		       (unsigned long long)region->compat_id->id_l);<br>
+ }<br>
+-<br>
+ static DEVICE_ATTR_RO(compat_id);<br>
+ <br>
++static ssize_t firmware_name_show(struct device *dev,<br>
++				  struct device_attribute *attr,<br>
++				  char *buf)<br>
++{<br>
++	struct fpga_region *region = to_fpga_region(dev);<br>
++<br>
++	if (!region->info || !region->info->firmware_name)<br>
++		return 0;<br>
++<br>
++	return sprintf(buf, "%s\n", region->info->firmware_name);<br>
++}<br>
++<br>
++static ssize_t firmware_name_store(struct device *dev,<br>
++				   struct device_attribute *attr,<br>
++				   const char *firmware_name, size_t count)<br>
++{<br>
++	struct fpga_region *region = to_fpga_region(dev);<br>
++	struct fpga_image_info *info = region->info;<br>
++	int error;<br>
++<br>
++	if (!info) {<br>
++		info = fpga_image_info_alloc(dev);<br>
++		if (!info)<br>
++			return -ENOMEM;<br>
++	} else if (info->firmware_name) {<br>
++		devm_kfree(dev, info->firmware_name);<br>
++	}<br>
++<br>
++	info->firmware_name = devm_kstrdup(dev, firmware_name, GFP_KERNEL);<br>
++	if (!info->firmware_name)<br>
++		return -ENOMEM;<br>
++<br>
++	if (count >  0 && info->firmware_name[count - 1] == '\n')<br>
++		info->firmware_name[count - 1] = '\0';<br>
++<br>
++	region->info = info;<br>
++	error = fpga_region_program_fpga(region);<br>
++	if (error) {<br>
++		devm_kfree(dev, info->firmware_name);<br>
++		info->firmware_name = NULL;<br>
++	}<br>
++<br>
++	return error ? error : count;<br>
++}<br>
++<br>
++static DEVICE_ATTR_RW(firmware_name);<br>
++<br>
+ static struct attribute *fpga_region_attrs[] = {<br>
+ 	&dev_attr_compat_id.attr,<br>
++	&dev_attr_firmware_name.attr,<br>
+ 	NULL,<br>
+ };<br>
+ ATTRIBUTE_GROUPS(fpga_region);<br>
+-- <br>
+2.26.1<br>
+<br>
+-- <br>
+Pengutronix e.K.                           |                             |<br>
+Steuerwalder Str. 21                       | <a  rel="nofollow" href="http://www.pengutronix.de/">http://www.pengutronix.de/</a>  |<br>
+31137 Hildesheim, Germany                  | Phone: +49-5121-206917-0    |<br>
+Amtsgericht Hildesheim, HRA 2686           | Fax:   +49-5121-206917-5555 |<br>
+<br>
+<br>
+

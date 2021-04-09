@@ -1,0 +1,88 @@
+There are a few more bits in the GSWIP_MII_CFG register for which we<br>
+did rely on the boot-loader (or the hardware defaults) to set them up<br>
+properly.<br>
+<br>
+For some external RMII PHYs we need to select the GSWIP_MII_CFG_RMII_CLK<br>
+bit and also we should un-set it for non-RMII PHYs. The<br>
+GSWIP_MII_CFG_RMII_CLK bit is ignored for other PHY connection modes.<br>
+<br>
+The GSWIP IP also supports in-band auto-negotiation for RGMII PHYs when<br>
+the GSWIP_MII_CFG_RGMII_IBS bit is set. Clear this bit always as there's<br>
+no known hardware which uses this (so it is not tested yet).<br>
+<br>
+Clear the xMII isolation bit when set at initialization time if it was<br>
+previously set by the bootloader. Not doing so could lead to no traffic<br>
+(neither RX nor TX) on a port with this bit set.<br>
+<br>
+While here, also add the GSWIP_MII_CFG_RESET bit. We don't need to<br>
+manage it because this bit is self-clearning when set. We still add it<br>
+here to get a better overview of the GSWIP_MII_CFG register.<br>
+<br>
+Fixes: 14fceff4771e51 ("net: dsa: Add Lantiq / Intel DSA driver for vrx200")<br>
+Cc: stable@xxxxxxxxxxxxxxx<br>
+Suggested-by: Hauke Mehrtens <hauke@xxxxxxxxxx><br>
+Acked-by: Hauke Mehrtens <hauke@xxxxxxxxxx><br>
+Signed-off-by: Martin Blumenstingl <martin.blumenstingl@xxxxxxxxxxxxxx><br>
+---<br>
+ drivers/net/dsa/lantiq_gswip.c | 19 ++++++++++++++++---<br>
+ 1 file changed, 16 insertions(+), 3 deletions(-)<br>
+<br>
+diff --git a/drivers/net/dsa/lantiq_gswip.c b/drivers/net/dsa/lantiq_gswip.c<br>
+index 126d4ea868ba..bf5c62e5c0b0 100644<br>
+--- a/drivers/net/dsa/lantiq_gswip.c<br>
++++ b/drivers/net/dsa/lantiq_gswip.c<br>
+@@ -93,8 +93,12 @@<br>
+ <br>
+ /* GSWIP MII Registers */<br>
+ #define GSWIP_MII_CFGp(p)		(0x2 * (p))<br>
++#define  GSWIP_MII_CFG_RESET		BIT(15)<br>
+ #define  GSWIP_MII_CFG_EN		BIT(14)<br>
++#define  GSWIP_MII_CFG_ISOLATE		BIT(13)<br>
+ #define  GSWIP_MII_CFG_LDCLKDIS		BIT(12)<br>
++#define  GSWIP_MII_CFG_RGMII_IBS	BIT(8)<br>
++#define  GSWIP_MII_CFG_RMII_CLK		BIT(7)<br>
+ #define  GSWIP_MII_CFG_MODE_MIIP	0x0<br>
+ #define  GSWIP_MII_CFG_MODE_MIIM	0x1<br>
+ #define  GSWIP_MII_CFG_MODE_RMIIP	0x2<br>
+@@ -821,9 +825,11 @@ static int gswip_setup(struct dsa_switch *ds)<br>
+ 	/* Configure the MDIO Clock 2.5 MHz */<br>
+ 	gswip_mdio_mask(priv, 0xff, 0x09, GSWIP_MDIO_MDC_CFG1);<br>
+ <br>
+-	/* Disable the xMII link */<br>
++	/* Disable the xMII interface and clear it's isolation bit */<br>
+ 	for (i = 0; i < priv->hw_info->max_ports; i++)<br>
+-		gswip_mii_mask_cfg(priv, GSWIP_MII_CFG_EN, 0, i);<br>
++		gswip_mii_mask_cfg(priv,<br>
++				   GSWIP_MII_CFG_EN | GSWIP_MII_CFG_ISOLATE,<br>
++				   0, i);<br>
+ <br>
+ 	/* enable special tag insertion on cpu port */<br>
+ 	gswip_switch_mask(priv, 0, GSWIP_FDMA_PCTRL_STEN,<br>
+@@ -1597,6 +1603,9 @@ static void gswip_phylink_mac_config(struct dsa_switch *ds, int port,<br>
+ 		break;<br>
+ 	case PHY_INTERFACE_MODE_RMII:<br>
+ 		miicfg |= GSWIP_MII_CFG_MODE_RMIIM;<br>
++<br>
++		/* Configure the RMII clock as output: */<br>
++		miicfg |= GSWIP_MII_CFG_RMII_CLK;<br>
+ 		break;<br>
+ 	case PHY_INTERFACE_MODE_RGMII:<br>
+ 	case PHY_INTERFACE_MODE_RGMII_ID:<br>
+@@ -1609,7 +1618,11 @@ static void gswip_phylink_mac_config(struct dsa_switch *ds, int port,<br>
+ 			"Unsupported interface: %d\n", state->interface);<br>
+ 		return;<br>
+ 	}<br>
+-	gswip_mii_mask_cfg(priv, GSWIP_MII_CFG_MODE_MASK, miicfg, port);<br>
++<br>
++	gswip_mii_mask_cfg(priv,<br>
++			   GSWIP_MII_CFG_MODE_MASK | GSWIP_MII_CFG_RMII_CLK |<br>
++			   GSWIP_MII_CFG_RGMII_IBS | GSWIP_MII_CFG_LDCLKDIS,<br>
++			   miicfg, port);<br>
+ <br>
+ 	switch (state->interface) {<br>
+ 	case PHY_INTERFACE_MODE_RGMII_ID:<br>
+-- <br>
+2.31.1<br>
+<br>
+<br>
+

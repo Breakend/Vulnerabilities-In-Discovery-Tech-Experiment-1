@@ -1,0 +1,75 @@
+This patchset is attempt to add CoW support for fsdax, and take XFS,<br>
+which has both reflink and fsdax feature, as an example.<br>
+<br>
+Changes from V3:<br>
+ - Take out the first 3 patches as a cleanup patchset[1], which has been<br>
+    sent yesterday.<br>
+ - Fix usage of code in dax_iomap_cow_copy()<br>
+ - Add comments for macro definitions<br>
+ - Fix other code style problems and mistakes<br>
+<br>
+Changes from V2:<br>
+ - Fix the mistake in iomap_apply2() and dax_dedupe_file_range_compare()<br>
+ - Add CoW judgement in dax_iomap_zero()<br>
+ - Fix other code style problems and mistakes<br>
+<br>
+Changes from V1:<br>
+ - Factor some helper functions to simplify dax fault code<br>
+ - Introduce iomap_apply2() for dax_dedupe_file_range_compare()<br>
+ - Fix mistakes and other problems<br>
+ - Rebased on v5.11<br>
+<br>
+One of the key mechanism need to be implemented in fsdax is CoW.  Copy<br>
+the data from srcmap before we actually write data to the destance<br>
+iomap.  And we just copy range in which data won't be changed.<br>
+<br>
+Another mechanism is range comparison.  In page cache case, readpage()<br>
+is used to load data on disk to page cache in order to be able to<br>
+compare data.  In fsdax case, readpage() does not work.  So, we need<br>
+another compare data with direct access support.<br>
+<br>
+With the two mechanism implemented in fsdax, we are able to make reflink<br>
+and fsdax work together in XFS.<br>
+<br>
+Some of the patches are picked up from Goldwyn's patchset.  I made some<br>
+changes to adapt to this patchset.<br>
+<br>
+<br>
+(Rebased on v5.12-rc5 and patchset[1])<br>
+<br>
+[1]: <a  rel="nofollow" href="https://lore.kernel.org/linux-xfs/20210407133823.828176-1-ruansy.fnst@xxxxxxxxxxx/">https://lore.kernel.org/linux-xfs/20210407133823.828176-1-ruansy.fnst@xxxxxxxxxxx/</a><br>
+==<br>
+<br>
+Shiyang Ruan (7):<br>
+  fsdax: Introduce dax_iomap_cow_copy()<br>
+  fsdax: Replace mmap entry in case of CoW<br>
+  fsdax: Add dax_iomap_cow_copy() for dax_iomap_zero<br>
+  iomap: Introduce iomap_apply2() for operations on two files<br>
+  fsdax: Dedup file range to use a compare function<br>
+  fs/xfs: Handle CoW for fsdax write() path<br>
+  fs/xfs: Add dedupe support for fsdax<br>
+<br>
+ fs/dax.c               | 202 +++++++++++++++++++++++++++++++++++------<br>
+ fs/iomap/apply.c       |  52 +++++++++++<br>
+ fs/iomap/buffered-io.c |   2 +-<br>
+ fs/remap_range.c       |  45 +++++++--<br>
+ fs/xfs/xfs_bmap_util.c |   3 +-<br>
+ fs/xfs/xfs_file.c      |  29 ++++--<br>
+ fs/xfs/xfs_inode.c     |   8 +-<br>
+ fs/xfs/xfs_inode.h     |   1 +<br>
+ fs/xfs/xfs_iomap.c     |  58 +++++++++++-<br>
+ fs/xfs/xfs_iomap.h     |   4 +<br>
+ fs/xfs/xfs_iops.c      |   7 +-<br>
+ fs/xfs/xfs_reflink.c   |  17 ++--<br>
+ include/linux/dax.h    |   7 +-<br>
+ include/linux/fs.h     |  12 ++-<br>
+ include/linux/iomap.h  |   7 +-<br>
+ 15 files changed, 393 insertions(+), 61 deletions(-)<br>
+<br>
+-- <br>
+2.31.0<br>
+<br>
+<br>
+<br>
+<br>
+

@@ -1,0 +1,54 @@
+flush_coherent_icache() doesn't need the address anymore,<br>
+so it can be called immediately when entering the public<br>
+functions and doesn't need to be disseminated among<br>
+lower level functions.<br>
+<br>
+And use page_to_phys() instead of open coding the calculation<br>
+of phys address to call flush_dcache_icache_phys().<br>
+<br>
+Signed-off-by: Christophe Leroy <christophe.leroy@xxxxxxxxxx><br>
+---<br>
+ arch/powerpc/mm/cacheflush.c | 11 +++--------<br>
+ 1 file changed, 3 insertions(+), 8 deletions(-)<br>
+<br>
+diff --git a/arch/powerpc/mm/cacheflush.c b/arch/powerpc/mm/cacheflush.c<br>
+index dc2d39da6f63..811045c50d82 100644<br>
+--- a/arch/powerpc/mm/cacheflush.c<br>
++++ b/arch/powerpc/mm/cacheflush.c<br>
+@@ -143,9 +143,6 @@ static void __flush_dcache_icache(void *p)<br>
+ {<br>
+ 	unsigned long addr = (unsigned long)p;<br>
+ <br>
+-	if (flush_coherent_icache())<br>
+-		return;<br>
+-<br>
+ 	clean_dcache_range(addr, addr + PAGE_SIZE);<br>
+ <br>
+ 	/*<br>
+@@ -182,6 +179,8 @@ static void flush_dcache_icache_hugepage(struct page *page)<br>
+ <br>
+ void flush_dcache_icache_page(struct page *page)<br>
+ {<br>
++	if (flush_coherent_icache())<br>
++		return;<br>
+ <br>
+ 	if (PageCompound(page))<br>
+ 		return flush_dcache_icache_hugepage(page);<br>
+@@ -195,11 +194,7 @@ void flush_dcache_icache_page(struct page *page)<br>
+ 		__flush_dcache_icache(start);<br>
+ 		kunmap_atomic(start);<br>
+ 	} else {<br>
+-		unsigned long addr = page_to_pfn(page) << PAGE_SHIFT;<br>
+-<br>
+-		if (flush_coherent_icache())<br>
+-			return;<br>
+-		flush_dcache_icache_phys(addr);<br>
++		flush_dcache_icache_phys(page_to_phys(page));<br>
+ 	}<br>
+ #endif<br>
+ }<br>
+-- <br>
+2.25.0<br>
+<br>
+<br>
+

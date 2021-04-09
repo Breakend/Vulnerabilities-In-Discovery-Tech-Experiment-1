@@ -1,0 +1,217 @@
+Allocate and release memory to store obj_cgroup pointers for each<br>
+non-root slab page. Reuse page->mem_cgroup pointer to store a pointer<br>
+to the allocated space.<br>
+<br>
+To distinguish between obj_cgroups and memcg pointers in case<br>
+when it's not obvious which one is used (as in page_cgroup_ino()),<br>
+let's always set the lowest bit in the obj_cgroup case.<br>
+<br>
+Signed-off-by: Roman Gushchin <guro@xxxxxx><br>
+---<br>
+ include/linux/mm_types.h |  5 ++++-<br>
+ include/linux/slab_def.h |  5 +++++<br>
+ include/linux/slub_def.h |  2 ++<br>
+ mm/memcontrol.c          | 17 +++++++++++---<br>
+ mm/slab.c                |  3 ++-<br>
+ mm/slab.h                | 48 ++++++++++++++++++++++++++++++++++++++++<br>
+ mm/slub.c                |  5 +++++<br>
+ 7 files changed, 80 insertions(+), 5 deletions(-)<br>
+<br>
+diff --git a/include/linux/mm_types.h b/include/linux/mm_types.h<br>
+index 4aba6c0c2ba8..0ad7e700f26d 100644<br>
+--- a/include/linux/mm_types.h<br>
++++ b/include/linux/mm_types.h<br>
+@@ -198,7 +198,10 @@ struct page {<br>
+ 	atomic_t _refcount;<br>
+ <br>
+ #ifdef CONFIG_MEMCG<br>
+-	struct mem_cgroup *mem_cgroup;<br>
++	union {<br>
++		struct mem_cgroup *mem_cgroup;<br>
++		struct obj_cgroup **obj_cgroups;<br>
++	};<br>
+ #endif<br>
+ <br>
+ 	/*<br>
+diff --git a/include/linux/slab_def.h b/include/linux/slab_def.h<br>
+index abc7de77b988..967a9a525eab 100644<br>
+--- a/include/linux/slab_def.h<br>
++++ b/include/linux/slab_def.h<br>
+@@ -114,4 +114,9 @@ static inline unsigned int obj_to_index(const struct kmem_cache *cache,<br>
+ 	return reciprocal_divide(offset, cache->reciprocal_buffer_size);<br>
+ }<br>
+ <br>
++static inline int objs_per_slab(const struct kmem_cache *cache)<br>
++{<br>
++	return cache->num;<br>
++}<br>
++<br>
+ #endif	/* _LINUX_SLAB_DEF_H */<br>
+diff --git a/include/linux/slub_def.h b/include/linux/slub_def.h<br>
+index 200ea292f250..cbda7d55796a 100644<br>
+--- a/include/linux/slub_def.h<br>
++++ b/include/linux/slub_def.h<br>
+@@ -191,4 +191,6 @@ static inline unsigned int obj_to_index(const struct kmem_cache *cache,<br>
+ 				 cache->reciprocal_size);<br>
+ }<br>
+ <br>
++extern int objs_per_slab(struct kmem_cache *cache);<br>
++<br>
+ #endif /* _LINUX_SLUB_DEF_H */<br>
+diff --git a/mm/memcontrol.c b/mm/memcontrol.c<br>
+index 7f87a0eeafec..63826e460b3f 100644<br>
+--- a/mm/memcontrol.c<br>
++++ b/mm/memcontrol.c<br>
+@@ -549,10 +549,21 @@ ino_t page_cgroup_ino(struct page *page)<br>
+ 	unsigned long ino = 0;<br>
+ <br>
+ 	rcu_read_lock();<br>
+-	if (PageSlab(page) && !PageTail(page))<br>
++	if (PageSlab(page) && !PageTail(page)) {<br>
+ 		memcg = memcg_from_slab_page(page);<br>
+-	else<br>
+-		memcg = READ_ONCE(page->mem_cgroup);<br>
++	} else {<br>
++		memcg = page->mem_cgroup;<br>
++<br>
++		/*<br>
++		 * The lowest bit set means that memcg isn't a valid<br>
++		 * memcg pointer, but a obj_cgroups pointer.<br>
++		 * In this case the page is shared and doesn't belong<br>
++		 * to any specific memory cgroup.<br>
++		 */<br>
++		if ((unsigned long) memcg & 0x1UL)<br>
++			memcg = NULL;<br>
++	}<br>
++<br>
+ 	while (memcg && !(memcg->css.flags & CSS_ONLINE))<br>
+ 		memcg = parent_mem_cgroup(memcg);<br>
+ 	if (memcg)<br>
+diff --git a/mm/slab.c b/mm/slab.c<br>
+index 9350062ffc1a..f2d67984595b 100644<br>
+--- a/mm/slab.c<br>
++++ b/mm/slab.c<br>
+@@ -1370,7 +1370,8 @@ static struct page *kmem_getpages(struct kmem_cache *cachep, gfp_t flags,<br>
+ 		return NULL;<br>
+ 	}<br>
+ <br>
+-	if (charge_slab_page(page, flags, cachep->gfporder, cachep)) {<br>
++	if (charge_slab_page(page, flags, cachep->gfporder, cachep,<br>
++			     cachep->num)) {<br>
+ 		__free_pages(page, cachep->gfporder);<br>
+ 		return NULL;<br>
+ 	}<br>
+diff --git a/mm/slab.h b/mm/slab.h<br>
+index 8a574d9361c1..44def57f050e 100644<br>
+--- a/mm/slab.h<br>
++++ b/mm/slab.h<br>
+@@ -319,6 +319,18 @@ static inline struct kmem_cache *memcg_root_cache(struct kmem_cache *s)<br>
+ 	return s->memcg_params.root_cache;<br>
+ }<br>
+ <br>
++static inline struct obj_cgroup **page_obj_cgroups(struct page *page)<br>
++{<br>
++	/*<br>
++	 * page->mem_cgroup and page->obj_cgroups are sharing the same<br>
++	 * space. To distinguish between them in case we don't know for sure<br>
++	 * that the page is a slab page (e.g. page_cgroup_ino()), let's<br>
++	 * always set the lowest bit of obj_cgroups.<br>
++	 */<br>
++	return (struct obj_cgroup **)<br>
++		((unsigned long)page->obj_cgroups & ~0x1UL);<br>
++}<br>
++<br>
+ /*<br>
+  * Expects a pointer to a slab page. Please note, that PageSlab() check<br>
+  * isn't sufficient, as it returns true also for tail compound slab pages,<br>
+@@ -406,6 +418,25 @@ static __always_inline void memcg_uncharge_slab(struct page *page, int order,<br>
+ 	percpu_ref_put_many(&s->memcg_params.refcnt, nr_pages);<br>
+ }<br>
+ <br>
++static inline int memcg_alloc_page_obj_cgroups(struct page *page, gfp_t gfp,<br>
++					       unsigned int objects)<br>
++{<br>
++	void *vec;<br>
++<br>
++	vec = kcalloc(objects, sizeof(struct obj_cgroup *), gfp);<br>
++	if (!vec)<br>
++		return -ENOMEM;<br>
++<br>
++	page->obj_cgroups = (struct obj_cgroup **) ((unsigned long)vec | 0x1UL);<br>
++	return 0;<br>
++}<br>
++<br>
++static inline void memcg_free_page_obj_cgroups(struct page *page)<br>
++{<br>
++	kfree(page_obj_cgroups(page));<br>
++	page->obj_cgroups = NULL;<br>
++}<br>
++<br>
+ extern void slab_init_memcg_params(struct kmem_cache *);<br>
+ extern void memcg_link_cache(struct kmem_cache *s, struct mem_cgroup *memcg);<br>
+ <br>
+@@ -455,6 +486,16 @@ static inline void memcg_uncharge_slab(struct page *page, int order,<br>
+ {<br>
+ }<br>
+ <br>
++static inline int memcg_alloc_page_obj_cgroups(struct page *page, gfp_t gfp,<br>
++					       unsigned int objects)<br>
++{<br>
++	return 0;<br>
++}<br>
++<br>
++static inline void memcg_free_page_obj_cgroups(struct page *page)<br>
++{<br>
++}<br>
++<br>
+ static inline void slab_init_memcg_params(struct kmem_cache *s)<br>
+ {<br>
+ }<br>
+@@ -481,12 +522,18 @@ static __always_inline int charge_slab_page(struct page *page,<br>
+ 					    gfp_t gfp, int order,<br>
+ 					    struct kmem_cache *s)<br>
+ {<br>
++	int ret;<br>
++<br>
+ 	if (is_root_cache(s)) {<br>
+ 		mod_node_page_state(page_pgdat(page), cache_vmstat_idx(s),<br>
+ 				    PAGE_SIZE << order);<br>
+ 		return 0;<br>
+ 	}<br>
+ <br>
++	ret = memcg_alloc_page_obj_cgroups(page, gfp, objs_per_slab(s));<br>
++	if (ret)<br>
++		return ret;<br>
++<br>
+ 	return memcg_charge_slab(page, gfp, order, s);<br>
+ }<br>
+ <br>
+@@ -499,6 +546,7 @@ static __always_inline void uncharge_slab_page(struct page *page, int order,<br>
+ 		return;<br>
+ 	}<br>
+ <br>
++	memcg_free_page_obj_cgroups(page);<br>
+ 	memcg_uncharge_slab(page, order, s);<br>
+ }<br>
+ <br>
+diff --git a/mm/slub.c b/mm/slub.c<br>
+index 8d16babe1829..a5fb0bb5c77a 100644<br>
+--- a/mm/slub.c<br>
++++ b/mm/slub.c<br>
+@@ -344,6 +344,11 @@ static inline unsigned int oo_objects(struct kmem_cache_order_objects x)<br>
+ 	return x.x & OO_MASK;<br>
+ }<br>
+ <br>
++int objs_per_slab(struct kmem_cache *cache)<br>
++{<br>
++	return oo_objects(cache->oo);<br>
++}<br>
++<br>
+ /*<br>
+  * Per slab locking using the pagelock<br>
+  */<br>
+-- <br>
+2.25.3<br>
+<br>
+<br>
+

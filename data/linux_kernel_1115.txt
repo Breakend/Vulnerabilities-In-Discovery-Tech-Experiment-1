@@ -1,0 +1,37 @@
+Thanks, this looks good.<br>
+<br>
+Reviewed-by: Harshad Shirwadkar <harshadshirwadkar@xxxxxxxxx><br>
+<br>
+On Thu, Apr 8, 2021 at 12:00 AM Xu Yihang <xuyihang@xxxxxxxxxx> wrote:<br>
+><i></i><br>
+><i> In case of if not ext4_fc_add_tlv branch, an error return code is missing.</i><br>
+><i></i><br>
+><i> Fixes: aa75f4d3daae ("ext4: main fast-commit commit path")</i><br>
+><i> Reported-by: Hulk Robot <hulkci@xxxxxxxxxx></i><br>
+><i> Signed-off-by: Xu Yihang <xuyihang@xxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  fs/ext4/fast_commit.c | 4 +++-</i><br>
+><i>  1 file changed, 3 insertions(+), 1 deletion(-)</i><br>
+><i></i><br>
+><i> diff --git a/fs/ext4/fast_commit.c b/fs/ext4/fast_commit.c</i><br>
+><i> index 7541d0b5d706..312273ed8a9f 100644</i><br>
+><i> --- a/fs/ext4/fast_commit.c</i><br>
+><i> +++ b/fs/ext4/fast_commit.c</i><br>
+><i> @@ -1088,8 +1088,10 @@ static int ext4_fc_perform_commit(journal_t *journal)</i><br>
+><i>                 head.fc_tid = cpu_to_le32(</i><br>
+><i>                         sbi->s_journal->j_running_transaction->t_tid);</i><br>
+><i>                 if (!ext4_fc_add_tlv(sb, EXT4_FC_TAG_HEAD, sizeof(head),</i><br>
+><i> -                       (u8 *)&head, &crc))</i><br>
+><i> +                       (u8 *)&head, &crc)) {</i><br>
+><i> +                       ret = -ENOSPC;</i><br>
+><i>                         goto out;</i><br>
+><i> +               }</i><br>
+><i>         }</i><br>
+><i></i><br>
+><i>         spin_lock(&sbi->s_fc_lock);</i><br>
+><i> --</i><br>
+><i> 2.17.1</i><br>
+><i></i><br>
+<br>
+<br>
+

@@ -1,0 +1,71 @@
+On Thu, Apr 8, 2021 at 2:00 PM David Hildenbrand <david@xxxxxxxxxx> wrote:<br>
+><i></i><br>
+><i> On 08.04.21 13:44, Arnd Bergmann wrote:</i><br>
+><i> > On Thu, Apr 8, 2021 at 1:00 PM David Hildenbrand <david@xxxxxxxxxx> wrote:</i><br>
+><i> >>></i><br>
+><i> >>> It is a somewhat awkward way to say "prevent this symbol from</i><br>
+><i> >>> being =y if the dependency is =m".</i><br>
+><i> >></i><br>
+><i> >> What would be the right thing to do in the case here then to achieve the</i><br>
+><i> >> "if DRMA_ASPEED_GFX is enabled, also enable DMA_CMA id possible"?</i><br>
+><i> >></i><br>
+><i> >> One approach could be to have for DMA_CMA</i><br>
+><i> >></i><br>
+><i> >> default y if DRMA_ASPEED_GFX</i><br>
+><i> >></i><br>
+><i> >> but it feels like the wrong way to tackle this.</i><br>
+><i> ></i><br>
+><i> > I'm still not sure what you are trying to achieve. Is the idea only to provide</i><br>
+><i> > a useful default for DMA_CMA depending on which drivers are enabled?</i><br>
+><i></i><br>
+><i> "Random drivers should not override a user configuration of core knobs</i><br>
+><i> (e.g., CONFIG_DMA_CMA=n)."</i><br>
+><i></i><br>
+><i> Let's assume I'm a distribution and want to set CONFIG_CMA=n or want to</i><br>
+><i> set CONFIG_DMA_CMA=n with CONFIG_CMA=y; there is no way to do that with</i><br>
+><i> e.g., DRMA_ASPEED_GFX=y because it will always override my (user!)</i><br>
+><i> setting -- even though it doesn't really always need it. Using "select"</i><br>
+><i> is the problem here.</i><br>
+<br>
+I agree on the part of removing the 'select' if we don't need it. The<br>
+part I couldn't figure out was what the 'imply' is supposed to help with.<br>
+Most other users that added imply tried (and failed) to fix a build problem.<br>
+<br>
+><i> > This is something you could do using a hidden helper symbol like</i><br>
+><i> ></i><br>
+><i> > config DRMA_ASPEED_GFX</i><br>
+><i> >         bool "Aspeed display driver"</i><br>
+><i> >         select DRM_WANT_CMA</i><br>
+><i> ></i><br>
+><i> > config DRM_WANT_CMA</i><br>
+><i> >         bool</i><br>
+><i> >         help</i><br>
+><i> >            Select this from any driver that benefits from CMA being enabled</i><br>
+><i> ></i><br>
+><i> > config DMA_CMA</i><br>
+><i> >         bool "Use CMA helpers for DRM"</i><br>
+><i> >         default DRM_WANT_CMA</i><br>
+><i> ></i><br>
+><i> >           Arnd</i><br>
+><i> ></i><br>
+><i></i><br>
+><i> That's precisely what I had first, with an additional "WANT_CMA" --  but</i><br>
+><i> looking at the number of such existing options (I was able to spot 1 !)</i><br>
+><i> I wondered if there is a better approach to achieve the same; "imply"</i><br>
+><i> sounded like a good candidate.</i><br>
+<br>
+I can probably find a couple more, but regardless of how many others<br>
+exist, this would be a much clearer way of doing it than 'imply' since it<br>
+has none of the ambiguity and misuse problems.<br>
+<br>
+I think the reason we don't see more is that generally speaking, those<br>
+defaults are widely ignored anyway. You almost always start out with<br>
+a defconfig file that contains everything you know you need, and then<br>
+you add bits to that. Having the default in any form only helps to<br>
+make that defconfig file one line shorter, while requiring other users<br>
+to add another line to turn it off when they do not want it.<br>
+<br>
+         Arnd<br>
+<br>
+<br>
+

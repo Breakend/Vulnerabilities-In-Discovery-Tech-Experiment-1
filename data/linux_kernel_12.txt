@@ -1,0 +1,129 @@
+Since this commit [1] booting kernel on MC based chips started to<br>
+fail because this firmware starts before the kernel and as soon as<br>
+SMMU is probed it starts to trigger contiguous faults.<br>
+This is a workaround that allows MC firmware to run with SMMU<br>
+in disable bypass mode. It consists of the following steps:<br>
+ 1. pause the firmware at early boot to get a chance to setup SMMU<br>
+ 2. request direct mapping for MC device<br>
+ 3. resume the firmware<br>
+The workaround relies on the fact that no state is lost when<br>
+pausing / resuming firmware, as per the docs.<br>
+With this patch, platforms with MC firmware can now boot without<br>
+having to change the default config to set:<br>
+  CONFIG_ARM_SMMU_DISABLE_BYPASS_BY_DEFAULT=n<br>
+<br>
+[1] 954a03be033 ("iommu/arm-smmu: Break insecure users by disabling bypass by default")<br>
+<br>
+Signed-off-by: Laurentiu Tudor <laurentiu.tudor@xxxxxxx><br>
+---<br>
+ drivers/bus/fsl-mc/fsl-mc-bus.c | 51 +++++++++++++++++++++++++++++++++<br>
+ 1 file changed, 51 insertions(+)<br>
+<br>
+diff --git a/drivers/bus/fsl-mc/fsl-mc-bus.c b/drivers/bus/fsl-mc/fsl-mc-bus.c<br>
+index fec394a28891..f9bc9c384ab5 100644<br>
+--- a/drivers/bus/fsl-mc/fsl-mc-bus.c<br>
++++ b/drivers/bus/fsl-mc/fsl-mc-bus.c<br>
+@@ -18,6 +18,8 @@<br>
+ #include <linux/bitops.h><br>
+ #include <linux/msi.h><br>
+ #include <linux/dma-mapping.h><br>
++#include <linux/io.h><br>
++#include <linux/iommu.h><br>
+ <br>
+ #include "fsl-mc-private.h"<br>
+ <br>
+@@ -889,6 +891,12 @@ static int get_mc_addr_translation_ranges(struct device *dev,<br>
+ 	return 0;<br>
+ }<br>
+ <br>
++#define FSL_MC_GCR1	0x0<br>
++#define GCR1_P1_STOP	BIT(31)<br>
++<br>
++static u32 boot_gcr1;<br>
++static void __iomem *fsl_mc_regs;<br>
++<br>
+ /**<br>
+  * fsl_mc_bus_probe - callback invoked when the root MC bus is being<br>
+  * added<br>
+@@ -906,6 +914,19 @@ static int fsl_mc_bus_probe(struct platform_device *pdev)<br>
+ 	struct mc_version mc_version;<br>
+ 	struct resource res;<br>
+ <br>
++	/*<br>
++	 * The MC firmware requires full access to the whole address space plus<br>
++	 * it has no way of dealing with any kind of address translation, so<br>
++	 * request direct mapping for it.<br>
++	 */<br>
++	error = iommu_request_dm_for_dev(&pdev->dev);<br>
++	if (error)<br>
++		dev_warn(&pdev->dev, "iommu_request_dm_for_dev() failed: %d\n",<br>
++			 error);<br>
++<br>
++	/* Resume the firmware */<br>
++	writel(boot_gcr1 & ~GCR1_P1_STOP, fsl_mc_regs + FSL_MC_GCR1);<br>
++<br>
+ 	mc = devm_kzalloc(&pdev->dev, sizeof(*mc), GFP_KERNEL);<br>
+ 	if (!mc)<br>
+ 		return -ENOMEM;<br>
+@@ -990,6 +1011,13 @@ static int fsl_mc_bus_remove(struct platform_device *pdev)<br>
+ 	if (!fsl_mc_is_root_dprc(&mc->root_mc_bus_dev->dev))<br>
+ 		return -EINVAL;<br>
+ <br>
++	/*<br>
++	 * Pause back the firmware so that it doesn't trigger faults by the<br>
++	 * time SMMU gets brought down.<br>
++	 */<br>
++	writel(boot_gcr1 | GCR1_P1_STOP, fsl_mc_regs + FSL_MC_GCR1);<br>
++	iounmap(fsl_mc_regs);<br>
++<br>
+ 	fsl_mc_device_remove(mc->root_mc_bus_dev);<br>
+ <br>
+ 	fsl_destroy_mc_io(mc->root_mc_bus_dev->mc_io);<br>
+@@ -1018,6 +1046,8 @@ static struct platform_driver fsl_mc_bus_driver = {<br>
+ static int __init fsl_mc_bus_driver_init(void)<br>
+ {<br>
+ 	int error;<br>
++	struct device_node *np;<br>
++	struct resource res;<br>
+ <br>
+ 	error = bus_register(&fsl_mc_bus_type);<br>
+ 	if (error < 0) {<br>
+@@ -1039,9 +1069,30 @@ static int __init fsl_mc_bus_driver_init(void)<br>
+ 	if (error < 0)<br>
+ 		goto error_cleanup_dprc_driver;<br>
+ <br>
++	np = of_find_matching_node(NULL, fsl_mc_bus_match_table);<br>
++	if (!of_device_is_available(np))<br>
++		goto error_cleanup_dprc_driver;<br>
++	error = of_address_to_resource(np, 1, &res);<br>
++	if (error)<br>
++		goto error_cleanup_dprc_driver;<br>
++	fsl_mc_regs = ioremap(res.start, resource_size(&res));<br>
++	if (!fsl_mc_regs) {<br>
++		error = -ENXIO;<br>
++		goto error_cleanup_dprc_driver;<br>
++	}<br>
++<br>
++	boot_gcr1 = readl(fsl_mc_regs + FSL_MC_GCR1);<br>
++	/*<br>
++	 * If found running, pause MC firmware in order to get a chance<br>
++	 * to setup SMMU for it.<br>
++	 */<br>
++	if (!(boot_gcr1 & GCR1_P1_STOP))<br>
++		writel(boot_gcr1 | GCR1_P1_STOP,  fsl_mc_regs + FSL_MC_GCR1);<br>
++<br>
+ 	return 0;<br>
+ <br>
+ error_cleanup_dprc_driver:<br>
++	iounmap(fsl_mc_regs);<br>
+ 	dprc_driver_exit();<br>
+ <br>
+ error_cleanup_driver:<br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+--------------AE161A00404C95FFAA71826B--<br>
+<br>
+<br>
+

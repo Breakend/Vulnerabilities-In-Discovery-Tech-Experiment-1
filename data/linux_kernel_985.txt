@@ -1,0 +1,32 @@
+Fix the following gcc warning:<br>
+<br>
+fs/cifs/cifsacl.c:1097:8: warning: variable ‘nmode’ set but not used<br>
+[-Wunused-but-set-variable].<br>
+<br>
+Reported-by: Abaci Robot <abaci@xxxxxxxxxxxxxxxxx><br>
+Signed-off-by: Jiapeng Chong <jiapeng.chong@xxxxxxxxxxxxxxxxx><br>
+---<br>
+ fs/cifs/cifsacl.c | 2 --<br>
+ 1 file changed, 2 deletions(-)<br>
+<br>
+diff --git a/fs/cifs/cifsacl.c b/fs/cifs/cifsacl.c<br>
+index d178cf8..fdb258a 100644<br>
+--- a/fs/cifs/cifsacl.c<br>
++++ b/fs/cifs/cifsacl.c<br>
+@@ -1094,11 +1094,9 @@ static int set_chmod_dacl(struct cifs_acl *pdacl, struct cifs_acl *pndacl,<br>
+ 	struct cifs_ace *pnntace = NULL;<br>
+ 	char *nacl_base = NULL;<br>
+ 	u32 num_aces = 0;<br>
+-	__u64 nmode;<br>
+ 	bool new_aces_set = false;<br>
+ <br>
+ 	/* Assuming that pndacl and pnmode are never NULL */<br>
+-	nmode = *pnmode;<br>
+ 	nacl_base = (char *)pndacl;<br>
+ 	nsize = sizeof(struct cifs_acl);<br>
+ <br>
+-- <br>
+1.8.3.1<br>
+<br>
+<br>
+

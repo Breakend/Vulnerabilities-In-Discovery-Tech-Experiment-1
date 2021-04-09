@@ -1,0 +1,123 @@
+On Thu, Apr 08, 2021 at 12:14:57AM +0200, Frederic Weisbecker wrote:<br>
+><i> On Wed, Apr 07, 2021 at 10:53:01AM -0300, Marcelo Tosatti wrote:</i><br>
+><i> > </i><br>
+><i> > Setting the realtime clock triggers an IPI to all CPUs to reprogram</i><br>
+><i> > hrtimers.</i><br>
+><i> > </i><br>
+><i> > However, only base, boottime and tai clocks have their offsets updated</i><br>
+><i> > (and therefore potentially require a reprogram).</i><br>
+><i> > </i><br>
+><i> > If the CPU is a nohz_full one, check if it only has </i><br>
+><i> > monotonic active timers, and in that case update the </i><br>
+><i> > realtime base offsets, skipping the IPI.</i><br>
+><i> > </i><br>
+><i> > This reduces interruptions to nohz_full CPUs.</i><br>
+><i> > </i><br>
+><i> > Signed-off-by: Marcelo Tosatti <mtosatti@xxxxxxxxxx></i><br>
+><i> > </i><br>
+><i> > diff --git a/kernel/time/hrtimer.c b/kernel/time/hrtimer.c</i><br>
+><i> > index 743c852e10f2..b42b1a434b22 100644</i><br>
+><i> > --- a/kernel/time/hrtimer.c</i><br>
+><i> > +++ b/kernel/time/hrtimer.c</i><br>
+><i> > @@ -853,6 +853,28 @@ static void hrtimer_reprogram(struct hrtimer *timer, bool reprogram)</i><br>
+><i> >  	tick_program_event(expires, 1);</i><br>
+><i> >  }</i><br>
+><i> >  </i><br>
+><i> > +#define CLOCK_SET_BASES ((1U << HRTIMER_BASE_REALTIME)|		\</i><br>
+><i> > +			 (1U << HRTIMER_BASE_REALTIME_SOFT)|	\</i><br>
+><i> > +			 (1U << HRTIMER_BASE_BOOTTIME)|		\</i><br>
+><i> > +			 (1U << HRTIMER_BASE_BOOTTIME_SOFT)|	\</i><br>
+><i> > +			 (1U << HRTIMER_BASE_TAI)|		\</i><br>
+><i> > +			 (1U << HRTIMER_BASE_TAI_SOFT))</i><br>
+><i> > +</i><br>
+><i> > +static bool need_reprogram_timer(struct hrtimer_cpu_base *cpu_base)</i><br>
+><i> > +{</i><br>
+><i> > +	unsigned int active = 0;</i><br>
+><i> > +</i><br>
+><i> > +	if (!cpu_base->softirq_activated)</i><br>
+><i> > +		active = cpu_base->active_bases & HRTIMER_ACTIVE_SOFT;</i><br>
+<br>
+If cpu_base->softirq_activated == 1, should IPI as well.<br>
+<br>
+><i> > +	active = active | (cpu_base->active_bases & HRTIMER_ACTIVE_HARD);</i><br>
+><i> > +</i><br>
+><i> > +	if ((active & CLOCK_SET_BASES) == 0)</i><br>
+><i> > +		return false;</i><br>
+><i> > +</i><br>
+><i> > +	return true;</i><br>
+><i> > +}</i><br>
+><i> > +</i><br>
+><i> >  /*</i><br>
+><i> >   * Clock realtime was set</i><br>
+><i> >   *</i><br>
+><i> > @@ -867,9 +889,41 @@ static void hrtimer_reprogram(struct hrtimer *timer, bool reprogram)</i><br>
+><i> >  void clock_was_set(void)</i><br>
+><i> >  {</i><br>
+><i> >  #ifdef CONFIG_HIGH_RES_TIMERS</i><br>
+><i> > -	/* Retrigger the CPU local events everywhere */</i><br>
+><i> > -	on_each_cpu(retrigger_next_event, NULL, 1);</i><br>
+><i> > +	cpumask_var_t mask;</i><br>
+><i> > +	int cpu;</i><br>
+><i> > +</i><br>
+><i> > +	if (!tick_nohz_full_enabled()) {</i><br>
+><i> > +		/* Retrigger the CPU local events everywhere */</i><br>
+><i> > +		on_each_cpu(retrigger_next_event, NULL, 1);</i><br>
+><i> > +		goto set_timerfd;</i><br>
+><i> > +	}</i><br>
+><i> > +</i><br>
+><i> > +	if (!zalloc_cpumask_var(&mask, GFP_KERNEL)) {</i><br>
+><i> > +		on_each_cpu(retrigger_next_event, NULL, 1);</i><br>
+><i> > +		goto set_timerfd;</i><br>
+><i> > +	}</i><br>
+><i> > +</i><br>
+><i> > +	/* Avoid interrupting nohz_full CPUs if possible */</i><br>
+><i> > +	preempt_disable();</i><br>
+><i> > +	for_each_online_cpu(cpu) {</i><br>
+><i> > +		if (tick_nohz_full_cpu(cpu)) {</i><br>
+><i> > +			unsigned long flags;</i><br>
+><i> > +			struct hrtimer_cpu_base *cpu_base = &per_cpu(hrtimer_bases, cpu);</i><br>
+><i> > +</i><br>
+><i> > +			raw_spin_lock_irqsave(&cpu_base->lock, flags);</i><br>
+><i> > +			if (need_reprogram_timer(cpu_base))</i><br>
+><i> > +				cpumask_set_cpu(cpu, mask);</i><br>
+><i> > +			else</i><br>
+><i> > +				hrtimer_update_base(cpu_base);</i><br>
+><i> > +			raw_spin_unlock_irqrestore(&cpu_base->lock, flags);</i><br>
+><i> > +		}</i><br>
+><i> </i><br>
+><i> You forgot to add the housekeeping CPUs to the mask.</i><br>
+<br>
+So people are using:<br>
+<br>
+console=tty0 console=ttyS0,115200n8 skew_tick=1 nohz=on rcu_nocbs=8-31 tuned.non_isolcpus=000000ff intel_pstate=disable nosoftlockup tsc=nowatchdog intel_iommu=on iommu=pt isolcpus=managed_irq,8-31 systemd.cpu_affinity=0,1,2,3,4,5,6,7 default_hugepagesz=1G hugepagesz=2M hugepages=128 nohz_full=8-31<br>
+<br>
+And using the nohz_full= CPUs (or subsets of nohz_full= CPUs) in two modes:<br>
+<br>
+Either "generic non-isolated applications" <br>
+(with load-balancing enabled for those CPUs), or for <br>
+latency sensitive applications. And switching between the modes.<br>
+<br>
+In this case, it would only be possible to check for<br>
+housekeeping CPUs of type MANAGED_IRQ, which would be strange.<br>
+<br>
+><i> As for the need_reprogram_timer() trick, I'll rather defer to Thomas review...</i><br>
+><i> </i><br>
+><i> Thanks.</i><br>
+<br>
+Thanks!<br>
+<br>
+><i> </i><br>
+><i> > +	}</i><br>
+><i> > +</i><br>
+><i> > +	smp_call_function_many(mask, retrigger_next_event, NULL, 1);</i><br>
+><i> > +	preempt_enable();</i><br>
+><i> > +	free_cpumask_var(mask);</i><br>
+><i> >  #endif</i><br>
+><i> > +set_timerfd:</i><br>
+><i> >  	timerfd_clock_was_set();</i><br>
+><i> >  }</i><br>
+><i> >  </i><br>
+><i> > </i><br>
+<br>
+<br>
+

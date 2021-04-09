@@ -1,0 +1,25 @@
+The header file if000c.h has been included two times in nouveau_dmem.c,<br>
+delete the redundant one.<br>
+<br>
+Signed-off-by: Zhang Jianhua <zhangjianhua18@xxxxxxxxxx><br>
+---<br>
+ drivers/gpu/drm/nouveau/nouveau_dmem.c | 1 -<br>
+ 1 file changed, 1 deletion(-)<br>
+<br>
+diff --git a/drivers/gpu/drm/nouveau/nouveau_dmem.c b/drivers/gpu/drm/nouveau/nouveau_dmem.c<br>
+index 92987daa5e17..f5cc057b123b 100644<br>
+--- a/drivers/gpu/drm/nouveau/nouveau_dmem.c<br>
++++ b/drivers/gpu/drm/nouveau/nouveau_dmem.c<br>
+@@ -33,7 +33,6 @@<br>
+ #include <nvif/if000c.h><br>
+ #include <nvif/if500b.h><br>
+ #include <nvif/if900b.h><br>
+-#include <nvif/if000c.h><br>
+ <br>
+ #include <nvhw/class/cla0b5.h><br>
+ <br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+

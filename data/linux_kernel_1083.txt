@@ -1,0 +1,37 @@
+pm_runtime_get_sync will increment pm usage counter even it failed.<br>
+Forgetting to putting operation will result in reference leak here.<br>
+Fix it by replacing it with pm_runtime_resume_and_get to keep usage<br>
+counter balanced.<br>
+<br>
+Signed-off-by: Shixin Liu <liushixin2@xxxxxxxxxx><br>
+---<br>
+ drivers/crypto/stm32/stm32-cryp.c | 4 ++--<br>
+ 1 file changed, 2 insertions(+), 2 deletions(-)<br>
+<br>
+diff --git a/drivers/crypto/stm32/stm32-cryp.c b/drivers/crypto/stm32/stm32-cryp.c<br>
+index 2a4793176c71..7389a0536ff0 100644<br>
+--- a/drivers/crypto/stm32/stm32-cryp.c<br>
++++ b/drivers/crypto/stm32/stm32-cryp.c<br>
+@@ -542,7 +542,7 @@ static int stm32_cryp_hw_init(struct stm32_cryp *cryp)<br>
+ 	int ret;<br>
+ 	u32 cfg, hw_mode;<br>
+ <br>
+-	pm_runtime_get_sync(cryp->dev);<br>
++	pm_runtime_resume_and_get(cryp->dev);<br>
+ <br>
+ 	/* Disable interrupt */<br>
+ 	stm32_cryp_write(cryp, CRYP_IMSCR, 0);<br>
+@@ -2043,7 +2043,7 @@ static int stm32_cryp_remove(struct platform_device *pdev)<br>
+ 	if (!cryp)<br>
+ 		return -ENODEV;<br>
+ <br>
+-	ret = pm_runtime_get_sync(cryp->dev);<br>
++	ret = pm_runtime_resume_and_get(cryp->dev);<br>
+ 	if (ret < 0)<br>
+ 		return ret;<br>
+ <br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

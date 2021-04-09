@@ -1,0 +1,114 @@
+Remove users of tty_warn() and replace them with calls to dev_warn()<br>
+which provides more information about the tty that has the error and<br>
+uses the standard formatting logic.<br>
+<br>
+Cc: Tetsuo Handa <penguin-kernel@xxxxxxxxxxxxxxxxxxx><br>
+Cc: Jiri Slaby <jirislaby@xxxxxxxxxx><br>
+Signed-off-by: Greg Kroah-Hartman <gregkh@xxxxxxxxxxxxxxxxxxx><br>
+---<br>
+ drivers/tty/n_tty.c       | 2 +-<br>
+ drivers/tty/tty.h         | 1 -<br>
+ drivers/tty/tty_io.c      | 8 ++++----<br>
+ drivers/tty/tty_jobctrl.c | 2 +-<br>
+ drivers/tty/tty_port.c    | 4 ++--<br>
+ 5 files changed, 8 insertions(+), 9 deletions(-)<br>
+<br>
+diff --git a/drivers/tty/n_tty.c b/drivers/tty/n_tty.c<br>
+index dbe208342258..39a448ef0aed 100644<br>
+--- a/drivers/tty/n_tty.c<br>
++++ b/drivers/tty/n_tty.c<br>
+@@ -1200,7 +1200,7 @@ static void n_tty_receive_overrun(struct tty_struct *tty)<br>
+ 	ldata->num_overrun++;<br>
+ 	if (time_after(jiffies, ldata->overrun_time + HZ) ||<br>
+ 			time_after(ldata->overrun_time, jiffies)) {<br>
+-		tty_warn(tty, "%d input overrun(s)\n", ldata->num_overrun);<br>
++		dev_warn(tty->dev, "%d input overrun(s)\n", ldata->num_overrun);<br>
+ 		ldata->overrun_time = jiffies;<br>
+ 		ldata->num_overrun = 0;<br>
+ 	}<br>
+diff --git a/drivers/tty/tty.h b/drivers/tty/tty.h<br>
+index 0323bc2cd6ba..45b15cc250e8 100644<br>
+--- a/drivers/tty/tty.h<br>
++++ b/drivers/tty/tty.h<br>
+@@ -10,7 +10,6 @@<br>
+ 	fn("%s %s: " f, tty_driver_name(tty), tty_name(tty), ##__VA_ARGS__)<br>
+ <br>
+ #define tty_debug(tty, f, ...)	tty_msg(pr_debug, tty, f, ##__VA_ARGS__)<br>
+-#define tty_warn(tty, f, ...)	tty_msg(pr_warn, tty, f, ##__VA_ARGS__)<br>
+ <br>
+ #define tty_info_ratelimited(tty, f, ...) \<br>
+ 		tty_msg(pr_info_ratelimited, tty, f, ##__VA_ARGS__)<br>
+diff --git a/drivers/tty/tty_io.c b/drivers/tty/tty_io.c<br>
+index 0079ffd0cb9c..2c3efa854ba5 100644<br>
+--- a/drivers/tty/tty_io.c<br>
++++ b/drivers/tty/tty_io.c<br>
+@@ -295,7 +295,7 @@ static int check_tty_count(struct tty_struct *tty, const char *routine)<br>
+ 	if (tty_port_kopened(tty->port))<br>
+ 		kopen_count++;<br>
+ 	if (tty->count != (count + kopen_count)) {<br>
+-		tty_warn(tty, "%s: tty->count(%d) != (#fd's(%d) + #kopen's(%d))\n",<br>
++		dev_warn(tty->dev, "%s: tty->count(%d) != (#fd's(%d) + #kopen's(%d))\n",<br>
+ 			 routine, tty->count, count, kopen_count);<br>
+ 		return (count + kopen_count);<br>
+ 	}<br>
+@@ -1823,7 +1823,7 @@ int tty_release(struct inode *inode, struct file *filp)<br>
+ <br>
+ 		if (once) {<br>
+ 			once = 0;<br>
+-			tty_warn(tty, "read/write wait queue active!\n");<br>
++			dev_warn(tty->dev, "read/write wait queue active!\n");<br>
+ 		}<br>
+ 		schedule_timeout_killable(timeout);<br>
+ 		if (timeout < 120 * HZ)<br>
+@@ -1834,12 +1834,12 @@ int tty_release(struct inode *inode, struct file *filp)<br>
+ <br>
+ 	if (o_tty) {<br>
+ 		if (--o_tty->count < 0) {<br>
+-			tty_warn(tty, "bad slave count (%d)\n", o_tty->count);<br>
++			dev_warn(tty->dev, "bad slave count (%d)\n", o_tty->count);<br>
+ 			o_tty->count = 0;<br>
+ 		}<br>
+ 	}<br>
+ 	if (--tty->count < 0) {<br>
+-		tty_warn(tty, "bad tty->count (%d)\n", tty->count);<br>
++		dev_warn(tty->dev, "bad tty->count (%d)\n", tty->count);<br>
+ 		tty->count = 0;<br>
+ 	}<br>
+ <br>
+diff --git a/drivers/tty/tty_jobctrl.c b/drivers/tty/tty_jobctrl.c<br>
+index 0728730d38d1..19ec43a6ef76 100644<br>
+--- a/drivers/tty/tty_jobctrl.c<br>
++++ b/drivers/tty/tty_jobctrl.c<br>
+@@ -61,7 +61,7 @@ int __tty_check_change(struct tty_struct *tty, int sig)<br>
+ 	rcu_read_unlock();<br>
+ <br>
+ 	if (!tty_pgrp)<br>
+-		tty_warn(tty, "sig=%d, tty->pgrp == NULL!\n", sig);<br>
++		dev_warn(tty->dev, "sig=%d, tty->pgrp == NULL!\n", sig);<br>
+ <br>
+ 	return ret;<br>
+ }<br>
+diff --git a/drivers/tty/tty_port.c b/drivers/tty/tty_port.c<br>
+index 303c198fbf5c..575fe3933ff9 100644<br>
+--- a/drivers/tty/tty_port.c<br>
++++ b/drivers/tty/tty_port.c<br>
+@@ -567,12 +567,12 @@ int tty_port_close_start(struct tty_port *port,<br>
+ <br>
+ 	spin_lock_irqsave(&port->lock, flags);<br>
+ 	if (tty->count == 1 && port->count != 1) {<br>
+-		tty_warn(tty, "%s: tty->count = 1 port count = %d\n", __func__,<br>
++		dev_warn(tty->dev, "%s: tty->count = 1 port count = %d\n", __func__,<br>
+ 			 port->count);<br>
+ 		port->count = 1;<br>
+ 	}<br>
+ 	if (--port->count < 0) {<br>
+-		tty_warn(tty, "%s: bad port count (%d)\n", __func__,<br>
++		dev_warn(tty->dev, "%s: bad port count (%d)\n", __func__,<br>
+ 			 port->count);<br>
+ 		port->count = 0;<br>
+ 	}<br>
+-- <br>
+2.31.1<br>
+<br>
+<br>
+

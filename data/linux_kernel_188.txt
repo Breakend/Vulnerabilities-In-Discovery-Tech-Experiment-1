@@ -1,0 +1,45 @@
+<br>
+Do not include private headers and do not frob in internals.<br>
+<br>
+On top of that, while the previous code restores the affinity, it<br>
+doesn't ensure the task actually moves there if it was running,<br>
+leading to the fun situation that it can be observed running outside<br>
+of its allowed mask for potentially significant time.<br>
+<br>
+Use the proper API instead.<br>
+<br>
+Signed-off-by: Peter Zijlstra (Intel) <peterz@xxxxxxxxxxxxx><br>
+---<br>
+ fs/io-wq.c |   11 ++---------<br>
+ 1 file changed, 2 insertions(+), 9 deletions(-)<br>
+<br>
+--- a/fs/io-wq.c<br>
++++ b/fs/io-wq.c<br>
+@@ -17,7 +17,6 @@<br>
+ #include <linux/cpu.h><br>
+ #include <linux/tracehook.h><br>
+ <br>
+-#include "../kernel/sched/sched.h"<br>
+ #include "io-wq.h"<br>
+ <br>
+ #define WORKER_IDLE_TIMEOUT	(5 * HZ)<br>
+@@ -1098,14 +1097,8 @@ void io_wq_put_and_exit(struct io_wq *wq<br>
+ <br>
+ static bool io_wq_worker_affinity(struct io_worker *worker, void *data)<br>
+ {<br>
+-	struct task_struct *task = worker->task;<br>
+-	struct rq_flags rf;<br>
+-	struct rq *rq;<br>
+-<br>
+-	rq = task_rq_lock(task, &rf);<br>
+-	do_set_cpus_allowed(task, cpumask_of_node(worker->wqe->node));<br>
+-	task->flags |= PF_NO_SETAFFINITY;<br>
+-	task_rq_unlock(rq, task, &rf);<br>
++	set_cpus_allowed_ptr(worker->task, cpumask_of_node(worker->wqe->node));<br>
++<br>
+ 	return false;<br>
+ }<br>
+ <br>
+<br>
+<br>
+

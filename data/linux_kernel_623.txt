@@ -1,0 +1,111 @@
+Add xfs_break_two_dax_layouts() to break layout for tow dax files.  Then<br>
+call compare range function only when files are both DAX or not.<br>
+<br>
+Signed-off-by: Shiyang Ruan <ruansy.fnst@xxxxxxxxxxx><br>
+---<br>
+ fs/xfs/xfs_file.c    | 20 ++++++++++++++++++++<br>
+ fs/xfs/xfs_inode.c   |  8 +++++++-<br>
+ fs/xfs/xfs_inode.h   |  1 +<br>
+ fs/xfs/xfs_reflink.c |  5 +++--<br>
+ 4 files changed, 31 insertions(+), 3 deletions(-)<br>
+<br>
+diff --git a/fs/xfs/xfs_file.c b/fs/xfs/xfs_file.c<br>
+index 5795d5d6f869..1fd457167c12 100644<br>
+--- a/fs/xfs/xfs_file.c<br>
++++ b/fs/xfs/xfs_file.c<br>
+@@ -842,6 +842,26 @@ xfs_break_dax_layouts(<br>
+ 			0, 0, xfs_wait_dax_page(inode));<br>
+ }<br>
+ <br>
++int<br>
++xfs_break_two_dax_layouts(<br>
++	struct inode		*src,<br>
++	struct inode		*dest)<br>
++{<br>
++	int			error;<br>
++	bool			retry = false;<br>
++<br>
++retry:<br>
++	error = xfs_break_dax_layouts(src, &retry);<br>
++	if (error || retry)<br>
++		goto retry;<br>
++<br>
++	error = xfs_break_dax_layouts(dest, &retry);<br>
++	if (error || retry)<br>
++		goto retry;<br>
++<br>
++	return error;<br>
++}<br>
++<br>
+ int<br>
+ xfs_break_layouts(<br>
+ 	struct inode		*inode,<br>
+diff --git a/fs/xfs/xfs_inode.c b/fs/xfs/xfs_inode.c<br>
+index f93370bd7b1e..c01786917eef 100644<br>
+--- a/fs/xfs/xfs_inode.c<br>
++++ b/fs/xfs/xfs_inode.c<br>
+@@ -3713,8 +3713,10 @@ xfs_ilock2_io_mmap(<br>
+ 	struct xfs_inode	*ip2)<br>
+ {<br>
+ 	int			ret;<br>
++	struct inode		*inode1 = VFS_I(ip1);<br>
++	struct inode		*inode2 = VFS_I(ip2);<br>
+ <br>
+-	ret = xfs_iolock_two_inodes_and_break_layout(VFS_I(ip1), VFS_I(ip2));<br>
++	ret = xfs_iolock_two_inodes_and_break_layout(inode1, inode2);<br>
+ 	if (ret)<br>
+ 		return ret;<br>
+ 	if (ip1 == ip2)<br>
+@@ -3722,6 +3724,10 @@ xfs_ilock2_io_mmap(<br>
+ 	else<br>
+ 		xfs_lock_two_inodes(ip1, XFS_MMAPLOCK_EXCL,<br>
+ 				    ip2, XFS_MMAPLOCK_EXCL);<br>
++<br>
++	if (IS_DAX(inode1) && IS_DAX(inode2))<br>
++		ret = xfs_break_two_dax_layouts(inode1, inode2);<br>
++<br>
+ 	return 0;<br>
+ }<br>
+ <br>
+diff --git a/fs/xfs/xfs_inode.h b/fs/xfs/xfs_inode.h<br>
+index 88ee4c3930ae..5ef21924dddc 100644<br>
+--- a/fs/xfs/xfs_inode.h<br>
++++ b/fs/xfs/xfs_inode.h<br>
+@@ -435,6 +435,7 @@ enum xfs_prealloc_flags {<br>
+ <br>
+ int	xfs_update_prealloc_flags(struct xfs_inode *ip,<br>
+ 				  enum xfs_prealloc_flags flags);<br>
++int	xfs_break_two_dax_layouts(struct inode *inode1, struct inode *inode2);<br>
+ int	xfs_break_layouts(struct inode *inode, uint *iolock,<br>
+ 		enum layout_break_reason reason);<br>
+ <br>
+diff --git a/fs/xfs/xfs_reflink.c b/fs/xfs/xfs_reflink.c<br>
+index a4cd6e8a7aa0..4426bcc8a985 100644<br>
+--- a/fs/xfs/xfs_reflink.c<br>
++++ b/fs/xfs/xfs_reflink.c<br>
+@@ -29,6 +29,7 @@<br>
+ #include "xfs_iomap.h"<br>
+ #include "xfs_sb.h"<br>
+ #include "xfs_ag_resv.h"<br>
++#include <linux/dax.h><br>
+ <br>
+ /*<br>
+  * Copy on Write of Shared Blocks<br>
+@@ -1324,8 +1325,8 @@ xfs_reflink_remap_prep(<br>
+ 	if (XFS_IS_REALTIME_INODE(src) || XFS_IS_REALTIME_INODE(dest))<br>
+ 		goto out_unlock;<br>
+ <br>
+-	/* Don't share DAX file data for now. */<br>
+-	if (IS_DAX(inode_in) || IS_DAX(inode_out))<br>
++	/* Don't share DAX file data with non-DAX file. */<br>
++	if (IS_DAX(inode_in) != IS_DAX(inode_out))<br>
+ 		goto out_unlock;<br>
+ <br>
+ 	if (!IS_DAX(inode_in))<br>
+-- <br>
+2.31.0<br>
+<br>
+<br>
+<br>
+<br>
+

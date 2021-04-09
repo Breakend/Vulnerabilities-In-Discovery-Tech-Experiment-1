@@ -1,0 +1,23 @@
+On Thu, Apr 08, 2021 at 06:23:38AM +0100, Matthew Wilcox (Oracle) wrote:<br>
+><i> bit_spinlocks are horrible on RT because there's absolutely nowhere</i><br>
+><i> to put the mutex to sleep on.  They also do not participate in lockdep</i><br>
+><i> because there's nowhere to put the map.</i><br>
+><i> </i><br>
+><i> Most (all?) bit spinlocks are actually a split lock; logically they</i><br>
+><i> could be treated as a single spinlock, but for performance, we want to</i><br>
+><i> split the lock over many objects.  Introduce the split_lock as somewhere</i><br>
+><i> to store the lockdep map and as somewhere that the RT kernel can put</i><br>
+><i> a mutex.  It may also let us store a ticket lock for better performance</i><br>
+><i> on non-RT kernels in the future, but I have left the current cpu_relax()</i><br>
+><i> implementation intact for now.</i><br>
+<br>
+I think I like it, but I'm not sure it'll work for RT as is. It's a bit<br>
+like qrwlock in that it only uses the internal (split) lock for<br>
+contention, but that doesn't work for PI.<br>
+<br>
+I've not recently looked at RT, but I think they simply used to bloat a<br>
+number of the data structures with a real lock. Sebastian and Thomas<br>
+will know better.<br>
+<br>
+<br>
+

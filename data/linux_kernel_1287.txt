@@ -1,0 +1,85 @@
+Since we are going to keep MMU enabled during relocation, we need to<br>
+keep EL1 mode throughout the relocation.<br>
+<br>
+Keep EL1 enabled, and switch EL2 only before enterying the new world.<br>
+<br>
+Suggested-by: James Morse <james.morse@xxxxxxx><br>
+Signed-off-by: Pavel Tatashin <pasha.tatashin@xxxxxxxxxx><br>
+---<br>
+ arch/arm64/kernel/cpu-reset.h       |  3 +--<br>
+ arch/arm64/kernel/machine_kexec.c   |  4 ++--<br>
+ arch/arm64/kernel/relocate_kernel.S | 13 +++++++++++--<br>
+ 3 files changed, 14 insertions(+), 6 deletions(-)<br>
+<br>
+diff --git a/arch/arm64/kernel/cpu-reset.h b/arch/arm64/kernel/cpu-reset.h<br>
+index 1922e7a690f8..f6d95512fec6 100644<br>
+--- a/arch/arm64/kernel/cpu-reset.h<br>
++++ b/arch/arm64/kernel/cpu-reset.h<br>
+@@ -20,11 +20,10 @@ static inline void __noreturn cpu_soft_restart(unsigned long entry,<br>
+ {<br>
+ 	typeof(__cpu_soft_restart) *restart;<br>
+ <br>
+-	unsigned long el2_switch = is_hyp_callable();<br>
+ 	restart = (void *)__pa_symbol(__cpu_soft_restart);<br>
+ <br>
+ 	cpu_install_idmap();<br>
+-	restart(el2_switch, entry, arg0, arg1, arg2);<br>
++	restart(0, entry, arg0, arg1, arg2);<br>
+ 	unreachable();<br>
+ }<br>
+ <br>
+diff --git a/arch/arm64/kernel/machine_kexec.c b/arch/arm64/kernel/machine_kexec.c<br>
+index fb03b6676fb9..d5940b7889f8 100644<br>
+--- a/arch/arm64/kernel/machine_kexec.c<br>
++++ b/arch/arm64/kernel/machine_kexec.c<br>
+@@ -231,8 +231,8 @@ void machine_kexec(struct kimage *kimage)<br>
+ 	} else {<br>
+ 		if (is_hyp_callable())<br>
+ 			__hyp_set_vectors(kimage->arch.el2_vectors);<br>
+-		cpu_soft_restart(kimage->arch.kern_reloc, virt_to_phys(kimage),<br>
+-				 0, 0);<br>
++		cpu_soft_restart(kimage->arch.kern_reloc,<br>
++				 virt_to_phys(kimage), 0, 0);<br>
+ 	}<br>
+ <br>
+ 	BUG(); /* Should never get here. */<br>
+diff --git a/arch/arm64/kernel/relocate_kernel.S b/arch/arm64/kernel/relocate_kernel.S<br>
+index 36b4496524c3..df023b82544b 100644<br>
+--- a/arch/arm64/kernel/relocate_kernel.S<br>
++++ b/arch/arm64/kernel/relocate_kernel.S<br>
+@@ -13,6 +13,7 @@<br>
+ #include <asm/kexec.h><br>
+ #include <asm/page.h><br>
+ #include <asm/sysreg.h><br>
++#include <asm/virt.h><br>
+ <br>
+ /*<br>
+  * arm64_relocate_new_kernel - Put a 2nd stage image in place and boot it.<br>
+@@ -61,12 +62,20 @@ SYM_CODE_START(arm64_relocate_new_kernel)<br>
+ 	isb<br>
+ <br>
+ 	/* Start new image. */<br>
++	ldr	x1, [x0, #KIMAGE_ARCH_EL2_VECTORS]	/* relocation start */<br>
++	cbz	x1, .Lel1<br>
++	ldr	x1, [x0, #KIMAGE_START]		/* relocation start */<br>
++	ldr	x2, [x0, #KIMAGE_ARCH_DTB_MEM]	/* dtb address */<br>
++	mov	x3, xzr<br>
++	mov	x4, xzr<br>
++	mov     x0, #HVC_SOFT_RESTART<br>
++	hvc	#0				/* Jumps from el2 */<br>
++.Lel1:<br>
+ 	ldr	x4, [x0, #KIMAGE_START]		/* relocation start */<br>
+ 	ldr	x0, [x0, #KIMAGE_ARCH_DTB_MEM]	/* dtb address */<br>
+-	mov	x1, xzr<br>
+ 	mov	x2, xzr<br>
+ 	mov	x3, xzr<br>
+-	br	x4<br>
++	br	x4				/* Jumps from el1 */<br>
+ SYM_CODE_END(arm64_relocate_new_kernel)<br>
+ <br>
+ .align 3	/* To keep the 64-bit values below naturally aligned. */<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

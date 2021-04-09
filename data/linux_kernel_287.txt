@@ -1,0 +1,12 @@
+On Mon, Apr 05, 2021 at 03:43:10PM -0500, madvenka@xxxxxxxxxxxxxxxxxxx wrote:<br>
+><i> From: "Madhavan T. Venkataraman" <madvenka@xxxxxxxxxxxxxxxxxxx></i><br>
+><i> </i><br>
+><i> Implement a check_reliability() function that will contain checks for the</i><br>
+><i> presence of various features and conditions that can render the stack trace</i><br>
+><i> unreliable.</i><br>
+<br>
+Reviewed-by: Mark Brown <broonie@xxxxxxxxxx><br>
+<p><strong>Attachment:
+<a href="00868/signature.asc" ><tt>signature.asc</tt></a></strong><br>
+<em>Description:</em> PGP signature</p>
+

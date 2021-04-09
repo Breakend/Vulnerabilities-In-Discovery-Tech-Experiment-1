@@ -1,0 +1,18 @@
+On 08.04.2021 18:21, Krzysztof Kozlowski wrote:<br>
+><i> On 08/04/2021 15:48, Chen Hui wrote:</i><br>
+><i>> There is error message within devm_ioremap_resource</i><br>
+><i>> already, so remove the dev_err calls to avoid redundant</i><br>
+><i>> error messages.</i><br>
+><i>></i><br>
+><i>> Signed-off-by: Chen Hui <clare.chenhui@xxxxxxxxxx></i><br>
+><i>> ---</i><br>
+><i>>  drivers/clk/samsung/clk-exynos4412-isp.c | 4 +---</i><br>
+><i>>  drivers/clk/samsung/clk-s5pv210-audss.c  | 4 +---</i><br>
+><i>>  2 files changed, 2 insertions(+), 6 deletions(-)</i><br>
+><i> </i><br>
+><i> Reviewed-by: Krzysztof Kozlowski <krzysztof.kozlowski@xxxxxxxxxxxxx></i><br>
+<br>
+Thank you, patch applied.<br>
+<br>
+<br>
+

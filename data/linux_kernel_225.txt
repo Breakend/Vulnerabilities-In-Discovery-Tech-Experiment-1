@@ -1,0 +1,99 @@
+Now that the proper infrastructure is in place, convert the irq-gic-v3 chip<br>
+to use handle_strict_flow_irq() along with IRQCHIP_AUTOMASKS_FLOW.<br>
+<br>
+For EOImode=1, the Priority Drop is moved from gic_handle_irq() into<br>
+chip->irq_ack(). This effectively pushes the EOIR write down into<br>
+->handle_irq(), but doesn't change its ordering wrt the irqaction<br>
+handling.<br>
+<br>
+The EOImode=1 irqchip also gains IRQCHIP_EOI_THREADED, which allows the<br>
+->irq_eoi() call to be deferred to the tail of ONESHOT IRQ threads. This<br>
+means a threaded ONESHOT IRQ can now be handled entirely without a single<br>
+chip->irq_mask() call.<br>
+<br>
+Despite not having an Active state, LPIs are made to use<br>
+handle_strict_flow_irq() as well. This lets them re-use<br>
+gic_eoimode1_chip.irq_ack() as Priority Drop, rather than special-case them<br>
+in gic_handle_irq().<br>
+<br>
+EOImode=0 handling remains unchanged.<br>
+<br>
+Signed-off-by: Valentin Schneider <valentin.schneider@xxxxxxx><br>
+---<br>
+ drivers/irqchip/irq-gic-v3.c | 23 +++++++++++++++--------<br>
+ 1 file changed, 15 insertions(+), 8 deletions(-)<br>
+<br>
+diff --git a/drivers/irqchip/irq-gic-v3.c b/drivers/irqchip/irq-gic-v3.c<br>
+index 242a8fc5ec86..da73398117a7 100644<br>
+--- a/drivers/irqchip/irq-gic-v3.c<br>
++++ b/drivers/irqchip/irq-gic-v3.c<br>
+@@ -626,8 +626,6 @@ static inline void gic_handle_nmi(u32 irqnr, struct pt_regs *regs)<br>
+ 	if (irqs_enabled)<br>
+ 		nmi_enter();<br>
+ <br>
+-	if (static_branch_likely(&supports_deactivate_key))<br>
+-		gic_write_eoir(irqnr);<br>
+ 	/*<br>
+ 	 * Leave the PSR.I bit set to prevent other NMIs to be<br>
+ 	 * received while handling this one.<br>
+@@ -663,9 +661,11 @@ static asmlinkage void __exception_irq_entry gic_handle_irq(struct pt_regs *regs<br>
+ 	if ((irqnr >= 1020 && irqnr <= 1023))<br>
+ 		return;<br>
+ <br>
+-	if (static_branch_likely(&supports_deactivate_key))<br>
+-		gic_write_eoir(irqnr);<br>
+-	else<br>
++	/*<br>
++	 * eoimode1 will give us an isb in handle_domain_irq(), before<br>
++	 * handle_irq_event().<br>
++	 */<br>
++	if (!static_branch_likely(&supports_deactivate_key))<br>
+ 		isb();<br>
+ <br>
+ 	if (handle_domain_irq(gic_data.domain, irqnr, regs)) {<br>
+@@ -1276,6 +1276,7 @@ static struct irq_chip gic_eoimode1_chip = {<br>
+ 	.name			= "GICv3",<br>
+ 	.irq_mask		= gic_eoimode1_mask_irq,<br>
+ 	.irq_unmask		= gic_unmask_irq,<br>
++	.irq_ack                = gic_eoi_irq,<br>
+ 	.irq_eoi		= gic_eoimode1_eoi_irq,<br>
+ 	.irq_set_type		= gic_set_type,<br>
+ 	.irq_set_affinity	= gic_set_affinity,<br>
+@@ -1288,7 +1289,9 @@ static struct irq_chip gic_eoimode1_chip = {<br>
+ 	.ipi_send_mask		= gic_ipi_send_mask,<br>
+ 	.flags			= IRQCHIP_SET_TYPE_MASKED |<br>
+ 				  IRQCHIP_SKIP_SET_WAKE |<br>
+-				  IRQCHIP_MASK_ON_SUSPEND,<br>
++				  IRQCHIP_MASK_ON_SUSPEND |<br>
++				  IRQCHIP_AUTOMASKS_FLOW |<br>
++				  IRQCHIP_EOI_THREADED,<br>
+ };<br>
+ <br>
+ static int gic_irq_domain_map(struct irq_domain *d, unsigned int irq,<br>
+@@ -1312,7 +1315,9 @@ static int gic_irq_domain_map(struct irq_domain *d, unsigned int irq,<br>
+ 	case SPI_RANGE:<br>
+ 	case ESPI_RANGE:<br>
+ 		irq_domain_set_info(d, irq, hw, chip, d->host_data,<br>
+-				    handle_fasteoi_irq, NULL, NULL);<br>
++				    static_branch_likely(&supports_deactivate_key) ?<br>
++				    handle_strict_flow_irq : handle_fasteoi_irq,<br>
++				    NULL, NULL);<br>
+ 		irq_set_probe(irq);<br>
+ 		irqd_set_single_target(irqd);<br>
+ 		break;<br>
+@@ -1321,7 +1326,9 @@ static int gic_irq_domain_map(struct irq_domain *d, unsigned int irq,<br>
+ 		if (!gic_dist_supports_lpis())<br>
+ 			return -EPERM;<br>
+ 		irq_domain_set_info(d, irq, hw, chip, d->host_data,<br>
+-				    handle_fasteoi_irq, NULL, NULL);<br>
++				    static_branch_likely(&supports_deactivate_key) ?<br>
++				    handle_strict_flow_irq : handle_fasteoi_irq,<br>
++				    NULL, NULL);<br>
+ 		break;<br>
+ <br>
+ 	default:<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

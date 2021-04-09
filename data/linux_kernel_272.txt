@@ -1,0 +1,20 @@
+On Wed, 07 Apr 2021 13:04:51 +0300, Matti Vaittinen wrote:<br>
+><i> BD9576MUF provides over-current protection and detection. Current is</i><br>
+><i> measured as voltage loss over external FET. Allow specifying FET's on</i><br>
+><i> resistance so current monitoring limits can be converted to voltages.</i><br>
+><i> </i><br>
+><i> Signed-off-by: Matti Vaittinen <matti.vaittinen@xxxxxxxxxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i> v5 onwards:</i><br>
+><i>   - No changes</i><br>
+><i> v4:</i><br>
+><i>   - Fixed the description indentiation</i><br>
+><i> ---</i><br>
+><i>  .../bindings/regulator/rohm,bd9576-regulator.yaml           | 6 ++++++</i><br>
+><i>  1 file changed, 6 insertions(+)</i><br>
+><i> </i><br>
+<br>
+Reviewed-by: Rob Herring <robh@xxxxxxxxxx><br>
+<br>
+<br>
+

@@ -1,0 +1,107 @@
+From: James Morse <james.morse@xxxxxxx><br>
+<br>
+The hyp-stub's el1_sync code doesn't do very much, this can easily fit<br>
+in the vectors.<br>
+<br>
+With this, all of the hyp-stubs behaviour is contained in its vectors.<br>
+This lets kexec and hibernate copy the hyp-stub when they need its<br>
+behaviour, instead of re-implementing it.<br>
+<br>
+Signed-off-by: James Morse <james.morse@xxxxxxx><br>
+<br>
+[Fixed merging issues]<br>
+<br>
+Signed-off-by: Pavel Tatashin <pasha.tatashin@xxxxxxxxxx><br>
+---<br>
+ arch/arm64/kernel/hyp-stub.S | 59 ++++++++++++++++++------------------<br>
+ 1 file changed, 29 insertions(+), 30 deletions(-)<br>
+<br>
+diff --git a/arch/arm64/kernel/hyp-stub.S b/arch/arm64/kernel/hyp-stub.S<br>
+index ff329c5c074d..d1a73d0f74e0 100644<br>
+--- a/arch/arm64/kernel/hyp-stub.S<br>
++++ b/arch/arm64/kernel/hyp-stub.S<br>
+@@ -21,6 +21,34 @@ SYM_CODE_START_LOCAL(\label)<br>
+ 	.align 7<br>
+ 	b	\label<br>
+ SYM_CODE_END(\label)<br>
++.endm<br>
++<br>
++.macro hyp_stub_el1_sync<br>
++SYM_CODE_START_LOCAL(hyp_stub_el1_sync)<br>
++	.align 7<br>
++	cmp	x0, #HVC_SET_VECTORS<br>
++	b.ne	2f<br>
++	msr	vbar_el2, x1<br>
++	b	9f<br>
++<br>
++2:	cmp	x0, #HVC_SOFT_RESTART<br>
++	b.ne	3f<br>
++	mov	x0, x2<br>
++	mov	x2, x4<br>
++	mov	x4, x1<br>
++	mov	x1, x3<br>
++	br	x4				// no return<br>
++<br>
++3:	cmp	x0, #HVC_RESET_VECTORS<br>
++	beq	9f				// Nothing to reset!<br>
++<br>
++	/* Someone called kvm_call_hyp() against the hyp-stub... */<br>
++	mov_q	x0, HVC_STUB_ERR<br>
++	eret<br>
++<br>
++9:	mov	x0, xzr<br>
++	eret<br>
++SYM_CODE_END(hyp_stub_el1_sync)<br>
+ .endm<br>
+ <br>
+ 	.text<br>
+@@ -39,7 +67,7 @@ SYM_CODE_START(__hyp_stub_vectors)<br>
+ 	invalid_vector	hyp_stub_el2h_fiq_invalid	// FIQ EL2h<br>
+ 	invalid_vector	hyp_stub_el2h_error_invalid	// Error EL2h<br>
+ <br>
+-	ventry	el1_sync			// Synchronous 64-bit EL1<br>
++	hyp_stub_el1_sync				// Synchronous 64-bit EL1<br>
+ 	invalid_vector	hyp_stub_el1_irq_invalid	// IRQ 64-bit EL1<br>
+ 	invalid_vector	hyp_stub_el1_fiq_invalid	// FIQ 64-bit EL1<br>
+ 	invalid_vector	hyp_stub_el1_error_invalid	// Error 64-bit EL1<br>
+@@ -55,35 +83,6 @@ SYM_CODE_END(__hyp_stub_vectors)<br>
+ # Check the __hyp_stub_vectors didn't overflow<br>
+ .org . - (__hyp_stub_vectors_end - __hyp_stub_vectors) + SZ_2K<br>
+ <br>
+-<br>
+-SYM_CODE_START_LOCAL(el1_sync)<br>
+-	cmp	x0, #HVC_SET_VECTORS<br>
+-	b.ne	1f<br>
+-	msr	vbar_el2, x1<br>
+-	b	9f<br>
+-<br>
+-1:	cmp	x0, #HVC_VHE_RESTART<br>
+-	b.eq	mutate_to_vhe<br>
+-<br>
+-2:	cmp	x0, #HVC_SOFT_RESTART<br>
+-	b.ne	3f<br>
+-	mov	x0, x2<br>
+-	mov	x2, x4<br>
+-	mov	x4, x1<br>
+-	mov	x1, x3<br>
+-	br	x4				// no return<br>
+-<br>
+-3:	cmp	x0, #HVC_RESET_VECTORS<br>
+-	beq	9f				// Nothing to reset!<br>
+-<br>
+-	/* Someone called kvm_call_hyp() against the hyp-stub... */<br>
+-	mov_q	x0, HVC_STUB_ERR<br>
+-	eret<br>
+-<br>
+-9:	mov	x0, xzr<br>
+-	eret<br>
+-SYM_CODE_END(el1_sync)<br>
+-<br>
+ // nVHE? No way! Give me the real thing!<br>
+ SYM_CODE_START_LOCAL(mutate_to_vhe)<br>
+ 	// Sanity check: MMU *must* be off<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

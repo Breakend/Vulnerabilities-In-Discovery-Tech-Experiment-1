@@ -1,0 +1,261 @@
+From: Ohad Sharabi <osharabi@xxxxxxxxx><br>
+<br>
+In order to minimize hard coded values between F/W and the driver, we<br>
+send msi-x indexes dynamically to the F/W.<br>
+<br>
+Signed-off-by: Ohad Sharabi <osharabi@xxxxxxxxx><br>
+Reviewed-by: Oded Gabbay <ogabbay@xxxxxxxxxx><br>
+Signed-off-by: Oded Gabbay <ogabbay@xxxxxxxxxx><br>
+---<br>
+ drivers/misc/habanalabs/common/firmware_if.c  | 67 +++++++++++++++++<br>
+ drivers/misc/habanalabs/common/habanalabs.h   |  4 +<br>
+ drivers/misc/habanalabs/gaudi/gaudi.c         |  2 +-<br>
+ drivers/misc/habanalabs/goya/goya.c           |  2 +-<br>
+ .../misc/habanalabs/include/common/cpucp_if.h | 75 ++++++++++++++-----<br>
+ 5 files changed, 131 insertions(+), 19 deletions(-)<br>
+<br>
+diff --git a/drivers/misc/habanalabs/common/firmware_if.c b/drivers/misc/habanalabs/common/firmware_if.c<br>
+index d81a8d537373..532a2fd7bfb4 100644<br>
+--- a/drivers/misc/habanalabs/common/firmware_if.c<br>
++++ b/drivers/misc/habanalabs/common/firmware_if.c<br>
+@@ -422,6 +422,73 @@ int hl_fw_cpucp_info_get(struct hl_device *hdev,<br>
+ 	return rc;<br>
+ }<br>
+ <br>
++static int hl_fw_send_msi_info_msg(struct hl_device *hdev)<br>
++{<br>
++	struct cpucp_array_data_packet *pkt;<br>
++	size_t total_pkt_size, data_size;<br>
++	u64 result;<br>
++	int rc;<br>
++<br>
++	/* skip sending this info for unsupported ASICs */<br>
++	if (!hdev->asic_funcs->get_msi_info)<br>
++		return 0;<br>
++<br>
++	data_size = CPUCP_NUM_OF_MSI_TYPES * sizeof(u32);<br>
++	total_pkt_size = sizeof(struct cpucp_array_data_packet) + data_size;<br>
++<br>
++	/* data should be aligned to 8 bytes in order to CPU-CP to copy it */<br>
++	total_pkt_size = (total_pkt_size + 0x7) & ~0x7;<br>
++<br>
++	/* total_pkt_size is casted to u16 later on */<br>
++	if (total_pkt_size > USHRT_MAX) {<br>
++		dev_err(hdev->dev, "CPUCP array data is too big\n");<br>
++		return -EINVAL;<br>
++	}<br>
++<br>
++	pkt = kzalloc(total_pkt_size, GFP_KERNEL);<br>
++	if (!pkt)<br>
++		return -ENOMEM;<br>
++<br>
++	pkt->length = cpu_to_le32(CPUCP_NUM_OF_MSI_TYPES);<br>
++<br>
++	hdev->asic_funcs->get_msi_info((u32 *)&pkt->data);<br>
++<br>
++	pkt->cpucp_pkt.ctl = cpu_to_le32(CPUCP_PACKET_MSI_INFO_SET <<<br>
++						CPUCP_PKT_CTL_OPCODE_SHIFT);<br>
++<br>
++	rc = hdev->asic_funcs->send_cpu_message(hdev, (u32 *)pkt,<br>
++						total_pkt_size, 0, &result);<br>
++<br>
++	/*<br>
++	 * in case packet result is invalid it means that FW does not support<br>
++	 * this feature and will use default/hard coded MSI values. no reason<br>
++	 * to stop the boot<br>
++	 */<br>
++	if (rc && result == cpucp_packet_invalid)<br>
++		rc = 0;<br>
++<br>
++	if (rc)<br>
++		dev_err(hdev->dev, "failed to send CPUCP array data\n");<br>
++<br>
++	kfree(pkt);<br>
++<br>
++	return rc;<br>
++}<br>
++<br>
++int hl_fw_cpucp_handshake(struct hl_device *hdev,<br>
++			u32 cpu_security_boot_status_reg,<br>
++			u32 boot_err0_reg)<br>
++{<br>
++	int rc;<br>
++<br>
++	rc = hl_fw_cpucp_info_get(hdev, cpu_security_boot_status_reg,<br>
++					boot_err0_reg);<br>
++	if (rc)<br>
++		return rc;<br>
++<br>
++	return hl_fw_send_msi_info_msg(hdev);<br>
++}<br>
++<br>
+ int hl_fw_get_eeprom_data(struct hl_device *hdev, void *data, size_t max_size)<br>
+ {<br>
+ 	struct cpucp_packet pkt = {};<br>
+diff --git a/drivers/misc/habanalabs/common/habanalabs.h b/drivers/misc/habanalabs/common/habanalabs.h<br>
+index d89ae4c3d634..867986ef4588 100644<br>
+--- a/drivers/misc/habanalabs/common/habanalabs.h<br>
++++ b/drivers/misc/habanalabs/common/habanalabs.h<br>
+@@ -1049,6 +1049,7 @@ struct hl_asic_funcs {<br>
+ 	int (*hw_block_mmap)(struct hl_device *hdev, struct vm_area_struct *vma,<br>
+ 			u32 block_id, u32 block_size);<br>
+ 	void (*enable_events_from_fw)(struct hl_device *hdev);<br>
++	void (*get_msi_info)(u32 *table);<br>
+ };<br>
+ <br>
+ <br>
+@@ -2374,6 +2375,9 @@ int hl_fw_send_heartbeat(struct hl_device *hdev);<br>
+ int hl_fw_cpucp_info_get(struct hl_device *hdev,<br>
+ 			u32 cpu_security_boot_status_reg,<br>
+ 			u32 boot_err0_reg);<br>
++int hl_fw_cpucp_handshake(struct hl_device *hdev,<br>
++			u32 cpu_security_boot_status_reg,<br>
++			u32 boot_err0_reg);<br>
+ int hl_fw_get_eeprom_data(struct hl_device *hdev, void *data, size_t max_size);<br>
+ int hl_fw_cpucp_pci_counters_get(struct hl_device *hdev,<br>
+ 		struct hl_info_pci_counters *counters);<br>
+diff --git a/drivers/misc/habanalabs/gaudi/gaudi.c b/drivers/misc/habanalabs/gaudi/gaudi.c<br>
+index 791434278904..62e3c63bec20 100644<br>
+--- a/drivers/misc/habanalabs/gaudi/gaudi.c<br>
++++ b/drivers/misc/habanalabs/gaudi/gaudi.c<br>
+@@ -7966,7 +7966,7 @@ static int gaudi_cpucp_info_get(struct hl_device *hdev)<br>
+ 	if (!(gaudi->hw_cap_initialized & HW_CAP_CPU_Q))<br>
+ 		return 0;<br>
+ <br>
+-	rc = hl_fw_cpucp_info_get(hdev, mmCPU_BOOT_DEV_STS0, mmCPU_BOOT_ERR0);<br>
++	rc = hl_fw_cpucp_handshake(hdev, mmCPU_BOOT_DEV_STS0, mmCPU_BOOT_ERR0);<br>
+ 	if (rc)<br>
+ 		return rc;<br>
+ <br>
+diff --git a/drivers/misc/habanalabs/goya/goya.c b/drivers/misc/habanalabs/goya/goya.c<br>
+index 175b7b0af450..9d49ba649db0 100644<br>
+--- a/drivers/misc/habanalabs/goya/goya.c<br>
++++ b/drivers/misc/habanalabs/goya/goya.c<br>
+@@ -5245,7 +5245,7 @@ int goya_cpucp_info_get(struct hl_device *hdev)<br>
+ 	if (!(goya->hw_cap_initialized & HW_CAP_CPU_Q))<br>
+ 		return 0;<br>
+ <br>
+-	rc = hl_fw_cpucp_info_get(hdev, mmCPU_BOOT_DEV_STS0, mmCPU_BOOT_ERR0);<br>
++	rc = hl_fw_cpucp_handshake(hdev, mmCPU_BOOT_DEV_STS0, mmCPU_BOOT_ERR0);<br>
+ 	if (rc)<br>
+ 		return rc;<br>
+ <br>
+diff --git a/drivers/misc/habanalabs/include/common/cpucp_if.h b/drivers/misc/habanalabs/include/common/cpucp_if.h<br>
+index 88e8ce6e0694..20a710f7a369 100644<br>
+--- a/drivers/misc/habanalabs/include/common/cpucp_if.h<br>
++++ b/drivers/misc/habanalabs/include/common/cpucp_if.h<br>
+@@ -302,6 +302,27 @@ enum pq_init_status {<br>
+  * CPUCP_PACKET_POWER_GET<br>
+  *       Fetch the present power consumption of the device (Current * Voltage).<br>
+  *<br>
++ * CPUCP_PACKET_NIC_PFC_SET -<br>
++ *       Enable/Disable the NIC PFC feature. The packet's arguments specify the<br>
++ *       NIC port, relevant lanes to configure and one bit indication for<br>
++ *       enable/disable.<br>
++ *<br>
++ * CPUCP_PACKET_NIC_FAULT_GET -<br>
++ *       Fetch the current indication for local/remote faults from the NIC MAC.<br>
++ *       The result is 32-bit value of the relevant register.<br>
++ *<br>
++ * CPUCP_PACKET_NIC_LPBK_SET -<br>
++ *       Enable/Disable the MAC loopback feature. The packet's arguments specify<br>
++ *       the NIC port, relevant lanes to configure and one bit indication for<br>
++ *       enable/disable.<br>
++ *<br>
++ * CPUCP_PACKET_NIC_MAC_INIT -<br>
++ *       Configure the NIC MAC channels. The packet's arguments specify the<br>
++ *       NIC port and the speed.<br>
++ *<br>
++ * CPUCP_PACKET_MSI_INFO_SET -<br>
++ *       set the index number for each supported msi type going from<br>
++ *       host to device<br>
+  */<br>
+ <br>
+ enum cpucp_packet_id {<br>
+@@ -337,6 +358,11 @@ enum cpucp_packet_id {<br>
+ 	CPUCP_PACKET_PLL_INFO_GET,		/* internal */<br>
+ 	CPUCP_PACKET_NIC_STATUS,		/* internal */<br>
+ 	CPUCP_PACKET_POWER_GET,			/* internal */<br>
++	CPUCP_PACKET_NIC_PFC_SET,		/* internal */<br>
++	CPUCP_PACKET_NIC_FAULT_GET,		/* internal */<br>
++	CPUCP_PACKET_NIC_LPBK_SET,		/* internal */<br>
++	CPUCP_PACKET_NIC_MAC_CFG,		/* internal */<br>
++	CPUCP_PACKET_MSI_INFO_SET,		/* internal */<br>
+ };<br>
+ <br>
+ #define CPUCP_PACKET_FENCE_VAL	0xFE8CE7A5<br>
+@@ -408,6 +434,12 @@ struct cpucp_unmask_irq_arr_packet {<br>
+ 	__le32 irqs[0];<br>
+ };<br>
+ <br>
++struct cpucp_array_data_packet {<br>
++	struct cpucp_packet cpucp_pkt;<br>
++	__le32 length;<br>
++	__le32 data[0];<br>
++};<br>
++<br>
+ enum cpucp_packet_rc {<br>
+ 	cpucp_packet_success,<br>
+ 	cpucp_packet_invalid,<br>
+@@ -476,6 +508,22 @@ enum cpucp_pll_type_attributes {<br>
+ 	cpucp_pll_pci,<br>
+ };<br>
+ <br>
++/*<br>
++ * MSI type enumeration table for all ASICs and future SW versions.<br>
++ * For future ASIC-LKD compatibility, we can only add new enumerations.<br>
++ * at the end of the table (before CPUCP_NUM_OF_MSI_TYPES).<br>
++ * Changing the order of entries or removing entries is not allowed.<br>
++ */<br>
++enum cpucp_msi_type {<br>
++	CPUCP_EVENT_QUEUE_MSI_TYPE,<br>
++	CPUCP_NIC_PORT1_MSI_TYPE,<br>
++	CPUCP_NIC_PORT3_MSI_TYPE,<br>
++	CPUCP_NIC_PORT5_MSI_TYPE,<br>
++	CPUCP_NIC_PORT7_MSI_TYPE,<br>
++	CPUCP_NIC_PORT9_MSI_TYPE,<br>
++	CPUCP_NUM_OF_MSI_TYPES<br>
++};<br>
++<br>
+ /*<br>
+  * PLL enumeration table used for all ASICs and future SW versions.<br>
+  * For future ASIC-LKD compatibility, we can only add new enumerations.<br>
+@@ -492,23 +540,16 @@ enum pll_index {<br>
+ 	TPC_PLL = 6,<br>
+ 	IF_PLL = 7,<br>
+ 	SRAM_PLL = 8,<br>
+-	NS_DCORE_PLL = 9,<br>
+-	MESH_DCORE_PLL = 10,<br>
+-	HBM_PLL = 11,<br>
+-	TPC_DCORE_PLL = 12,<br>
+-	VIDEO_DCORE_PLL = 13,<br>
+-	SRAM_DCORE_PLL = 14,<br>
+-	NIC_PHY_DCORE_PLL = 15,<br>
+-	MSS_DCORE_PLL = 16,<br>
+-	DMA_DCORE_PLL = 17,<br>
+-	SIF_PLL = 18,<br>
+-	DDR_PLL = 19,<br>
+-	VID_PLL = 20,<br>
+-	BANK_PLL = 21,<br>
+-	MMU_PLL = 22,<br>
+-	IC_PLL = 23,<br>
+-	MC_PLL = 24,<br>
+-	EMMC_PLL = 25,<br>
++	NS_PLL = 9,<br>
++	HBM_PLL = 10,<br>
++	MSS_PLL = 11,<br>
++	DDR_PLL = 12,<br>
++	VID_PLL = 13,<br>
++	BANK_PLL = 14,<br>
++	MMU_PLL = 15,<br>
++	IC_PLL = 16,<br>
++	MC_PLL = 17,<br>
++	EMMC_PLL = 18,<br>
+ 	PLL_MAX<br>
+ };<br>
+ <br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

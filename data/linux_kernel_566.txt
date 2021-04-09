@@ -1,0 +1,24 @@
+Add support for MT7530 interrupt controller.<br>
+<br>
+DENG Qingfang (4):<br>
+  net: phy: add MediaTek PHY driver<br>
+  net: dsa: mt7530: add interrupt support<br>
+  dt-bindings: net: dsa: add MT7530 interrupt controller binding<br>
+  staging: mt7621-dts: enable MT7530 interrupt controller<br>
+<br>
+ .../devicetree/bindings/net/dsa/mt7530.txt    |   5 +<br>
+ drivers/net/dsa/Kconfig                       |   1 +<br>
+ drivers/net/dsa/mt7530.c                      | 266 ++++++++++++++++--<br>
+ drivers/net/dsa/mt7530.h                      |  20 +-<br>
+ drivers/net/phy/Kconfig                       |   5 +<br>
+ drivers/net/phy/Makefile                      |   1 +<br>
+ drivers/net/phy/mediatek.c                    | 112 ++++++++<br>
+ drivers/staging/mt7621-dts/mt7621.dtsi        |   3 +<br>
+ 8 files changed, 384 insertions(+), 29 deletions(-)<br>
+ create mode 100644 drivers/net/phy/mediatek.c<br>
+<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

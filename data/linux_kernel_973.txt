@@ -1,0 +1,122 @@
+From: Zhongjun Tan <tanzhongjun@xxxxxxxxxx><br>
+<br>
+Delete selinux selinux_xfrm_policy_lookup() useless argument.<br>
+<br>
+Signed-off-by: Zhongjun Tan <tanzhongjun@xxxxxxxxxx><br>
+---<br>
+ include/linux/lsm_hook_defs.h   | 3 +--<br>
+ include/linux/security.h        | 4 ++--<br>
+ net/xfrm/xfrm_policy.c          | 6 ++----<br>
+ security/security.c             | 4 ++--<br>
+ security/selinux/include/xfrm.h | 2 +-<br>
+ security/selinux/xfrm.c         | 2 +-<br>
+ 6 files changed, 9 insertions(+), 12 deletions(-)<br>
+<br>
+diff --git a/include/linux/lsm_hook_defs.h b/include/linux/lsm_hook_defs.h<br>
+index 04c0179..2adeea4 100644<br>
+--- a/include/linux/lsm_hook_defs.h<br>
++++ b/include/linux/lsm_hook_defs.h<br>
+@@ -358,8 +358,7 @@<br>
+ 	 struct xfrm_sec_ctx *polsec, u32 secid)<br>
+ LSM_HOOK(void, LSM_RET_VOID, xfrm_state_free_security, struct xfrm_state *x)<br>
+ LSM_HOOK(int, 0, xfrm_state_delete_security, struct xfrm_state *x)<br>
+-LSM_HOOK(int, 0, xfrm_policy_lookup, struct xfrm_sec_ctx *ctx, u32 fl_secid,<br>
+-	 u8 dir)<br>
++LSM_HOOK(int, 0, xfrm_policy_lookup, struct xfrm_sec_ctx *ctx, u32 fl_secid)<br>
+ LSM_HOOK(int, 1, xfrm_state_pol_flow_match, struct xfrm_state *x,<br>
+ 	 struct xfrm_policy *xp, const struct flowi_common *flic)<br>
+ LSM_HOOK(int, 0, xfrm_decode_session, struct sk_buff *skb, u32 *secid,<br>
+diff --git a/include/linux/security.h b/include/linux/security.h<br>
+index 06f7c50..24eda04 100644<br>
+--- a/include/linux/security.h<br>
++++ b/include/linux/security.h<br>
+@@ -1681,7 +1681,7 @@ int security_xfrm_state_alloc_acquire(struct xfrm_state *x,<br>
+ 				      struct xfrm_sec_ctx *polsec, u32 secid);<br>
+ int security_xfrm_state_delete(struct xfrm_state *x);<br>
+ void security_xfrm_state_free(struct xfrm_state *x);<br>
+-int security_xfrm_policy_lookup(struct xfrm_sec_ctx *ctx, u32 fl_secid, u8 dir);<br>
++int security_xfrm_policy_lookup(struct xfrm_sec_ctx *ctx, u32 fl_secid);<br>
+ int security_xfrm_state_pol_flow_match(struct xfrm_state *x,<br>
+ 				       struct xfrm_policy *xp,<br>
+ 				       const struct flowi_common *flic);<br>
+@@ -1732,7 +1732,7 @@ static inline int security_xfrm_state_delete(struct xfrm_state *x)<br>
+ 	return 0;<br>
+ }<br>
+ <br>
+-static inline int security_xfrm_policy_lookup(struct xfrm_sec_ctx *ctx, u32 fl_secid, u8 dir)<br>
++static inline int security_xfrm_policy_lookup(struct xfrm_sec_ctx *ctx, u32 fl_secid)<br>
+ {<br>
+ 	return 0;<br>
+ }<br>
+diff --git a/net/xfrm/xfrm_policy.c b/net/xfrm/xfrm_policy.c<br>
+index 156347f..d5d934e 100644<br>
+--- a/net/xfrm/xfrm_policy.c<br>
++++ b/net/xfrm/xfrm_policy.c<br>
+@@ -1902,8 +1902,7 @@ static int xfrm_policy_match(const struct xfrm_policy *pol,<br>
+ <br>
+ 	match = xfrm_selector_match(sel, fl, family);<br>
+ 	if (match)<br>
+-		ret = security_xfrm_policy_lookup(pol->security, fl->flowi_secid,<br>
+-						  dir);<br>
++		ret = security_xfrm_policy_lookup(pol->security, fl->flowi_secid);<br>
+ 	return ret;<br>
+ }<br>
+ <br>
+@@ -2181,8 +2180,7 @@ static struct xfrm_policy *xfrm_sk_policy_lookup(const struct sock *sk, int dir,<br>
+ 				goto out;<br>
+ 			}<br>
+ 			err = security_xfrm_policy_lookup(pol->security,<br>
+-						      fl->flowi_secid,<br>
+-						      dir);<br>
++						      fl->flowi_secid);<br>
+ 			if (!err) {<br>
+ 				if (!xfrm_pol_hold_rcu(pol))<br>
+ 					goto again;<br>
+diff --git a/security/security.c b/security/security.c<br>
+index b38155b..0c1c979 100644<br>
+--- a/security/security.c<br>
++++ b/security/security.c<br>
+@@ -2466,9 +2466,9 @@ void security_xfrm_state_free(struct xfrm_state *x)<br>
+ 	call_void_hook(xfrm_state_free_security, x);<br>
+ }<br>
+ <br>
+-int security_xfrm_policy_lookup(struct xfrm_sec_ctx *ctx, u32 fl_secid, u8 dir)<br>
++int security_xfrm_policy_lookup(struct xfrm_sec_ctx *ctx, u32 fl_secid)<br>
+ {<br>
+-	return call_int_hook(xfrm_policy_lookup, 0, ctx, fl_secid, dir);<br>
++	return call_int_hook(xfrm_policy_lookup, 0, ctx, fl_secid);<br>
+ }<br>
+ <br>
+ int security_xfrm_state_pol_flow_match(struct xfrm_state *x,<br>
+diff --git a/security/selinux/include/xfrm.h b/security/selinux/include/xfrm.h<br>
+index 0a6f34a..7415940 100644<br>
+--- a/security/selinux/include/xfrm.h<br>
++++ b/security/selinux/include/xfrm.h<br>
+@@ -23,7 +23,7 @@ int selinux_xfrm_state_alloc_acquire(struct xfrm_state *x,<br>
+ 				     struct xfrm_sec_ctx *polsec, u32 secid);<br>
+ void selinux_xfrm_state_free(struct xfrm_state *x);<br>
+ int selinux_xfrm_state_delete(struct xfrm_state *x);<br>
+-int selinux_xfrm_policy_lookup(struct xfrm_sec_ctx *ctx, u32 fl_secid, u8 dir);<br>
++int selinux_xfrm_policy_lookup(struct xfrm_sec_ctx *ctx, u32 fl_secid);<br>
+ int selinux_xfrm_state_pol_flow_match(struct xfrm_state *x,<br>
+ 				      struct xfrm_policy *xp,<br>
+ 				      const struct flowi_common *flic);<br>
+diff --git a/security/selinux/xfrm.c b/security/selinux/xfrm.c<br>
+index 634f3db..be83e5c 100644<br>
+--- a/security/selinux/xfrm.c<br>
++++ b/security/selinux/xfrm.c<br>
+@@ -150,7 +150,7 @@ static int selinux_xfrm_delete(struct xfrm_sec_ctx *ctx)<br>
+  * LSM hook implementation that authorizes that a flow can use a xfrm policy<br>
+  * rule.<br>
+  */<br>
+-int selinux_xfrm_policy_lookup(struct xfrm_sec_ctx *ctx, u32 fl_secid, u8 dir)<br>
++int selinux_xfrm_policy_lookup(struct xfrm_sec_ctx *ctx, u32 fl_secid)<br>
+ {<br>
+ 	int rc;<br>
+ <br>
+-- <br>
+1.9.1<br>
+<br>
+<br>
+<br>
+

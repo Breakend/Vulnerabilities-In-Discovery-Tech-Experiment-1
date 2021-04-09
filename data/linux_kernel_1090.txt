@@ -1,0 +1,17 @@
+On 2021/4/8 7:04, Wolfram Sang wrote:<br>
+><i> </i><br>
+><i>> Reason for temp variable is for me it's confusing to see statement like</i><br>
+><i>> "rate_khz = rate_khz / 1000".</i><br>
+><i> </i><br>
+><i> Yes. And with this clearer calculation, we can maybe skip the HZ_PER_KHZ</i><br>
+><i> define completely and just use plain '1000' as a factor/divider because</i><br>
+><i> it then becomes obvious. I still find the define more confusing than</i><br>
+><i> helpful TBH. But I'll leave the final decision to Yicong Yang.</i><br>
+><i> </i><br>
+<br>
+HZ_PER_KHZ macro are defined separately in other places of the kernel.<br>
+Andy suggested to have this defined and used so that one day we can factor<br>
+this macro out to the public. :)<br>
+<br>
+<br>
+

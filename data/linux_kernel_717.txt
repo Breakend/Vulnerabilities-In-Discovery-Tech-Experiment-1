@@ -1,0 +1,51 @@
+From: Xuezhi Zhang <zhangxuezhi1@xxxxxxxxxx><br>
+<br>
+Fix the following coccicheck warning:<br>
+drivers/gpu/drm//nouveau/nouveau_hwmon.c:44:8-16: <br>
+WARNING: use scnprintf or sprintf<br>
+drivers/gpu/drm//nouveau/nouveau_hwmon.c:57:8-16: <br>
+WARNING: use scnprintf or sprintf<br>
+drivers/gpu/drm//nouveau/nouveau_hwmon.c:90:8-16: <br>
+WARNING: use scnprintf or sprintf<br>
+<br>
+Signed-off-by: Xuezhi Zhang <zhangxuezhi1@xxxxxxxxxx><br>
+---<br>
+ drivers/gpu/drm/nouveau/nouveau_hwmon.c | 6 +++---<br>
+ 1 file changed, 3 insertions(+), 3 deletions(-)<br>
+<br>
+diff --git a/drivers/gpu/drm/nouveau/nouveau_hwmon.c b/drivers/gpu/drm/nouveau/nouveau_hwmon.c<br>
+index 1c3104d20571..c6e5ee9ece6d 100644<br>
+--- a/drivers/gpu/drm/nouveau/nouveau_hwmon.c<br>
++++ b/drivers/gpu/drm/nouveau/nouveau_hwmon.c<br>
+@@ -41,7 +41,7 @@ static ssize_t<br>
+ nouveau_hwmon_show_temp1_auto_point1_pwm(struct device *d,<br>
+ 					 struct device_attribute *a, char *buf)<br>
+ {<br>
+-	return snprintf(buf, PAGE_SIZE, "%d\n", 100);<br>
++	return sysfs_emit(buf, "%d\n", 100);<br>
+ }<br>
+ static SENSOR_DEVICE_ATTR(temp1_auto_point1_pwm, 0444,<br>
+ 			  nouveau_hwmon_show_temp1_auto_point1_pwm, NULL, 0);<br>
+@@ -54,7 +54,7 @@ nouveau_hwmon_temp1_auto_point1_temp(struct device *d,<br>
+ 	struct nouveau_drm *drm = nouveau_drm(dev);<br>
+ 	struct nvkm_therm *therm = nvxx_therm(&drm->client.device);<br>
+ <br>
+-	return snprintf(buf, PAGE_SIZE, "%d\n",<br>
++	return sysfs_emit(buf, "%d\n",<br>
+ 	      therm->attr_get(therm, NVKM_THERM_ATTR_THRS_FAN_BOOST) * 1000);<br>
+ }<br>
+ static ssize_t<br>
+@@ -87,7 +87,7 @@ nouveau_hwmon_temp1_auto_point1_temp_hyst(struct device *d,<br>
+ 	struct nouveau_drm *drm = nouveau_drm(dev);<br>
+ 	struct nvkm_therm *therm = nvxx_therm(&drm->client.device);<br>
+ <br>
+-	return snprintf(buf, PAGE_SIZE, "%d\n",<br>
++	return sysfs_emit(buf, "%d\n",<br>
+ 	 therm->attr_get(therm, NVKM_THERM_ATTR_THRS_FAN_BOOST_HYST) * 1000);<br>
+ }<br>
+ static ssize_t<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

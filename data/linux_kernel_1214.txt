@@ -1,0 +1,364 @@
+On Wed, 7 Apr 2021 16:30:01 -0400<br>
+Alex Deucher <alexdeucher@xxxxxxxxx> wrote:<br>
+<br>
+><i> On Tue, Apr 6, 2021 at 10:13 AM Carlis <llyz108@xxxxxxx> wrote:</i><br>
+><i> ></i><br>
+><i> > From: Xuezhi Zhang <zhangxuezhi1@xxxxxxxxxx></i><br>
+><i> ></i><br>
+><i> > Fix the following coccicheck warning:</i><br>
+><i> > drivers/gpu/drm/amd/pm//amdgpu_pm.c:1940:8-16:</i><br>
+><i> > WARNING: use scnprintf or sprintf</i><br>
+><i> > drivers/gpu/drm/amd/pm//amdgpu_pm.c:1978:8-16:</i><br>
+><i> > WARNING: use scnprintf or sprintf</i><br>
+><i> > drivers/gpu/drm/amd/pm//amdgpu_pm.c:2022:8-16:</i><br>
+><i> > WARNING: use scnprintf or sprintf</i><br>
+><i> > drivers/gpu/drm/amd/pm//amdgpu_pm.c:294:8-16:</i><br>
+><i> > WARNING: use scnprintf or sprintf</i><br>
+><i> > drivers/gpu/drm/amd/pm//amdgpu_pm.c:154:8-16:</i><br>
+><i> > WARNING: use scnprintf or sprintf</i><br>
+><i> > drivers/gpu/drm/amd/pm//amdgpu_pm.c:496:8-16:</i><br>
+><i> > WARNING: use scnprintf or sprintf</i><br>
+><i> > drivers/gpu/drm/amd/pm//amdgpu_pm.c:512:9-17:</i><br>
+><i> > WARNING: use scnprintf or sprintf</i><br>
+><i> > drivers/gpu/drm/amd/pm//amdgpu_pm.c:1740:8-16:</i><br>
+><i> > WARNING: use scnprintf or sprintf</i><br>
+><i> > drivers/gpu/drm/amd/pm//amdgpu_pm.c:1667:8-16:</i><br>
+><i> > WARNING: use scnprintf or sprintf</i><br>
+><i> > drivers/gpu/drm/amd/pm//amdgpu_pm.c:2074:8-16:</i><br>
+><i> > WARNING: use scnprintf or sprintf</i><br>
+><i> > drivers/gpu/drm/amd/pm//amdgpu_pm.c:2047:9-17:</i><br>
+><i> > WARNING: use scnprintf or sprintf</i><br>
+><i> > drivers/gpu/drm/amd/pm//amdgpu_pm.c:2768:8-16:</i><br>
+><i> > WARNING: use scnprintf or sprintf</i><br>
+><i> > drivers/gpu/drm/amd/pm//amdgpu_pm.c:2738:8-16:</i><br>
+><i> > WARNING: use scnprintf or sprintf</i><br>
+><i> > drivers/gpu/drm/amd/pm//amdgpu_pm.c:2442:8-16:</i><br>
+><i> > WARNING: use scnprintf or sprintf</i><br>
+><i> > drivers/gpu/drm/amd/pm//amdgpu_pm.c:3246:8-16:</i><br>
+><i> > WARNING: use scnprintf or sprintf</i><br>
+><i> > drivers/gpu/drm/amd/pm//amdgpu_pm.c:3253:8-16:</i><br>
+><i> > WARNING: use scnprintf or sprintf</i><br>
+><i> > drivers/gpu/drm/amd/pm//amdgpu_pm.c:2458:8-16:</i><br>
+><i> > WARNING: use scnprintf or sprintf</i><br>
+><i> > drivers/gpu/drm/amd/pm//amdgpu_pm.c:3047:8-16:</i><br>
+><i> > WARNING: use scnprintf or sprintf</i><br>
+><i> > drivers/gpu/drm/amd/pm//amdgpu_pm.c:3133:8-16:</i><br>
+><i> > WARNING: use scnprintf or sprintf</i><br>
+><i> > drivers/gpu/drm/amd/pm//amdgpu_pm.c:3209:8-16:</i><br>
+><i> > WARNING: use scnprintf or sprintf</i><br>
+><i> > drivers/gpu/drm/amd/pm//amdgpu_pm.c:3216:8-16:</i><br>
+><i> > WARNING: use scnprintf or sprintf</i><br>
+><i> > drivers/gpu/drm/amd/pm//amdgpu_pm.c:2410:8-16:</i><br>
+><i> > WARNING: use scnprintf or sprintf</i><br>
+><i> > drivers/gpu/drm/amd/pm//amdgpu_pm.c:2496:8-16:</i><br>
+><i> > WARNING: use scnprintf or sprintf</i><br>
+><i> > drivers/gpu/drm/amd/pm//amdgpu_pm.c:2470:8-16:</i><br>
+><i> > WARNING: use scnprintf or sprintf</i><br>
+><i> > drivers/gpu/drm/amd/pm//amdgpu_pm.c:2426:8-16:</i><br>
+><i> > WARNING: use scnprintf or sprintf</i><br>
+><i> > drivers/gpu/drm/amd/pm//amdgpu_pm.c:2965:8-16:</i><br>
+><i> > WARNING: use scnprintf or sprintf</i><br>
+><i> > drivers/gpu/drm/amd/pm//amdgpu_pm.c:2972:8-16:</i><br>
+><i> > WARNING: use scnprintf or sprintf</i><br>
+><i> > drivers/gpu/drm/amd/pm//amdgpu_pm.c:3006:8-16:</i><br>
+><i> > WARNING: use scnprintf or sprintf</i><br>
+><i> > drivers/gpu/drm/amd/pm//amdgpu_pm.c:3013:8-16:</i><br>
+><i> > WARNING: use scnprintf or sprintf</i><br>
+><i> ></i><br>
+><i> > Signed-off-by: Xuezhi Zhang <zhangxuezhi1@xxxxxxxxxx>  </i><br>
+><i> </i><br>
+><i> I already applied a similar patch last week.</i><br>
+><i> </i><br>
+><i> Thanks,</i><br>
+><i> </i><br>
+><i> Alex</i><br>
+><i> </i><br>
+OK.<br>
+Thanks,<br>
+<br>
+Xuezhi Zhang<br>
+><i> </i><br>
+><i> > ---</i><br>
+><i> >  drivers/gpu/drm/amd/pm/amdgpu_pm.c | 58</i><br>
+><i> > +++++++++++++++--------------- 1 file changed, 29 insertions(+), 29</i><br>
+><i> > deletions(-)</i><br>
+><i> ></i><br>
+><i> > diff --git a/drivers/gpu/drm/amd/pm/amdgpu_pm.c</i><br>
+><i> > b/drivers/gpu/drm/amd/pm/amdgpu_pm.c index</i><br>
+><i> > 5fa65f191a37..2777966ec1ca 100644 ---</i><br>
+><i> > a/drivers/gpu/drm/amd/pm/amdgpu_pm.c +++</i><br>
+><i> > b/drivers/gpu/drm/amd/pm/amdgpu_pm.c @@ -151,7 +151,7 @@ static</i><br>
+><i> > ssize_t amdgpu_get_power_dpm_state(struct device *dev,</i><br>
+><i> > pm_runtime_mark_last_busy(ddev->dev);</i><br>
+><i> > pm_runtime_put_autosuspend(ddev->dev);</i><br>
+><i> ></i><br>
+><i> > -       return snprintf(buf, PAGE_SIZE, "%s\n",</i><br>
+><i> > +       return sysfs_emit(buf, "%s\n",</i><br>
+><i> >                         (pm == POWER_STATE_TYPE_BATTERY) ?</i><br>
+><i> > "battery" : (pm == POWER_STATE_TYPE_BALANCED) ? "balanced" :</i><br>
+><i> > "performance"); }</i><br>
+><i> > @@ -291,7 +291,7 @@ static ssize_t</i><br>
+><i> > amdgpu_get_power_dpm_force_performance_level(struct device *dev,</i><br>
+><i> > pm_runtime_mark_last_busy(ddev->dev);</i><br>
+><i> > pm_runtime_put_autosuspend(ddev->dev);</i><br>
+><i> ></i><br>
+><i> > -       return snprintf(buf, PAGE_SIZE, "%s\n",</i><br>
+><i> > +       return sysfs_emit(buf, "%s\n",</i><br>
+><i> >                         (level == AMD_DPM_FORCED_LEVEL_AUTO) ?</i><br>
+><i> > "auto" : (level == AMD_DPM_FORCED_LEVEL_LOW) ? "low" :</i><br>
+><i> >                         (level == AMD_DPM_FORCED_LEVEL_HIGH) ?</i><br>
+><i> > "high" : @@ -493,7 +493,7 @@ static ssize_t</i><br>
+><i> > amdgpu_get_pp_cur_state(struct device *dev, if (i == data.nums)</i><br>
+><i> >                 i = -EINVAL;</i><br>
+><i> ></i><br>
+><i> > -       return snprintf(buf, PAGE_SIZE, "%d\n", i);</i><br>
+><i> > +       return sysfs_emit(buf, "%d\n", i);</i><br>
+><i> >  }</i><br>
+><i> ></i><br>
+><i> >  static ssize_t amdgpu_get_pp_force_state(struct device *dev,</i><br>
+><i> > @@ -509,7 +509,7 @@ static ssize_t amdgpu_get_pp_force_state(struct</i><br>
+><i> > device *dev, if (adev->pp_force_state_enabled)</i><br>
+><i> >                 return amdgpu_get_pp_cur_state(dev, attr, buf);</i><br>
+><i> >         else</i><br>
+><i> > -               return snprintf(buf, PAGE_SIZE, "\n");</i><br>
+><i> > +               return sysfs_emit(buf, "\n");</i><br>
+><i> >  }</i><br>
+><i> ></i><br>
+><i> >  static ssize_t amdgpu_set_pp_force_state(struct device *dev,</i><br>
+><i> > @@ -1664,7 +1664,7 @@ static ssize_t amdgpu_get_pp_sclk_od(struct</i><br>
+><i> > device *dev, pm_runtime_mark_last_busy(ddev->dev);</i><br>
+><i> >         pm_runtime_put_autosuspend(ddev->dev);</i><br>
+><i> ></i><br>
+><i> > -       return snprintf(buf, PAGE_SIZE, "%d\n", value);</i><br>
+><i> > +       return sysfs_emit(buf, "%d\n", value);</i><br>
+><i> >  }</i><br>
+><i> ></i><br>
+><i> >  static ssize_t amdgpu_set_pp_sclk_od(struct device *dev,</i><br>
+><i> > @@ -1737,7 +1737,7 @@ static ssize_t amdgpu_get_pp_mclk_od(struct</i><br>
+><i> > device *dev, pm_runtime_mark_last_busy(ddev->dev);</i><br>
+><i> >         pm_runtime_put_autosuspend(ddev->dev);</i><br>
+><i> ></i><br>
+><i> > -       return snprintf(buf, PAGE_SIZE, "%d\n", value);</i><br>
+><i> > +       return sysfs_emit(buf, "%d\n", value);</i><br>
+><i> >  }</i><br>
+><i> ></i><br>
+><i> >  static ssize_t amdgpu_set_pp_mclk_od(struct device *dev,</i><br>
+><i> > @@ -1937,7 +1937,7 @@ static ssize_t</i><br>
+><i> > amdgpu_get_gpu_busy_percent(struct device *dev, if (r)</i><br>
+><i> >                 return r;</i><br>
+><i> ></i><br>
+><i> > -       return snprintf(buf, PAGE_SIZE, "%d\n", value);</i><br>
+><i> > +       return sysfs_emit(buf, "%d\n", value);</i><br>
+><i> >  }</i><br>
+><i> ></i><br>
+><i> >  /**</i><br>
+><i> > @@ -1975,7 +1975,7 @@ static ssize_t</i><br>
+><i> > amdgpu_get_mem_busy_percent(struct device *dev, if (r)</i><br>
+><i> >                 return r;</i><br>
+><i> ></i><br>
+><i> > -       return snprintf(buf, PAGE_SIZE, "%d\n", value);</i><br>
+><i> > +       return sysfs_emit(buf, "%d\n", value);</i><br>
+><i> >  }</i><br>
+><i> ></i><br>
+><i> >  /**</i><br>
+><i> > @@ -2019,7 +2019,7 @@ static ssize_t amdgpu_get_pcie_bw(struct</i><br>
+><i> > device *dev, pm_runtime_mark_last_busy(ddev->dev);</i><br>
+><i> >         pm_runtime_put_autosuspend(ddev->dev);</i><br>
+><i> ></i><br>
+><i> > -       return snprintf(buf, PAGE_SIZE, "%llu %llu %i\n",</i><br>
+><i> > +       return sysfs_emit(buf,  "%llu %llu %i\n",</i><br>
+><i> >                         count0, count1, pcie_get_mps(adev->pdev));</i><br>
+><i> >  }</i><br>
+><i> ></i><br>
+><i> > @@ -2044,7 +2044,7 @@ static ssize_t amdgpu_get_unique_id(struct</i><br>
+><i> > device *dev, return -EPERM;</i><br>
+><i> ></i><br>
+><i> >         if (adev->unique_id)</i><br>
+><i> > -               return snprintf(buf, PAGE_SIZE, "%016llx\n",</i><br>
+><i> > adev->unique_id);</i><br>
+><i> > +               return sysfs_emit(buf, "%016llx\n",</i><br>
+><i> > adev->unique_id);</i><br>
+><i> ></i><br>
+><i> >         return 0;</i><br>
+><i> >  }</i><br>
+><i> > @@ -2071,7 +2071,7 @@ static ssize_t</i><br>
+><i> > amdgpu_get_thermal_throttling_logging(struct device *dev, struct</i><br>
+><i> > drm_device *ddev = dev_get_drvdata(dev); struct amdgpu_device *adev</i><br>
+><i> > = drm_to_adev(ddev);</i><br>
+><i> ></i><br>
+><i> > -       return snprintf(buf, PAGE_SIZE, "%s: thermal throttling</i><br>
+><i> > logging %s, with interval %d seconds\n",</i><br>
+><i> > +       return sysfs_emit(buf, "%s: thermal throttling logging %s,</i><br>
+><i> > with interval %d seconds\n", adev_to_drm(adev)->unique,</i><br>
+><i> >                         atomic_read(&adev->throttling_logging_enabled)</i><br>
+><i> > ? "enabled" : "disabled", adev->throttling_logging_rs.interval / HZ</i><br>
+><i> > + 1); @@ -2407,7 +2407,7 @@ static ssize_t</i><br>
+><i> > amdgpu_hwmon_show_temp(struct device *dev, if (r)</i><br>
+><i> >                 return r;</i><br>
+><i> ></i><br>
+><i> > -       return snprintf(buf, PAGE_SIZE, "%d\n", temp);</i><br>
+><i> > +       return sysfs_emit(buf, "%d\n", temp);</i><br>
+><i> >  }</i><br>
+><i> ></i><br>
+><i> >  static ssize_t amdgpu_hwmon_show_temp_thresh(struct device *dev,</i><br>
+><i> > @@ -2423,7 +2423,7 @@ static ssize_t</i><br>
+><i> > amdgpu_hwmon_show_temp_thresh(struct device *dev, else</i><br>
+><i> >                 temp = adev->pm.dpm.thermal.max_temp;</i><br>
+><i> ></i><br>
+><i> > -       return snprintf(buf, PAGE_SIZE, "%d\n", temp);</i><br>
+><i> > +       return sysfs_emit(buf, "%d\n", temp);</i><br>
+><i> >  }</i><br>
+><i> ></i><br>
+><i> >  static ssize_t amdgpu_hwmon_show_hotspot_temp_thresh(struct device</i><br>
+><i> > *dev, @@ -2439,7 +2439,7 @@ static ssize_t</i><br>
+><i> > amdgpu_hwmon_show_hotspot_temp_thresh(struct device *dev, else</i><br>
+><i> >                 temp = adev->pm.dpm.thermal.max_hotspot_crit_temp;</i><br>
+><i> ></i><br>
+><i> > -       return snprintf(buf, PAGE_SIZE, "%d\n", temp);</i><br>
+><i> > +       return sysfs_emit(buf, "%d\n", temp);</i><br>
+><i> >  }</i><br>
+><i> ></i><br>
+><i> >  static ssize_t amdgpu_hwmon_show_mem_temp_thresh(struct device</i><br>
+><i> > *dev, @@ -2455,7 +2455,7 @@ static ssize_t</i><br>
+><i> > amdgpu_hwmon_show_mem_temp_thresh(struct device *dev, else</i><br>
+><i> >                 temp = adev->pm.dpm.thermal.max_mem_crit_temp;</i><br>
+><i> ></i><br>
+><i> > -       return snprintf(buf, PAGE_SIZE, "%d\n", temp);</i><br>
+><i> > +       return sysfs_emit(buf, "%d\n", temp);</i><br>
+><i> >  }</i><br>
+><i> ></i><br>
+><i> >  static ssize_t amdgpu_hwmon_show_temp_label(struct device *dev,</i><br>
+><i> > @@ -2467,7 +2467,7 @@ static ssize_t</i><br>
+><i> > amdgpu_hwmon_show_temp_label(struct device *dev, if (channel >=</i><br>
+><i> > PP_TEMP_MAX) return -EINVAL;</i><br>
+><i> ></i><br>
+><i> > -       return snprintf(buf, PAGE_SIZE, "%s\n",</i><br>
+><i> > temp_label[channel].label);</i><br>
+><i> > +       return sysfs_emit(buf, "%s\n", temp_label[channel].label);</i><br>
+><i> >  }</i><br>
+><i> ></i><br>
+><i> >  static ssize_t amdgpu_hwmon_show_temp_emergency(struct device *dev,</i><br>
+><i> > @@ -2493,7 +2493,7 @@ static ssize_t</i><br>
+><i> > amdgpu_hwmon_show_temp_emergency(struct device *dev, break;</i><br>
+><i> >         }</i><br>
+><i> ></i><br>
+><i> > -       return snprintf(buf, PAGE_SIZE, "%d\n", temp);</i><br>
+><i> > +       return sysfs_emit(buf, "%d\n", temp);</i><br>
+><i> >  }</i><br>
+><i> ></i><br>
+><i> >  static ssize_t amdgpu_hwmon_get_pwm1_enable(struct device *dev,</i><br>
+><i> > @@ -2735,7 +2735,7 @@ static ssize_t</i><br>
+><i> > amdgpu_hwmon_get_fan1_min(struct device *dev, if (r)</i><br>
+><i> >                 return r;</i><br>
+><i> ></i><br>
+><i> > -       return snprintf(buf, PAGE_SIZE, "%d\n", min_rpm);</i><br>
+><i> > +       return sysfs_emit(buf, "%d\n", min_rpm);</i><br>
+><i> >  }</i><br>
+><i> ></i><br>
+><i> >  static ssize_t amdgpu_hwmon_get_fan1_max(struct device *dev,</i><br>
+><i> > @@ -2765,7 +2765,7 @@ static ssize_t</i><br>
+><i> > amdgpu_hwmon_get_fan1_max(struct device *dev, if (r)</i><br>
+><i> >                 return r;</i><br>
+><i> ></i><br>
+><i> > -       return snprintf(buf, PAGE_SIZE, "%d\n", max_rpm);</i><br>
+><i> > +       return sysfs_emit(buf, "%d\n", max_rpm);</i><br>
+><i> >  }</i><br>
+><i> ></i><br>
+><i> >  static ssize_t amdgpu_hwmon_get_fan1_target(struct device *dev,</i><br>
+><i> > @@ -2962,14 +2962,14 @@ static ssize_t</i><br>
+><i> > amdgpu_hwmon_show_vddgfx(struct device *dev, if (r)</i><br>
+><i> >                 return r;</i><br>
+><i> ></i><br>
+><i> > -       return snprintf(buf, PAGE_SIZE, "%d\n", vddgfx);</i><br>
+><i> > +       return sysfs_emit(buf, "%d\n", vddgfx);</i><br>
+><i> >  }</i><br>
+><i> ></i><br>
+><i> >  static ssize_t amdgpu_hwmon_show_vddgfx_label(struct device *dev,</i><br>
+><i> >                                               struct</i><br>
+><i> > device_attribute *attr, char *buf)</i><br>
+><i> >  {</i><br>
+><i> > -       return snprintf(buf, PAGE_SIZE, "vddgfx\n");</i><br>
+><i> > +       return sysfs_emit(buf, "vddgfx\n");</i><br>
+><i> >  }</i><br>
+><i> ></i><br>
+><i> >  static ssize_t amdgpu_hwmon_show_vddnb(struct device *dev,</i><br>
+><i> > @@ -3003,14 +3003,14 @@ static ssize_t</i><br>
+><i> > amdgpu_hwmon_show_vddnb(struct device *dev, if (r)</i><br>
+><i> >                 return r;</i><br>
+><i> ></i><br>
+><i> > -       return snprintf(buf, PAGE_SIZE, "%d\n", vddnb);</i><br>
+><i> > +       return sysfs_emit(buf, "%d\n", vddnb);</i><br>
+><i> >  }</i><br>
+><i> ></i><br>
+><i> >  static ssize_t amdgpu_hwmon_show_vddnb_label(struct device *dev,</i><br>
+><i> >                                               struct</i><br>
+><i> > device_attribute *attr, char *buf)</i><br>
+><i> >  {</i><br>
+><i> > -       return snprintf(buf, PAGE_SIZE, "vddnb\n");</i><br>
+><i> > +       return sysfs_emit(buf, "vddnb\n");</i><br>
+><i> >  }</i><br>
+><i> ></i><br>
+><i> >  static ssize_t amdgpu_hwmon_show_power_avg(struct device *dev,</i><br>
+><i> > @@ -3044,7 +3044,7 @@ static ssize_t</i><br>
+><i> > amdgpu_hwmon_show_power_avg(struct device *dev, /* convert to</i><br>
+><i> > microwatts */ uw = (query >> 8) * 1000000 + (query & 0xff) * 1000;</i><br>
+><i> ></i><br>
+><i> > -       return snprintf(buf, PAGE_SIZE, "%u\n", uw);</i><br>
+><i> > +       return sysfs_emit(buf, "%u\n", uw);</i><br>
+><i> >  }</i><br>
+><i> ></i><br>
+><i> >  static ssize_t amdgpu_hwmon_show_power_cap_min(struct device *dev,</i><br>
+><i> > @@ -3130,7 +3130,7 @@ static ssize_t</i><br>
+><i> > amdgpu_hwmon_show_power_label(struct device *dev, {</i><br>
+><i> >         int limit_type = to_sensor_dev_attr(attr)->index;</i><br>
+><i> ></i><br>
+><i> > -       return snprintf(buf, PAGE_SIZE, "%s\n",</i><br>
+><i> > +       return sysfs_emit(buf, "%s\n",</i><br>
+><i> >                 limit_type == SMU_FAST_PPT_LIMIT ? "fastPPT" :</i><br>
+><i> > "slowPPT"); }</i><br>
+><i> ></i><br>
+><i> > @@ -3206,14 +3206,14 @@ static ssize_t</i><br>
+><i> > amdgpu_hwmon_show_sclk(struct device *dev, if (r)</i><br>
+><i> >                 return r;</i><br>
+><i> ></i><br>
+><i> > -       return snprintf(buf, PAGE_SIZE, "%u\n", sclk * 10 * 1000);</i><br>
+><i> > +       return sysfs_emit(buf, "%u\n", sclk * 10 * 1000);</i><br>
+><i> >  }</i><br>
+><i> ></i><br>
+><i> >  static ssize_t amdgpu_hwmon_show_sclk_label(struct device *dev,</i><br>
+><i> >                                             struct device_attribute</i><br>
+><i> > *attr, char *buf)</i><br>
+><i> >  {</i><br>
+><i> > -       return snprintf(buf, PAGE_SIZE, "sclk\n");</i><br>
+><i> > +       return sysfs_emit(buf, "sclk\n");</i><br>
+><i> >  }</i><br>
+><i> ></i><br>
+><i> >  static ssize_t amdgpu_hwmon_show_mclk(struct device *dev,</i><br>
+><i> > @@ -3243,14 +3243,14 @@ static ssize_t</i><br>
+><i> > amdgpu_hwmon_show_mclk(struct device *dev, if (r)</i><br>
+><i> >                 return r;</i><br>
+><i> ></i><br>
+><i> > -       return snprintf(buf, PAGE_SIZE, "%u\n", mclk * 10 * 1000);</i><br>
+><i> > +       return sysfs_emit(buf, "%u\n", mclk * 10 * 1000);</i><br>
+><i> >  }</i><br>
+><i> ></i><br>
+><i> >  static ssize_t amdgpu_hwmon_show_mclk_label(struct device *dev,</i><br>
+><i> >                                             struct device_attribute</i><br>
+><i> > *attr, char *buf)</i><br>
+><i> >  {</i><br>
+><i> > -       return snprintf(buf, PAGE_SIZE, "mclk\n");</i><br>
+><i> > +       return sysfs_emit(buf, "mclk\n");</i><br>
+><i> >  }</i><br>
+><i> ></i><br>
+><i> >  /**</i><br>
+><i> > --</i><br>
+><i> > 2.25.1</i><br>
+><i> ></i><br>
+><i> ></i><br>
+><i> > _______________________________________________</i><br>
+><i> > dri-devel mailing list</i><br>
+><i> > dri-devel@xxxxxxxxxxxxxxxxxxxxx</i><br>
+><i> > <a  rel="nofollow" href="https://lists.freedesktop.org/mailman/listinfo/dri-devel">https://lists.freedesktop.org/mailman/listinfo/dri-devel</a>  </i><br>
+<br>
+<br>
+

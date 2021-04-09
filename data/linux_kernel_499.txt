@@ -1,0 +1,80 @@
+Hi Hongbo,<br>
+<br>
+Thank you for the patch! Yet something to improve:<br>
+<br>
+[auto build test ERROR on cryptodev/master]<br>
+[also build test ERROR on crypto/master security/next-testing linus/master v5.12-rc6 next-20210407]<br>
+[If your patch is applied to the wrong git tree, kindly drop us a note.<br>
+And when submitting patch, we suggest to use '--base' as documented in<br>
+<a  rel="nofollow" href="https://git-scm.com/docs/git-format-patch">https://git-scm.com/docs/git-format-patch</a>]<br>
+<br>
+url:    <a  rel="nofollow" href="https://github.com/0day-ci/linux/commits/Hongbo-Li/crypto-add-rsa-pss-support-for-x509/20210407-214446">https://github.com/0day-ci/linux/commits/Hongbo-Li/crypto-add-rsa-pss-support-for-x509/20210407-214446</a><br>
+base:   <a  rel="nofollow" href="https://git.kernel.org/pub/scm/linux/kernel/git/herbert/cryptodev-2.6.git">https://git.kernel.org/pub/scm/linux/kernel/git/herbert/cryptodev-2.6.git</a> master<br>
+config: x86_64-randconfig-a006-20210408 (attached as .config)<br>
+compiler: gcc-9 (Debian 9.3.0-22) 9.3.0<br>
+reproduce (this is a W=1 build):<br>
+        # <a  rel="nofollow" href="https://github.com/0day-ci/linux/commit/16672847d0bd803ad40d0b2065125645c082585a">https://github.com/0day-ci/linux/commit/16672847d0bd803ad40d0b2065125645c082585a</a><br>
+        git remote add linux-review <a  rel="nofollow" href="https://github.com/0day-ci/linux">https://github.com/0day-ci/linux</a><br>
+        git fetch --no-tags linux-review Hongbo-Li/crypto-add-rsa-pss-support-for-x509/20210407-214446<br>
+        git checkout 16672847d0bd803ad40d0b2065125645c082585a<br>
+        # save the attached .config to linux build tree<br>
+        make W=1 ARCH=x86_64 <br>
+<br>
+If you fix the issue, kindly add following tag as appropriate<br>
+Reported-by: kernel test robot <lkp@xxxxxxxxx><br>
+<br>
+All errors (new ones prefixed by >>):<br>
+<br>
+   ld: crypto/rsa_helper.o: in function `rsa_get_pss_hash':<br>
+><i>> crypto/rsa_helper.c:161: undefined reference to `look_up_OID'</i><br>
+   ld: crypto/rsa_helper.o: in function `rsa_get_pss_mgf':<br>
+   crypto/rsa_helper.c:195: undefined reference to `look_up_OID'<br>
+   ld: crypto/rsa_helper.o: in function `rsa_get_pss_mgf_hash':<br>
+   crypto/rsa_helper.c:212: undefined reference to `look_up_OID'<br>
+<br>
+<br>
+vim +161 crypto/rsa_helper.c<br>
+<br>
+   151	<br>
+   152	int rsa_get_pss_hash(void *context, size_t hdrlen, unsigned char tag,<br>
+   153			     const void *value, size_t vlen)<br>
+   154	{<br>
+   155		struct rsa_pss_ctx *ctx = context;<br>
+   156		enum OID oid;<br>
+   157	<br>
+   158		if (!value || !vlen)<br>
+   159			return -EINVAL;<br>
+   160	<br>
+ ><i> 161		oid = look_up_OID(value, vlen);</i><br>
+   162		switch (oid) {<br>
+   163		case OID_sha1:<br>
+   164			ctx->hash_algo = "sha1";<br>
+   165			break;<br>
+   166		case OID_sha224:<br>
+   167			ctx->hash_algo = "sha224";<br>
+   168			break;<br>
+   169		case OID_sha256:<br>
+   170			ctx->hash_algo = "sha256";<br>
+   171			break;<br>
+   172		case OID_sha384:<br>
+   173			ctx->hash_algo = "sha384";<br>
+   174			break;<br>
+   175		case OID_sha512:<br>
+   176			ctx->hash_algo = "sha512";<br>
+   177			break;<br>
+   178		default:<br>
+   179			return -ENOPKG;<br>
+   180	<br>
+   181		}<br>
+   182	<br>
+   183		return 0;<br>
+   184	}<br>
+   185	<br>
+<br>
+---<br>
+0-DAY CI Kernel Test Service, Intel Corporation<br>
+<a  rel="nofollow" href="https://lists.01.org/hyperkitty/list/kbuild-all@xxxxxxxxxxxx">https://lists.01.org/hyperkitty/list/kbuild-all@xxxxxxxxxxxx</a><br>
+<p><strong>Attachment:
+<a href="00634/.config.gz" ><tt>.config.gz</tt></a></strong><br>
+<em>Description:</em> application/gzip</p>
+

@@ -1,0 +1,25 @@
+The header file priv.h has been included two times in base.c,<br>
+delete the redundant one.<br>
+<br>
+Signed-off-by: Zhang Jianhua <zhangjianhua18@xxxxxxxxxx><br>
+---<br>
+ drivers/gpu/drm/nouveau/nvkm/engine/nvenc/base.c | 1 -<br>
+ 1 file changed, 1 deletion(-)<br>
+<br>
+diff --git a/drivers/gpu/drm/nouveau/nvkm/engine/nvenc/base.c b/drivers/gpu/drm/nouveau/nvkm/engine/nvenc/base.c<br>
+index c39e797dc7c9..cf5dcfda7b25 100644<br>
+--- a/drivers/gpu/drm/nouveau/nvkm/engine/nvenc/base.c<br>
++++ b/drivers/gpu/drm/nouveau/nvkm/engine/nvenc/base.c<br>
+@@ -21,7 +21,6 @@<br>
+  */<br>
+ #include "priv.h"<br>
+ <br>
+-#include "priv.h"<br>
+ #include <core/firmware.h><br>
+ <br>
+ static void *<br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+

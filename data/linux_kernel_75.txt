@@ -1,0 +1,39 @@
+So this issue is blocking the LLVM upgrading on ChromeOS. Nathan, do<br>
+you mind sending out the smaller patch like Nick suggested just to see<br>
+what feedback we could get? I could send it for you if you are busy,<br>
+and please let me know what tags I should use in that case.<br>
+<br>
+Thanks,<br>
+Jian<br>
+<br>
+On Wed, Mar 31, 2021 at 3:06 PM Nick Desaulniers<br>
+<ndesaulniers@xxxxxxxxxx> wrote:<br>
+><i></i><br>
+><i> On Wed, Mar 31, 2021 at 2:58 PM Nathan Chancellor <nathan@xxxxxxxxxx> wrote:</i><br>
+><i> ></i><br>
+><i> > On Wed, Mar 31, 2021 at 02:27:03PM -0700, Jian Cai wrote:</i><br>
+><i> > ></i><br>
+><i> > > I just realized you already proposed solutions for skipping the check</i><br>
+><i> > > in <a  rel="nofollow" href="https://lore.kernel.org/linux-block/20210310225240.4epj2mdmzt4vurr3@archlinux-ax161/#t">https://lore.kernel.org/linux-block/20210310225240.4epj2mdmzt4vurr3@archlinux-ax161/#t</a>.</i><br>
+><i> > > Do you have any plans to send them for review?</i><br>
+><i> ></i><br>
+><i> > I was hoping to gather some feedback on which option would be preferred</i><br>
+><i> > by Jens and the other ClangBuiltLinux folks before I sent them along. I</i><br>
+><i> > can send the first just to see what kind of feedback I can gather.</i><br>
+><i></i><br>
+><i> Either approach is fine by me. The smaller might be easier to get</i><br>
+><i> accepted into stable. The larger approach will probably become more</i><br>
+><i> useful in the future (having the diag infra work properly with clang).</i><br>
+><i> I think the ball is kind of in Jens' court to decide.  Would doing</i><br>
+><i> both be appropriate, Jens? Have the smaller patch tagged for stable</i><br>
+><i> disabling it for the whole file, then another commit on top not tagged</i><br>
+><i> for stable that adds the diag infra, and a third on top replacing the</i><br>
+><i> file level warning disablement with local diags to isolate this down</i><br>
+><i> to one case?  It's a fair but small amount of churn IMO; but if Jens</i><br>
+><i> is not opposed it seems fine?</i><br>
+><i> --</i><br>
+><i> Thanks,</i><br>
+><i> ~Nick Desaulniers</i><br>
+<br>
+<br>
+

@@ -1,0 +1,398 @@
+Add three tracepoints to track the activity of the read helpers:<br>
+<br>
+ (1) netfs/netfs_read<br>
+<br>
+     This logs entry to the read helpers and also expansion of the range in<br>
+     a readahead request.<br>
+<br>
+ (2) netfs/netfs_rreq<br>
+<br>
+     This logs the progress of netfs_read_request objects which track<br>
+     read requests.  A read request may be a compound of multiple<br>
+     subrequests.<br>
+<br>
+ (3) netfs/netfs_sreq<br>
+<br>
+     This logs the progress of netfs_read_subrequest objects, which track<br>
+     the contributions from various sources to a read request.<br>
+<br>
+Signed-off-by: David Howells <dhowells@xxxxxxxxxx><br>
+Reviewed-by: Jeff Layton <jlayton@xxxxxxxxxx><br>
+cc: Matthew Wilcox <willy@xxxxxxxxxxxxx><br>
+cc: linux-mm@xxxxxxxxx<br>
+cc: linux-cachefs@xxxxxxxxxx<br>
+cc: linux-afs@xxxxxxxxxxxxxxxxxxx<br>
+cc: linux-nfs@xxxxxxxxxxxxxxx<br>
+cc: linux-cifs@xxxxxxxxxxxxxxx<br>
+cc: ceph-devel@xxxxxxxxxxxxxxx<br>
+cc: v9fs-developer@xxxxxxxxxxxxxxxxxxxxx<br>
+cc: linux-fsdevel@xxxxxxxxxxxxxxx<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161118138060.1232039.5353374588021776217.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161118138060.1232039.5353374588021776217.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # rfc<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161161033468.2537118.14021843889844001905.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161161033468.2537118.14021843889844001905.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v2<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161340395843.1303470.7355519662919639648.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161340395843.1303470.7355519662919639648.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v3<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161539538693.286939.10171713520419106334.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161539538693.286939.10171713520419106334.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v4<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161653796447.2770958.1870655382450862155.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161653796447.2770958.1870655382450862155.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v5<br>
+---<br>
+<br>
+ fs/netfs/read_helper.c       |   26 +++++<br>
+ include/linux/netfs.h        |    1 <br>
+ include/trace/events/netfs.h |  199 ++++++++++++++++++++++++++++++++++++++++++<br>
+ 3 files changed, 226 insertions(+)<br>
+ create mode 100644 include/trace/events/netfs.h<br>
+<br>
+diff --git a/fs/netfs/read_helper.c b/fs/netfs/read_helper.c<br>
+index 30d4bf6bf28a..799eee7f4ee6 100644<br>
+--- a/fs/netfs/read_helper.c<br>
++++ b/fs/netfs/read_helper.c<br>
+@@ -16,6 +16,8 @@<br>
+ #include <linux/task_io_accounting_ops.h><br>
+ #include <linux/netfs.h><br>
+ #include "internal.h"<br>
++#define CREATE_TRACE_POINTS<br>
++#include <trace/events/netfs.h><br>
+ <br>
+ MODULE_DESCRIPTION("Network fs support");<br>
+ MODULE_AUTHOR("Red Hat, Inc.");<br>
+@@ -84,6 +86,7 @@ static void netfs_free_read_request(struct work_struct *work)<br>
+ 	netfs_rreq_clear_subreqs(rreq, false);<br>
+ 	if (rreq->netfs_priv)<br>
+ 		rreq->netfs_ops->cleanup(rreq->mapping, rreq->netfs_priv);<br>
++	trace_netfs_rreq(rreq, netfs_rreq_trace_free);<br>
+ 	kfree(rreq);<br>
+ }<br>
+ <br>
+@@ -129,6 +132,7 @@ static void __netfs_put_subrequest(struct netfs_read_subrequest *subreq,<br>
+ {<br>
+ 	struct netfs_read_request *rreq = subreq->rreq;<br>
+ <br>
++	trace_netfs_sreq(subreq, netfs_sreq_trace_free);<br>
+ 	kfree(subreq);<br>
+ 	netfs_put_read_request(rreq, was_async);<br>
+ }<br>
+@@ -183,6 +187,7 @@ static void netfs_read_from_server(struct netfs_read_request *rreq,<br>
+  */<br>
+ static void netfs_rreq_completed(struct netfs_read_request *rreq, bool was_async)<br>
+ {<br>
++	trace_netfs_rreq(rreq, netfs_rreq_trace_done);<br>
+ 	netfs_rreq_clear_subreqs(rreq, was_async);<br>
+ 	netfs_put_read_request(rreq, was_async);<br>
+ }<br>
+@@ -221,6 +226,8 @@ static void netfs_rreq_unlock(struct netfs_read_request *rreq)<br>
+ 	iopos = 0;<br>
+ 	subreq_failed = (subreq->error < 0);<br>
+ <br>
++	trace_netfs_rreq(rreq, netfs_rreq_trace_unlock);<br>
++<br>
+ 	rcu_read_lock();<br>
+ 	xas_for_each(&xas, page, last_page) {<br>
+ 		unsigned int pgpos = (page->index - start_page) * PAGE_SIZE;<br>
+@@ -281,6 +288,8 @@ static void netfs_rreq_short_read(struct netfs_read_request *rreq,<br>
+ 	__clear_bit(NETFS_SREQ_SHORT_READ, &subreq->flags);<br>
+ 	__set_bit(NETFS_SREQ_SEEK_DATA_READ, &subreq->flags);<br>
+ <br>
++	trace_netfs_sreq(subreq, netfs_sreq_trace_resubmit_short);<br>
++<br>
+ 	netfs_get_read_subrequest(subreq);<br>
+ 	atomic_inc(&rreq->nr_rd_ops);<br>
+ 	netfs_read_from_server(rreq, subreq);<br>
+@@ -296,6 +305,8 @@ static bool netfs_rreq_perform_resubmissions(struct netfs_read_request *rreq)<br>
+ <br>
+ 	WARN_ON(in_interrupt());<br>
+ <br>
++	trace_netfs_rreq(rreq, netfs_rreq_trace_resubmit);<br>
++<br>
+ 	/* We don't want terminating submissions trying to wake us up whilst<br>
+ 	 * we're still going through the list.<br>
+ 	 */<br>
+@@ -308,6 +319,7 @@ static bool netfs_rreq_perform_resubmissions(struct netfs_read_request *rreq)<br>
+ 				break;<br>
+ 			subreq->source = NETFS_DOWNLOAD_FROM_SERVER;<br>
+ 			subreq->error = 0;<br>
++			trace_netfs_sreq(subreq, netfs_sreq_trace_download_instead);<br>
+ 			netfs_get_read_subrequest(subreq);<br>
+ 			atomic_inc(&rreq->nr_rd_ops);<br>
+ 			netfs_read_from_server(rreq, subreq);<br>
+@@ -332,6 +344,8 @@ static bool netfs_rreq_perform_resubmissions(struct netfs_read_request *rreq)<br>
+  */<br>
+ static void netfs_rreq_assess(struct netfs_read_request *rreq, bool was_async)<br>
+ {<br>
++	trace_netfs_rreq(rreq, netfs_rreq_trace_assess);<br>
++<br>
+ again:<br>
+ 	if (!test_bit(NETFS_RREQ_FAILED, &rreq->flags) &&<br>
+ 	    test_bit(NETFS_RREQ_INCOMPLETE_IO, &rreq->flags)) {<br>
+@@ -422,6 +436,8 @@ void netfs_subreq_terminated(struct netfs_read_subrequest *subreq,<br>
+ 		set_bit(NETFS_RREQ_WRITE_TO_CACHE, &rreq->flags);<br>
+ <br>
+ out:<br>
++	trace_netfs_sreq(subreq, netfs_sreq_trace_terminated);<br>
++<br>
+ 	/* If we decrement nr_rd_ops to 0, the ref belongs to us. */<br>
+ 	u = atomic_dec_return(&rreq->nr_rd_ops);<br>
+ 	if (u == 0)<br>
+@@ -510,6 +526,7 @@ netfs_rreq_prepare_read(struct netfs_read_request *rreq,<br>
+ <br>
+ out:<br>
+ 	subreq->source = source;<br>
++	trace_netfs_sreq(subreq, netfs_sreq_trace_prepare);<br>
+ 	return source;<br>
+ }<br>
+ <br>
+@@ -549,6 +566,7 @@ static bool netfs_rreq_submit_slice(struct netfs_read_request *rreq,<br>
+ <br>
+ 	rreq->submitted += subreq->len;<br>
+ <br>
++	trace_netfs_sreq(subreq, netfs_sreq_trace_submit);<br>
+ 	switch (source) {<br>
+ 	case NETFS_FILL_WITH_ZEROES:<br>
+ 		netfs_fill_with_zeroes(rreq, subreq);<br>
+@@ -591,6 +609,9 @@ static void netfs_rreq_expand(struct netfs_read_request *rreq,<br>
+ 		readahead_expand(ractl, rreq->start, rreq->len);<br>
+ 		rreq->start  = readahead_pos(ractl);<br>
+ 		rreq->len = readahead_length(ractl);<br>
++<br>
++		trace_netfs_read(rreq, readahead_pos(ractl), readahead_length(ractl),<br>
++				 netfs_read_trace_expanded);<br>
+ 	}<br>
+ }<br>
+ <br>
+@@ -632,6 +653,9 @@ void netfs_readahead(struct readahead_control *ractl,<br>
+ 	rreq->start	= readahead_pos(ractl);<br>
+ 	rreq->len	= readahead_length(ractl);<br>
+ <br>
++	trace_netfs_read(rreq, readahead_pos(ractl), readahead_length(ractl),<br>
++			 netfs_read_trace_readahead);<br>
++<br>
+ 	netfs_rreq_expand(rreq, ractl);<br>
+ <br>
+ 	atomic_set(&rreq->nr_rd_ops, 1);<br>
+@@ -698,6 +722,8 @@ int netfs_readpage(struct file *file,<br>
+ 	rreq->start	= page_index(page) * PAGE_SIZE;<br>
+ 	rreq->len	= thp_size(page);<br>
+ <br>
++	trace_netfs_read(rreq, rreq->start, rreq->len, netfs_read_trace_readpage);<br>
++<br>
+ 	netfs_get_read_request(rreq);<br>
+ <br>
+ 	atomic_set(&rreq->nr_rd_ops, 1);<br>
+diff --git a/include/linux/netfs.h b/include/linux/netfs.h<br>
+index 59e926e62d2e..8e8c6a4e4dde 100644<br>
+--- a/include/linux/netfs.h<br>
++++ b/include/linux/netfs.h<br>
+@@ -124,6 +124,7 @@ struct netfs_read_request {<br>
+ 	struct list_head	subrequests;	/* Requests to fetch I/O from disk or net */<br>
+ 	void			*netfs_priv;	/* Private data for the netfs */<br>
+ 	unsigned int		debug_id;<br>
++	unsigned int		cookie_debug_id;<br>
+ 	atomic_t		nr_rd_ops;	/* Number of read ops in progress */<br>
+ 	size_t			submitted;	/* Amount submitted for I/O so far */<br>
+ 	size_t			len;		/* Length of the request */<br>
+diff --git a/include/trace/events/netfs.h b/include/trace/events/netfs.h<br>
+new file mode 100644<br>
+index 000000000000..12ad382764c5<br>
+--- /dev/null<br>
++++ b/include/trace/events/netfs.h<br>
+@@ -0,0 +1,199 @@<br>
++/* SPDX-License-Identifier: GPL-2.0-or-later */<br>
++/* Network filesystem support module tracepoints<br>
++ *<br>
++ * Copyright (C) 2021 Red Hat, Inc. All Rights Reserved.<br>
++ * Written by David Howells (dhowells@xxxxxxxxxx)<br>
++ */<br>
++#undef TRACE_SYSTEM<br>
++#define TRACE_SYSTEM netfs<br>
++<br>
++#if !defined(_TRACE_NETFS_H) || defined(TRACE_HEADER_MULTI_READ)<br>
++#define _TRACE_NETFS_H<br>
++<br>
++#include <linux/tracepoint.h><br>
++<br>
++/*<br>
++ * Define enums for tracing information.<br>
++ */<br>
++#ifndef __NETFS_DECLARE_TRACE_ENUMS_ONCE_ONLY<br>
++#define __NETFS_DECLARE_TRACE_ENUMS_ONCE_ONLY<br>
++<br>
++enum netfs_read_trace {<br>
++	netfs_read_trace_expanded,<br>
++	netfs_read_trace_readahead,<br>
++	netfs_read_trace_readpage,<br>
++};<br>
++<br>
++enum netfs_rreq_trace {<br>
++	netfs_rreq_trace_assess,<br>
++	netfs_rreq_trace_done,<br>
++	netfs_rreq_trace_free,<br>
++	netfs_rreq_trace_resubmit,<br>
++	netfs_rreq_trace_unlock,<br>
++	netfs_rreq_trace_unmark,<br>
++	netfs_rreq_trace_write,<br>
++};<br>
++<br>
++enum netfs_sreq_trace {<br>
++	netfs_sreq_trace_download_instead,<br>
++	netfs_sreq_trace_free,<br>
++	netfs_sreq_trace_prepare,<br>
++	netfs_sreq_trace_resubmit_short,<br>
++	netfs_sreq_trace_submit,<br>
++	netfs_sreq_trace_terminated,<br>
++	netfs_sreq_trace_write,<br>
++	netfs_sreq_trace_write_term,<br>
++};<br>
++<br>
++#endif<br>
++<br>
++#define netfs_read_traces					\<br>
++	EM(netfs_read_trace_expanded,		"EXPANDED ")	\<br>
++	EM(netfs_read_trace_readahead,		"READAHEAD")	\<br>
++	E_(netfs_read_trace_readpage,		"READPAGE ")<br>
++<br>
++#define netfs_rreq_traces					\<br>
++	EM(netfs_rreq_trace_assess,		"ASSESS")	\<br>
++	EM(netfs_rreq_trace_done,		"DONE  ")	\<br>
++	EM(netfs_rreq_trace_free,		"FREE  ")	\<br>
++	EM(netfs_rreq_trace_resubmit,		"RESUBM")	\<br>
++	EM(netfs_rreq_trace_unlock,		"UNLOCK")	\<br>
++	EM(netfs_rreq_trace_unmark,		"UNMARK")	\<br>
++	E_(netfs_rreq_trace_write,		"WRITE ")<br>
++<br>
++#define netfs_sreq_sources					\<br>
++	EM(NETFS_FILL_WITH_ZEROES,		"ZERO")		\<br>
++	EM(NETFS_DOWNLOAD_FROM_SERVER,		"DOWN")		\<br>
++	EM(NETFS_READ_FROM_CACHE,		"READ")		\<br>
++	E_(NETFS_INVALID_READ,			"INVL")		\<br>
++<br>
++#define netfs_sreq_traces					\<br>
++	EM(netfs_sreq_trace_download_instead,	"RDOWN")	\<br>
++	EM(netfs_sreq_trace_free,		"FREE ")	\<br>
++	EM(netfs_sreq_trace_prepare,		"PREP ")	\<br>
++	EM(netfs_sreq_trace_resubmit_short,	"SHORT")	\<br>
++	EM(netfs_sreq_trace_submit,		"SUBMT")	\<br>
++	EM(netfs_sreq_trace_terminated,		"TERM ")	\<br>
++	EM(netfs_sreq_trace_write,		"WRITE")	\<br>
++	E_(netfs_sreq_trace_write_term,		"WTERM")<br>
++<br>
++<br>
++/*<br>
++ * Export enum symbols via userspace.<br>
++ */<br>
++#undef EM<br>
++#undef E_<br>
++#define EM(a, b) TRACE_DEFINE_ENUM(a);<br>
++#define E_(a, b) TRACE_DEFINE_ENUM(a);<br>
++<br>
++netfs_read_traces;<br>
++netfs_rreq_traces;<br>
++netfs_sreq_sources;<br>
++netfs_sreq_traces;<br>
++<br>
++/*<br>
++ * Now redefine the EM() and E_() macros to map the enums to the strings that<br>
++ * will be printed in the output.<br>
++ */<br>
++#undef EM<br>
++#undef E_<br>
++#define EM(a, b)	{ a, b },<br>
++#define E_(a, b)	{ a, b }<br>
++<br>
++TRACE_EVENT(netfs_read,<br>
++	    TP_PROTO(struct netfs_read_request *rreq,<br>
++		     loff_t start, size_t len,<br>
++		     enum netfs_read_trace what),<br>
++<br>
++	    TP_ARGS(rreq, start, len, what),<br>
++<br>
++	    TP_STRUCT__entry(<br>
++		    __field(unsigned int,		rreq		)<br>
++		    __field(unsigned int,		cookie		)<br>
++		    __field(loff_t,			start		)<br>
++		    __field(size_t,			len		)<br>
++		    __field(enum netfs_read_trace,	what		)<br>
++			     ),<br>
++<br>
++	    TP_fast_assign(<br>
++		    __entry->rreq	= rreq->debug_id;<br>
++		    __entry->cookie	= rreq->cookie_debug_id;<br>
++		    __entry->start	= start;<br>
++		    __entry->len	= len;<br>
++		    __entry->what	= what;<br>
++			   ),<br>
++<br>
++	    TP_printk("R=%08x %s c=%08x s=%llx %zx",<br>
++		      __entry->rreq,<br>
++		      __print_symbolic(__entry->what, netfs_read_traces),<br>
++		      __entry->cookie,<br>
++		      __entry->start, __entry->len)<br>
++	    );<br>
++<br>
++TRACE_EVENT(netfs_rreq,<br>
++	    TP_PROTO(struct netfs_read_request *rreq,<br>
++		     enum netfs_rreq_trace what),<br>
++<br>
++	    TP_ARGS(rreq, what),<br>
++<br>
++	    TP_STRUCT__entry(<br>
++		    __field(unsigned int,		rreq		)<br>
++		    __field(unsigned short,		flags		)<br>
++		    __field(enum netfs_rreq_trace,	what		)<br>
++			     ),<br>
++<br>
++	    TP_fast_assign(<br>
++		    __entry->rreq	= rreq->debug_id;<br>
++		    __entry->flags	= rreq->flags;<br>
++		    __entry->what	= what;<br>
++			   ),<br>
++<br>
++	    TP_printk("R=%08x %s f=%02x",<br>
++		      __entry->rreq,<br>
++		      __print_symbolic(__entry->what, netfs_rreq_traces),<br>
++		      __entry->flags)<br>
++	    );<br>
++<br>
++TRACE_EVENT(netfs_sreq,<br>
++	    TP_PROTO(struct netfs_read_subrequest *sreq,<br>
++		     enum netfs_sreq_trace what),<br>
++<br>
++	    TP_ARGS(sreq, what),<br>
++<br>
++	    TP_STRUCT__entry(<br>
++		    __field(unsigned int,		rreq		)<br>
++		    __field(unsigned short,		index		)<br>
++		    __field(short,			error		)<br>
++		    __field(unsigned short,		flags		)<br>
++		    __field(enum netfs_read_source,	source		)<br>
++		    __field(enum netfs_sreq_trace,	what		)<br>
++		    __field(size_t,			len		)<br>
++		    __field(size_t,			transferred	)<br>
++		    __field(loff_t,			start		)<br>
++			     ),<br>
++<br>
++	    TP_fast_assign(<br>
++		    __entry->rreq	= sreq->rreq->debug_id;<br>
++		    __entry->index	= sreq->debug_index;<br>
++		    __entry->error	= sreq->error;<br>
++		    __entry->flags	= sreq->flags;<br>
++		    __entry->source	= sreq->source;<br>
++		    __entry->what	= what;<br>
++		    __entry->len	= sreq->len;<br>
++		    __entry->transferred = sreq->transferred;<br>
++		    __entry->start	= sreq->start;<br>
++			   ),<br>
++<br>
++	    TP_printk("R=%08x[%u] %s %s f=%02x s=%llx %zx/%zx e=%d",<br>
++		      __entry->rreq, __entry->index,<br>
++		      __print_symbolic(__entry->what, netfs_sreq_traces),<br>
++		      __print_symbolic(__entry->source, netfs_sreq_sources),<br>
++		      __entry->flags,<br>
++		      __entry->start, __entry->transferred, __entry->len,<br>
++		      __entry->error)<br>
++	    );<br>
++<br>
++#endif /* _TRACE_NETFS_H */<br>
++<br>
++/* This part must be outside protection */<br>
++#include <trace/define_trace.h><br>
+<br>
+<br>
+<br>
+

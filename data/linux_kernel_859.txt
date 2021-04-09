@@ -1,0 +1,220 @@
+Use clock bulk helpers to get/enable/disable clocks, meanwhile<br>
+make sys_ck optional, then will be easier to handle clocks.<br>
+<br>
+Signed-off-by: Chunfeng Yun <chunfeng.yun@xxxxxxxxxxxx><br>
+---<br>
+ drivers/usb/host/xhci-mtk.c | 109 +++++++-----------------------------<br>
+ drivers/usb/host/xhci-mtk.h |  10 ++--<br>
+ 2 files changed, 24 insertions(+), 95 deletions(-)<br>
+<br>
+diff --git a/drivers/usb/host/xhci-mtk.c b/drivers/usb/host/xhci-mtk.c<br>
+index 30927f4064d4..d4c455eecb8d 100644<br>
+--- a/drivers/usb/host/xhci-mtk.c<br>
++++ b/drivers/usb/host/xhci-mtk.c<br>
+@@ -7,7 +7,6 @@<br>
+  *  Chunfeng Yun <chunfeng.yun@xxxxxxxxxxxx><br>
+  */<br>
+ <br>
+-#include <linux/clk.h><br>
+ #include <linux/dma-mapping.h><br>
+ #include <linux/iopoll.h><br>
+ #include <linux/kernel.h><br>
+@@ -220,89 +219,6 @@ static int xhci_mtk_ssusb_config(struct xhci_hcd_mtk *mtk)<br>
+ 	return xhci_mtk_host_enable(mtk);<br>
+ }<br>
+ <br>
+-static int xhci_mtk_clks_get(struct xhci_hcd_mtk *mtk)<br>
+-{<br>
+-	struct device *dev = mtk->dev;<br>
+-<br>
+-	mtk->sys_clk = devm_clk_get(dev, "sys_ck");<br>
+-	if (IS_ERR(mtk->sys_clk)) {<br>
+-		dev_err(dev, "fail to get sys_ck\n");<br>
+-		return PTR_ERR(mtk->sys_clk);<br>
+-	}<br>
+-<br>
+-	mtk->xhci_clk = devm_clk_get_optional(dev, "xhci_ck");<br>
+-	if (IS_ERR(mtk->xhci_clk))<br>
+-		return PTR_ERR(mtk->xhci_clk);<br>
+-<br>
+-	mtk->ref_clk = devm_clk_get_optional(dev, "ref_ck");<br>
+-	if (IS_ERR(mtk->ref_clk))<br>
+-		return PTR_ERR(mtk->ref_clk);<br>
+-<br>
+-	mtk->mcu_clk = devm_clk_get_optional(dev, "mcu_ck");<br>
+-	if (IS_ERR(mtk->mcu_clk))<br>
+-		return PTR_ERR(mtk->mcu_clk);<br>
+-<br>
+-	mtk->dma_clk = devm_clk_get_optional(dev, "dma_ck");<br>
+-	return PTR_ERR_OR_ZERO(mtk->dma_clk);<br>
+-}<br>
+-<br>
+-static int xhci_mtk_clks_enable(struct xhci_hcd_mtk *mtk)<br>
+-{<br>
+-	int ret;<br>
+-<br>
+-	ret = clk_prepare_enable(mtk->ref_clk);<br>
+-	if (ret) {<br>
+-		dev_err(mtk->dev, "failed to enable ref_clk\n");<br>
+-		goto ref_clk_err;<br>
+-	}<br>
+-<br>
+-	ret = clk_prepare_enable(mtk->sys_clk);<br>
+-	if (ret) {<br>
+-		dev_err(mtk->dev, "failed to enable sys_clk\n");<br>
+-		goto sys_clk_err;<br>
+-	}<br>
+-<br>
+-	ret = clk_prepare_enable(mtk->xhci_clk);<br>
+-	if (ret) {<br>
+-		dev_err(mtk->dev, "failed to enable xhci_clk\n");<br>
+-		goto xhci_clk_err;<br>
+-	}<br>
+-<br>
+-	ret = clk_prepare_enable(mtk->mcu_clk);<br>
+-	if (ret) {<br>
+-		dev_err(mtk->dev, "failed to enable mcu_clk\n");<br>
+-		goto mcu_clk_err;<br>
+-	}<br>
+-<br>
+-	ret = clk_prepare_enable(mtk->dma_clk);<br>
+-	if (ret) {<br>
+-		dev_err(mtk->dev, "failed to enable dma_clk\n");<br>
+-		goto dma_clk_err;<br>
+-	}<br>
+-<br>
+-	return 0;<br>
+-<br>
+-dma_clk_err:<br>
+-	clk_disable_unprepare(mtk->mcu_clk);<br>
+-mcu_clk_err:<br>
+-	clk_disable_unprepare(mtk->xhci_clk);<br>
+-xhci_clk_err:<br>
+-	clk_disable_unprepare(mtk->sys_clk);<br>
+-sys_clk_err:<br>
+-	clk_disable_unprepare(mtk->ref_clk);<br>
+-ref_clk_err:<br>
+-	return ret;<br>
+-}<br>
+-<br>
+-static void xhci_mtk_clks_disable(struct xhci_hcd_mtk *mtk)<br>
+-{<br>
+-	clk_disable_unprepare(mtk->dma_clk);<br>
+-	clk_disable_unprepare(mtk->mcu_clk);<br>
+-	clk_disable_unprepare(mtk->xhci_clk);<br>
+-	clk_disable_unprepare(mtk->sys_clk);<br>
+-	clk_disable_unprepare(mtk->ref_clk);<br>
+-}<br>
+-<br>
+ /* only clocks can be turn off for ip-sleep wakeup mode */<br>
+ static void usb_wakeup_ip_sleep_set(struct xhci_hcd_mtk *mtk, bool enable)<br>
+ {<br>
+@@ -367,6 +283,19 @@ static void usb_wakeup_set(struct xhci_hcd_mtk *mtk, bool enable)<br>
+ 		usb_wakeup_ip_sleep_set(mtk, enable);<br>
+ }<br>
+ <br>
++static int xhci_mtk_clks_get(struct xhci_hcd_mtk *mtk)<br>
++{<br>
++	struct clk_bulk_data *clks = mtk->clks;<br>
++<br>
++	clks[0].id = "sys_ck";<br>
++	clks[1].id = "xhci_ck";<br>
++	clks[2].id = "ref_ck";<br>
++	clks[3].id = "mcu_ck";<br>
++	clks[4].id = "dma_ck";<br>
++<br>
++	return devm_clk_bulk_get_optional(mtk->dev, BULK_CLKS_NUM, clks);<br>
++}<br>
++<br>
+ static int xhci_mtk_ldos_enable(struct xhci_hcd_mtk *mtk)<br>
+ {<br>
+ 	int ret;<br>
+@@ -522,7 +451,7 @@ static int xhci_mtk_probe(struct platform_device *pdev)<br>
+ 	if (ret)<br>
+ 		goto disable_pm;<br>
+ <br>
+-	ret = xhci_mtk_clks_enable(mtk);<br>
++	ret = clk_bulk_prepare_enable(BULK_CLKS_NUM, mtk->clks);<br>
+ 	if (ret)<br>
+ 		goto disable_ldos;<br>
+ <br>
+@@ -625,7 +554,7 @@ static int xhci_mtk_probe(struct platform_device *pdev)<br>
+ 	usb_put_hcd(hcd);<br>
+ <br>
+ disable_clk:<br>
+-	xhci_mtk_clks_disable(mtk);<br>
++	clk_bulk_disable_unprepare(BULK_CLKS_NUM, mtk->clks);<br>
+ <br>
+ disable_ldos:<br>
+ 	xhci_mtk_ldos_disable(mtk);<br>
+@@ -655,7 +584,7 @@ static int xhci_mtk_remove(struct platform_device *pdev)<br>
+ 	usb_put_hcd(shared_hcd);<br>
+ 	usb_put_hcd(hcd);<br>
+ 	xhci_mtk_sch_exit(mtk);<br>
+-	xhci_mtk_clks_disable(mtk);<br>
++	clk_bulk_disable_unprepare(BULK_CLKS_NUM, mtk->clks);<br>
+ 	xhci_mtk_ldos_disable(mtk);<br>
+ <br>
+ 	pm_runtime_disable(dev);<br>
+@@ -682,7 +611,7 @@ static int __maybe_unused xhci_mtk_suspend(struct device *dev)<br>
+ 	if (ret)<br>
+ 		goto restart_poll_rh;<br>
+ <br>
+-	xhci_mtk_clks_disable(mtk);<br>
++	clk_bulk_disable_unprepare(BULK_CLKS_NUM, mtk->clks);<br>
+ 	usb_wakeup_set(mtk, true);<br>
+ 	return 0;<br>
+ <br>
+@@ -703,7 +632,7 @@ static int __maybe_unused xhci_mtk_resume(struct device *dev)<br>
+ 	int ret;<br>
+ <br>
+ 	usb_wakeup_set(mtk, false);<br>
+-	ret = xhci_mtk_clks_enable(mtk);<br>
++	ret = clk_bulk_prepare_enable(BULK_CLKS_NUM, mtk->clks);<br>
+ 	if (ret)<br>
+ 		goto enable_wakeup;<br>
+ <br>
+@@ -719,7 +648,7 @@ static int __maybe_unused xhci_mtk_resume(struct device *dev)<br>
+ 	return 0;<br>
+ <br>
+ disable_clks:<br>
+-	xhci_mtk_clks_disable(mtk);<br>
++	clk_bulk_disable_unprepare(BULK_CLKS_NUM, mtk->clks);<br>
+ enable_wakeup:<br>
+ 	usb_wakeup_set(mtk, true);<br>
+ 	return ret;<br>
+diff --git a/drivers/usb/host/xhci-mtk.h b/drivers/usb/host/xhci-mtk.h<br>
+index 621ec1a85009..11996edc1967 100644<br>
+--- a/drivers/usb/host/xhci-mtk.h<br>
++++ b/drivers/usb/host/xhci-mtk.h<br>
+@@ -9,8 +9,12 @@<br>
+ #ifndef _XHCI_MTK_H_<br>
+ #define _XHCI_MTK_H_<br>
+ <br>
++#include <linux/clk.h><br>
++<br>
+ #include "xhci.h"<br>
+ <br>
++#define BULK_CLKS_NUM	5<br>
++<br>
+ /**<br>
+  * To simplify scheduler algorithm, set a upper limit for ESIT,<br>
+  * if a synchromous ep's ESIT is larger than @XHCI_MTK_MAX_ESIT,<br>
+@@ -140,11 +144,7 @@ struct xhci_hcd_mtk {<br>
+ 	int u3p_dis_msk;<br>
+ 	struct regulator *vusb33;<br>
+ 	struct regulator *vbus;<br>
+-	struct clk *sys_clk;	/* sys and mac clock */<br>
+-	struct clk *xhci_clk;<br>
+-	struct clk *ref_clk;<br>
+-	struct clk *mcu_clk;<br>
+-	struct clk *dma_clk;<br>
++	struct clk_bulk_data clks[BULK_CLKS_NUM];<br>
+ 	struct regmap *pericfg;<br>
+ 	struct phy **phys;<br>
+ 	int num_phys;<br>
+-- <br>
+2.18.0<br>
+<br>
+<br>
+

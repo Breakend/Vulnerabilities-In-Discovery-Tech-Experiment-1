@@ -1,0 +1,86 @@
+succed -> succeed in mm/hugetlb.c<br>
+wil -> will in mm/mempolicy.c<br>
+wit -> with in mm/page_alloc.c<br>
+Retruns -> Returns in mm/page_vma_mapped.c<br>
+confict -> conflict in mm/secretmem.c<br>
+No functionality changed.<br>
+<br>
+Signed-off-by: Lu Jialin <lujialin4@xxxxxxxxxx><br>
+---<br>
+ mm/hugetlb.c         | 2 +-<br>
+ mm/mempolicy.c       | 2 +-<br>
+ mm/page_alloc.c      | 2 +-<br>
+ mm/page_vma_mapped.c | 2 +-<br>
+ mm/secretmem.c       | 2 +-<br>
+ 5 files changed, 5 insertions(+), 5 deletions(-)<br>
+<br>
+diff --git a/mm/hugetlb.c b/mm/hugetlb.c<br>
+index c22111f3da20..e414534e1fc4 100644<br>
+--- a/mm/hugetlb.c<br>
++++ b/mm/hugetlb.c<br>
+@@ -2304,7 +2304,7 @@ static int alloc_and_dissolve_huge_page(struct hstate *h, struct page *old_page,<br>
+ 	} else if (!HPageFreed(old_page)) {<br>
+ 		/*<br>
+ 		 * Page's refcount is 0 but it has not been enqueued in the<br>
+-		 * freelist yet. Race window is small, so we can succed here if<br>
++		 * freelist yet. Race window is small, so we can succeed here if<br>
+ 		 * we retry.<br>
+ 		 */<br>
+ 		spin_unlock(&hugetlb_lock);<br>
+diff --git a/mm/mempolicy.c b/mm/mempolicy.c<br>
+index 5690513c5668..d79fa299b70c 100644<br>
+--- a/mm/mempolicy.c<br>
++++ b/mm/mempolicy.c<br>
+@@ -994,7 +994,7 @@ static long do_get_mempolicy(int *policy, nodemask_t *nmask,<br>
+ 		if (flags & MPOL_F_ADDR) {<br>
+ 			/*<br>
+ 			 * Take a refcount on the mpol, lookup_node()<br>
+-			 * wil drop the mmap_lock, so after calling<br>
++			 * will drop the mmap_lock, so after calling<br>
+ 			 * lookup_node() only "pol" remains valid, "vma"<br>
+ 			 * is stale.<br>
+ 			 */<br>
+diff --git a/mm/page_alloc.c b/mm/page_alloc.c<br>
+index 604dcd69397b..b457cc316009 100644<br>
+--- a/mm/page_alloc.c<br>
++++ b/mm/page_alloc.c<br>
+@@ -4173,7 +4173,7 @@ __alloc_pages_may_oom(gfp_t gfp_mask, unsigned int order,<br>
+ }<br>
+ <br>
+ /*<br>
+- * Maximum number of compaction retries wit a progress before OOM<br>
++ * Maximum number of compaction retries with a progress before OOM<br>
+  * killer is consider as the only way to move forward.<br>
+  */<br>
+ #define MAX_COMPACT_RETRIES 16<br>
+diff --git a/mm/page_vma_mapped.c b/mm/page_vma_mapped.c<br>
+index 86e3a3688d59..2cf01d933f13 100644<br>
+--- a/mm/page_vma_mapped.c<br>
++++ b/mm/page_vma_mapped.c<br>
+@@ -134,7 +134,7 @@ static bool check_pte(struct page_vma_mapped_walk *pvmw)<br>
+  * regardless of which page table level the page is mapped at. @pvmw->pmd is<br>
+  * NULL.<br>
+  *<br>
+- * Retruns false if there are no more page table entries for the page in<br>
++ * Returns false if there are no more page table entries for the page in<br>
+  * the vma. @pvmw->ptl is unlocked and @pvmw->pte is unmapped.<br>
+  *<br>
+  * If you need to stop the walk before page_vma_mapped_walk() returned false,<br>
+diff --git a/mm/secretmem.c b/mm/secretmem.c<br>
+index 3b1ba3991964..38e22c45e482 100644<br>
+--- a/mm/secretmem.c<br>
++++ b/mm/secretmem.c<br>
+@@ -204,7 +204,7 @@ SYSCALL_DEFINE1(memfd_secret, unsigned int, flags)<br>
+ 	struct file *file;<br>
+ 	int fd, err;<br>
+ <br>
+-	/* make sure local flags do not confict with global fcntl.h */<br>
++	/* make sure local flags do not conflict with global fcntl.h */<br>
+ 	BUILD_BUG_ON(SECRETMEM_FLAGS_MASK & O_CLOEXEC);<br>
+ <br>
+ 	if (!secretmem_enable)<br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+

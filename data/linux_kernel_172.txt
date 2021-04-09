@@ -1,0 +1,89 @@
+Hi!<br>
+<br>
+Given code like:<br>
+<br>
+DEFINE_STATIC_KEY_FALSE(sched_schedstats);<br>
+<br>
+#define   schedstat_enabled()		static_branch_unlikely(&sched_schedstats)<br>
+#define   schedstat_set(var, val)	do { if (schedstat_enabled()) { var = (val); } } while (0)<br>
+#define __schedstat_set(var, val)	do { var = (val); } while (0)<br>
+<br>
+void foo(void)<br>
+{<br>
+	struct task_struct *p = current;<br>
+<br>
+	schedstat_set(p->se.statistics.wait_start,  0);<br>
+	schedstat_set(p->se.statistics.sleep_start, 0);<br>
+	schedstat_set(p->se.statistics.block_start, 0);<br>
+}<br>
+<br>
+Where the static_branch_unlikely() ends up being:<br>
+<br>
+static __always_inline bool arch_static_branch(struct static_key * const key, const bool branch)<br>
+{<br>
+	asm_volatile_goto("1:"<br>
+		".byte " __stringify(BYTES_NOP5) "\n\t"<br>
+		".pushsection __jump_table,  \"aw\" \n\t"<br>
+		_ASM_ALIGN "\n\t"<br>
+		".long 1b - ., %l[l_yes] - . \n\t"<br>
+		_ASM_PTR "%c0 + %c1 - .\n\t"<br>
+		".popsection \n\t"<br>
+		: :  "i" (key), "i" (branch) : : l_yes);<br>
+<br>
+	return false;<br>
+l_yes:<br>
+	return true;<br>
+}<br>
+<br>
+The compiler gives us code like:<br>
+<br>
+000000000000a290 <foo>:<br>
+    a290:       65 48 8b 04 25 00 00 00 00      mov    %gs:0x0,%rax     a295: R_X86_64_32S      current_task<br>
+    a299:       0f 1f 44 00 00          nopl   0x0(%rax,%rax,1)<br>
+    a29e:       0f 1f 44 00 00          nopl   0x0(%rax,%rax,1)<br>
+    a2a3:       0f 1f 44 00 00          nopl   0x0(%rax,%rax,1)<br>
+    a2a8:       c3                      retq<br>
+    a2a9:       48 c7 80 28 01 00 00 00 00 00 00        movq   $0x0,0x128(%rax)<br>
+    a2b4:       eb e8                   jmp    a29e <foo+0xe><br>
+    a2b6:       48 c7 80 58 01 00 00 00 00 00 00        movq   $0x0,0x158(%rax)<br>
+    a2c1:       eb e0                   jmp    a2a3 <foo+0x13><br>
+    a2c3:       48 c7 80 70 01 00 00 00 00 00 00        movq   $0x0,0x170(%rax)<br>
+    a2ce:       c3                      retq<br>
+<br>
+<br>
+Now, in this case I can easily rewrite foo like:<br>
+<br>
+void foo2(void)<br>
+{<br>
+	struct task_struct *p = current;<br>
+<br>
+	if (schedstat_enabled()) {<br>
+		__schedstat_set(p->se.statistics.wait_start,  0);<br>
+		__schedstat_set(p->se.statistics.sleep_start, 0);<br>
+		__schedstat_set(p->se.statistics.block_start, 0);<br>
+	}<br>
+}<br>
+<br>
+Which gives the far more reasonable:<br>
+<br>
+000000000000a2d0 <foo2>:<br>
+    a2d0:       65 48 8b 04 25 00 00 00 00      mov    %gs:0x0,%rax     a2d5: R_X86_64_32S      current_task<br>
+    a2d9:       0f 1f 44 00 00          nopl   0x0(%rax,%rax,1)<br>
+    a2de:       c3                      retq<br>
+    a2df:       48 c7 80 28 01 00 00 00 00 00 00        movq   $0x0,0x128(%rax)<br>
+    a2ea:       48 c7 80 58 01 00 00 00 00 00 00        movq   $0x0,0x158(%rax)<br>
+    a2f5:       48 c7 80 70 01 00 00 00 00 00 00        movq   $0x0,0x170(%rax)<br>
+    a300:       c3                      retq<br>
+<br>
+But I've found a few sites where this isn't so trivial.<br>
+<br>
+Is there *any* way in which we can have the compiler recognise that the<br>
+asm_goto only depends on its arguments and have it merge the branches<br>
+itself?<br>
+<br>
+I do realize that asm-goto being volatile this is a fairly huge ask, but<br>
+I figured I should at least raise the issue, if only to raise awareness.<br>
+<br>
+<br>
+<br>
+

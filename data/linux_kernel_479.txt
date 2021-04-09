@@ -1,0 +1,112 @@
+On Thu, Apr 08, 2021 at 09:22:52PM +0800, Yicong Yang wrote:<br>
+><i> On 2021/4/8 2:55, Bjorn Helgaas wrote:</i><br>
+><i> > On Tue, Apr 06, 2021 at 08:45:53PM +0800, Yicong Yang wrote:</i><br>
+<br>
+><i> >> +On Kunpeng 930 SoC, the PCIe root complex is composed of several</i><br>
+><i> >> +PCIe cores.</i><br>
+><i> </i><br>
+><i> > Can you connect "Kunpeng 930" to something in the kernel tree?</i><br>
+><i> > "git grep -i kunpeng" shows nothing that's obviously relevant.</i><br>
+><i> > I assume there's a related driver in drivers/pci/controller/?</i><br>
+><i> </i><br>
+><i> Kunpeng 930 is the product name of Hip09 platform. The PCIe</i><br>
+><i> controller uses the generic PCIe driver based on ACPI.</i><br>
+<br>
+I guess I'm just looking for a hint to help users know when to enable<br>
+the Kconfig for this.  Maybe the "HiSilicon" in the Kconfig help is<br>
+enough?  Maybe "Kunpeng 930" is not even necessary?  If "Kunpeng 930"<br>
+*is* necessary, there should be some way to relate it to something<br>
+else.<br>
+<br>
+><i> >> +from the file, and the desired value written to the file to tune.</i><br>
+><i> > </i><br>
+><i> >> +Tuning multiple events at the same time is not permitted, which means</i><br>
+><i> >> +you cannot read or write more than one tune file at one time.</i><br>
+><i> > </i><br>
+><i> > I think this is obvious from the model, so the sentence doesn't really</i><br>
+><i> > add anything.  Each event is a separate file, and it's obvious that</i><br>
+><i> > there's no way to write to multiple files simultaneously.</i><br>
+><i> </i><br>
+><i> from the usage we shown below this situation won't happen. I just worry</i><br>
+><i> that users may have a program to open multiple files at the same time and</i><br>
+><i> read/write simultaneously, so add this line here to mention the restriction.</i><br>
+<br>
+How is this possible?  I don't think "writing multiple files<br>
+simultaneously" is even possible in the Linux syscall model.  I don't<br>
+think a user will do anything differently after reading "you cannot<br>
+read or write more than one tune file at one time."<br>
+<br>
+><i> >> +- tx_path_rx_req_alloc_buf_level: watermark of RX requested</i><br>
+><i> >> +- tx_path_tx_req_alloc_buf_level: watermark of TX requested</i><br>
+><i> >> +</i><br>
+><i> >> +These events influence the watermark of the buffer allocated for each</i><br>
+><i> >> +type. RX means the inbound while Tx means outbound. For a busy</i><br>
+><i> >> +direction, you should increase the related buffer watermark to enhance</i><br>
+><i> >> +the performance.</i><br>
+><i> > </i><br>
+><i> > Based on what you have written here, I would just write 2 to both</i><br>
+><i> > files to enhance the performance in both directions.  But obviously</i><br>
+><i> > there must be some tradeoff here, e.g., increasing Rx performance</i><br>
+><i> > comes at the cost of Tx performane.</i><br>
+><i> </i><br>
+><i> the Rx buffer and Tx buffer are separate, so they won't influence</i><br>
+><i> each other.</i><br>
+<br>
+Why would I write anything other than 2 to these files?  That's the<br>
+question I think this paragraph should answer.<br>
+<br>
+><i> >> +9. data_format</i><br>
+><i> >> +--------------</i><br>
+><i> >> +</i><br>
+><i> >> +File to indicate the format of the traced TLP headers. User can also</i><br>
+><i> >> +specify the desired format of traced TLP headers. Available formats</i><br>
+><i> >> +are 4DW, 8DW which indicates the length of each TLP headers traced.</i><br>
+><i> >> +::</i><br>
+><i> >> +    $ cat data_format</i><br>
+><i> >> +    [4DW]    8DW</i><br>
+><i> >> +    $ echo 8 > data_format</i><br>
+><i> >> +    $ cat data_format</i><br>
+><i> >> +    4DW     [8DW]</i><br>
+><i> >> +</i><br>
+><i> >> +The traced TLP header format is different from the PCIe standard.</i><br>
+><i> > </i><br>
+><i> > I'm confused.  Below you say the fields of the traced TLP header are</i><br>
+><i> > defined by the PCIe spec.  But here you say the format is *different*.</i><br>
+><i> > What exactly is different?</i><br>
+><i> </i><br>
+><i> For the Request Header Format for 64-bit addressing of Memory, defind in</i><br>
+><i> PCIe spec 4.0, Figure 2-15, the 1st DW is like:</i><br>
+><i> </i><br>
+><i> Byte 0 > [Fmt] [Type] [T9] [Tc] [T8] [Attr] [LN] [TH] ... [Length]</i><br>
+><i> </i><br>
+><i> some are recorded in our traced header like below, which some are not.</i><br>
+><i> that's what I mean the format of the header are different. But for a</i><br>
+><i> certain field like 'Fmt', the meaning keeps same with what Spec defined.</i><br>
+><i> that's what I mean the fields definition of our traced header keep same</i><br>
+><i> with the Spec.</i><br>
+<br>
+Ah, that helps a lot, thank you.  Maybe you could say something along<br>
+the lines of this:<br>
+<br>
+  When using the 8DW data format, the entire TLP header is logged.<br>
+  For example, the TLP header for Memory Reads with 64-bit addresses<br>
+  is shown in PCIe r5.0, Figure 2-17; the header for Configuration<br>
+  Requests is shown in Figure 2.20, etc.<br>
+<br>
+  In addition, 8DW trace buffer entries contain a timestamp and<br>
+  possibly a prefix, e.g., a PASID TLP prefix (see Figure 6-20).  TLPs<br>
+  may include more than one prefix, but only one can be logged in<br>
+  trace buffer entries.<br>
+<br>
+  When using the 4DW data format, DW0 of the trace buffer entry<br>
+  contains selected fields of DW0 of the TLP, together with a<br>
+  timestamp.  DW1-DW3 of the trace buffer entry contain DW1-DW3<br>
+  directly from the TLP header.<br>
+<br>
+This looks like a really cool device.  I wish we had this for more<br>
+platforms.<br>
+<br>
+Bjorn<br>
+<br>
+<br>
+

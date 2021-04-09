@@ -1,0 +1,60 @@
+Add driver and MAINTAINERS for HiSilicon I2C controller on Kunpeng SoC. Also<br>
+provide the devm_*() variants for adding the I2C adapters. Add a public<br>
+api to provide I2C frequency mode strings and convert designware driver<br>
+to use it.<br>
+<br>
+Change since v6:<br>
+- make the i2c_freq_mode_string() exported rather than inline<br>
+- addressed the comments from Wolfram and Jarkko for the driver<br>
+<br>
+Change since v5:<br>
+- address the comment from Dmitry and add his Reviewed-by<br>
+- address the comment from Jarkko and add his Reviewed-by and Tested-by<br>
+- add Jarkko's Acked-by for designware patch<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/linux-i2c/1617113966-40498-1-git-send-email-yangyicong@xxxxxxxxxxxxx/">https://lore.kernel.org/linux-i2c/1617113966-40498-1-git-send-email-yangyicong@xxxxxxxxxxxxx/</a><br>
+<br>
+Change since v4:<br>
+- and Andy's Reviewed-by<br>
+- attach Andy's patch of switch designware driver to use i2c_freq_mode_string()<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/linux-i2c/1617109549-4013-1-git-send-email-yangyicong@xxxxxxxxxxxxx/">https://lore.kernel.org/linux-i2c/1617109549-4013-1-git-send-email-yangyicong@xxxxxxxxxxxxx/</a><br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/linux-i2c/20210330134633.29889-1-andriy.shevchenko@xxxxxxxxxxxxxxx/">https://lore.kernel.org/linux-i2c/20210330134633.29889-1-andriy.shevchenko@xxxxxxxxxxxxxxx/</a><br>
+<br>
+Change since v3:<br>
+- split the bus mode string api to I2C as suggested by Andy<br>
+- simplify the devm variants and change the export format<br>
+- address the comments of the HiSilicon I2C driver from Andy and Dmitry, thanks!<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/linux-i2c/1616411413-7177-1-git-send-email-yangyicong@xxxxxxxxxxxxx/">https://lore.kernel.org/linux-i2c/1616411413-7177-1-git-send-email-yangyicong@xxxxxxxxxxxxx/</a><br>
+<br>
+Change since v2:<br>
+- handle -EPROBE_DEFER case when get irq number by platform_get_irq()<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/linux-i2c/1615296137-14558-1-git-send-email-yangyicong@xxxxxxxxxxxxx/">https://lore.kernel.org/linux-i2c/1615296137-14558-1-git-send-email-yangyicong@xxxxxxxxxxxxx/</a><br>
+<br>
+Change since v1:<br>
+- fix compile test error on 32bit arch, reported by intel lkp robot:<br>
+  64 bit division without using kernel wrapper in probe function.<br>
+Link:<a  rel="nofollow" href="https://lore.kernel.org/linux-i2c/1615016946-55670-1-git-send-email-yangyicong@xxxxxxxxxxxxx/">https://lore.kernel.org/linux-i2c/1615016946-55670-1-git-send-email-yangyicong@xxxxxxxxxxxxx/</a><br>
+<br>
+Andy Shevchenko (1):<br>
+  i2c: designware: Switch over to i2c_freq_mode_string()<br>
+<br>
+Yicong Yang (4):<br>
+  i2c: core: add managed function for adding i2c adapters<br>
+  i2c: core: add api to provide frequency mode strings<br>
+  i2c: add support for HiSilicon I2C controller<br>
+  MAINTAINERS: Add maintainer for HiSilicon I2C driver<br>
+<br>
+ MAINTAINERS                                |   7 +<br>
+ drivers/i2c/busses/Kconfig                 |  10 +<br>
+ drivers/i2c/busses/Makefile                |   1 +<br>
+ drivers/i2c/busses/i2c-designware-master.c |  20 +-<br>
+ drivers/i2c/busses/i2c-hisi.c              | 504 +++++++++++++++++++++++++++++<br>
+ drivers/i2c/i2c-core-base.c                |  47 +++<br>
+ include/linux/i2c.h                        |   4 +<br>
+ 7 files changed, 577 insertions(+), 16 deletions(-)<br>
+ create mode 100644 drivers/i2c/busses/i2c-hisi.c<br>
+<br>
+-- <br>
+2.8.1<br>
+<br>
+<br>
+

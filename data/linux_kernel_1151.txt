@@ -1,0 +1,21 @@
+On Thu, Apr 08, 2021 at 06:01:42PM +0000, Min Li wrote:<br>
+><i> > </i><br>
+><i> > That does not make sense, this is only one kernel module, with one .h file in</i><br>
+><i> > this patch, I do not see those other files you are talking about...</i><br>
+><i> > </i><br>
+><i> > And if you have named registers that are identical, and yet you only work on</i><br>
+><i> > one device, that feels like a design flaw somewhere :)</i><br>
+><i> > </i><br>
+><i> </i><br>
+><i> Hi Greg, the register files are in the 1/2 patch for the mfd part of the change. </i><br>
+><i> The reason they have same named register is because they are all synchronization </i><br>
+><i> devices and they share some similar features</i><br>
+<br>
+But what does that have to do with the misc device?<br>
+<br>
+totally confused,<br>
+<br>
+greg k-h<br>
+<br>
+<br>
+

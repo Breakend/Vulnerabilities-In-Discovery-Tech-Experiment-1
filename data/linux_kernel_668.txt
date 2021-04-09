@@ -1,0 +1,31 @@
+Fix to return a negative error code from the error handling<br>
+case instead of 0, as done elsewhere in this function.<br>
+<br>
+Fixes: 82af6d19d8d9 ("RDMA/qedr: Fix synchronization methods and memory leaks in qedr")<br>
+Reported-by: Hulk Robot <hulkci@xxxxxxxxxx><br>
+Signed-off-by: Wang Wensheng <wangwensheng4@xxxxxxxxxx><br>
+---<br>
+ drivers/infiniband/hw/qedr/qedr_iw_cm.c | 4 +++-<br>
+ 1 file changed, 3 insertions(+), 1 deletion(-)<br>
+<br>
+diff --git a/drivers/infiniband/hw/qedr/qedr_iw_cm.c b/drivers/infiniband/hw/qedr/qedr_iw_cm.c<br>
+index c4bc587..1715fbe 100644<br>
+--- a/drivers/infiniband/hw/qedr/qedr_iw_cm.c<br>
++++ b/drivers/infiniband/hw/qedr/qedr_iw_cm.c<br>
+@@ -636,8 +636,10 @@ int qedr_iw_connect(struct iw_cm_id *cm_id, struct iw_cm_conn_param *conn_param)<br>
+ 	memcpy(in_params.local_mac_addr, dev->ndev->dev_addr, ETH_ALEN);<br>
+ <br>
+ 	if (test_and_set_bit(QEDR_IWARP_CM_WAIT_FOR_CONNECT,<br>
+-			     &qp->iwarp_cm_flags))<br>
++			     &qp->iwarp_cm_flags)) {<br>
++		rc = -ENODEV;<br>
+ 		goto err; /* QP already being destroyed */<br>
++	}<br>
+ <br>
+ 	rc = dev->ops->iwarp_connect(dev->rdma_ctx, &in_params, &out_params);<br>
+ 	if (rc) {<br>
+-- <br>
+2.9.4<br>
+<br>
+<br>
+

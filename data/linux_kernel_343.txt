@@ -1,0 +1,141 @@
+On 4/8/21 4:29 AM, hongbo li wrote:<br>
+><i> Hi Varad,</i><br>
+><i> </i><br>
+><i> Varad Gautam <varad.gautam@xxxxxxxx <<a  rel="nofollow" href="mailto:varad.gautam@xxxxxxxx">mailto:varad.gautam@xxxxxxxx</a>>> 于2021年4月8日周四 上午5:20写道：</i><br>
+><i>></i><br>
+><i>> Hi Hongbo,</i><br>
+><i>></i><br>
+><i>> On 4/7/21 10:27 AM, hongbo li wrote:</i><br>
+><i>> > Hello Varad，</i><br>
+><i>> ></i><br>
+><i>> > I also made an implementation of rsa pss: "[PATCH v3 0/4] crypto: add</i><br>
+><i>> > rsa pss support for x509".</i><br>
+><i>> > I notice your patches and did some review,  find the following</i><br>
+><i>> > differences between our patches:</i><br>
+><i>> > 1. You rework the rsa pad framework. This is reasonable.</i><br>
+><i>> > 2. You did some changes on the keyctl and asymmetric struct. I don't</i><br>
+><i>> > see the reason.</i><br>
+><i>> >     Because for x509 layer, it only need to know the hash param, and</i><br>
+><i>> > could ignore other params(salt len, mgfhash).</i><br>
+><i>> >     Let rsa-pss itself parse the pss related params. So it seems we</i><br>
+><i>> > don't need to change asymmetric's</i><br>
+><i>> >     common struct.</i><br>
+><i>></i><br>
+><i>> A signature might be generated with a different set of params than those</i><br>
+><i>> used for signing the x509 certificate that wraps the corresponding pubkey.</i><br>
+><i>> In this case, using the params that came in when the pubkey was loaded,</i><br>
+><i>> instead of params for the actual signature would be incorrect. I see</i><br>
+><i>> struct public_key_signature as the right place to store such state,</i><br>
+><i>> regardless of where the signature came from (detached or selfsigned).</i><br>
+><i>></i><br>
+><i> </i><br>
+><i> As what the comments in x509_note_params()  say:</i><br>
+><i> In crypto/asymmetric_keys/x509.asn1, AlgorithmIdentifier is used three times :</i><br>
+><i> 1. The signature AlgorithmIdentifier in TBSCertificate.</i><br>
+><i> 2. The algorithm in SubjectPublicKeyInfo</i><br>
+><i> 3. The signatureAlgorithm after tbsCertificate.</i><br>
+><i> When the pubkey was loaded, it is the third one. According to rfc5280 [1],</i><br>
+><i> the third has the same value as the first one.  Your patch use the first, and I</i><br>
+><i> use the third, I think both are fine.</i><br>
+><i> </i><br>
+<br>
+Consider the following to illustrate my point:<br>
+<br>
+# Generate a key pair:<br>
+slen=20<br>
+mgfhash=sha384<br>
+openssl req -x509 -newkey rsa:4096 -nodes -keyout private.pem -out pss-0.der \<br>
+    -days 100 -outform der -config x509.genkey -sha384 -sigopt rsa_padding_mode:pss \<br>
+    -sigopt rsa_pss_saltlen:$slen -sigopt rsa_mgf1_md:$mgfhash<br>
+<br>
+openssl x509 -in pss-0.der -inform der -pubkey -noout > public.pem<br>
+<br>
+# Sign some data:<br>
+echo data > data.txt<br>
+slen=30<br>
+mgfhash=sha256<br>
+openssl dgst -sha384 -sign private.pem -sigopt rsa_padding_mode:pss \<br>
+    -sigopt rsa_pss_saltlen:$slen -sigopt rsa_mgf1_md:$mgfhash \<br>
+    -out sig.bin data.txt<br>
+<br>
+sig.bin has a different slen and mgfhash vs the signature stored in pss-0.der.<br>
+Since psspad_set_pub_key() here [1] will unpack the params that correspond to<br>
+pss-0.der, verifying sig.bin (eg via keyctl pkey_verify) would fail.<br>
+<br>
+><i>> For the same reason, I also prefer the parsing machinery for signature</i><br>
+><i>> params be kept in x509_cert_parser instead of unpacking a buffer in the</i><br>
+><i>> PSS akcipher's set_pub_key implementation [1]. Going that way, we also end</i><br>
+><i>> up parsing these params twice, since x509 needs to unpack the hash</i><br>
+><i>> algorithm in a pss-specific way anyway.</i><br>
+><i>></i><br>
+><i> </i><br>
+><i> Yes, my patch needs to parse the params twice, my purpose is to make small</i><br>
+><i> change to x509 layer.</i><br>
+><i> </i><br>
+><i>> For the IMA usecase, since x509_key_preparse() would have already filled</i><br>
+><i>> in the params in public_key_signature, asymmetric_verify should be able</i><br>
+><i>> to find and set these from key->payload before calling verify_signature().</i><br>
+><i>></i><br>
+><i>> > 3. Why reject the cert whose MGF is different from the hash function</i><br>
+><i>> > used for signature generation?</i><br>
+><i>> >    My implementation could support different hashes, so don't get your point.</i><br>
+><i>></i><br>
+><i>> The verify operation (psspad_verify_complete [3]) in theory supports it,</i><br>
+><i>> which I've tested against such certificates crafted via openssl.</i><br>
+><i>></i><br>
+><i>> I chose to reject such certificates early on during x509 parsing since,</i><br>
+><i>> - these are not a common occurence in practice, and</i><br>
+><i>> - testing (besides via openssl) without a set of reference vectors to harden</i><br>
+><i>>   the verification against seemed insufficient.</i><br>
+><i>></i><br>
+><i>> I've had some more test runs complete in the meantime, and I'll drop that</i><br>
+><i>> check in the next round.</i><br>
+><i>></i><br>
+><i>> > 4. I add a test vector and a patch to support using rsa-pss for iam.</i><br>
+><i>> > 5. Other implementation difference, i.e. the mgf and verify functions.</i><br>
+><i>> ></i><br>
+><i>> > Maybe we could merge our patches, what's your opinion?</i><br>
+><i>> ></i><br>
+><i>></i><br>
+><i>> Sounds good. I'll send out a v2 soon, and if you agree, the test vector [4]</i><br>
+><i>> and IMA [5] can go on top of it?</i><br>
+><i> </i><br>
+><i> Sure, Thank you.</i><br>
+<br>
+I've posted a v2 at [2].<br>
+<br>
+[1] <a  rel="nofollow" href="https://patchwork.kernel.org/project/linux-crypto/patch/1617802906-30513-3-git-send-email-herbert.tencent@xxxxxxxxx/">https://patchwork.kernel.org/project/linux-crypto/patch/1617802906-30513-3-git-send-email-herbert.tencent@xxxxxxxxx/</a><br>
+[2] <a  rel="nofollow" href="https://lkml.org/lkml/2021/4/8/775">https://lkml.org/lkml/2021/4/8/775</a><br>
+<br>
+Regards,<br>
+Varad<br>
+<br>
+><i>></i><br>
+><i>> [1] <a  rel="nofollow" href="https://patchwork.kernel.org/project/linux-crypto/patch/1617802906-30513-3-git-send-email-herbert.tencent@xxxxxxxxx/">https://patchwork.kernel.org/project/linux-crypto/patch/1617802906-30513-3-git-send-email-herbert.tencent@xxxxxxxxx/</a> <<a  rel="nofollow" href="https://patchwork.kernel.org/project/linux-crypto/patch/1617802906-30513-3-git-send-email-herbert.tencent@xxxxxxxxx/">https://patchwork.kernel.org/project/linux-crypto/patch/1617802906-30513-3-git-send-email-herbert.tencent@xxxxxxxxx/</a>></i><br>
+><i>> [2] <a  rel="nofollow" href="https://patchwork.kernel.org/project/linux-crypto/patch/1617802906-30513-5-git-send-email-herbert.tencent@xxxxxxxxx/">https://patchwork.kernel.org/project/linux-crypto/patch/1617802906-30513-5-git-send-email-herbert.tencent@xxxxxxxxx/</a> <<a  rel="nofollow" href="https://patchwork.kernel.org/project/linux-crypto/patch/1617802906-30513-5-git-send-email-herbert.tencent@xxxxxxxxx/">https://patchwork.kernel.org/project/linux-crypto/patch/1617802906-30513-5-git-send-email-herbert.tencent@xxxxxxxxx/</a>></i><br>
+><i>> [3] <a  rel="nofollow" href="https://patchwork.kernel.org/project/linux-crypto/patch/20210330202829.4825-2-varad.gautam@xxxxxxxx/">https://patchwork.kernel.org/project/linux-crypto/patch/20210330202829.4825-2-varad.gautam@xxxxxxxx/</a> <<a  rel="nofollow" href="https://patchwork.kernel.org/project/linux-crypto/patch/20210330202829.4825-2-varad.gautam@xxxxxxxx/">https://patchwork.kernel.org/project/linux-crypto/patch/20210330202829.4825-2-varad.gautam@xxxxxxxx/</a>></i><br>
+><i>> [4] <a  rel="nofollow" href="https://patchwork.kernel.org/project/linux-crypto/patch/1617802906-30513-4-git-send-email-herbert.tencent@xxxxxxxxx/">https://patchwork.kernel.org/project/linux-crypto/patch/1617802906-30513-4-git-send-email-herbert.tencent@xxxxxxxxx/</a> <<a  rel="nofollow" href="https://patchwork.kernel.org/project/linux-crypto/patch/1617802906-30513-4-git-send-email-herbert.tencent@xxxxxxxxx/">https://patchwork.kernel.org/project/linux-crypto/patch/1617802906-30513-4-git-send-email-herbert.tencent@xxxxxxxxx/</a>></i><br>
+><i>></i><br>
+><i>> Regards,</i><br>
+><i>> Varad</i><br>
+><i>></i><br>
+><i>> > Best regards</i><br>
+><i>> ></i><br>
+><i> </i><br>
+><i> [1] <a  rel="nofollow" href="https://tools.ietf.org/html/rfc5280#section-4.1.1.2">https://tools.ietf.org/html/rfc5280#section-4.1.1.2</a> <<a  rel="nofollow" href="https://tools.ietf.org/html/rfc5280#section-4.1.1.2">https://tools.ietf.org/html/rfc5280#section-4.1.1.2</a>></i><br>
+><i> </i><br>
+><i> Best Regards</i><br>
+><i> Hongbo</i><br>
+><i> </i><br>
+<br>
+-- <br>
+SUSE Software Solutions Germany GmbH<br>
+Maxfeldstr. 5<br>
+90409 Nürnberg<br>
+Germany<br>
+<br>
+HRB 36809, AG Nürnberg<br>
+Geschäftsführer: Felix Imendörffer<br>
+<br>
+<br>
+

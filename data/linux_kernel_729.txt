@@ -1,0 +1,25 @@
+On Thu, Apr 08, 2021, Vineeth Pillai wrote:<br>
+><i> Hi Vitaly,</i><br>
+><i> </i><br>
+><i> On 4/8/21 7:06 AM, Vitaly Kuznetsov wrote:</i><br>
+><i> > -	if (ms_hyperv.hints & HV_X64_ENLIGHTENED_VMCS_RECOMMENDED) {</i><br>
+><i> > +	/*</i><br>
+><i> > +	 * AMD does not need enlightened VMCS as VMCB is already a</i><br>
+><i> > +	 * datastructure in memory.</i><br>
+><i> > Well, VMCS is also a structure in memory, isn't it? It's just that we</i><br>
+><i> > don't have a 'clean field' concept for it and we can't use normal memory</i><br>
+><i> > accesses.</i><br>
+<br>
+Technically, you can use normal memory accesses, so long as software guarantees<br>
+the VMCS isn't resident in the VMCS cache and knows the field offsets for the<br>
+underlying CPU.  The lack of an architecturally defined layout is the biggest<br>
+issue, e.g. tacking on dirty bits through a PV ABI would be trivial.<br>
+<br>
+><i> Yes, you are right. I was referring to the fact that we cant use normal</i><br>
+><i> memory accesses, but is a bit mis-worded.</i><br>
+<br>
+If you slot in "architectural" it will read nicely, i.e. "VMCB is already an<br>
+architectural datastructure in memory".<br>
+<br>
+<br>
+

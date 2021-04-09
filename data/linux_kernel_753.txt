@@ -1,0 +1,56 @@
+Sync tool's uapi to pick up the changes adding inherit_thread,<br>
+remove_on_exec, and sigtrap fields to perf_event_attr.<br>
+<br>
+Signed-off-by: Marco Elver <elver@xxxxxxxxxx><br>
+---<br>
+v4:<br>
+* Update for new perf_event_attr::sig_data.<br>
+<br>
+v3:<br>
+* Added to series.<br>
+---<br>
+ tools/include/uapi/linux/perf_event.h | 12 +++++++++++-<br>
+ 1 file changed, 11 insertions(+), 1 deletion(-)<br>
+<br>
+diff --git a/tools/include/uapi/linux/perf_event.h b/tools/include/uapi/linux/perf_event.h<br>
+index ad15e40d7f5d..31b00e3b69c9 100644<br>
+--- a/tools/include/uapi/linux/perf_event.h<br>
++++ b/tools/include/uapi/linux/perf_event.h<br>
+@@ -311,6 +311,7 @@ enum perf_event_read_format {<br>
+ #define PERF_ATTR_SIZE_VER4	104	/* add: sample_regs_intr */<br>
+ #define PERF_ATTR_SIZE_VER5	112	/* add: aux_watermark */<br>
+ #define PERF_ATTR_SIZE_VER6	120	/* add: aux_sample_size */<br>
++#define PERF_ATTR_SIZE_VER7	128	/* add: sig_data */<br>
+ <br>
+ /*<br>
+  * Hardware event_id to monitor via a performance monitoring event:<br>
+@@ -389,7 +390,10 @@ struct perf_event_attr {<br>
+ 				cgroup         :  1, /* include cgroup events */<br>
+ 				text_poke      :  1, /* include text poke events */<br>
+ 				build_id       :  1, /* use build id in mmap2 events */<br>
+-				__reserved_1   : 29;<br>
++				inherit_thread :  1, /* children only inherit if cloned with CLONE_THREAD */<br>
++				remove_on_exec :  1, /* event is removed from task on exec */<br>
++				sigtrap        :  1, /* send synchronous SIGTRAP on event */<br>
++				__reserved_1   : 26;<br>
+ <br>
+ 	union {<br>
+ 		__u32		wakeup_events;	  /* wakeup every n events */<br>
+@@ -441,6 +445,12 @@ struct perf_event_attr {<br>
+ 	__u16	__reserved_2;<br>
+ 	__u32	aux_sample_size;<br>
+ 	__u32	__reserved_3;<br>
++<br>
++	/*<br>
++	 * User provided data if sigtrap=1, passed back to user via<br>
++	 * siginfo_t::si_perf, e.g. to permit user to identify the event.<br>
++	 */<br>
++	__u64	sig_data;<br>
+ };<br>
+ <br>
+ /*<br>
+-- <br>
+2.31.0.208.g409f899ff0-goog<br>
+<br>
+<br>
+

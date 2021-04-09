@@ -1,0 +1,33 @@
+The symbol 'msr_read' and 'msr_write' are not used outside of msr.c, so this<br>
+commit marks them static.<br>
+<br>
+Signed-off-by: Zhao Xuehui <zhaoxuehui1@xxxxxxxxxx><br>
+---<br>
+ arch/x86/lib/msr.c | 4 ++--<br>
+ 1 file changed, 2 insertions(+), 2 deletions(-)<br>
+<br>
+diff --git a/arch/x86/lib/msr.c b/arch/x86/lib/msr.c<br>
+index 3bd905e10ee2..b09cd2ad426c 100644<br>
+--- a/arch/x86/lib/msr.c<br>
++++ b/arch/x86/lib/msr.c<br>
+@@ -36,7 +36,7 @@ EXPORT_SYMBOL(msrs_free);<br>
+  * argument @m.<br>
+  *<br>
+  */<br>
+-int msr_read(u32 msr, struct msr *m)<br>
++static int msr_read(u32 msr, struct msr *m)<br>
+ {<br>
+ 	int err;<br>
+ 	u64 val;<br>
+@@ -54,7 +54,7 @@ int msr_read(u32 msr, struct msr *m)<br>
+  * @msr: MSR to write<br>
+  * @m: value to write<br>
+  */<br>
+-int msr_write(u32 msr, struct msr *m)<br>
++static int msr_write(u32 msr, struct msr *m)<br>
+ {<br>
+ 	return wrmsrl_safe(msr, m->q);<br>
+ }<br>
+<br>
+<br>
+

@@ -1,0 +1,67 @@
+On Wed, 07 Apr 2021, Benjamin Tissoires wrote:<br>
+<br>
+><i> On Tue, Apr 6, 2021 at 10:56 AM Lee Jones <lee.jones@xxxxxxxxxx> wrote:</i><br>
+><i> ></i><br>
+><i> > On Fri, 26 Mar 2021, Lee Jones wrote:</i><br>
+><i> ></i><br>
+><i> > > This set is part of a larger effort attempting to clean-up W=1</i><br>
+><i> > > kernel builds, which are currently overwhelmingly riddled with</i><br>
+><i> > > niggly little warnings.</i><br>
+><i> > ></i><br>
+><i> > > Lee Jones (25):</i><br>
+><i> > >   HID: intel-ish-hid: Remove unused variable 'err'</i><br>
+><i> > >   HID: ishtp-hid-client: Move variable to where it's actually used</i><br>
+><i> > >   HID: intel-ish-hid: pci-ish: Remove unused variable 'ret'</i><br>
+><i> > >   HID: intel-ish: Supply some missing param descriptions</i><br>
+><i> > >   HID: intel-ish: Fix a naming disparity and a formatting error</i><br>
+><i> > >   HID: usbhid: Repair a formatting issue in a struct description</i><br>
+><i> > >   HID: intel-ish-hid: Fix a little doc-rot</i><br>
+><i> > >   HID: usbhid: hid-pidff: Demote a couple kernel-doc abuses</i><br>
+><i> > >   HID: hid-alps: Correct struct misnaming</i><br>
+><i> > >   HID: intel-ish-hid: Fix potential copy/paste error</i><br>
+><i> > >   HID: hid-core: Fix incorrect function name in header</i><br>
+><i> > >   HID: intel-ish-hid: ipc: Correct fw_reset_work_fn() function name in</i><br>
+><i> > >     header</i><br>
+><i> > >   HID: ishtp-hid-client: Fix incorrect function name report_bad_packet()</i><br>
+><i> > >   HID: hid-kye: Fix incorrect function name for kye_tablet_enable()</i><br>
+><i> > >   HID: hid-picolcd_core: Remove unused variable 'ret'</i><br>
+><i> > >   HID: hid-logitech-hidpp: Fix conformant kernel-doc header and demote</i><br>
+><i> > >     abuses</i><br>
+><i> > >   HID: hid-uclogic-rdesc: Kernel-doc is for functions and structs</i><br>
+><i> > >   HID: hid-thrustmaster: Demote a bunch of kernel-doc abuses</i><br>
+><i> > >   HID: hid-uclogic-params: Ensure function names are present and correct</i><br>
+><i> > >     in kernel-doc headers</i><br>
+><i> > >   HID: hid-sensor-custom: Remove unused variable 'ret'</i><br>
+><i> > >   HID: wacom_sys: Demote kernel-doc abuse</i><br>
+><i> > >   HID: hid-sensor-hub: Remove unused struct member 'quirks'</i><br>
+><i> > >   HID: hid-sensor-hub: Move 'hsdev' description to correct struct</i><br>
+><i> > >     definition</i><br>
+><i> > >   HID: intel-ish-hid: ishtp-fw-loader: Fix a bunch of formatting issues</i><br>
+><i> > >   HID: ishtp-hid-client: Fix 'suggest-attribute=format' compiler warning</i><br>
+><i> ></i><br>
+><i> > These have been on the list for a couple of weeks now.</i><br>
+><i> ></i><br>
+><i> > Is there anything I can do to help expedite their merge?</i><br>
+><i> ></i><br>
+><i> > I'm concerned since -rc6 has just been released.</i><br>
+><i> </i><br>
+><i> Sorry for the delay.</i><br>
+><i> </i><br>
+><i> I am currently queuing them locally and running a few tests on them. I</i><br>
+><i> don't expect anything to happen, but better be safe than anything.</i><br>
+><i> </i><br>
+><i> FWIW, I am splitting the series in 3:</i><br>
+><i> - 11 patches for intel ish are going to be queued in for-5.13/intel-ish</i><br>
+><i> - the thrustmaster one in for-5.13/thrustmaster</i><br>
+><i> - the rest (13 patches) will be sent in for-5.13/warnings.</i><br>
+<br>
+Sounds good to me.  Thanks Benjamin.<br>
+<br>
+-- <br>
+Lee Jones [李琼斯]<br>
+Senior Technical Lead - Developer Services<br>
+Linaro.org │ Open source software for Arm SoCs<br>
+Follow Linaro: Facebook | Twitter | Blog<br>
+<br>
+<br>
+

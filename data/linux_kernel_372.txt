@@ -1,0 +1,116 @@
+Linux currently supports RSA PKCSv1.5 encoding scheme for<br>
+signing / verification. This adds support for RSASSA PSS signature<br>
+verification as described in RFC8017 [1].<br>
+<br>
+Patch 1 extends the x509 certificate parser to unpack PSS signature<br>
+  parameters.<br>
+Patches 2-8 pull out the common functions / struct definitions from<br>
+  rsa-pkcs1pad.c into rsa-common.c, to be shared across RSA encoding<br>
+  scheme implementations.<br>
+Patches 9, 10 provide some more plumbing to export the data needed to<br>
+  perform PSS operations (salt length, RSA modulus).<br>
+Patches 11-16 set up PSS scaffolding and provide the verification<br>
+  operation per RFC8017.<br>
+Patches 17, 18 turn the final knobs on to allow lowering PSS signatures<br>
+  for verification via keyctl.<br>
+<br>
+The patchset is available as a git tree at [2].<br>
+<br>
+Testing:<br>
+The implementation was tested by adding reference public keys to the<br>
+kernel's keyring via `keyctl padd` and then verifying a known<br>
+message digest / signature against this public key via `keyctl pkey_verify`.<br>
+The reference vectors were taken from:<br>
+- the Wycheproof testsuite [3]<br>
+- FIPS 186-2 and 186-4 test vectors [4]<br>
+<br>
+The test harness is available at [5].<br>
+<br>
+Example keyctl usage for PSS verification:<br>
+rsa_bits=4096 # 2048/3072/4096<br>
+hash_algo=sha256 # sha1/sha224/sha256/sha384/sha512<br>
+saltlen=32<br>
+# Generate keys, certificate:<br>
+openssl req -x509 -newkey rsa:$rsa_bits -nodes -keyout private.pem -out cert.der \<br>
+  -days 100 -outform der -$hash_algo -sigopt rsa_padding_mode:pss \<br>
+  -sigopt rsa_pss_saltlen:$saltlen -sigopt rsa_mgf1_md:$hash_algo<br>
+<br>
+# Sign data.txt:<br>
+openssl dgst -${hash_algo} -sign private.pem -sigopt rsa_padding_mode:pss \<br>
+  -sigopt rsa_pss_saltlen:${saltlen} -out sig.bin data.txt<br>
+<br>
+# Digest data.txt:<br>
+openssl dgst -${hash_algo} -binary -out data.${hash_algo}.raw data.txt<br>
+<br>
+# Load pubkey into the kernel's keyring:<br>
+kv=$(keyctl padd asymmetric "test-key" @u < cert.der)<br>
+<br>
+# Verify with `enc=pss`:<br>
+keyctl pkey_verify $kv "0" data.${hash_algo}.raw \<br>
+    sig.bin "enc=pss hash=${hash_algo} slen=${saltlen} mgfhash=${hash_algo}"<br>
+<br>
+v2:<br>
+- Allow certificates where mgf hash algorithm is different from the digest hash<br>
+  algorithm.<br>
+- Fix sparse warnings on "X.509: Parse RSASSA-PSS style certificates".<br>
+<br>
+v1 is available at [6][7].<br>
+<br>
+[1] <a  rel="nofollow" href="https://tools.ietf.org/html/rfc8017#section-8.1">https://tools.ietf.org/html/rfc8017#section-8.1</a><br>
+[2] <a  rel="nofollow" href="https://github.com/varadgautam/kernel/tree/rsassa-psspad-v2">https://github.com/varadgautam/kernel/tree/rsassa-psspad-v2</a><br>
+[3] <a  rel="nofollow" href="https://github.com/google/wycheproof/blob/master/testvectors/">https://github.com/google/wycheproof/blob/master/testvectors/</a><br>
+[4] <a  rel="nofollow" href="https://csrc.nist.gov/projects/cryptographic-algorithm-validation-program/digital-signatures#rsavs">https://csrc.nist.gov/projects/cryptographic-algorithm-validation-program/digital-signatures#rsavs</a><br>
+[5] <a  rel="nofollow" href="https://github.com/varadgautam/keyctl-rsa-tests">https://github.com/varadgautam/keyctl-rsa-tests</a><br>
+[6] <a  rel="nofollow" href="https://lore.kernel.org/lkml/20210330202829.4825-1-varad.gautam@xxxxxxxx/">https://lore.kernel.org/lkml/20210330202829.4825-1-varad.gautam@xxxxxxxx/</a><br>
+[7] <a  rel="nofollow" href="https://github.com/varadgautam/kernel/tree/rsassa-psspad">https://github.com/varadgautam/kernel/tree/rsassa-psspad</a><br>
+<br>
+Varad Gautam (18):<br>
+  X.509: Parse RSASSA-PSS style certificates<br>
+  crypto: rsa-pkcs1pad: Rename pkcs1pad-specific functions to rsapad<br>
+  crypto: rsa-pkcs1pad: Extract pkcs1pad_create into a generic helper<br>
+  crypto: rsa-pkcs1pad: Pull out child req processing code into helpers<br>
+  crypto: rsa-pkcs1pad: Rename pkcs1pad_* structs to rsapad_*<br>
+  crypto: rsa: Start moving RSA common code to rsa-common<br>
+  crypto: rsa: Move more common code to rsa-common<br>
+  crypto: rsa: Move rsapad_akcipher_setup_child and callback to<br>
+    rsa-common<br>
+  crypto: Extend akcipher API to pass signature parameters<br>
+  crypto: rsa: Move struct rsa_mpi_key definition to rsa.h<br>
+  crypto: Scaffolding for RSA-PSS signature style<br>
+  crypto: rsa-psspad: Introduce shash alloc/dealloc helpers<br>
+  crypto: rsa-psspad: Get signature parameters from a given signature<br>
+  crypto: Implement MGF1 Mask Generation Function for RSASSA-PSS<br>
+  crypto: rsa-psspad: Provide PSS signature verify operation<br>
+  crypto: rsa-psspad: Implement signature verify callback<br>
+  crypto: Accept pss as valid encoding during signature verification<br>
+  keyctl_pkey: Add pkey parameters slen and mgfhash for PSS<br>
+<br>
+ crypto/Kconfig                            |   6 +<br>
+ crypto/Makefile                           |   2 +<br>
+ crypto/asymmetric_keys/Makefile           |   5 +-<br>
+ crypto/asymmetric_keys/asymmetric_type.c  |   2 +<br>
+ crypto/asymmetric_keys/public_key.c       |  18 +-<br>
+ crypto/asymmetric_keys/x509_cert_parser.c | 148 ++++++++<br>
+ crypto/asymmetric_keys/x509_rsassa.asn1   |  17 +<br>
+ crypto/rsa-common.c                       | 291 ++++++++++++++++<br>
+ crypto/rsa-pkcs1pad.c                     | 400 +++-------------------<br>
+ crypto/rsa-psspad.c                       | 291 ++++++++++++++++<br>
+ crypto/rsa.c                              |  26 +-<br>
+ include/crypto/akcipher.h                 |  26 ++<br>
+ include/crypto/internal/rsa-common.h      |  61 ++++<br>
+ include/crypto/internal/rsa.h             |  10 +<br>
+ include/crypto/public_key.h               |   4 +<br>
+ include/linux/keyctl.h                    |   2 +<br>
+ include/linux/oid_registry.h              |   3 +<br>
+ security/keys/keyctl_pkey.c               |  13 +<br>
+ 18 files changed, 961 insertions(+), 364 deletions(-)<br>
+ create mode 100644 crypto/asymmetric_keys/x509_rsassa.asn1<br>
+ create mode 100644 crypto/rsa-common.c<br>
+ create mode 100644 crypto/rsa-psspad.c<br>
+ create mode 100644 include/crypto/internal/rsa-common.h<br>
+<br>
+-- <br>
+2.30.2<br>
+<br>
+<br>
+

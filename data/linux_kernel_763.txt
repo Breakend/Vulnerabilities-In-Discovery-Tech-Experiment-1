@@ -1,0 +1,41 @@
+Hi all,<br>
+<br>
+On Thu, 8 Apr 2021 20:34:49 +1000 Stephen Rothwell <sfr@xxxxxxxxxxxxxxxx> wrote:<br>
+><i></i><br>
+><i> Today's linux-next merge of the akpm-current tree got a conflict in:</i><br>
+><i> </i><br>
+><i>   Makefile</i><br>
+<br>
+This also affected init/Kconfig<br>
+<br>
+><i> between commit:</i><br>
+><i> </i><br>
+><i>   2f8864dbe668 ("kbuild: move module strip/compression code into scripts/Makefile.modinst")</i><br>
+><i> </i><br>
+><i> from the kbuild tree and commit:</i><br>
+><i> </i><br>
+><i>   7b35c1a01c2e ("init: add support for zstd compressed modules")</i><br>
+><i> </i><br>
+><i> from the akpm-current tree.</i><br>
+><i> </i><br>
+><i> Also commit</i><br>
+><i> </i><br>
+><i>   ee2305118fc3 ("kbuild: add support for zstd compressed modules")</i><br>
+><i> </i><br>
+><i> from the kbuild tree seems to do the same as the akpm-current commit</i><br>
+><i> above, so I just effectively reverted the akpm-current commit.</i><br>
+><i> </i><br>
+><i> I fixed it up (see above) and can carry the fix as necessary. This</i><br>
+><i> is now fixed as far as linux-next is concerned, but any non trivial</i><br>
+><i> conflicts should be mentioned to your upstream maintainer when your tree</i><br>
+><i> is submitted for merging.  You may also want to consider cooperating</i><br>
+><i> with the maintainer of the conflicting tree to minimise any particularly</i><br>
+><i> complex conflicts.</i><br>
+<br>
+-- <br>
+Cheers,<br>
+Stephen Rothwell<br>
+<p><strong>Attachment:
+<a href="00400/pgpNJdvnuEbtM.pgp" ><tt>pgpNJdvnuEbtM.pgp</tt></a></strong><br>
+<em>Description:</em> OpenPGP digital signature</p>
+

@@ -1,0 +1,48 @@
+Here's a partial change, but we still need to deal with the assumption that<br>
+page_has_private() makes that its output can be used to count the number of<br>
+refs held for PG_private *and* PG_private_2 - which isn't true for my code<br>
+here.<br>
+<br>
+David<br>
+---<br>
+commit e7c28d83b84b972c3faa0dd86020548aa50eda75<br>
+Author: David Howells <dhowells@xxxxxxxxxx><br>
+Date:   Thu Apr 8 16:33:20 2021 +0100<br>
+<br>
+    netfs: Fix PG_private_2 helper functions to consistently use compound_head()<br>
+<br>
+diff --git a/include/linux/pagemap.h b/include/linux/pagemap.h<br>
+index ef511364cc0c..63ca6430aef5 100644<br>
+--- a/include/linux/pagemap.h<br>
++++ b/include/linux/pagemap.h<br>
+@@ -699,6 +699,7 @@ void page_endio(struct page *page, bool is_write, int err);<br>
+  */<br>
+ static inline void set_page_private_2(struct page *page)<br>
+ {<br>
++	page = compound_head(page);<br>
+ 	get_page(page);<br>
+ 	SetPagePrivate2(page);<br>
+ }<br>
+diff --git a/mm/filemap.c b/mm/filemap.c<br>
+index 0ce93c8799ca..46e0321ba87a 100644<br>
+--- a/mm/filemap.c<br>
++++ b/mm/filemap.c<br>
+@@ -1461,6 +1461,7 @@ EXPORT_SYMBOL(end_page_private_2);<br>
+  */<br>
+ void wait_on_page_private_2(struct page *page)<br>
+ {<br>
++	page = compound_head(page);<br>
+ 	while (PagePrivate2(page))<br>
+ 		wait_on_page_bit(page, PG_private_2);<br>
+ }<br>
+@@ -1481,6 +1482,7 @@ int wait_on_page_private_2_killable(struct page *page)<br>
+ {<br>
+ 	int ret = 0;<br>
+ <br>
++	page = compound_head(page);<br>
+ 	while (PagePrivate2(page)) {<br>
+ 		ret = wait_on_page_bit_killable(page, PG_private_2);<br>
+ 		if (ret < 0)<br>
+<br>
+<br>
+

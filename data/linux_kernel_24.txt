@@ -1,0 +1,7 @@
+Hi Lee<br>
+<br>
+I just withdraw the misc driver review and sent you a new patch for mfd change alone. <br>
+I will focus on mfd for now. Please take a look. Thanks<br>
+<br>
+Min<br>
+

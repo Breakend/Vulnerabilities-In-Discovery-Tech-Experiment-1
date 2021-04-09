@@ -1,0 +1,365 @@
+Implements the per-cpu mode in which a sampling thread is created for<br>
+each cpu in the "cpus" (and tracing_mask).<br>
+<br>
+The per-cpu mode has the potention to speed up the hwlat detection by<br>
+running on multiple CPUs at the same time.<br>
+<br>
+Cc: Jonathan Corbet <corbet@xxxxxxx><br>
+Cc: Steven Rostedt <rostedt@xxxxxxxxxxx><br>
+Cc: Ingo Molnar <mingo@xxxxxxxxxx><br>
+Cc: Peter Zijlstra <peterz@xxxxxxxxxxxxx><br>
+Cc: Thomas Gleixner <tglx@xxxxxxxxxxxxx><br>
+Cc: Alexandre Chartre <alexandre.chartre@xxxxxxxxxx><br>
+Cc: Clark Willaims <williams@xxxxxxxxxx><br>
+Cc: John Kacur <jkacur@xxxxxxxxxx><br>
+Cc: Juri Lelli <juri.lelli@xxxxxxxxxx><br>
+Cc: linux-doc@xxxxxxxxxxxxxxx<br>
+Cc: linux-kernel@xxxxxxxxxxxxxxx<br>
+Signed-off-by: Daniel Bristot de Oliveira <bristot@xxxxxxxxxx><br>
+<br>
+---<br>
+ Documentation/trace/hwlat_detector.rst |   6 +-<br>
+ kernel/trace/trace_hwlat.c             | 171 +++++++++++++++++++------<br>
+ 2 files changed, 137 insertions(+), 40 deletions(-)<br>
+<br>
+diff --git a/Documentation/trace/hwlat_detector.rst b/Documentation/trace/hwlat_detector.rst<br>
+index f63fdd867598..7a6fab105b29 100644<br>
+--- a/Documentation/trace/hwlat_detector.rst<br>
++++ b/Documentation/trace/hwlat_detector.rst<br>
+@@ -85,10 +85,12 @@ the available options are:<br>
+ <br>
+  - none:        do not force migration<br>
+  - round-robin: migrate across each CPU specified in cpus between each window<br>
++ - per-cpu:     create a per-cpu thread for each cpu in cpus<br>
+ <br>
+ By default, hwlat detector will also obey the tracing_cpumask, so the thread<br>
+ will be placed only in the set of cpus that is both on the hwlat detector's<br>
+ cpus and in the global tracing_cpumask file. The user can overwrite the<br>
+ cpumask by setting it manually. Changing the hwlatd affinity externally,<br>
+-e.g., via taskset tool, will disable the round-robin migration.<br>
+-<br>
++e.g., via taskset tool, will disable the round-robin migration. In the<br>
++per-cpu mode, the per-cpu thread (hwlatd/CPU) will be pinned to its relative<br>
++cpu, and its affinity cannot be changed.<br>
+diff --git a/kernel/trace/trace_hwlat.c b/kernel/trace/trace_hwlat.c<br>
+index 3818200c9e24..52968ea312df 100644<br>
+--- a/kernel/trace/trace_hwlat.c<br>
++++ b/kernel/trace/trace_hwlat.c<br>
+@@ -34,7 +34,7 @@<br>
+  * Copyright (C) 2008-2009 Jon Masters, Red Hat, Inc. <jcm@xxxxxxxxxx><br>
+  * Copyright (C) 2013-2016 Steven Rostedt, Red Hat, Inc. <srostedt@xxxxxxxxxx><br>
+  *<br>
+- * Includes useful feedback from Clark Williams <clark@xxxxxxxxxx><br>
++ * Includes useful feedback from Clark Williams <williams@xxxxxxxxxx><br>
+  *<br>
+  */<br>
+ #include <linux/kthread.h><br>
+@@ -54,9 +54,6 @@ static struct trace_array	*hwlat_trace;<br>
+ #define DEFAULT_SAMPLE_WIDTH	500000			/* 0.5s */<br>
+ #define DEFAULT_LAT_THRESHOLD	10			/* 10us */<br>
+ <br>
+-/* sampling thread*/<br>
+-static struct task_struct *hwlat_kthread;<br>
+-<br>
+ static struct dentry *hwlat_sample_width;	/* sample width us */<br>
+ static struct dentry *hwlat_sample_window;	/* sample window us */<br>
+ static struct dentry *hwlat_cpumask_dentry;	/* hwlat cpus allowed */<br>
+@@ -65,19 +62,27 @@ static struct dentry *hwlat_thread_mode;	/* hwlat thread mode */<br>
+ enum {<br>
+ 	MODE_NONE = 0,<br>
+ 	MODE_ROUND_ROBIN,<br>
++	MODE_PER_CPU,<br>
+ 	MODE_MAX<br>
+ };<br>
+ <br>
+-static char *thread_mode_str[] = { "none", "round-robin" };<br>
++static char *thread_mode_str[] = { "none", "round-robin", "per-cpu" };<br>
+ <br>
+ /* Save the previous tracing_thresh value */<br>
+ static unsigned long save_tracing_thresh;<br>
+ <br>
+-/* NMI timestamp counters */<br>
+-static u64 nmi_ts_start;<br>
+-static u64 nmi_total_ts;<br>
+-static int nmi_count;<br>
+-static int nmi_cpu;<br>
++/* runtime kthread data */<br>
++struct hwlat_kthread_data {<br>
++	struct task_struct *kthread;<br>
++	/* NMI timestamp counters */<br>
++	u64 nmi_ts_start;<br>
++	u64 nmi_total_ts;<br>
++	int nmi_count;<br>
++	int nmi_cpu;<br>
++};<br>
++<br>
++struct hwlat_kthread_data hwlat_single_cpu_data;<br>
++DEFINE_PER_CPU(struct hwlat_kthread_data, hwlat_per_cpu_data);<br>
+ <br>
+ /* Tells NMIs to call back to the hwlat tracer to record timestamps */<br>
+ bool trace_hwlat_callback_enabled;<br>
+@@ -114,6 +119,14 @@ static struct hwlat_data {<br>
+ 	.thread_mode		= MODE_ROUND_ROBIN<br>
+ };<br>
+ <br>
++struct hwlat_kthread_data *get_cpu_data(void)<br>
++{<br>
++	if (hwlat_data.thread_mode == MODE_PER_CPU)<br>
++		return this_cpu_ptr(&hwlat_per_cpu_data);<br>
++	else<br>
++		return &hwlat_single_cpu_data;<br>
++}<br>
++<br>
+ static bool hwlat_busy;<br>
+ <br>
+ static void trace_hwlat_sample(struct hwlat_sample *sample)<br>
+@@ -151,7 +164,9 @@ static void trace_hwlat_sample(struct hwlat_sample *sample)<br>
+ <br>
+ void trace_hwlat_callback(bool enter)<br>
+ {<br>
+-	if (smp_processor_id() != nmi_cpu)<br>
++	struct hwlat_kthread_data *kdata = get_cpu_data();<br>
++<br>
++	if (kdata->kthread)<br>
+ 		return;<br>
+ <br>
+ 	/*<br>
+@@ -160,13 +175,13 @@ void trace_hwlat_callback(bool enter)<br>
+ 	 */<br>
+ 	if (!IS_ENABLED(CONFIG_GENERIC_SCHED_CLOCK)) {<br>
+ 		if (enter)<br>
+-			nmi_ts_start = time_get();<br>
++			kdata->nmi_ts_start = time_get();<br>
+ 		else<br>
+-			nmi_total_ts += time_get() - nmi_ts_start;<br>
++			kdata->nmi_total_ts += time_get() - kdata->nmi_ts_start;<br>
+ 	}<br>
+ <br>
+ 	if (enter)<br>
+-		nmi_count++;<br>
++		kdata->nmi_count++;<br>
+ }<br>
+ <br>
+ /**<br>
+@@ -178,6 +193,7 @@ void trace_hwlat_callback(bool enter)<br>
+  */<br>
+ static int get_sample(void)<br>
+ {<br>
++	struct hwlat_kthread_data *kdata = get_cpu_data();<br>
+ 	struct trace_array *tr = hwlat_trace;<br>
+ 	struct hwlat_sample s;<br>
+ 	time_type start, t1, t2, last_t2;<br>
+@@ -190,9 +206,8 @@ static int get_sample(void)<br>
+ <br>
+ 	do_div(thresh, NSEC_PER_USEC); /* modifies interval value */<br>
+ <br>
+-	nmi_cpu = smp_processor_id();<br>
+-	nmi_total_ts = 0;<br>
+-	nmi_count = 0;<br>
++	kdata->nmi_total_ts = 0;<br>
++	kdata->nmi_count = 0;<br>
+ 	/* Make sure NMIs see this first */<br>
+ 	barrier();<br>
+ <br>
+@@ -262,15 +277,15 @@ static int get_sample(void)<br>
+ 		ret = 1;<br>
+ <br>
+ 		/* We read in microseconds */<br>
+-		if (nmi_total_ts)<br>
+-			do_div(nmi_total_ts, NSEC_PER_USEC);<br>
++		if (kdata->nmi_total_ts)<br>
++			do_div(kdata->nmi_total_ts, NSEC_PER_USEC);<br>
+ <br>
+ 		hwlat_data.count++;<br>
+ 		s.seqnum = hwlat_data.count;<br>
+ 		s.duration = sample;<br>
+ 		s.outer_duration = outer_sample;<br>
+-		s.nmi_total_ts = nmi_total_ts;<br>
+-		s.nmi_count = nmi_count;<br>
++		s.nmi_total_ts = kdata->nmi_total_ts;<br>
++		s.nmi_count = kdata->nmi_count;<br>
+ 		s.count = count;<br>
+ 		trace_hwlat_sample(&s);<br>
+ <br>
+@@ -376,23 +391,43 @@ static int kthread_fn(void *data)<br>
+ }<br>
+ <br>
+ /**<br>
+- * start_kthread - Kick off the hardware latency sampling/detector kthread<br>
++ * stop_stop_kthread - Inform the hardware latency samping/detector kthread to stop<br>
++ *<br>
++ * This kicks the running hardware latency sampling/detector kernel thread and<br>
++ * tells it to stop sampling now. Use this on unload and at system shutdown.<br>
++ */<br>
++static void stop_single_kthread(void)<br>
++{<br>
++	struct hwlat_kthread_data *kdata = get_cpu_data();<br>
++	struct task_struct *kthread = kdata->kthread;<br>
++<br>
++	if (!kthread)<br>
++<br>
++		return;<br>
++	kthread_stop(kthread);<br>
++<br>
++	kdata->kthread = NULL;<br>
++}<br>
++<br>
++<br>
++/**<br>
++ * start_single_kthread - Kick off the hardware latency sampling/detector kthread<br>
+  *<br>
+  * This starts the kernel thread that will sit and sample the CPU timestamp<br>
+  * counter (TSC or similar) and look for potential hardware latencies.<br>
+  */<br>
+-static int start_kthread(struct trace_array *tr)<br>
++static int start_single_kthread(struct trace_array *tr)<br>
+ {<br>
++	struct hwlat_kthread_data *kdata = get_cpu_data();<br>
+ 	struct cpumask *current_mask = &save_cpumask;<br>
+ 	struct task_struct *kthread;<br>
+ 	int next_cpu;<br>
+ <br>
+-	if (hwlat_kthread)<br>
++	if (kdata->kthread)<br>
+ 		return 0;<br>
+ <br>
+-<br>
+ 	kthread = kthread_create(kthread_fn, NULL, "hwlatd");<br>
+-	if (IS_ERR(kthread)) {<br>
++	if (IS_ERR(kdata->kthread)) {<br>
+ 		pr_err(BANNER "could not start sampling thread\n");<br>
+ 		return -ENOMEM;<br>
+ 	}<br>
+@@ -419,24 +454,77 @@ static int start_kthread(struct trace_array *tr)<br>
+ <br>
+ 	sched_setaffinity(kthread->pid, current_mask);<br>
+ <br>
+-	hwlat_kthread = kthread;<br>
++	kdata->kthread = kthread;<br>
+ 	wake_up_process(kthread);<br>
+ <br>
+ 	return 0;<br>
+ }<br>
+ <br>
+ /**<br>
+- * stop_kthread - Inform the hardware latency samping/detector kthread to stop<br>
++ * stop_per_cpu_kthread - Inform the hardware latency samping/detector kthread to stop<br>
+  *<br>
+- * This kicks the running hardware latency sampling/detector kernel thread and<br>
++ * This kicks the running hardware latency sampling/detector kernel threads and<br>
+  * tells it to stop sampling now. Use this on unload and at system shutdown.<br>
+  */<br>
+-static void stop_kthread(void)<br>
++static void stop_per_cpu_kthreads(void)<br>
+ {<br>
+-	if (!hwlat_kthread)<br>
+-		return;<br>
+-	kthread_stop(hwlat_kthread);<br>
+-	hwlat_kthread = NULL;<br>
++	struct task_struct *kthread;<br>
++	int cpu;<br>
++<br>
++	for_each_online_cpu(cpu) {<br>
++		kthread = per_cpu(hwlat_per_cpu_data, cpu).kthread;<br>
++		if (kthread)<br>
++			kthread_stop(kthread);<br>
++	}<br>
++}<br>
++<br>
++/**<br>
++ * start_per_cpu_kthread - Kick off the hardware latency sampling/detector kthreads<br>
++ *<br>
++ * This starts the kernel threads that will sit on potentially all cpus and<br>
++ * sample the CPU timestamp counter (TSC or similar) and look for potential<br>
++ * hardware latencies.<br>
++ */<br>
++static int start_per_cpu_kthreads(struct trace_array *tr)<br>
++{<br>
++	struct cpumask *current_mask = &save_cpumask;<br>
++	struct cpumask *this_cpumask;<br>
++	struct task_struct *kthread;<br>
++	char comm[24];<br>
++	int cpu;<br>
++<br>
++	if (!alloc_cpumask_var(&this_cpumask, GFP_KERNEL))<br>
++		return -ENOMEM;<br>
++<br>
++	get_online_cpus();<br>
++	/*<br>
++	 * Run only on CPUs in which trace and hwlat are allowed to run.<br>
++	 */<br>
++	cpumask_and(current_mask, tr->tracing_cpumask, &hwlat_cpumask);<br>
++	/*<br>
++	 * And the CPU is online.<br>
++	 */<br>
++	cpumask_and(current_mask, cpu_online_mask, current_mask);<br>
++	put_online_cpus();<br>
++<br>
++	for_each_online_cpu(cpu)<br>
++		per_cpu(hwlat_per_cpu_data, cpu).kthread = NULL;<br>
++<br>
++	for_each_cpu(cpu, current_mask) {<br>
++		snprintf(comm, 24, "hwlatd/%d", cpu);<br>
++<br>
++		kthread = kthread_create_on_cpu(kthread_fn, NULL, cpu, comm);<br>
++		if (IS_ERR(kthread)) {<br>
++			pr_err(BANNER "could not start sampling thread\n");<br>
++			stop_per_cpu_kthreads();<br>
++			return -ENOMEM;<br>
++		}<br>
++<br>
++		per_cpu(hwlat_per_cpu_data, cpu).kthread = kthread;<br>
++		wake_up_process(kthread);<br>
++	}<br>
++<br>
++	return 0;<br>
+ }<br>
+ <br>
+ /*<br>
+@@ -701,7 +789,8 @@ static int hwlat_mode_open(struct inode *inode, struct file *file)<br>
+  * The "none" sets the allowed cpumask for a single hwlatd thread at the<br>
+  * startup and lets the scheduler handle the migration. The default mode is<br>
+  * the "round-robin" one, in which a single hwlatd thread runs, migrating<br>
+- * among the allowed CPUs in a round-robin fashion.<br>
++ * among the allowed CPUs in a round-robin fashion. The "per-cpu" mode<br>
++ * creates one hwlatd thread per allowed CPU.<br>
+  */<br>
+ static ssize_t hwlat_mode_write(struct file *filp, const char __user *ubuf,<br>
+ 				 size_t cnt, loff_t *ppos)<br>
+@@ -827,14 +916,20 @@ static void hwlat_tracer_start(struct trace_array *tr)<br>
+ {<br>
+ 	int err;<br>
+ <br>
+-	err = start_kthread(tr);<br>
++	if (hwlat_data.thread_mode == MODE_PER_CPU)<br>
++		err = start_per_cpu_kthreads(tr);<br>
++	else<br>
++		err = start_single_kthread(tr);<br>
+ 	if (err)<br>
+ 		pr_err(BANNER "Cannot start hwlat kthread\n");<br>
+ }<br>
+ <br>
+ static void hwlat_tracer_stop(struct trace_array *tr)<br>
+ {<br>
+-	stop_kthread();<br>
++	if (hwlat_data.thread_mode == MODE_PER_CPU)<br>
++		stop_per_cpu_kthreads();<br>
++	else<br>
++		stop_single_kthread();<br>
+ }<br>
+ <br>
+ static int hwlat_tracer_init(struct trace_array *tr)<br>
+@@ -864,7 +959,7 @@ static int hwlat_tracer_init(struct trace_array *tr)<br>
+ <br>
+ static void hwlat_tracer_reset(struct trace_array *tr)<br>
+ {<br>
+-	stop_kthread();<br>
++	hwlat_tracer_stop(tr);<br>
+ <br>
+ 	/* the tracing threshold is static between runs */<br>
+ 	last_tracing_thresh = tracing_thresh;<br>
+-- <br>
+2.30.2<br>
+<br>
+<br>
+

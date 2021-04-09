@@ -1,0 +1,25 @@
+On Thu, Apr 08, 2021 at 05:30:26PM +0200, Paolo Bonzini wrote:<br>
+><i> On 08/04/21 17:28, Wei Liu wrote:</i><br>
+><i> > > Although the Hyper-v TLFS mentions that a guest cannot use this feature</i><br>
+><i> > > unless the hypervisor advertises support for it, some hypercalls which</i><br>
+><i> > > we plan on upstreaming in future uses them anyway.</i><br>
+><i> > </i><br>
+><i> > No, please don't do this. Check the feature bit(s) before you issue</i><br>
+><i> > hypercalls which rely on the extended interface.</i><br>
+><i> </i><br>
+><i> Perhaps Siddharth should clarify this, but I read it as Hyper-V being buggy</i><br>
+><i> and using XMM arguments unconditionally.</i><br>
+><i> </i><br>
+<br>
+There is no code in upstream Linux that uses the XMM fast hypercall<br>
+interface at the moment.<br>
+<br>
+If there is such code, it has bugs in it and should be fixed. :-)<br>
+<br>
+Wei.<br>
+<br>
+><i> Paolo</i><br>
+><i> </i><br>
+<br>
+<br>
+

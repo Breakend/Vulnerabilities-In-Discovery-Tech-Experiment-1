@@ -1,0 +1,77 @@
+On Thu, Apr 08, 2021 at 05:11:12PM +0800, Longfang Liu wrote:<br>
+><i> Some types of EHCI controllers do not have SBRN registers.</i><br>
+><i> By comparing the white list, the operation of reading the SBRN</i><br>
+><i> registers is skipped.</i><br>
+><i> </i><br>
+><i> Subsequent EHCI controller types without SBRN registers can be</i><br>
+><i> directly added to the white list.</i><br>
+><i> </i><br>
+><i> The current patch does not affect the drive function.</i><br>
+><i> </i><br>
+><i> Signed-off-by: Longfang Liu <liulongfang@xxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  drivers/usb/host/ehci-pci.c | 27 +++++++++++++++++++++++----</i><br>
+><i>  1 file changed, 23 insertions(+), 4 deletions(-)</i><br>
+><i> </i><br>
+><i> diff --git a/drivers/usb/host/ehci-pci.c b/drivers/usb/host/ehci-pci.c</i><br>
+><i> index 3c3820a..6a30afa 100644</i><br>
+><i> --- a/drivers/usb/host/ehci-pci.c</i><br>
+><i> +++ b/drivers/usb/host/ehci-pci.c</i><br>
+><i> @@ -47,6 +47,28 @@ static inline bool is_bypassed_id(struct pci_dev *pdev)</i><br>
+><i>  	return !!pci_match_id(bypass_pci_id_table, pdev);</i><br>
+><i>  }</i><br>
+><i>  </i><br>
+><i> +static const struct usb_nosbrn_whitelist_entry {</i><br>
+><i> +	unsigned short vendor;</i><br>
+><i> +	unsigned short device;</i><br>
+<br>
+u16 here please.<br>
+<br>
+><i> +} usb_nosbrn_whitelist[] = {</i><br>
+><i> +	/* STMICRO ConneXT has no sbrn register */</i><br>
+><i> +	{PCI_VENDOR_ID_STMICRO, PCI_DEVICE_ID_STMICRO_USB_HOST},</i><br>
+><i> +	{}</i><br>
+<br>
+trailing , please.<br>
+<br>
+><i> +};</i><br>
+><i> +</i><br>
+><i> +static bool usb_nosbrn_whitelist_check(struct pci_dev *pdev)</i><br>
+><i> +{</i><br>
+><i> +	const struct usb_nosbrn_whitelist_entry *entry;</i><br>
+><i> +</i><br>
+><i> +	for (entry = usb_nosbrn_whitelist; entry->vendor; entry++) {</i><br>
+><i> +		if (pdev->vendor == entry->vendor &&</i><br>
+><i> +		    pdev->device == entry->device)</i><br>
+><i> +			return true;</i><br>
+><i> +	}</i><br>
+><i> +</i><br>
+><i> +	return false;</i><br>
+><i> +}</i><br>
+><i> +</i><br>
+><i>  /*</i><br>
+><i>   * 0x84 is the offset of in/out threshold register,</i><br>
+><i>   * and it is the same offset as the register of 'hostpc'.</i><br>
+><i> @@ -288,10 +310,7 @@ static int ehci_pci_setup(struct usb_hcd *hcd)</i><br>
+><i>  	}</i><br>
+><i>  </i><br>
+><i>  	/* Serial Bus Release Number is at PCI 0x60 offset */</i><br>
+><i> -	if (pdev->vendor == PCI_VENDOR_ID_STMICRO</i><br>
+><i> -	    && pdev->device == PCI_DEVICE_ID_STMICRO_USB_HOST)</i><br>
+><i> -		;	/* ConneXT has no sbrn register */</i><br>
+><i> -	else</i><br>
+><i> +	if (!usb_nosbrn_whitelist_check(pdev))</i><br>
+<br>
+Doing this as a "negative" is hard to understand.  Should this just be:<br>
+	forbid_sbrn_read()<br>
+or something like that?<br>
+<br>
+The term "whitelist" is not a good thing to use as it does not really<br>
+explain anything here.<br>
+<br>
+thanks,<br>
+<br>
+greg k-h<br>
+<br>
+<br>
+

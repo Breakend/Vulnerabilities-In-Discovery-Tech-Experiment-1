@@ -1,0 +1,25 @@
+Hi all,<br>
+<br>
+On 4/8/21 2:13 PM, Stephen Rothwell wrote:<br>
+><i> Hi all,</i><br>
+><i> </i><br>
+><i> Commit</i><br>
+><i> </i><br>
+><i>   11cccec79c60 ("genirq: Add IRQF_NO_AUTOEN for request_irq/nmi()")</i><br>
+><i> </i><br>
+><i> is missing a Signed-off-by from its committer.</i><br>
+<br>
+Ugh, thanks for letting me know, this was supposed to come from a merge<br>
+from an immutable branch from the tip folks, but I did a rebase -i<br>
+to fixup a typo in a commit message and that seems to have flattened<br>
+the merge :|<br>
+<br>
+I'll redo the last 3 commits in pdx/for-next to re-add the merge<br>
+and do a forced push.<br>
+<br>
+Regards,<br>
+<br>
+Hans<br>
+<br>
+<br>
+

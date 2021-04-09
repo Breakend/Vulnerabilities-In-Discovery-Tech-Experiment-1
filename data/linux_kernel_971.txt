@@ -1,0 +1,41 @@
+From: Xuezhi Zhang <zhangxuezhi1@xxxxxxxxxx><br>
+<br>
+Fix the following coccicheck warning:<br>
+drivers/gpu/drm//panel/panel-dsi-cm.c:271:8-16: <br>
+WARNING: use scnprintf or sprintf<br>
+drivers/gpu/drm//panel/panel-dsi-cm.c:251:8-16: <br>
+WARNING: use scnprintf or sprintf<br>
+<br>
+Signed-off-by: Xuezhi Zhang <zhangxuezhi1@xxxxxxxxxx><br>
+---<br>
+ drivers/gpu/drm/panel/panel-dsi-cm.c | 4 ++--<br>
+ 1 file changed, 2 insertions(+), 2 deletions(-)<br>
+<br>
+diff --git a/drivers/gpu/drm/panel/panel-dsi-cm.c b/drivers/gpu/drm/panel/panel-dsi-cm.c<br>
+index 5fbfb71ca3d9..a8efb06cca64 100644<br>
+--- a/drivers/gpu/drm/panel/panel-dsi-cm.c<br>
++++ b/drivers/gpu/drm/panel/panel-dsi-cm.c<br>
+@@ -248,7 +248,7 @@ static ssize_t num_dsi_errors_show(struct device *dev,<br>
+ 	if (r)<br>
+ 		return r;<br>
+ <br>
+-	return snprintf(buf, PAGE_SIZE, "%d\n", errors);<br>
++	return sysfs_emit(buf, "%d\n", errors);<br>
+ }<br>
+ <br>
+ static ssize_t hw_revision_show(struct device *dev,<br>
+@@ -268,7 +268,7 @@ static ssize_t hw_revision_show(struct device *dev,<br>
+ 	if (r)<br>
+ 		return r;<br>
+ <br>
+-	return snprintf(buf, PAGE_SIZE, "%02x.%02x.%02x\n", id1, id2, id3);<br>
++	return sysfs_emit(buf, "%02x.%02x.%02x\n", id1, id2, id3);<br>
+ }<br>
+ <br>
+ static DEVICE_ATTR_RO(num_dsi_errors);<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+<br>
+

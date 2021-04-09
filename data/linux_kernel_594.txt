@@ -1,0 +1,112 @@
+The following commit has been merged into the x86/entry branch of tip:<br>
+<br>
+Commit-ID:     70918779aec9bd01d16f4e6e800ffe423d196021<br>
+Gitweb:        <a  rel="nofollow" href="https://git.kernel.org/tip/70918779aec9bd01d16f4e6e800ffe423d196021">https://git.kernel.org/tip/70918779aec9bd01d16f4e6e800ffe423d196021</a><br>
+Author:        Kees Cook <keescook@xxxxxxxxxxxx><br>
+AuthorDate:    Thu, 01 Apr 2021 16:23:46 -07:00<br>
+Committer:     Thomas Gleixner <tglx@xxxxxxxxxxxxx><br>
+CommitterDate: Thu, 08 Apr 2021 14:12:19 +02:00<br>
+<br>
+arm64: entry: Enable random_kstack_offset support<br>
+<br>
+Allow for a randomized stack offset on a per-syscall basis, with roughly<br>
+5 bits of entropy. (And include AAPCS rationale AAPCS thanks to Mark<br>
+Rutland.)<br>
+<br>
+In order to avoid unconditional stack canaries on syscall entry (due to<br>
+the use of alloca()), also disable stack protector to avoid triggering<br>
+needless checks and slowing down the entry path. As there is no general<br>
+way to control stack protector coverage with a function attribute[1],<br>
+this must be disabled at the compilation unit level. This isn't a problem<br>
+here, though, since stack protector was not triggered before: examining<br>
+the resulting syscall.o, there are no changes in canary coverage (none<br>
+before, none now).<br>
+<br>
+[1] a working __attribute__((no_stack_protector)) has been added to GCC<br>
+and Clang but has not been released in any version yet:<br>
+<a  rel="nofollow" href="https://gcc.gnu.org/git/gitweb.cgi?p=gcc.git;h=346b302d09c1e6db56d9fe69048acb32fbb97845">https://gcc.gnu.org/git/gitweb.cgi?p=gcc.git;h=346b302d09c1e6db56d9fe69048acb32fbb97845</a><br>
+<a  rel="nofollow" href="https://reviews.llvm.org/rG4fbf84c1732fca596ad1d6e96015e19760eb8a9b">https://reviews.llvm.org/rG4fbf84c1732fca596ad1d6e96015e19760eb8a9b</a><br>
+<br>
+Signed-off-by: Kees Cook <keescook@xxxxxxxxxxxx><br>
+Signed-off-by: Thomas Gleixner <tglx@xxxxxxxxxxxxx><br>
+Acked-by: Will Deacon <will@xxxxxxxxxx><br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/20210401232347.2791257-6-keescook@xxxxxxxxxxxx">https://lore.kernel.org/r/20210401232347.2791257-6-keescook@xxxxxxxxxxxx</a><br>
+<br>
+---<br>
+ arch/arm64/Kconfig          |  1 +<br>
+ arch/arm64/kernel/Makefile  |  5 +++++<br>
+ arch/arm64/kernel/syscall.c | 16 ++++++++++++++++<br>
+ 3 files changed, 22 insertions(+)<br>
+<br>
+diff --git a/arch/arm64/Kconfig b/arch/arm64/Kconfig<br>
+index e4e1b65..4640d25 100644<br>
+--- a/arch/arm64/Kconfig<br>
++++ b/arch/arm64/Kconfig<br>
+@@ -146,6 +146,7 @@ config ARM64<br>
+ 	select HAVE_ARCH_MMAP_RND_COMPAT_BITS if COMPAT<br>
+ 	select HAVE_ARCH_PFN_VALID<br>
+ 	select HAVE_ARCH_PREL32_RELOCATIONS<br>
++	select HAVE_ARCH_RANDOMIZE_KSTACK_OFFSET<br>
+ 	select HAVE_ARCH_SECCOMP_FILTER<br>
+ 	select HAVE_ARCH_STACKLEAK<br>
+ 	select HAVE_ARCH_THREAD_STRUCT_WHITELIST<br>
+diff --git a/arch/arm64/kernel/Makefile b/arch/arm64/kernel/Makefile<br>
+index ed65576..6cc9773 100644<br>
+--- a/arch/arm64/kernel/Makefile<br>
++++ b/arch/arm64/kernel/Makefile<br>
+@@ -9,6 +9,11 @@ CFLAGS_REMOVE_ftrace.o = $(CC_FLAGS_FTRACE)<br>
+ CFLAGS_REMOVE_insn.o = $(CC_FLAGS_FTRACE)<br>
+ CFLAGS_REMOVE_return_address.o = $(CC_FLAGS_FTRACE)<br>
+ <br>
++# Remove stack protector to avoid triggering unneeded stack canary<br>
++# checks due to randomize_kstack_offset.<br>
++CFLAGS_REMOVE_syscall.o	 = -fstack-protector -fstack-protector-strong<br>
++CFLAGS_syscall.o	+= -fno-stack-protector<br>
++<br>
+ # Object file lists.<br>
+ obj-y			:= debug-monitors.o entry.o irq.o fpsimd.o		\<br>
+ 			   entry-common.o entry-fpsimd.o process.o ptrace.o	\<br>
+diff --git a/arch/arm64/kernel/syscall.c b/arch/arm64/kernel/syscall.c<br>
+index b9cf12b..263d6c1 100644<br>
+--- a/arch/arm64/kernel/syscall.c<br>
++++ b/arch/arm64/kernel/syscall.c<br>
+@@ -5,6 +5,7 @@<br>
+ #include <linux/errno.h><br>
+ #include <linux/nospec.h><br>
+ #include <linux/ptrace.h><br>
++#include <linux/randomize_kstack.h><br>
+ #include <linux/syscalls.h><br>
+ <br>
+ #include <asm/daifflags.h><br>
+@@ -43,6 +44,8 @@ static void invoke_syscall(struct pt_regs *regs, unsigned int scno,<br>
+ {<br>
+ 	long ret;<br>
+ <br>
++	add_random_kstack_offset();<br>
++<br>
+ 	if (scno < sc_nr) {<br>
+ 		syscall_fn_t syscall_fn;<br>
+ 		syscall_fn = syscall_table[array_index_nospec(scno, sc_nr)];<br>
+@@ -55,6 +58,19 @@ static void invoke_syscall(struct pt_regs *regs, unsigned int scno,<br>
+ 		ret = lower_32_bits(ret);<br>
+ <br>
+ 	regs->regs[0] = ret;<br>
++<br>
++	/*<br>
++	 * Ultimately, this value will get limited by KSTACK_OFFSET_MAX(),<br>
++	 * but not enough for arm64 stack utilization comfort. To keep<br>
++	 * reasonable stack head room, reduce the maximum offset to 9 bits.<br>
++	 *<br>
++	 * The actual entropy will be further reduced by the compiler when<br>
++	 * applying stack alignment constraints: the AAPCS mandates a<br>
++	 * 16-byte (i.e. 4-bit) aligned SP at function boundaries.<br>
++	 *<br>
++	 * The resulting 5 bits of entropy is seen in SP[8:4].<br>
++	 */<br>
++	choose_random_kstack_offset(get_random_int() & 0x1FF);<br>
+ }<br>
+ <br>
+ static inline bool has_syscall_work(unsigned long flags)<br>
+<br>
+<br>
+

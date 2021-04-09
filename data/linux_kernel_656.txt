@@ -1,0 +1,39 @@
+KVM_GET_EMULATED_CPUID returns -E2BIG if the nent field of<br>
+struct kvm_cpuid2 is smaller than the actual entries, while<br>
+it adjusts nent if the provided amount is bigger than the<br>
+actual amount.<br>
+<br>
+Update documentation accordingly. ENOMEM is just returned if the<br>
+allocation fails, like all other calls.<br>
+<br>
+Signed-off-by: Emanuele Giuseppe Esposito <eesposit@xxxxxxxxxx><br>
+---<br>
+ Documentation/virt/kvm/api.rst | 10 ++++------<br>
+ 1 file changed, 4 insertions(+), 6 deletions(-)<br>
+<br>
+diff --git a/Documentation/virt/kvm/api.rst b/Documentation/virt/kvm/api.rst<br>
+index 307f2fcf1b02..8ba23bc2a625 100644<br>
+--- a/Documentation/virt/kvm/api.rst<br>
++++ b/Documentation/virt/kvm/api.rst<br>
+@@ -3404,12 +3404,10 @@ which features are emulated by kvm instead of being present natively.<br>
+ <br>
+ Userspace invokes KVM_GET_EMULATED_CPUID by passing a kvm_cpuid2<br>
+ structure with the 'nent' field indicating the number of entries in<br>
+-the variable-size array 'entries'. If the number of entries is too low<br>
+-to describe the cpu capabilities, an error (E2BIG) is returned. If the<br>
+-number is too high, the 'nent' field is adjusted and an error (ENOMEM)<br>
+-is returned. If the number is just right, the 'nent' field is adjusted<br>
+-to the number of valid entries in the 'entries' array, which is then<br>
+-filled.<br>
++the variable-size array 'entries'.<br>
++If the number of entries is too low to describe the cpu<br>
++capabilities, an error (E2BIG) is returned.  If the number is too high,<br>
++the 'nent' field is adjusted and the entries array is filled.<br>
+ <br>
+ The entries returned are the set CPUID bits of the respective features<br>
+ which kvm emulates, as returned by the CPUID instruction, with unknown<br>
+-- <br>
+2.30.2<br>
+<br>
+<br>
+

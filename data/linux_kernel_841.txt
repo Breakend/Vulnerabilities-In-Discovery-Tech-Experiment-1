@@ -1,0 +1,82 @@
+08.04.2021 16:26, Thierry Reding пишет:<br>
+><i> On Thu, Apr 08, 2021 at 02:42:42AM -0700, Nicolin Chen wrote:</i><br>
+><i>> On Mon, Mar 29, 2021 at 02:32:55AM +0300, Dmitry Osipenko wrote:</i><br>
+><i>>> All consumer-grade Android and Chromebook devices show a splash screen</i><br>
+><i>>> on boot and then display is left enabled when kernel is booted. This</i><br>
+><i>>> behaviour is unacceptable in a case of implicit IOMMU domains to which</i><br>
+><i>>> devices are attached during kernel boot since devices, like display</i><br>
+><i>>> controller, may perform DMA at that time. We can work around this problem</i><br>
+><i>>> by deferring the enable of SMMU translation for a specific devices,</i><br>
+><i>>> like a display controller, until the first IOMMU mapping is created,</i><br>
+><i>>> which works good enough in practice because by that time h/w is already</i><br>
+><i>>> stopped.</i><br>
+><i>>></i><br>
+><i>>> Signed-off-by: Dmitry Osipenko <digetx@xxxxxxxxx></i><br>
+><i>></i><br>
+><i>> For both patches:</i><br>
+><i>> Acked-by: Nicolin Chen <nicoleotsuka@xxxxxxxxx></i><br>
+><i>> Tested-by: Nicolin Chen <nicoleotsuka@xxxxxxxxx></i><br>
+><i>></i><br>
+><i>> The WAR looks good to me. Perhaps Thierry would give some input.</i><br>
+<br>
+Nicolin, thank you very much for the help!<br>
+<br>
+><i>> Another topic:</i><br>
+><i>> I think this may help work around the mc-errors, which we have</i><br>
+><i>> been facing on Tegra210 also when we enable IOMMU_DOMAIN_DMA.</i><br>
+><i>> (attached a test patch rebasing on these two)</i><br>
+><i> </i><br>
+><i> Ugh... that's exactly what I was afraid of. Now everybody is going to</i><br>
+><i> think that we can just work around this issue with driver-specific SMMU</i><br>
+><i> hacks...</i><br>
+><i> </i><br>
+><i>> However, GPU would also report errors using DMA domain:</i><br>
+><i>></i><br>
+><i>>  nouveau 57000000.gpu: acr: firmware unavailable</i><br>
+><i>>  nouveau 57000000.gpu: pmu: firmware unavailable</i><br>
+><i>>  nouveau 57000000.gpu: gr: firmware unavailable</i><br>
+><i>>  tegra-mc 70019000.memory-controller: gpusrd: read @0x00000000fffbe200: Security violation (TrustZone violation)</i><br>
+><i>>  nouveau 57000000.gpu: DRM: failed to create kernel channel, -22</i><br>
+><i>>  tegra-mc 70019000.memory-controller: gpusrd: read @0x00000000fffad000: Security violation (TrustZone violation)</i><br>
+><i>>  nouveau 57000000.gpu: fifo: SCHED_ERROR 20 []</i><br>
+><i>>  nouveau 57000000.gpu: fifo: SCHED_ERROR 20 []</i><br>
+><i>></i><br>
+><i>> Looking at the address, seems that GPU allocated memory in 32-bit</i><br>
+><i>> physical address space behind SMMU, so a violation happened after</i><br>
+><i>> turning on DMA domain I guess... </i><br>
+><i> </i><br>
+><i> The problem with GPU is... extra complicated. You're getting these</i><br>
+><i> faults because you're enabling the IOMMU-backed DMA API, which then</i><br>
+><i> causes the Nouveau driver allocate buffers using the DMA API instead of</i><br>
+><i> explicitly allocating pages and then mapping them using the IOMMU API.</i><br>
+><i> However, there are additional patches needed to teach Nouveau about how</i><br>
+><i> to deal with SMMU and those haven't been merged yet. I've got prototypes</i><br>
+><i> of this, but before the whole framebuffer carveout passing work makes</i><br>
+><i> progress there's little sense in moving individual pieces forward.</i><br>
+><i> </i><br>
+><i> One more not to try and cut corners. We know what the right solution is,</i><br>
+><i> even if it takes a lot of work. I'm willing to ack this patch, or some</i><br>
+><i> version of it, but only as a way of working around things we have no</i><br>
+><i> realistic chance of fixing properly anymore. I still think it would be</i><br>
+><i> best if we could derive identity mappings from command-line arguments on</i><br>
+><i> these platforms because I think most of them will actually set that, and</i><br>
+><i> then the solution becomes at least uniform at the SMMU level.</i><br>
+><i> </i><br>
+><i> For Tegra210 I've already laid out a path to a solution that's going to</i><br>
+><i> be generic and extend to Tegra186 and later as well.</i><br>
+<br>
+We still have issues in the DRM and other drivers that don't allow us to<br>
+flip ON the IOMMU_DOMAIN_DMA support.<br>
+<br>
+My patch addresses the issue with the ARM_DMA_USE_IOMMU option, which<br>
+allocates the unmanaged domain for DMA purposes on ARM32, causing the<br>
+trouble in the multiplatform kernel configuration since it's not<br>
+possible to opt-out from ARM_DMA_USE_IOMMU in this case. Perhaps this<br>
+needs to be clarified in the commit message.<br>
+<br>
+<a  rel="nofollow" href="https://elixir.bootlin.com/linux/v5.12-rc6/source/arch/arm/mm/dma-mapping.c#L2078">https://elixir.bootlin.com/linux/v5.12-rc6/source/arch/arm/mm/dma-mapping.c#L2078</a><br>
+<br>
+<a  rel="nofollow" href="https://elixir.bootlin.com/linux/v5.12-rc6/source/drivers/iommu/iommu.c#L1929">https://elixir.bootlin.com/linux/v5.12-rc6/source/drivers/iommu/iommu.c#L1929</a><br>
+<br>
+<br>
+

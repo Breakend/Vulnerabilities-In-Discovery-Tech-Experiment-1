@@ -1,0 +1,43 @@
+Ola Aline,<br>
+<br>
+Welcome to the kernel community. Hope you enjoy some of this<br>
+Outreachy adventures.<br>
+<br>
+Normally, when you submit a v2, we want to know what changed<br>
+between the first submission and v2.<br>
+<br>
+If you are subscribed to linux-media, you can read some<br>
+of the series with a vN+1 and look how it's done. Examples:<br>
+<br>
+<a  rel="nofollow" href="https://www.spinics.net/lists/linux-media/msg190043.html">https://www.spinics.net/lists/linux-media/msg190043.html</a><br>
+<br>
+<a  rel="nofollow" href="https://www.spinics.net/lists/linux-media/msg189923.html">https://www.spinics.net/lists/linux-media/msg189923.html</a><br>
+<br>
+I'm sure your Outreachy mentors can tell you more.<br>
+<br>
+On Thu, 2021-04-08 at 11:07 -0300, Aline Santana Cordeiro wrote:<br>
+><i> Aligns line break with the remaining function arguments</i><br>
+><i> to the open parenthesis. Issue found by checkpatch.</i><br>
+><i> </i><br>
+><i> Signed-off-by: Aline Santana Cordeiro <alinesantanacordeiro@xxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  drivers/staging/media/hantro/hantro_hw.h | 2 +-</i><br>
+><i>  1 file changed, 1 insertion(+), 1 deletion(-)</i><br>
+><i> </i><br>
+><i> diff --git a/drivers/staging/media/hantro/hantro_hw.h b/drivers/staging/media/hantro/hantro_hw.h</i><br>
+><i> index 34c9e46..a650b9c 100644</i><br>
+><i> --- a/drivers/staging/media/hantro/hantro_hw.h</i><br>
+><i> +++ b/drivers/staging/media/hantro/hantro_hw.h</i><br>
+><i> @@ -207,7 +207,7 @@ hantro_h264_mv_size(unsigned int width, unsigned int height)</i><br>
+><i>  void hantro_g1_mpeg2_dec_run(struct hantro_ctx *ctx);</i><br>
+><i>  void rk3399_vpu_mpeg2_dec_run(struct hantro_ctx *ctx);</i><br>
+><i>  void hantro_mpeg2_dec_copy_qtable(u8 *qtable,</i><br>
+><i> -       const struct v4l2_ctrl_mpeg2_quantization *ctrl);</i><br>
+><i> +                                 const struct v4l2_ctrl_mpeg2_quantization *ctrl);</i><br>
+><i>  int hantro_mpeg2_dec_init(struct hantro_ctx *ctx);</i><br>
+><i>  void hantro_mpeg2_dec_exit(struct hantro_ctx *ctx);</i><br>
+><i>  </i><br>
+<br>
+<br>
+<br>
+

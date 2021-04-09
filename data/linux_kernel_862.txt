@@ -1,0 +1,251 @@
+A dedicated wakeup irq will be used to handle runtime suspend/resume,<br>
+we use dev_pm_set_dedicated_wake_irq API to take care of requesting<br>
+and attaching wakeup irq, then the suspend/resume framework will help<br>
+to enable/disable wakeup irq.<br>
+<br>
+The runtime PM is default off since some platforms may not support it.<br>
+users can enable it via power/control (set "auto") in sysfs.<br>
+<br>
+Signed-off-by: Chunfeng Yun <chunfeng.yun@xxxxxxxxxxxx><br>
+---<br>
+ drivers/usb/host/xhci-mtk.c | 140 +++++++++++++++++++++++++++++++-----<br>
+ 1 file changed, 124 insertions(+), 16 deletions(-)<br>
+<br>
+diff --git a/drivers/usb/host/xhci-mtk.c b/drivers/usb/host/xhci-mtk.c<br>
+index a74764ab914a..30927f4064d4 100644<br>
+--- a/drivers/usb/host/xhci-mtk.c<br>
++++ b/drivers/usb/host/xhci-mtk.c<br>
+@@ -16,6 +16,7 @@<br>
+ #include <linux/of.h><br>
+ #include <linux/platform_device.h><br>
+ #include <linux/pm_runtime.h><br>
++#include <linux/pm_wakeirq.h><br>
+ #include <linux/regmap.h><br>
+ #include <linux/regulator/consumer.h><br>
+ <br>
+@@ -358,7 +359,6 @@ static int usb_wakeup_of_property_parse(struct xhci_hcd_mtk *mtk,<br>
+ 			mtk->uwk_reg_base, mtk->uwk_vers);<br>
+ <br>
+ 	return PTR_ERR_OR_ZERO(mtk->uwk);<br>
+-<br>
+ }<br>
+ <br>
+ static void usb_wakeup_set(struct xhci_hcd_mtk *mtk, bool enable)<br>
+@@ -458,6 +458,7 @@ static int xhci_mtk_probe(struct platform_device *pdev)<br>
+ 	struct resource *res;<br>
+ 	struct usb_hcd *hcd;<br>
+ 	int ret = -ENODEV;<br>
++	int wakeup_irq;<br>
+ 	int irq;<br>
+ <br>
+ 	if (usb_disabled())<br>
+@@ -485,6 +486,21 @@ static int xhci_mtk_probe(struct platform_device *pdev)<br>
+ 	if (ret)<br>
+ 		return ret;<br>
+ <br>
++	irq = platform_get_irq_byname_optional(pdev, "host");<br>
++	if (irq < 0) {<br>
++		if (irq == -EPROBE_DEFER)<br>
++			return irq;<br>
++<br>
++		/* for backward compatibility */<br>
++		irq = platform_get_irq(pdev, 0);<br>
++		if (irq < 0)<br>
++			return irq;<br>
++	}<br>
++<br>
++	wakeup_irq = platform_get_irq_byname_optional(pdev, "wakeup");<br>
++	if (wakeup_irq == -EPROBE_DEFER)<br>
++		return wakeup_irq;<br>
++<br>
+ 	mtk->lpm_support = of_property_read_bool(node, "usb3-lpm-capable");<br>
+ 	/* optional property, ignore the error if it does not exist */<br>
+ 	of_property_read_u32(node, "mediatek,u3p-dis-msk",<br>
+@@ -496,9 +512,11 @@ static int xhci_mtk_probe(struct platform_device *pdev)<br>
+ 		return ret;<br>
+ 	}<br>
+ <br>
++	pm_runtime_set_active(dev);<br>
++	pm_runtime_use_autosuspend(dev);<br>
++	pm_runtime_set_autosuspend_delay(dev, 4000);<br>
+ 	pm_runtime_enable(dev);<br>
+ 	pm_runtime_get_sync(dev);<br>
+-	device_enable_async_suspend(dev);<br>
+ <br>
+ 	ret = xhci_mtk_ldos_enable(mtk);<br>
+ 	if (ret)<br>
+@@ -508,12 +526,6 @@ static int xhci_mtk_probe(struct platform_device *pdev)<br>
+ 	if (ret)<br>
+ 		goto disable_ldos;<br>
+ <br>
+-	irq = platform_get_irq(pdev, 0);<br>
+-	if (irq < 0) {<br>
+-		ret = irq;<br>
+-		goto disable_clk;<br>
+-	}<br>
+-<br>
+ 	hcd = usb_create_hcd(driver, dev, dev_name(dev));<br>
+ 	if (!hcd) {<br>
+ 		ret = -ENOMEM;<br>
+@@ -579,8 +591,26 @@ static int xhci_mtk_probe(struct platform_device *pdev)<br>
+ 	if (ret)<br>
+ 		goto dealloc_usb2_hcd;<br>
+ <br>
++	if (wakeup_irq > 0) {<br>
++		ret = dev_pm_set_dedicated_wake_irq(dev, wakeup_irq);<br>
++		if (ret) {<br>
++			dev_err(dev, "set wakeup irq %d failed\n", wakeup_irq);<br>
++			goto dealloc_usb3_hcd;<br>
++		}<br>
++		dev_info(dev, "wakeup irq %d\n", wakeup_irq);<br>
++	}<br>
++<br>
++	device_enable_async_suspend(dev);<br>
++	pm_runtime_mark_last_busy(dev);<br>
++	pm_runtime_put_autosuspend(dev);<br>
++	pm_runtime_forbid(dev);<br>
++<br>
+ 	return 0;<br>
+ <br>
++dealloc_usb3_hcd:<br>
++	usb_remove_hcd(xhci->shared_hcd);<br>
++	xhci->shared_hcd = NULL;<br>
++<br>
+ dealloc_usb2_hcd:<br>
+ 	usb_remove_hcd(hcd);<br>
+ <br>
+@@ -601,25 +631,26 @@ static int xhci_mtk_probe(struct platform_device *pdev)<br>
+ 	xhci_mtk_ldos_disable(mtk);<br>
+ <br>
+ disable_pm:<br>
+-	pm_runtime_put_sync(dev);<br>
++	pm_runtime_put_sync_autosuspend(dev);<br>
+ 	pm_runtime_disable(dev);<br>
+ 	return ret;<br>
+ }<br>
+ <br>
+-static int xhci_mtk_remove(struct platform_device *dev)<br>
++static int xhci_mtk_remove(struct platform_device *pdev)<br>
+ {<br>
+-	struct xhci_hcd_mtk *mtk = platform_get_drvdata(dev);<br>
++	struct xhci_hcd_mtk *mtk = platform_get_drvdata(pdev);<br>
+ 	struct usb_hcd	*hcd = mtk->hcd;<br>
+ 	struct xhci_hcd	*xhci = hcd_to_xhci(hcd);<br>
+ 	struct usb_hcd  *shared_hcd = xhci->shared_hcd;<br>
++	struct device *dev = &pdev->dev;<br>
+ <br>
+-	pm_runtime_put_noidle(&dev->dev);<br>
+-	pm_runtime_disable(&dev->dev);<br>
++	pm_runtime_get_sync(dev);<br>
++	xhci->xhc_state |= XHCI_STATE_REMOVING;<br>
++	dev_pm_clear_wake_irq(dev);<br>
++	device_init_wakeup(dev, false);<br>
+ <br>
+ 	usb_remove_hcd(shared_hcd);<br>
+ 	xhci->shared_hcd = NULL;<br>
+-	device_init_wakeup(&dev->dev, false);<br>
+-<br>
+ 	usb_remove_hcd(hcd);<br>
+ 	usb_put_hcd(shared_hcd);<br>
+ 	usb_put_hcd(hcd);<br>
+@@ -627,6 +658,10 @@ static int xhci_mtk_remove(struct platform_device *dev)<br>
+ 	xhci_mtk_clks_disable(mtk);<br>
+ 	xhci_mtk_ldos_disable(mtk);<br>
+ <br>
++	pm_runtime_disable(dev);<br>
++	pm_runtime_put_noidle(dev);<br>
++	pm_runtime_set_suspended(dev);<br>
++<br>
+ 	return 0;<br>
+ }<br>
+ <br>
+@@ -690,10 +725,83 @@ static int __maybe_unused xhci_mtk_resume(struct device *dev)<br>
+ 	return ret;<br>
+ }<br>
+ <br>
++static int check_rhub_status(struct xhci_hcd *xhci, struct xhci_hub *rhub)<br>
++{<br>
++	u32 suspended_ports;<br>
++	u32 status;<br>
++	int num_ports;<br>
++	int i;<br>
++<br>
++	num_ports = rhub->num_ports;<br>
++	suspended_ports = rhub->bus_state.suspended_ports;<br>
++	for (i = 0; i < num_ports; i++) {<br>
++		if (!(suspended_ports & BIT(i))) {<br>
++			status = readl(rhub->ports[i]->addr);<br>
++			if (status & PORT_CONNECT)<br>
++				return -EBUSY;<br>
++		}<br>
++	}<br>
++<br>
++	return 0;<br>
++}<br>
++<br>
++/*<br>
++ * check the bus whether it could suspend or not<br>
++ * the bus will suspend if the downstream ports are already suspended,<br>
++ * or no devices connected.<br>
++ */<br>
++static int check_bus_status(struct xhci_hcd *xhci)<br>
++{<br>
++	int ret;<br>
++<br>
++	ret = check_rhub_status(xhci, &xhci->usb3_rhub);<br>
++	if (ret)<br>
++		return ret;<br>
++<br>
++	return check_rhub_status(xhci, &xhci->usb2_rhub);<br>
++}<br>
++<br>
++static int __maybe_unused xhci_mtk_runtime_suspend(struct device *dev)<br>
++{<br>
++	struct xhci_hcd_mtk  *mtk = dev_get_drvdata(dev);<br>
++	struct xhci_hcd *xhci = hcd_to_xhci(mtk->hcd);<br>
++	int ret = 0;<br>
++<br>
++	if (xhci->xhc_state)<br>
++		return -ESHUTDOWN;<br>
++<br>
++	if (device_may_wakeup(dev)) {<br>
++		ret = check_bus_status(xhci);<br>
++		if (!ret)<br>
++			ret = xhci_mtk_suspend(dev);<br>
++	}<br>
++<br>
++	/* -EBUSY: let PM automatically reschedule another autosuspend */<br>
++	return ret ? -EBUSY : 0;<br>
++}<br>
++<br>
++static int __maybe_unused xhci_mtk_runtime_resume(struct device *dev)<br>
++{<br>
++	struct xhci_hcd_mtk  *mtk = dev_get_drvdata(dev);<br>
++	struct xhci_hcd *xhci = hcd_to_xhci(mtk->hcd);<br>
++	int ret = 0;<br>
++<br>
++	if (xhci->xhc_state)<br>
++		return -ESHUTDOWN;<br>
++<br>
++	if (device_may_wakeup(dev))<br>
++		ret = xhci_mtk_resume(dev);<br>
++<br>
++	return ret;<br>
++}<br>
++<br>
+ static const struct dev_pm_ops xhci_mtk_pm_ops = {<br>
+ 	SET_SYSTEM_SLEEP_PM_OPS(xhci_mtk_suspend, xhci_mtk_resume)<br>
++	SET_RUNTIME_PM_OPS(xhci_mtk_runtime_suspend,<br>
++			   xhci_mtk_runtime_resume, NULL)<br>
+ };<br>
+-#define DEV_PM_OPS IS_ENABLED(CONFIG_PM) ? &xhci_mtk_pm_ops : NULL<br>
++<br>
++#define DEV_PM_OPS (IS_ENABLED(CONFIG_PM) ? &xhci_mtk_pm_ops : NULL)<br>
+ <br>
+ static const struct of_device_id mtk_xhci_of_match[] = {<br>
+ 	{ .compatible = "mediatek,mt8173-xhci"},<br>
+-- <br>
+2.18.0<br>
+<br>
+<br>
+

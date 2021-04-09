@@ -1,0 +1,39 @@
+From: Quanyang Wang <quanyang.wang@xxxxxxxxxxxxx><br>
+<br>
+When starting a read operation, we should call zynqmp_qspi_setuprxdma<br>
+first to set xqspi->mode according to xqspi->bytes_to_receive and<br>
+to calculate correct xqspi->dma_rx_bytes. Then in the function<br>
+zynqmp_qspi_fillgenfifo, generate the appropriate command with<br>
+operating mode and bytes to transfer, and fill the GENFIFO with<br>
+the command to perform the read operation.<br>
+<br>
+Calling zynqmp_qspi_fillgenfifo before zynqmp_qspi_setuprxdma will<br>
+result in incorrect transfer length and operating mode. So change<br>
+the calling order to fix this issue.<br>
+<br>
+Fixes: 1c26372e5aa9 ("spi: spi-zynqmp-gqspi: Update driver to use spi-mem framework")<br>
+Signed-off-by: Quanyang Wang <quanyang.wang@xxxxxxxxxxxxx><br>
+Reviewed-by: Amit Kumar Mahapatra <amit.kumar-mahapatra@xxxxxxxxxx><br>
+---<br>
+ drivers/spi/spi-zynqmp-gqspi.c | 2 +-<br>
+ 1 file changed, 1 insertion(+), 1 deletion(-)<br>
+<br>
+diff --git a/drivers/spi/spi-zynqmp-gqspi.c b/drivers/spi/spi-zynqmp-gqspi.c<br>
+index cf73a069b759..036d8ae41c06 100644<br>
+--- a/drivers/spi/spi-zynqmp-gqspi.c<br>
++++ b/drivers/spi/spi-zynqmp-gqspi.c<br>
+@@ -827,8 +827,8 @@ static void zynqmp_qspi_write_op(struct zynqmp_qspi *xqspi, u8 tx_nbits,<br>
+ static void zynqmp_qspi_read_op(struct zynqmp_qspi *xqspi, u8 rx_nbits,<br>
+ 				u32 genfifoentry)<br>
+ {<br>
+-	zynqmp_qspi_fillgenfifo(xqspi, rx_nbits, genfifoentry);<br>
+ 	zynqmp_qspi_setuprxdma(xqspi);<br>
++	zynqmp_qspi_fillgenfifo(xqspi, rx_nbits, genfifoentry);<br>
+ }<br>
+ <br>
+ /**<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

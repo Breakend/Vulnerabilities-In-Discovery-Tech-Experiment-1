@@ -1,0 +1,53 @@
+
+Hey Bjorn,<br>
+Thanks for the patch!<br>
+<br>
+On 1/8/21 5:01 AM, Bjorn Andersson wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+The code validates that segments of p_memsz bytes of a segment will fit<br>
+in the provided memory region, but does not validate that p_filesz bytes<br>
+will, which means that an incorrectly crafted ELF header might write<br>
+beyond the provided memory region.<br>
+<br>
+Fixes: 051fb70fd4ea ("remoteproc: qcom: Driver for the self-authenticating Hexagon v5")<br>
+Signed-off-by: Bjorn Andersson <bjorn.andersson@xxxxxxxxxx><br>
+---<br>
+  drivers/soc/qcom/mdt_loader.c | 8 ++++++++<br>
+  1 file changed, 8 insertions(+)<br>
+<br>
+diff --git a/drivers/soc/qcom/mdt_loader.c b/drivers/soc/qcom/mdt_loader.c<br>
+index e01d18e9ad2b..5180b5996830 100644<br>
+--- a/drivers/soc/qcom/mdt_loader.c<br>
++++ b/drivers/soc/qcom/mdt_loader.c<br>
+@@ -230,6 +230,14 @@ static int __qcom_mdt_load(struct device *dev, const struct firmware *fw,<br>
+  			break;<br>
+  		}<br>
+  
++		if (phdr->p_filesz > phdr->p_memsz) {
+<br>
++			dev_err(dev,<br>
++				"refusing to load segment %d with p_filesz > p_memsz\n",<br>
++				i);<br>
++			ret = -EINVAL;<br>
++			break;<br>
++		}<br>
++<br>
+</blockquote>
+<br>
+Reviewed-by: Sibi Sankar <sibis@xxxxxxxxxxxxxx><br>
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+  		ptr = mem_region + offset;<br>
+  
+  		if (phdr->p_filesz && phdr->p_offset < fw->size) {
+<br>
+<br>
+</blockquote>
+<br>
+--<br>
+Qualcomm Innovation Center, Inc.<br>
+Qualcomm Innovation Center, Inc, is a member of Code Aurora Forum,<br>
+a Linux Foundation Collaborative Project<br>
+<br>
+<br>
+

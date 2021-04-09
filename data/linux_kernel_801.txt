@@ -1,0 +1,48 @@
+On Wed, Apr 07, 2021 at 09:25:43PM +0800, YueHaibing wrote:<br>
+><i> </i><br>
+><i> commit 765c37d87669 ("dmaengine: at_xdmac: rework slave configuration part")</i><br>
+><i> left behind this, so can remove it.</i><br>
+><i> </i><br>
+><i> Signed-off-by: YueHaibing <yuehaibing@xxxxxxxxxx></i><br>
+><i> Reviewed-by: Tudor Ambarus <tudor.ambarus@xxxxxxxxxxxxx></i><br>
+<br>
+Acked-by: Ludovic Desroches <ludovic.desroches@xxxxxxxxxxxxx><br>
+<br>
+Thanks for the cleanup.<br>
+<br>
+Regards,<br>
+Ludovic<br>
+<br>
+><i> ---</i><br>
+><i> v2: Fix commit log</i><br>
+><i> ---</i><br>
+><i>  drivers/dma/at_xdmac.c | 11 -----------</i><br>
+><i>  1 file changed, 11 deletions(-)</i><br>
+><i> </i><br>
+><i> diff --git a/drivers/dma/at_xdmac.c b/drivers/dma/at_xdmac.c</i><br>
+><i> index fe45ad5d06c4..64a52bf4d737 100644</i><br>
+><i> --- a/drivers/dma/at_xdmac.c</i><br>
+><i> +++ b/drivers/dma/at_xdmac.c</i><br>
+><i> @@ -344,17 +344,6 @@ static inline int at_xdmac_chan_is_paused(struct at_xdmac_chan *atchan)</i><br>
+><i>         return test_bit(AT_XDMAC_CHAN_IS_PAUSED, &atchan->status);</i><br>
+><i>  }</i><br>
+><i> </i><br>
+><i> -static inline int at_xdmac_csize(u32 maxburst)</i><br>
+><i> -{</i><br>
+><i> -       int csize;</i><br>
+><i> -</i><br>
+><i> -       csize = ffs(maxburst) - 1;</i><br>
+><i> -       if (csize > 4)</i><br>
+><i> -               csize = -EINVAL;</i><br>
+><i> -</i><br>
+><i> -       return csize;</i><br>
+><i> -};</i><br>
+><i> -</i><br>
+><i>  static inline bool at_xdmac_chan_is_peripheral_xfer(u32 cfg)</i><br>
+><i>  {</i><br>
+><i>         return cfg & AT_XDMAC_CC_TYPE_PER_TRAN;</i><br>
+><i> --</i><br>
+><i> 2.17.1</i><br>
+><i> </i><br>
+<br>
+

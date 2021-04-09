@@ -1,0 +1,37 @@
+Fix the following gcc warning:<br>
+<br>
+drivers/message/fusion/mptbase.c:3087:9: warning: variable ‘status’ set<br>
+but not used [-Wunused-but-set-variable].<br>
+<br>
+Reported-by: Abaci Robot <abaci@xxxxxxxxxxxxxxxxx><br>
+Signed-off-by: Jiapeng Chong <jiapeng.chong@xxxxxxxxxxxxxxxxx><br>
+---<br>
+ drivers/message/fusion/mptbase.c | 3 +--<br>
+ 1 file changed, 1 insertion(+), 2 deletions(-)<br>
+<br>
+diff --git a/drivers/message/fusion/mptbase.c b/drivers/message/fusion/mptbase.c<br>
+index 549797d..f37ea06 100644<br>
+--- a/drivers/message/fusion/mptbase.c<br>
++++ b/drivers/message/fusion/mptbase.c<br>
+@@ -3084,7 +3084,7 @@ static int mpt_remove_dead_ioc_func(void *arg)<br>
+ 	int			 req_sz;<br>
+ 	int			 reply_sz;<br>
+ 	int			 sz;<br>
+-	u32			 status, vv;<br>
++	u32			 vv;<br>
+ 	u8			 shiftFactor=1;<br>
+ <br>
+ 	/* IOC *must* NOT be in RESET state! */<br>
+@@ -3142,7 +3142,6 @@ static int mpt_remove_dead_ioc_func(void *arg)<br>
+ 		facts->IOCExceptions = le16_to_cpu(facts->IOCExceptions);<br>
+ 		facts->IOCStatus = le16_to_cpu(facts->IOCStatus);<br>
+ 		facts->IOCLogInfo = le32_to_cpu(facts->IOCLogInfo);<br>
+-		status = le16_to_cpu(facts->IOCStatus) & MPI_IOCSTATUS_MASK;<br>
+ 		/* CHECKME! IOCStatus, IOCLogInfo */<br>
+ <br>
+ 		facts->ReplyQueueDepth = le16_to_cpu(facts->ReplyQueueDepth);<br>
+-- <br>
+1.8.3.1<br>
+<br>
+<br>
+

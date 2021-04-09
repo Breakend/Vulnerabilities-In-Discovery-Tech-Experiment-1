@@ -1,0 +1,42 @@
+On Thu, Mar 25, 2021 at 03:26:00PM +0800, Zhiqiang Liu wrote:<br>
+><i> From: Feilong Lin <linfeilong@xxxxxxxxxx></i><br>
+><i> </i><br>
+><i> In enable_slot() in drivers/pci/hotplug/acpiphp_glue.c, if pci_get_slot()</i><br>
+><i> will return NULL, we will do not set SLOT_ENABLED flag of slot. if one</i><br>
+><i> device is found by calling pci_get_slot(), its reference count will be</i><br>
+><i> increased. In this case, we did not call pci_dev_put() to decrement the</i><br>
+><i> its reference count, the memory of the device (struct pci_dev type) will</i><br>
+><i> leak.</i><br>
+><i> </i><br>
+><i> Fix it by calling pci_dev_put() to decrement its reference count after that</i><br>
+><i> pci_get_slot() returns a PCI device.</i><br>
+><i> </i><br>
+><i> Signed-off-by: Feilong Lin <linfeilong@xxxxxxxxxx></i><br>
+><i> Signed-off-by: Zhiqiang Liu <liuzhiqiang26@xxxxxxxxxx></i><br>
+<br>
+Applied with Rafael's reviewed-by to pci/hotplug for v5.13, thanks!<br>
+<br>
+><i> --</i><br>
+><i> v2: rewrite subject and commit log as suggested by Bjorn Helgaas.</i><br>
+><i> ---</i><br>
+><i>  drivers/pci/hotplug/acpiphp_glue.c | 1 +</i><br>
+><i>  1 file changed, 1 insertion(+)</i><br>
+><i> </i><br>
+><i> diff --git a/drivers/pci/hotplug/acpiphp_glue.c b/drivers/pci/hotplug/acpiphp_glue.c</i><br>
+><i> index 3365c93abf0e..f031302ad401 100644</i><br>
+><i> --- a/drivers/pci/hotplug/acpiphp_glue.c</i><br>
+><i> +++ b/drivers/pci/hotplug/acpiphp_glue.c</i><br>
+><i> @@ -533,6 +533,7 @@ static void enable_slot(struct acpiphp_slot *slot, bool bridge)</i><br>
+><i>  			slot->flags &= ~SLOT_ENABLED;</i><br>
+><i>  			continue;</i><br>
+><i>  		}</i><br>
+><i> +		pci_dev_put(dev);</i><br>
+><i>  	}</i><br>
+><i>  }</i><br>
+><i> </i><br>
+><i> -- </i><br>
+><i> 2.19.1</i><br>
+><i> </i><br>
+<br>
+<br>
+

@@ -1,0 +1,31 @@
+On Thu, Apr 08, 2021 at 01:38:17PM +0200, Daniel Vetter wrote:<br>
+<br>
+><i> If you want to change this, we need automatic conflict resolution like apt</i><br>
+><i> and other package managers have, with suggestions how to fix the config if</i><br>
+><i> you want to enable a driver, but some of its requirements are missing. The</i><br>
+><i> current approach of hiding driver symbols complete if any of their</i><br>
+><i> dependencies are off is really not great.</i><br>
+<br>
++1 to this.. <br>
+<br>
+Though Kconfig is basically already unusuable unless you have hours to<br>
+carefully craft the kconfig you need to get out.<br>
+<br>
+I'm not sure trying to optimize this by abusing the existing language<br>
+rules is such a good idea.<br>
+<br>
+I gave a very half hearted go at a simple heuristic solution solve for<br>
+kconfig a while ago. It is good enough to sometimes automate a kconfig<br>
+task, but it is not so nice.<br>
+<br>
+I use it to do things like "turn on all RDMA drivers" which is quite<br>
+a hard to do by hand.<br>
+<br>
+It looks liked heursitics need a lot of fine tuning as the<br>
+conditionals are complex enough that it is hard to guess which branch<br>
+is going to yield a success.<br>
+<br>
+Jason<br>
+<br>
+<br>
+

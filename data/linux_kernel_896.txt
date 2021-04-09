@@ -1,0 +1,67 @@
+
+On 08.04.21 14:49, Linus Walleij wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+On Thu, Apr 8, 2021 at 2:01 PM David Hildenbrand <david@xxxxxxxxxx> wrote:<br>
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em"><blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+This is something you could do using a hidden helper symbol like<br>
+<br>
+config DRMA_ASPEED_GFX<br>
+         bool "Aspeed display driver"<br>
+         select DRM_WANT_CMA<br>
+<br>
+config DRM_WANT_CMA<br>
+         bool<br>
+         help<br>
+            Select this from any driver that benefits from CMA being enabled<br>
+<br>
+config DMA_CMA<br>
+         bool "Use CMA helpers for DRM"<br>
+         default DRM_WANT_CMA<br>
+<br>
+           Arnd<br>
+<br>
+</blockquote>
+<br>
+That's precisely what I had first, with an additional "WANT_CMA" --  but<br>
+looking at the number of such existing options (I was able to spot 1 !)<br>
+</blockquote>
+<br>
+If you do this it probably makes sense to fix a few other drivers<br>
+Kconfig in the process. It's not just a problem with your driver.<br>
+"my" drivers:<br>
+<br>
+</blockquote>
+<br>
+:) I actually wanted to convert them to "depends on DMA_CMA" but ran 
+into recursive dependencies ...
+<br>
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+drivers/gpu/drm/mcde/Kconfig<br>
+drivers/gpu/drm/pl111/Kconfig<br>
+drivers/gpu/drm/tve200/Kconfig<br>
+</blockquote>
+<br>
+I was assuming these are "real" dependencies. Will it also work without 
+DMA_CMA?
+<br>
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+<br>
+certainly needs this as well, and pretty much anything that is<br>
+selecting DRM_KMS_CMA_HELPER or<br>
+DRM_GEM_CMA_HELPER "wants" DMA_CMA.<br>
+</blockquote>
+<br>
+"wants" as in "desires to use but can life without" or "wants" as in 
+"really needs it". ?
+<br>
+<br>
+--<br>
+Thanks,<br>
+<br>
+David / dhildenb<br>
+<br>
+<br>
+

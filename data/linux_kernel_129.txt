@@ -1,0 +1,125 @@
+On Tue, Apr 06, 2021, Wanpeng Li wrote:<br>
+><i> From: Wanpeng Li <wanpengli@xxxxxxxxxxx></i><br>
+><i> </i><br>
+><i> To analyze some performance issues with lock contention and scheduling,</i><br>
+><i> it is nice to know when directed yield are successful or failing.</i><br>
+><i> </i><br>
+><i> Signed-off-by: Wanpeng Li <wanpengli@xxxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  arch/x86/include/asm/kvm_host.h |  2 ++</i><br>
+><i>  arch/x86/kvm/x86.c              | 26 ++++++++++++++++++++------</i><br>
+><i>  2 files changed, 22 insertions(+), 6 deletions(-)</i><br>
+><i> </i><br>
+><i> diff --git a/arch/x86/include/asm/kvm_host.h b/arch/x86/include/asm/kvm_host.h</i><br>
+><i> index 44f8930..157bcaa 100644</i><br>
+><i> --- a/arch/x86/include/asm/kvm_host.h</i><br>
+><i> +++ b/arch/x86/include/asm/kvm_host.h</i><br>
+><i> @@ -1126,6 +1126,8 @@ struct kvm_vcpu_stat {</i><br>
+><i>  	u64 halt_poll_success_ns;</i><br>
+><i>  	u64 halt_poll_fail_ns;</i><br>
+><i>  	u64 nested_run;</i><br>
+><i> +	u64 yield_directed;</i><br>
+><i> +	u64 yield_directed_ignore;</i><br>
+><i>  };</i><br>
+><i>  </i><br>
+><i>  struct x86_instruction_info;</i><br>
+><i> diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c</i><br>
+><i> index 16fb395..3b475cd 100644</i><br>
+><i> --- a/arch/x86/kvm/x86.c</i><br>
+><i> +++ b/arch/x86/kvm/x86.c</i><br>
+><i> @@ -246,6 +246,8 @@ struct kvm_stats_debugfs_item debugfs_entries[] = {</i><br>
+><i>  	VCPU_STAT("halt_poll_success_ns", halt_poll_success_ns),</i><br>
+><i>  	VCPU_STAT("halt_poll_fail_ns", halt_poll_fail_ns),</i><br>
+><i>  	VCPU_STAT("nested_run", nested_run),</i><br>
+><i> +	VCPU_STAT("yield_directed", yield_directed),</i><br>
+<br>
+This is ambiguous, it's not clear without looking at the code if it's counting<br>
+attempts or actual yields.<br>
+<br>
+><i> +	VCPU_STAT("yield_directed_ignore", yield_directed_ignore),</i><br>
+<br>
+"ignored" also feels a bit misleading, as that implies KVM deliberately ignored<br>
+a valid request, whereas many of the failure paths are due to invalid requests<br>
+or errors of some kind.<br>
+<br>
+What about mirroring the halt poll stats, i.e. track "attempted" and "successful",<br>
+as opposed to "attempted" and "ignored/failed".    And maybe switched directed<br>
+and yield?  I.e. directed_yield_attempted and directed_yield_successful.<br>
+<br>
+Alternatively, would it make sense to do s/directed/pv, or is that not worth the<br>
+potential risk of being wrong if a non-paravirt use case comes along?<br>
+<br>
+	pv_yield_attempted<br>
+	pv_yield_successful<br>
+<br>
+><i>  	VM_STAT("mmu_shadow_zapped", mmu_shadow_zapped),</i><br>
+><i>  	VM_STAT("mmu_pte_write", mmu_pte_write),</i><br>
+><i>  	VM_STAT("mmu_pde_zapped", mmu_pde_zapped),</i><br>
+><i> @@ -8211,21 +8213,33 @@ void kvm_apicv_init(struct kvm *kvm, bool enable)</i><br>
+><i>  }</i><br>
+><i>  EXPORT_SYMBOL_GPL(kvm_apicv_init);</i><br>
+><i>  </i><br>
+><i> -static void kvm_sched_yield(struct kvm *kvm, unsigned long dest_id)</i><br>
+><i> +static void kvm_sched_yield(struct kvm_vcpu *vcpu, unsigned long dest_id)</i><br>
+><i>  {</i><br>
+><i>  	struct kvm_vcpu *target = NULL;</i><br>
+><i>  	struct kvm_apic_map *map;</i><br>
+><i>  </i><br>
+><i> +	vcpu->stat.yield_directed++;</i><br>
+><i> +</i><br>
+><i>  	rcu_read_lock();</i><br>
+><i> -	map = rcu_dereference(kvm->arch.apic_map);</i><br>
+><i> +	map = rcu_dereference(vcpu->kvm->arch.apic_map);</i><br>
+><i>  </i><br>
+><i>  	if (likely(map) && dest_id <= map->max_apic_id && map->phys_map[dest_id])</i><br>
+><i>  		target = map->phys_map[dest_id]->vcpu;</i><br>
+><i>  </i><br>
+><i>  	rcu_read_unlock();</i><br>
+><i> +	if (!target)</i><br>
+><i> +		goto no_yield;</i><br>
+><i> +</i><br>
+><i> +	if (!READ_ONCE(target->ready))</i><br>
+<br>
+I vote to keep these checks together.  That'll also make the addition of the<br>
+"don't yield to self" check match the order of ready vs. self in kvm_vcpu_on_spin().<br>
+<br>
+	if (!target || !READ_ONCE(target->ready))<br>
+<br>
+><i> +		goto no_yield;</i><br>
+><i>  </i><br>
+><i> -	if (target && READ_ONCE(target->ready))</i><br>
+><i> -		kvm_vcpu_yield_to(target);</i><br>
+><i> +	if (kvm_vcpu_yield_to(target) <= 0)</i><br>
+><i> +		goto no_yield;</i><br>
+><i> +	return;</i><br>
+><i> +</i><br>
+><i> +no_yield:</i><br>
+><i> +	vcpu->stat.yield_directed_ignore++;</i><br>
+><i> +	return;</i><br>
+><i>  }</i><br>
+><i>  </i><br>
+><i>  int kvm_emulate_hypercall(struct kvm_vcpu *vcpu)</i><br>
+><i> @@ -8272,7 +8286,7 @@ int kvm_emulate_hypercall(struct kvm_vcpu *vcpu)</i><br>
+><i>  			break;</i><br>
+><i>  </i><br>
+><i>  		kvm_pv_kick_cpu_op(vcpu->kvm, a0, a1);</i><br>
+><i> -		kvm_sched_yield(vcpu->kvm, a1);</i><br>
+><i> +		kvm_sched_yield(vcpu, a1);</i><br>
+><i>  		ret = 0;</i><br>
+><i>  		break;</i><br>
+><i>  #ifdef CONFIG_X86_64</i><br>
+><i> @@ -8290,7 +8304,7 @@ int kvm_emulate_hypercall(struct kvm_vcpu *vcpu)</i><br>
+><i>  		if (!guest_pv_has(vcpu, KVM_FEATURE_PV_SCHED_YIELD))</i><br>
+><i>  			break;</i><br>
+><i>  </i><br>
+><i> -		kvm_sched_yield(vcpu->kvm, a0);</i><br>
+><i> +		kvm_sched_yield(vcpu, a0);</i><br>
+><i>  		ret = 0;</i><br>
+><i>  		break;</i><br>
+><i>  	default:</i><br>
+><i> -- </i><br>
+><i> 2.7.4</i><br>
+><i> </i><br>
+<br>
+<br>
+

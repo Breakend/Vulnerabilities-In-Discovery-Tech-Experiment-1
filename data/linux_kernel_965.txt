@@ -1,0 +1,54 @@
+On Wed, Apr 07, 2021 at 02:43:10PM -0700, Luck, Tony wrote:<br>
+><i> On Wed, Apr 07, 2021 at 11:18:16PM +0200, Borislav Petkov wrote:</i><br>
+><i> > On Thu, Mar 25, 2021 at 05:02:34PM -0700, Tony Luck wrote:</i><br>
+><i> > > Andy Lutomirski pointed out that sending SIGBUS to tasks that</i><br>
+><i> > > hit poison in the kernel copying syscall parameters from user</i><br>
+><i> > > address space is not the right semantic.</i><br>
+><i> > </i><br>
+><i> > What does that mean exactly?</i><br>
+><i> </i><br>
+><i> Andy said that a task could check a memory range for poison by</i><br>
+><i> doing:</i><br>
+><i> </i><br>
+><i> 	ret = write(fd, buf, size);</i><br>
+><i> 	if (ret == size) {</i><br>
+><i> 		memory range is all good</i><br>
+><i> 	}</i><br>
+><i> </i><br>
+><i> That doesn't work if the kernel sends a SIGBUS.</i><br>
+><i> </i><br>
+><i> It doesn't seem a likely scenario ... but Andy is correct that</i><br>
+><i> the above ought to work.</i><br>
+<br>
+We need to document properly what this is aiming to fix. He said<br>
+something yesterday along the lines of kthread_use_mm() hitting a SIGBUS<br>
+when a kthread "attaches" to an address space. I'm still unclear as to<br>
+how exactly that happens - there are only a handful of kthread_use_mm()<br>
+users in the tree...<br>
+<br>
+><i> Yes. This is for kernel reading memory belongng to "current" task.</i><br>
+<br>
+Provided "current" is really the task to which the poison page belongs.<br>
+That kthread_use_mm() thing sounded like the wrong task gets killed. But that<br>
+needs more details.<br>
+<br>
+><i> Same in that the page gets unmapped. Different in that there</i><br>
+><i> is no SIGBUS if the kernel did the access for the user.</i><br>
+<br>
+What is even the actual use case with sending tasks SIGBUS on poison<br>
+consumption? KVM? Others?<br>
+<br>
+Are we documenting somewhere: "if your process gets a SIGBUS and this<br>
+and that, which means your page got offlined, you should do this and<br>
+that to recover"?<br>
+<br>
+Thx.<br>
+<br>
+-- <br>
+Regards/Gruss,<br>
+    Boris.<br>
+<br>
+<a  rel="nofollow" href="https://people.kernel.org/tglx/notes-about-netiquette">https://people.kernel.org/tglx/notes-about-netiquette</a><br>
+<br>
+<br>
+

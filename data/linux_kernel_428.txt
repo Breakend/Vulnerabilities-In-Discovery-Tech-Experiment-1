@@ -1,0 +1,157 @@
+Add three functions to manipulate PG_private_2:<br>
+<br>
+ (*) set_page_private_2() - Set the flag and take an appropriate reference<br>
+     on the flagged page.<br>
+<br>
+ (*) end_page_private_2() - Clear the flag, drop the reference and wake up<br>
+     any waiters, somewhat analogously with end_page_writeback().<br>
+<br>
+ (*) wait_on_page_private_2() - Wait for the flag to be cleared.<br>
+<br>
+Wrappers will need to be placed in the netfs lib header in the patch that<br>
+adds that.<br>
+<br>
+[This implements a suggestion by Linus[1] to not mix the terminology of<br>
+ PG_private_2 and PG_fscache in the mm core function]<br>
+<br>
+Changes:<br>
+v5:<br>
+- Add set and end functions, calling the end function end rather than<br>
+  unlock[3].<br>
+- Keep a ref on the page when PG_private_2 is set[4][5].<br>
+<br>
+v4:<br>
+- Remove extern from the declaration[2].<br>
+<br>
+Suggested-by: Linus Torvalds <torvalds@xxxxxxxxxxxxxxxxxxxx><br>
+Signed-off-by: David Howells <dhowells@xxxxxxxxxx><br>
+cc: Matthew Wilcox (Oracle) <willy@xxxxxxxxxxxxx><br>
+cc: Alexander Viro <viro@xxxxxxxxxxxxxxxxxx><br>
+cc: Christoph Hellwig <hch@xxxxxx><br>
+cc: linux-mm@xxxxxxxxx<br>
+cc: linux-cachefs@xxxxxxxxxx<br>
+cc: linux-afs@xxxxxxxxxxxxxxxxxxx<br>
+cc: linux-nfs@xxxxxxxxxxxxxxx<br>
+cc: linux-cifs@xxxxxxxxxxxxxxx<br>
+cc: ceph-devel@xxxxxxxxxxxxxxx<br>
+cc: v9fs-developer@xxxxxxxxxxxxxxxxxxxxx<br>
+cc: linux-fsdevel@xxxxxxxxxxxxxxx<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/1330473.1612974547@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/1330473.1612974547@xxxxxxxxxxxxxxxxxxxxxx/</a> # v1<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/CAHk-=wjgA-74ddehziVk=XAEMTKswPu1Yw4uaro1R3ibs27ztw@xxxxxxxxxxxxxx/">https://lore.kernel.org/r/CAHk-=wjgA-74ddehziVk=XAEMTKswPu1Yw4uaro1R3ibs27ztw@xxxxxxxxxxxxxx/</a> [1]<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/20210216102659.GA27714@xxxxxx/">https://lore.kernel.org/r/20210216102659.GA27714@xxxxxx/</a> [2]<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161340387944.1303470.7944159520278177652.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161340387944.1303470.7944159520278177652.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v3<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161539528910.286939.1252328699383291173.stgit@xxxxxxxxxxxxxxxxxxxxxx">https://lore.kernel.org/r/161539528910.286939.1252328699383291173.stgit@xxxxxxxxxxxxxxxxxxxxxx</a> # v4<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/20210321105309.GG3420@xxxxxxxxxxxxxxxxxxxx">https://lore.kernel.org/r/20210321105309.GG3420@xxxxxxxxxxxxxxxxxxxx</a> [3]<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/CAHk-=wh+2gbF7XEjYc=HV9w_2uVzVf7vs60BPz0gFA=+pUm3ww@xxxxxxxxxxxxxx/">https://lore.kernel.org/r/CAHk-=wh+2gbF7XEjYc=HV9w_2uVzVf7vs60BPz0gFA=+pUm3ww@xxxxxxxxxxxxxx/</a> [4]<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/CAHk-=wjSGsRj7xwhSMQ6dAQiz53xA39pOG+XA_WeTgwBBu4uqg@xxxxxxxxxxxxxx/">https://lore.kernel.org/r/CAHk-=wjSGsRj7xwhSMQ6dAQiz53xA39pOG+XA_WeTgwBBu4uqg@xxxxxxxxxxxxxx/</a> [5]<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161653788200.2770958.9517755716374927208.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161653788200.2770958.9517755716374927208.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v5<br>
+---<br>
+<br>
+ include/linux/pagemap.h |   19 +++++++++++++++<br>
+ mm/filemap.c            |   59 +++++++++++++++++++++++++++++++++++++++++++++++<br>
+ 2 files changed, 78 insertions(+)<br>
+<br>
+diff --git a/include/linux/pagemap.h b/include/linux/pagemap.h<br>
+index 8c9947fd62f3..4a7c916abb5c 100644<br>
+--- a/include/linux/pagemap.h<br>
++++ b/include/linux/pagemap.h<br>
+@@ -688,6 +688,25 @@ void wait_for_stable_page(struct page *page);<br>
+ <br>
+ void page_endio(struct page *page, bool is_write, int err);<br>
+ <br>
++/**<br>
++ * set_page_private_2 - Set PG_private_2 on a page and take a ref<br>
++ * @page: The page.<br>
++ *<br>
++ * Set the PG_private_2 flag on a page and take the reference needed for the VM<br>
++ * to handle its lifetime correctly.  This sets the flag and takes the<br>
++ * reference unconditionally, so care must be taken not to set the flag again<br>
++ * if it's already set.<br>
++ */<br>
++static inline void set_page_private_2(struct page *page)<br>
++{<br>
++	get_page(page);<br>
++	SetPagePrivate2(page);<br>
++}<br>
++<br>
++void end_page_private_2(struct page *page);<br>
++void wait_on_page_private_2(struct page *page);<br>
++int wait_on_page_private_2_killable(struct page *page);<br>
++<br>
+ /*<br>
+  * Add an arbitrary waiter to a page's wait queue<br>
+  */<br>
+diff --git a/mm/filemap.c b/mm/filemap.c<br>
+index 43700480d897..788b71e8a72d 100644<br>
+--- a/mm/filemap.c<br>
++++ b/mm/filemap.c<br>
+@@ -1432,6 +1432,65 @@ void unlock_page(struct page *page)<br>
+ }<br>
+ EXPORT_SYMBOL(unlock_page);<br>
+ <br>
++/**<br>
++ * end_page_private_2 - Clear PG_private_2 and release any waiters<br>
++ * @page: The page<br>
++ *<br>
++ * Clear the PG_private_2 bit on a page and wake up any sleepers waiting for<br>
++ * this.  The page ref held for PG_private_2 being set is released.<br>
++ *<br>
++ * This is, for example, used when a netfs page is being written to a local<br>
++ * disk cache, thereby allowing writes to the cache for the same page to be<br>
++ * serialised.<br>
++ */<br>
++void end_page_private_2(struct page *page)<br>
++{<br>
++	page = compound_head(page);<br>
++	VM_BUG_ON_PAGE(!PagePrivate2(page), page);<br>
++	clear_bit_unlock(PG_private_2, &page->flags);<br>
++	wake_up_page_bit(page, PG_private_2);<br>
++	put_page(page);<br>
++}<br>
++EXPORT_SYMBOL(end_page_private_2);<br>
++<br>
++/**<br>
++ * wait_on_page_private_2 - Wait for PG_private_2 to be cleared on a page<br>
++ * @page: The page to wait on<br>
++ *<br>
++ * Wait for PG_private_2 (aka PG_fscache) to be cleared on a page.<br>
++ */<br>
++void wait_on_page_private_2(struct page *page)<br>
++{<br>
++	while (PagePrivate2(page))<br>
++		wait_on_page_bit(page, PG_private_2);<br>
++}<br>
++EXPORT_SYMBOL(wait_on_page_private_2);<br>
++<br>
++/**<br>
++ * wait_on_page_private_2_killable - Wait for PG_private_2 to be cleared on a page<br>
++ * @page: The page to wait on<br>
++ *<br>
++ * Wait for PG_private_2 (aka PG_fscache) to be cleared on a page or until a<br>
++ * fatal signal is received by the calling task.<br>
++ *<br>
++ * Return:<br>
++ * - 0 if successful.<br>
++ * - -EINTR if a fatal signal was encountered.<br>
++ */<br>
++int wait_on_page_private_2_killable(struct page *page)<br>
++{<br>
++	int ret = 0;<br>
++<br>
++	while (PagePrivate2(page)) {<br>
++		ret = wait_on_page_bit_killable(page, PG_private_2);<br>
++		if (ret < 0)<br>
++			break;<br>
++	}<br>
++<br>
++	return ret;<br>
++}<br>
++EXPORT_SYMBOL(wait_on_page_private_2_killable);<br>
++<br>
+ /**<br>
+  * end_page_writeback - end writeback against a page<br>
+  * @page: the page<br>
+<br>
+<br>
+<br>
+

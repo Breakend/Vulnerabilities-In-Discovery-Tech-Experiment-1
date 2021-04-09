@@ -1,0 +1,51 @@
+
+On 08/04/2021 10:01, Jonathan Cameron wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+On Wed, 7 Apr 2021 21:40:05 +0100<br>
+Will Deacon <will@xxxxxxxxxx> wrote:<br>
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+On Wed, Apr 07, 2021 at 05:49:02PM +0800, Qi Liu wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+PCIe PMU Root Complex Integrated End Point(RCiEP) device is supported<br>
+to sample bandwidth, latency, buffer occupation etc.<br>
+<br>
+Each PMU RCiEP device monitors multiple root ports, and each RCiEP is<br>
+registered as a pmu in /sys/bus/event_source/devices, so users can<br>
+select target PMU, and use filter to do further sets.<br>
+<br>
+Filtering options contains:<br>
+event        - select the event.<br>
+subevent     - select the subevent.<br>
+port         - select target root ports. Information of root ports<br>
+                are shown under sysfs.<br>
+bdf           - select requester_id of target EP device.<br>
+trig_len     - set trigger condition for starting event statistics.<br>
+trigger_mode - set trigger mode. 0 means starting to statistic when<br>
+                bigger than trigger condition, and 1 means smaller.<br>
+thr_len      - set threshold for statistics.<br>
+thr_mode     - set threshold mode. 0 means count when bigger than<br>
+                threshold, and 1 means smaller.<br>
+<br>
+Reviewed-by: Jonathan Cameron <Jonathan.Cameron@xxxxxxxxxx><br>
+</blockquote>
+<br>
+Do you have a link to this review, please?<br>
+</blockquote>
+<br>
+Internal review, so drop the tag.<br>
+<br>
+Jonathan<br>
+</blockquote>
+<br>
+Hi Will,<br>
+<br>
+Are you implying that you would rather that any review for these drivers 
+is done in public on the lists?
+<br>
+<br>
+Cheers,<br>
+John<br>
+<br>
+<br>
+

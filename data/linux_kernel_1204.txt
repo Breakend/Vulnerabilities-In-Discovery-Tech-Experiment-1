@@ -1,0 +1,293 @@
+On Wed, Apr 07, 2021 at 02:46:11PM -0700, Daniel Xu wrote:<br>
+><i> This commit introduces the bpf page cache iterator. This iterator allows</i><br>
+><i> users to run a bpf prog against each page in the "page cache".</i><br>
+><i> Internally, the "page cache" is extremely tied to VFS superblock + inode</i><br>
+><i> combo. Because of this, iter_pagecache will only examine pages in the</i><br>
+><i> caller's mount namespace.</i><br>
+><i> </i><br>
+><i> Signed-off-by: Daniel Xu <dxu@xxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  kernel/bpf/Makefile         |   2 +-</i><br>
+><i>  kernel/bpf/pagecache_iter.c | 293 ++++++++++++++++++++++++++++++++++++</i><br>
+><i>  2 files changed, 294 insertions(+), 1 deletion(-)</i><br>
+><i>  create mode 100644 kernel/bpf/pagecache_iter.c</i><br>
+><i> </i><br>
+><i> diff --git a/kernel/bpf/Makefile b/kernel/bpf/Makefile</i><br>
+><i> index 7f33098ca63f..3deb6a8d3f75 100644</i><br>
+><i> --- a/kernel/bpf/Makefile</i><br>
+><i> +++ b/kernel/bpf/Makefile</i><br>
+><i> @@ -6,7 +6,7 @@ cflags-nogcse-$(CONFIG_X86)$(CONFIG_CC_IS_GCC) := -fno-gcse</i><br>
+><i>  endif</i><br>
+><i>  CFLAGS_core.o += $(call cc-disable-warning, override-init) $(cflags-nogcse-yy)</i><br>
+><i>  </i><br>
+><i> -obj-$(CONFIG_BPF_SYSCALL) += syscall.o verifier.o inode.o helpers.o tnum.o bpf_iter.o map_iter.o task_iter.o prog_iter.o</i><br>
+><i> +obj-$(CONFIG_BPF_SYSCALL) += syscall.o verifier.o inode.o helpers.o tnum.o bpf_iter.o pagecache_iter.o map_iter.o task_iter.o prog_iter.o</i><br>
+><i>  obj-$(CONFIG_BPF_SYSCALL) += hashtab.o arraymap.o percpu_freelist.o bpf_lru_list.o lpm_trie.o map_in_map.o</i><br>
+><i>  obj-$(CONFIG_BPF_SYSCALL) += local_storage.o queue_stack_maps.o ringbuf.o</i><br>
+><i>  obj-$(CONFIG_BPF_SYSCALL) += bpf_local_storage.o bpf_task_storage.o</i><br>
+><i> diff --git a/kernel/bpf/pagecache_iter.c b/kernel/bpf/pagecache_iter.c</i><br>
+><i> new file mode 100644</i><br>
+><i> index 000000000000..8442ab0d4221</i><br>
+><i> --- /dev/null</i><br>
+><i> +++ b/kernel/bpf/pagecache_iter.c</i><br>
+><i> @@ -0,0 +1,293 @@</i><br>
+><i> +// SPDX-License-Identifier: GPL-2.0-only</i><br>
+><i> +/* Copyright (c) 2021 Facebook */</i><br>
+><i> +</i><br>
+><i> +#include <linux/bpf.h></i><br>
+><i> +#include <linux/btf_ids.h></i><br>
+><i> +#include <linux/init.h></i><br>
+><i> +#include <linux/mm_types.h></i><br>
+><i> +#include <linux/mnt_namespace.h></i><br>
+><i> +#include <linux/nsproxy.h></i><br>
+><i> +#include <linux/pagemap.h></i><br>
+><i> +#include <linux/radix-tree.h></i><br>
+><i> +#include <linux/seq_file.h></i><br>
+><i> +#include "../../fs/mount.h"</i><br>
+<br>
+This is a private header on purpose. Outside of fs/ poking around in<br>
+struct mount or struct mount_namespace should not be done.<br>
+<br>
+><i> +</i><br>
+><i> +struct bpf_iter_seq_pagecache_info {</i><br>
+><i> +	struct mnt_namespace *ns;</i><br>
+><i> +	struct radix_tree_root superblocks;</i><br>
+><i> +	struct super_block *cur_sb;</i><br>
+><i> +	struct inode *cur_inode;</i><br>
+><i> +	unsigned long cur_page_idx;</i><br>
+><i> +};</i><br>
+><i> +</i><br>
+><i> +static struct super_block *goto_next_sb(struct bpf_iter_seq_pagecache_info *info)</i><br>
+><i> +{</i><br>
+><i> +	struct super_block *sb = NULL;</i><br>
+><i> +	struct radix_tree_iter iter;</i><br>
+><i> +	void **slot;</i><br>
+><i> +</i><br>
+><i> +	radix_tree_for_each_slot(slot, &info->superblocks, &iter,</i><br>
+><i> +				 ((unsigned long)info->cur_sb + 1)) {</i><br>
+><i> +		sb = (struct super_block *)iter.index;</i><br>
+><i> +		break;</i><br>
+><i> +	}</i><br>
+><i> +</i><br>
+><i> +	info->cur_sb = sb;</i><br>
+><i> +	info->cur_inode = NULL;</i><br>
+><i> +	info->cur_page_idx = 0;</i><br>
+><i> +	return sb;</i><br>
+><i> +}</i><br>
+><i> +</i><br>
+><i> +static bool inode_unusual(struct inode *inode) {</i><br>
+><i> +	return ((inode->i_state & (I_FREEING|I_WILL_FREE|I_NEW)) ||</i><br>
+><i> +		(inode->i_mapping->nrpages == 0));</i><br>
+><i> +}</i><br>
+><i> +</i><br>
+><i> +static struct inode *goto_next_inode(struct bpf_iter_seq_pagecache_info *info)</i><br>
+><i> +{</i><br>
+><i> +	struct inode *prev_inode = info->cur_inode;</i><br>
+><i> +	struct inode *inode;</i><br>
+><i> +</i><br>
+><i> +retry:</i><br>
+><i> +	BUG_ON(!info->cur_sb);</i><br>
+><i> +	spin_lock(&info->cur_sb->s_inode_list_lock);</i><br>
+><i> +</i><br>
+><i> +	if (!info->cur_inode) {</i><br>
+><i> +		list_for_each_entry(inode, &info->cur_sb->s_inodes, i_sb_list) {</i><br>
+><i> +			spin_lock(&inode->i_lock);</i><br>
+><i> +			if (inode_unusual(inode)) {</i><br>
+><i> +				spin_unlock(&inode->i_lock);</i><br>
+><i> +				continue;</i><br>
+><i> +			}</i><br>
+><i> +			__iget(inode);</i><br>
+><i> +			spin_unlock(&inode->i_lock);</i><br>
+><i> +			info->cur_inode = inode;</i><br>
+><i> +			break;</i><br>
+><i> +		}</i><br>
+><i> +	} else {</i><br>
+><i> +		inode = info->cur_inode;</i><br>
+><i> +		info->cur_inode = NULL;</i><br>
+><i> +		list_for_each_entry_continue(inode, &info->cur_sb->s_inodes,</i><br>
+><i> +					     i_sb_list) {</i><br>
+><i> +			spin_lock(&inode->i_lock);</i><br>
+><i> +			if (inode_unusual(inode)) {</i><br>
+><i> +				spin_unlock(&inode->i_lock);</i><br>
+><i> +				continue;</i><br>
+><i> +			}</i><br>
+><i> +			__iget(inode);</i><br>
+><i> +			spin_unlock(&inode->i_lock);</i><br>
+><i> +			info->cur_inode = inode;</i><br>
+><i> +			break;</i><br>
+><i> +		}</i><br>
+><i> +	}</i><br>
+><i> +</i><br>
+><i> +	/* Seen all inodes in this superblock */</i><br>
+><i> +	if (!info->cur_inode) {</i><br>
+><i> +		spin_unlock(&info->cur_sb->s_inode_list_lock);</i><br>
+><i> +		if (!goto_next_sb(info)) {</i><br>
+><i> +			inode = NULL;</i><br>
+><i> +			goto out;</i><br>
+><i> +		}</i><br>
+><i> +</i><br>
+><i> +		goto retry;</i><br>
+><i> +	}</i><br>
+><i> +</i><br>
+><i> +	spin_unlock(&info->cur_sb->s_inode_list_lock);</i><br>
+><i> +	info->cur_page_idx = 0;</i><br>
+><i> +out:</i><br>
+><i> +	iput(prev_inode);</i><br>
+><i> +	return info->cur_inode;</i><br>
+><i> +}</i><br>
+><i> +</i><br>
+><i> +static struct page *goto_next_page(struct bpf_iter_seq_pagecache_info *info)</i><br>
+><i> +{</i><br>
+><i> +	struct page *page, *ret = NULL;</i><br>
+><i> +	unsigned long idx;</i><br>
+><i> +</i><br>
+><i> +	rcu_read_lock();</i><br>
+><i> +retry:</i><br>
+><i> +	BUG_ON(!info->cur_inode);</i><br>
+><i> +	ret = NULL;</i><br>
+><i> +	xa_for_each_start(&info->cur_inode->i_data.i_pages, idx, page,</i><br>
+><i> +			  info->cur_page_idx) {</i><br>
+><i> +		if (!page_cache_get_speculative(page))</i><br>
+><i> +			continue;</i><br>
+><i> +</i><br>
+><i> +		ret = page;</i><br>
+><i> +		info->cur_page_idx = idx + 1;</i><br>
+><i> +		break;</i><br>
+><i> +	}</i><br>
+><i> +</i><br>
+><i> +	if (!ret) {</i><br>
+><i> +		/* Seen all inodes and superblocks */</i><br>
+><i> +		if (!goto_next_inode(info))</i><br>
+><i> +			goto out;</i><br>
+><i> +</i><br>
+><i> +		goto retry;</i><br>
+><i> +	}</i><br>
+><i> +</i><br>
+><i> +out:</i><br>
+><i> +	rcu_read_unlock();</i><br>
+><i> +	return ret;</i><br>
+><i> +}</i><br>
+><i> +</i><br>
+><i> +static void *pagecache_seq_start(struct seq_file *seq, loff_t *pos)</i><br>
+><i> +{</i><br>
+><i> +	struct bpf_iter_seq_pagecache_info *info = seq->private;</i><br>
+><i> +	struct page *page;</i><br>
+><i> +</i><br>
+><i> +	if (!info->cur_sb && !goto_next_sb(info))</i><br>
+><i> +		return NULL;</i><br>
+><i> +	if (!info->cur_inode && !goto_next_inode(info))</i><br>
+><i> +		return NULL;</i><br>
+><i> +</i><br>
+><i> +	page = goto_next_page(info);</i><br>
+><i> +	if (!page)</i><br>
+><i> +		return NULL;</i><br>
+><i> +</i><br>
+><i> +	if (*pos == 0)</i><br>
+><i> +		++*pos;</i><br>
+><i> +</i><br>
+><i> +	return page;</i><br>
+><i> +</i><br>
+><i> +}</i><br>
+><i> +</i><br>
+><i> +static void *pagecache_seq_next(struct seq_file *seq, void *v, loff_t *pos)</i><br>
+><i> +{</i><br>
+><i> +	struct bpf_iter_seq_pagecache_info *info = seq->private;</i><br>
+><i> +	struct page *page;</i><br>
+><i> +</i><br>
+><i> +	++*pos;</i><br>
+><i> +	put_page((struct page *)v);</i><br>
+><i> +	page = goto_next_page(info);</i><br>
+><i> +	if (!page)</i><br>
+><i> +		return NULL;</i><br>
+><i> +</i><br>
+><i> +	return page;</i><br>
+><i> +}</i><br>
+><i> +</i><br>
+><i> +struct bpf_iter__pagecache {</i><br>
+><i> +	__bpf_md_ptr(struct bpf_iter_meta *, meta);</i><br>
+><i> +	__bpf_md_ptr(struct page *, page);</i><br>
+><i> +};</i><br>
+><i> +</i><br>
+><i> +DEFINE_BPF_ITER_FUNC(pagecache, struct bpf_iter_meta *meta, struct page *page)</i><br>
+><i> +</i><br>
+><i> +static int __pagecache_seq_show(struct seq_file *seq, struct page *page,</i><br>
+><i> +				bool in_stop)</i><br>
+><i> +{</i><br>
+><i> +	struct bpf_iter_meta meta;</i><br>
+><i> +	struct bpf_iter__pagecache ctx;</i><br>
+><i> +	struct bpf_prog *prog;</i><br>
+><i> +</i><br>
+><i> +	meta.seq = seq;</i><br>
+><i> +	prog = bpf_iter_get_info(&meta, in_stop);</i><br>
+><i> +	if (!prog)</i><br>
+><i> +		return 0;</i><br>
+><i> +</i><br>
+><i> +	meta.seq = seq;</i><br>
+><i> +	ctx.meta = &meta;</i><br>
+><i> +	ctx.page = page;</i><br>
+><i> +	return bpf_iter_run_prog(prog, &ctx);</i><br>
+><i> +}</i><br>
+><i> +</i><br>
+><i> +static int pagecache_seq_show(struct seq_file *seq, void *v)</i><br>
+><i> +{</i><br>
+><i> +	return __pagecache_seq_show(seq, v, false);</i><br>
+><i> +}</i><br>
+><i> +</i><br>
+><i> +static void pagecache_seq_stop(struct seq_file *seq, void *v)</i><br>
+><i> +{</i><br>
+><i> +	(void)__pagecache_seq_show(seq, v, true);</i><br>
+><i> +	if (v)</i><br>
+><i> +		put_page((struct page *)v);</i><br>
+><i> +}</i><br>
+><i> +</i><br>
+><i> +static int init_seq_pagecache(void *priv_data, struct bpf_iter_aux_info *aux)</i><br>
+><i> +{</i><br>
+><i> +	struct bpf_iter_seq_pagecache_info *info = priv_data;</i><br>
+><i> +	struct radix_tree_iter iter;</i><br>
+><i> +	struct super_block *sb;</i><br>
+><i> +	struct mount *mnt;</i><br>
+><i> +	void **slot;</i><br>
+><i> +	int err;</i><br>
+><i> +</i><br>
+><i> +	info->ns = current->nsproxy->mnt_ns;</i><br>
+><i> +	get_mnt_ns(info->ns);</i><br>
+><i> +	INIT_RADIX_TREE(&info->superblocks, GFP_KERNEL);</i><br>
+><i> +</i><br>
+><i> +	spin_lock(&info->ns->ns_lock);</i><br>
+><i> +	list_for_each_entry(mnt, &info->ns->list, mnt_list) {</i><br>
+<br>
+Not just are there helpers for taking ns_lock<br>
+static inline void lock_ns_list(struct mnt_namespace *ns)<br>
+static inline void unlock_ns_list(struct mnt_namespace *ns)<br>
+they are private to fs/namespace.c because it's the only place that<br>
+should ever walk this list.<br>
+<br>
+This seems buggy: why is it ok here to only take ns_lock and not also<br>
+namespace_sem like mnt_already_visible() and __is_local_mountpoint() or<br>
+the relevant proc iterators? I might be missing something.<br>
+<br>
+><i> +		sb = mnt->mnt.mnt_sb;</i><br>
+><i> +</i><br>
+><i> +		/* The same mount may be mounted in multiple places */</i><br>
+><i> +		if (radix_tree_lookup(&info->superblocks, (unsigned long)sb))</i><br>
+><i> +			continue;</i><br>
+><i> +</i><br>
+><i> +		err = radix_tree_insert(&info->superblocks,</i><br>
+><i> +				        (unsigned long)sb, (void *)1);</i><br>
+><i> +		if (err)</i><br>
+><i> +			goto out;</i><br>
+><i> +	}</i><br>
+><i> +</i><br>
+><i> +	radix_tree_for_each_slot(slot, &info->superblocks, &iter, 0) {</i><br>
+><i> +		sb = (struct super_block *)iter.index;</i><br>
+><i> +		atomic_inc(&sb->s_active);</i><br>
+<br>
+It also isn't nice that you mess with sb->s_active directly.<br>
+<br>
+Imho, this is poking around in a lot of fs/ specific stuff that other<br>
+parts of the kernel should not care about or have access to.<br>
+<br>
+Christian<br>
+<br>
+<br>
+

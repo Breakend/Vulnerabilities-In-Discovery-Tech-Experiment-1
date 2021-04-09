@@ -1,0 +1,15 @@
+The pull request you sent on Thu, 8 Apr 2021 19:46:51 +0200:<br>
+<br>
+><i> git://git.kernel.org/pub/scm/linux/kernel/git/s390/linux.git tags/s390-5.12-6</i><br>
+<br>
+has been merged into torvalds/linux.git:<br>
+<a  rel="nofollow" href="https://git.kernel.org/torvalds/c/3fb4f979b4fa1f92a02b538ae86e725b73e703d0">https://git.kernel.org/torvalds/c/3fb4f979b4fa1f92a02b538ae86e725b73e703d0</a><br>
+<br>
+Thank you!<br>
+<br>
+-- <br>
+Deet-doot-dot, I am a bot.<br>
+<a  rel="nofollow" href="https://korg.docs.kernel.org/prtracker.html">https://korg.docs.kernel.org/prtracker.html</a><br>
+<br>
+<br>
+

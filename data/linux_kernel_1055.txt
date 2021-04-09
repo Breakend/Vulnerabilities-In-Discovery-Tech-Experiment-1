@@ -1,0 +1,216 @@
+Hi Ben,<br>
+<br>
+Do you have any similar idea that can share with us?<br>
+<br>
+<br>
+Thanks<br>
+Keqian<br>
+<br>
+On 2021/4/7 7:42, Sean Christopherson wrote:<br>
+><i> +Ben</i><br>
+><i> </i><br>
+><i> On Tue, Apr 06, 2021, Keqian Zhu wrote:</i><br>
+><i>> Hi Paolo,</i><br>
+><i>></i><br>
+><i>> I plan to rework this patch and do full test. What do you think about this idea</i><br>
+><i>> (enable dirty logging for huge pages lazily)?</i><br>
+><i> </i><br>
+><i> Ben, don't you also have something similar (or maybe the exact opposite?) in the</i><br>
+><i> hopper?  This sounds very familiar, but I can't quite connect the dots that are</i><br>
+><i> floating around my head...</i><br>
+><i>  </i><br>
+><i>> PS: As dirty log of TDP MMU has been supported, I should add more code.</i><br>
+><i>></i><br>
+><i>> On 2020/8/28 16:11, Keqian Zhu wrote:</i><br>
+><i>>> Currently during enable dirty logging, if we're with init-all-set,</i><br>
+><i>>> we just write protect huge pages and leave normal pages untouched,</i><br>
+><i>>> for that we can enable dirty logging for these pages lazily.</i><br>
+><i>>></i><br>
+><i>>> It seems that enable dirty logging lazily for huge pages is feasible</i><br>
+><i>>> too, which not only reduces the time of start dirty logging, also</i><br>
+><i>>> greatly reduces side-effect on guest when there is high dirty rate.</i><br>
+><i>>></i><br>
+><i>>> (These codes are not tested, for RFC purpose :-) ).</i><br>
+><i>>></i><br>
+><i>>> Signed-off-by: Keqian Zhu <zhukeqian1@xxxxxxxxxx></i><br>
+><i>>> ---</i><br>
+><i>>>  arch/x86/include/asm/kvm_host.h |  3 +-</i><br>
+><i>>>  arch/x86/kvm/mmu/mmu.c          | 65 ++++++++++++++++++++++++++-------</i><br>
+><i>>>  arch/x86/kvm/vmx/vmx.c          |  3 +-</i><br>
+><i>>>  arch/x86/kvm/x86.c              | 22 +++++------</i><br>
+><i>>>  4 files changed, 62 insertions(+), 31 deletions(-)</i><br>
+><i>>></i><br>
+><i>>> diff --git a/arch/x86/include/asm/kvm_host.h b/arch/x86/include/asm/kvm_host.h</i><br>
+><i>>> index 5303dbc5c9bc..201a068cf43d 100644</i><br>
+><i>>> --- a/arch/x86/include/asm/kvm_host.h</i><br>
+><i>>> +++ b/arch/x86/include/asm/kvm_host.h</i><br>
+><i>>> @@ -1296,8 +1296,7 @@ void kvm_mmu_set_mask_ptes(u64 user_mask, u64 accessed_mask,</i><br>
+><i>>>  </i><br>
+><i>>>  void kvm_mmu_reset_context(struct kvm_vcpu *vcpu);</i><br>
+><i>>>  void kvm_mmu_slot_remove_write_access(struct kvm *kvm,</i><br>
+><i>>> -				      struct kvm_memory_slot *memslot,</i><br>
+><i>>> -				      int start_level);</i><br>
+><i>>> +				      struct kvm_memory_slot *memslot);</i><br>
+><i>>>  void kvm_mmu_zap_collapsible_sptes(struct kvm *kvm,</i><br>
+><i>>>  				   const struct kvm_memory_slot *memslot);</i><br>
+><i>>>  void kvm_mmu_slot_leaf_clear_dirty(struct kvm *kvm,</i><br>
+><i>>> diff --git a/arch/x86/kvm/mmu/mmu.c b/arch/x86/kvm/mmu/mmu.c</i><br>
+><i>>> index 43fdb0c12a5d..4b7d577de6cd 100644</i><br>
+><i>>> --- a/arch/x86/kvm/mmu/mmu.c</i><br>
+><i>>> +++ b/arch/x86/kvm/mmu/mmu.c</i><br>
+><i>>> @@ -1625,14 +1625,45 @@ static bool __rmap_set_dirty(struct kvm *kvm, struct kvm_rmap_head *rmap_head)</i><br>
+><i>>>  }</i><br>
+><i>>>  </i><br>
+><i>>>  /**</i><br>
+><i>>> - * kvm_mmu_write_protect_pt_masked - write protect selected PT level pages</i><br>
+><i>>> + * kvm_mmu_write_protect_largepage_masked - write protect selected largepages</i><br>
+><i>>>   * @kvm: kvm instance</i><br>
+><i>>>   * @slot: slot to protect</i><br>
+><i>>>   * @gfn_offset: start of the BITS_PER_LONG pages we care about</i><br>
+><i>>>   * @mask: indicates which pages we should protect</i><br>
+><i>>>   *</i><br>
+><i>>> - * Used when we do not need to care about huge page mappings: e.g. during dirty</i><br>
+><i>>> - * logging we do not have any such mappings.</i><br>
+><i>>> + * @ret: true if all pages are write protected</i><br>
+><i>>> + */</i><br>
+><i>>> +static bool kvm_mmu_write_protect_largepage_masked(struct kvm *kvm,</i><br>
+><i>>> +				    struct kvm_memory_slot *slot,</i><br>
+><i>>> +				    gfn_t gfn_offset, unsigned long mask)</i><br>
+><i>>> +{</i><br>
+><i>>> +	struct kvm_rmap_head *rmap_head;</i><br>
+><i>>> +	bool protected, all_protected;</i><br>
+><i>>> +	gfn_t start_gfn = slot->base_gfn + gfn_offset;</i><br>
+><i>>> +	int i;</i><br>
+><i>>> +</i><br>
+><i>>> +	all_protected = true;</i><br>
+><i>>> +	while (mask) {</i><br>
+><i>>> +		protected = false;</i><br>
+><i>>> +		for (i = PG_LEVEL_2M; i <= KVM_MAX_HUGEPAGE_LEVEL; ++i) {</i><br>
+><i>>> +			rmap_head = __gfn_to_rmap(start_gfn + __ffs(mask), i, slot);</i><br>
+><i>>> +			protectd |= __rmap_write_protect(kvm, rmap_head, false);</i><br>
+><i>>> +		}</i><br>
+><i>>> +</i><br>
+><i>>> +		all_protected &= protectd;</i><br>
+><i>>> +		/* clear the first set bit */</i><br>
+><i>>> +		mask &= mask - 1;</i><br>
+><i>>> +	}</i><br>
+><i>>> +</i><br>
+><i>>> +	return all_protected;</i><br>
+><i>>> +}</i><br>
+><i>>> +</i><br>
+><i>>> +/**</i><br>
+><i>>> + * kvm_mmu_write_protect_pt_masked - write protect selected PT level pages</i><br>
+><i>>> + * @kvm: kvm instance</i><br>
+><i>>> + * @slot: slot to protect</i><br>
+><i>>> + * @gfn_offset: start of the BITS_PER_LONG pages we care about</i><br>
+><i>>> + * @mask: indicates which pages we should protect</i><br>
+><i>>>   */</i><br>
+><i>>>  static void kvm_mmu_write_protect_pt_masked(struct kvm *kvm,</i><br>
+><i>>>  				     struct kvm_memory_slot *slot,</i><br>
+><i>>> @@ -1679,18 +1710,25 @@ EXPORT_SYMBOL_GPL(kvm_mmu_clear_dirty_pt_masked);</i><br>
+><i>>>  </i><br>
+><i>>>  /**</i><br>
+><i>>>   * kvm_arch_mmu_enable_log_dirty_pt_masked - enable dirty logging for selected</i><br>
+><i>>> - * PT level pages.</i><br>
+><i>>> - *</i><br>
+><i>>> - * It calls kvm_mmu_write_protect_pt_masked to write protect selected pages to</i><br>
+><i>>> - * enable dirty logging for them.</i><br>
+><i>>> - *</i><br>
+><i>>> - * Used when we do not need to care about huge page mappings: e.g. during dirty</i><br>
+><i>>> - * logging we do not have any such mappings.</i><br>
+><i>>> + * dirty pages.</i><br>
+><i>>>   */</i><br>
+><i>>>  void kvm_arch_mmu_enable_log_dirty_pt_masked(struct kvm *kvm,</i><br>
+><i>>>  				struct kvm_memory_slot *slot,</i><br>
+><i>>>  				gfn_t gfn_offset, unsigned long mask)</i><br>
+><i>>>  {</i><br>
+><i>>> +	/*</i><br>
+><i>>> +	 * If we're with initial-all-set, huge pages are NOT</i><br>
+><i>>> +	 * write protected when we start dirty log, so we must</i><br>
+><i>>> +	 * write protect them here.</i><br>
+><i>>> +	 */</i><br>
+><i>>> +	if (kvm_dirty_log_manual_protect_and_init_set(kvm)) {</i><br>
+><i>>> +		if (kvm_mmu_write_protect_largepage_masked(kvm, slot,</i><br>
+><i>>> +					gfn_offset, mask))</i><br>
+><i>>> +			return;</i><br>
+><i>>> +	}</i><br>
+><i>>> +</i><br>
+><i>>> +	/* Then we can handle the 4K level pages */</i><br>
+><i>>> +</i><br>
+><i>>>  	if (kvm_x86_ops.enable_log_dirty_pt_masked)</i><br>
+><i>>>  		kvm_x86_ops.enable_log_dirty_pt_masked(kvm, slot, gfn_offset,</i><br>
+><i>>>  				mask);</i><br>
+><i>>> @@ -5906,14 +5944,13 @@ static bool slot_rmap_write_protect(struct kvm *kvm,</i><br>
+><i>>>  }</i><br>
+><i>>>  </i><br>
+><i>>>  void kvm_mmu_slot_remove_write_access(struct kvm *kvm,</i><br>
+><i>>> -				      struct kvm_memory_slot *memslot,</i><br>
+><i>>> -				      int start_level)</i><br>
+><i>>> +				      struct kvm_memory_slot *memslot)</i><br>
+><i>>>  {</i><br>
+><i>>>  	bool flush;</i><br>
+><i>>>  </i><br>
+><i>>>  	spin_lock(&kvm->mmu_lock);</i><br>
+><i>>> -	flush = slot_handle_level(kvm, memslot, slot_rmap_write_protect,</i><br>
+><i>>> -				start_level, KVM_MAX_HUGEPAGE_LEVEL, false);</i><br>
+><i>>> +	flush = slot_handle_all_level(kvm, memslot, slot_rmap_write_protect,</i><br>
+><i>>> +				      false);</i><br>
+><i>>>  	spin_unlock(&kvm->mmu_lock);</i><br>
+><i>>>  </i><br>
+><i>>>  	/*</i><br>
+><i>>> diff --git a/arch/x86/kvm/vmx/vmx.c b/arch/x86/kvm/vmx/vmx.c</i><br>
+><i>>> index 819c185adf09..ba871c52ef8b 100644</i><br>
+><i>>> --- a/arch/x86/kvm/vmx/vmx.c</i><br>
+><i>>> +++ b/arch/x86/kvm/vmx/vmx.c</i><br>
+><i>>> @@ -7538,8 +7538,7 @@ static void vmx_sched_in(struct kvm_vcpu *vcpu, int cpu)</i><br>
+><i>>>  static void vmx_slot_enable_log_dirty(struct kvm *kvm,</i><br>
+><i>>>  				     struct kvm_memory_slot *slot)</i><br>
+><i>>>  {</i><br>
+><i>>> -	if (!kvm_dirty_log_manual_protect_and_init_set(kvm))</i><br>
+><i>>> -		kvm_mmu_slot_leaf_clear_dirty(kvm, slot);</i><br>
+><i>>> +	kvm_mmu_slot_leaf_clear_dirty(kvm, slot);</i><br>
+><i>>>  	kvm_mmu_slot_largepage_remove_write_access(kvm, slot);</i><br>
+><i>>>  }</i><br>
+><i>>>  </i><br>
+><i>>> diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c</i><br>
+><i>>> index d39d6cf1d473..c31c32f1424b 100644</i><br>
+><i>>> --- a/arch/x86/kvm/x86.c</i><br>
+><i>>> +++ b/arch/x86/kvm/x86.c</i><br>
+><i>>> @@ -10225,22 +10225,18 @@ static void kvm_mmu_slot_apply_flags(struct kvm *kvm,</i><br>
+><i>>>  	 * is enabled the D-bit or the W-bit will be cleared.</i><br>
+><i>>>  	 */</i><br>
+><i>>>  	if (new->flags & KVM_MEM_LOG_DIRTY_PAGES) {</i><br>
+><i>>> +		/*</i><br>
+><i>>> +		 * If we're with initial-all-set, we don't need</i><br>
+><i>>> +		 * to write protect any page because they're</i><br>
+><i>>> +		 * reported as dirty already.</i><br>
+><i>>> +		 */</i><br>
+><i>>> +		if (kvm_dirty_log_manual_protect_and_init_set(kvm))</i><br>
+><i>>> +			return;</i><br>
+><i>>> +</i><br>
+><i>>>  		if (kvm_x86_ops.slot_enable_log_dirty) {</i><br>
+><i>>>  			kvm_x86_ops.slot_enable_log_dirty(kvm, new);</i><br>
+><i>>>  		} else {</i><br>
+><i>>> -			int level =</i><br>
+><i>>> -				kvm_dirty_log_manual_protect_and_init_set(kvm) ?</i><br>
+><i>>> -				PG_LEVEL_2M : PG_LEVEL_4K;</i><br>
+><i>>> -</i><br>
+><i>>> -			/*</i><br>
+><i>>> -			 * If we're with initial-all-set, we don't need</i><br>
+><i>>> -			 * to write protect any small page because</i><br>
+><i>>> -			 * they're reported as dirty already.  However</i><br>
+><i>>> -			 * we still need to write-protect huge pages</i><br>
+><i>>> -			 * so that the page split can happen lazily on</i><br>
+><i>>> -			 * the first write to the huge page.</i><br>
+><i>>> -			 */</i><br>
+><i>>> -			kvm_mmu_slot_remove_write_access(kvm, new, level);</i><br>
+><i>>> +			kvm_mmu_slot_remove_write_access(kvm, new);</i><br>
+><i>>>  		}</i><br>
+><i>>>  	} else {</i><br>
+><i>>>  		if (kvm_x86_ops.slot_disable_log_dirty)</i><br>
+><i>>></i><br>
+><i> .</i><br>
+><i> </i><br>
+<br>
+<br>
+

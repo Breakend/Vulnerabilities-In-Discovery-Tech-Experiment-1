@@ -1,0 +1,18 @@
+On Wed, Apr 07, 2021 at 12:34:59PM -0500, Brijesh Singh wrote:<br>
+><i> The feature is part of the GHCB version 2 and is enforced by the</i><br>
+><i> hypervisor. I guess it can be extended for the ES. Since this feature</i><br>
+><i> was not available in GHCB version 1 (base ES) so it should be presented</i><br>
+><i> as an optional for the ES ?</i><br>
+<br>
+Yeah, it probably is not worth the effort. If an attacker controls the<br>
+guest kernel, then it can re-register a new GHCB so it doesn't really<br>
+matter.<br>
+<br>
+-- <br>
+Regards/Gruss,<br>
+    Boris.<br>
+<br>
+<a  rel="nofollow" href="https://people.kernel.org/tglx/notes-about-netiquette">https://people.kernel.org/tglx/notes-about-netiquette</a><br>
+<br>
+<br>
+

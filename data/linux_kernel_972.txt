@@ -1,0 +1,51 @@
+Hi Dan,<br>
+<br>
+On Wed, 7 Apr 2021 at 16:32, Dan Williams <dcbw@xxxxxxxxxx> wrote:<br>
+><i></i><br>
+><i> On Mon, 2021-04-05 at 11:52 +0200, Loic Poulain wrote:</i><br>
+><i> > This change introduces initial support for a WWAN framework. Given</i><br>
+><i> > the</i><br>
+><i> > complexity and heterogeneity of existing WWAN hardwares and</i><br>
+><i> > interfaces,</i><br>
+><i> > there is no strict definition of what a WWAN device is and how it</i><br>
+><i> > should</i><br>
+><i> > be represented. It's often a collection of multiple devices that</i><br>
+><i> > perform</i><br>
+><i> > the global WWAN feature (netdev, tty, chardev, etc).</i><br>
+><i></i><br>
+><i> Great to see the continued work on this.</i><br>
+><i></i><br>
+><i> Were you intending to follow-up with functionality to group netdevs</i><br>
+><i> with the control ports?  From my quick look at v9 here it only deals</i><br>
+><i> with MHI control ports (diag, QMI, AT, etc) which is great, but not the</i><br>
+><i> full story.</i><br>
+><i></i><br>
+><i> I think that was a big part of the discussion around Johannes' earlier</i><br>
+><i> series since it's often protocol-specific to tie a particular netdev</i><br>
+><i> with a given control port, but that's something that's really necessary</i><br>
+><i> for a good abstract userspace.</i><br>
+><i></i><br>
+><i> Thoughts here? I'd love to see that functionality too.</i><br>
+<br>
+Yes, though it's not in the scope for this initial series*, I plan to add that.<br>
+<br>
+I was thinking about introducing a wwan_register_ndev or<br>
+wwan_attach_ndev. Most of the time, netdev does not have reference to<br>
+related existing (or future) control ports (they are different<br>
+drivers), so we may need something like a 'context_id' for both ndev<br>
+and control ports that can be used for linking them when necessary.<br>
+Then, this relation could be represented as e.g a sysfs link to ndev<br>
+device(s)... That's just a possible approach, I'll be happy to discuss<br>
+this further.<br>
+<br>
+* Note: Userspace tools like ModemManager are able to link control<br>
+ports and netdev by looking at the sysfs hierarchy, it's fine for<br>
+simple connection management, but probably not enough for 'multi PDN'<br>
+support for which devices may have multiple netdev and ports<br>
+targetting different 'PDN contexts'...<br>
+<br>
+Regards,<br>
+Loic<br>
+<br>
+<br>
+

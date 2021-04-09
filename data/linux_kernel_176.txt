@@ -1,0 +1,9 @@
+On Mon, Apr 05, 2021 at 08:10:46AM -0700, kan.liang@xxxxxxxxxxxxxxx wrote:<br>
+><i> +#define is_hybrid()			(!!x86_pmu.num_hybrid_pmus)</i><br>
+<br>
+Given this is sprinkled all over the place, can you make this a<br>
+static_key_false + static_branch_unlikely() such that the hybrid case is<br>
+out-of-line?<br>
+<br>
+<br>
+

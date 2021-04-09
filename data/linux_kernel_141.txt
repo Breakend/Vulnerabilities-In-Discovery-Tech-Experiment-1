@@ -1,0 +1,55 @@
+Add CPUFreq support to SDX55 platform using the cpufreq-dt driver.<br>
+There is no dedicated hardware block available on this platform to<br>
+carry on the CPUFreq duties. Hence, it is accomplished using the CPU<br>
+clock and regulators tied together by the operating points table.<br>
+<br>
+Signed-off-by: Manivannan Sadhasivam <manivannan.sadhasivam@xxxxxxxxxx><br>
+---<br>
+ arch/arm/boot/dts/qcom-sdx55.dtsi | 29 +++++++++++++++++++++++++++++<br>
+ 1 file changed, 29 insertions(+)<br>
+<br>
+diff --git a/arch/arm/boot/dts/qcom-sdx55.dtsi b/arch/arm/boot/dts/qcom-sdx55.dtsi<br>
+index 8112a5283ce2..20cb2c903a91 100644<br>
+--- a/arch/arm/boot/dts/qcom-sdx55.dtsi<br>
++++ b/arch/arm/boot/dts/qcom-sdx55.dtsi<br>
+@@ -53,6 +53,35 @@ cpu0: cpu@0 {<br>
+ 			compatible = "arm,cortex-a7";<br>
+ 			reg = <0x0>;<br>
+ 			enable-method = "psci";<br>
++			clocks = <&apcs>;<br>
++			power-domains = <&rpmhpd SDX55_CX>;<br>
++			power-domain-names = "rpmhpd";<br>
++			operating-points-v2 = <&cpu_opp_table>;<br>
++		};<br>
++	};<br>
++<br>
++	cpu_opp_table: cpu-opp-table {<br>
++		compatible = "operating-points-v2";<br>
++		opp-shared;<br>
++<br>
++		opp-345600000 {<br>
++			opp-hz = /bits/ 64 <345600000>;<br>
++			required-opps = <&rpmhpd_opp_low_svs>;<br>
++		};<br>
++<br>
++		opp-576000000 {<br>
++			opp-hz = /bits/ 64 <576000000>;<br>
++			required-opps = <&rpmhpd_opp_svs>;<br>
++		};<br>
++<br>
++		opp-1094400000 {<br>
++			opp-hz = /bits/ 64 <1094400000>;<br>
++			required-opps = <&rpmhpd_opp_nom>;<br>
++		};<br>
++<br>
++		opp-1555200000 {<br>
++			opp-hz = /bits/ 64 <1555200000>;<br>
++			required-opps = <&rpmhpd_opp_turbo>;<br>
+ 		};<br>
+ 	};<br>
+ <br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

@@ -1,0 +1,27 @@
+Fix to return a negative error code from the error handling<br>
+case instead of 0, as done elsewhere in this function.<br>
+<br>
+Fixes: 3a253caaad11 ("char: tpm: add i2c driver for cr50")<br>
+Reported-by: Hulk Robot <hulkci@xxxxxxxxxx><br>
+Signed-off-by: Zhihao Cheng <chengzhihao1@xxxxxxxxxx><br>
+---<br>
+ drivers/char/tpm/tpm_tis_i2c_cr50.c | 1 +<br>
+ 1 file changed, 1 insertion(+)<br>
+<br>
+diff --git a/drivers/char/tpm/tpm_tis_i2c_cr50.c b/drivers/char/tpm/tpm_tis_i2c_cr50.c<br>
+index ec9a65e7887d..e908da78fbf4 100644<br>
+--- a/drivers/char/tpm/tpm_tis_i2c_cr50.c<br>
++++ b/drivers/char/tpm/tpm_tis_i2c_cr50.c<br>
+@@ -483,6 +483,7 @@ static int tpm_cr50_i2c_tis_recv(struct tpm_chip *chip, u8 *buf, size_t buf_len)<br>
+ 	expected = be32_to_cpup((__be32 *)(buf + 2));<br>
+ 	if (expected > buf_len) {<br>
+ 		dev_err(&chip->dev, "Buffer too small to receive i2c data\n");<br>
++		rc = -EIO;<br>
+ 		goto out_err;<br>
+ 	}<br>
+ <br>
+-- <br>
+2.25.4<br>
+<br>
+<br>
+

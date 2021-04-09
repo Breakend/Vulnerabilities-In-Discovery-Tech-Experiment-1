@@ -1,0 +1,392 @@
+tree/branch: <a  rel="nofollow" href="https://git.kernel.org/pub/scm/linux/kernel/git/paulmck/linux-rcu.git">https://git.kernel.org/pub/scm/linux/kernel/git/paulmck/linux-rcu.git</a> dev.2021.04.02a<br>
+branch HEAD: 4bc4fd6b7e87ff0bdb1aa2493af85be2784717c0  rcu: Fix RCU priority boosting and add more debug output<br>
+<br>
+Error/Warning reports:<br>
+<br>
+<a  rel="nofollow" href="https://lore.kernel.org/lkml/202104081002.GeatLTuT-lkp@xxxxxxxxx">https://lore.kernel.org/lkml/202104081002.GeatLTuT-lkp@xxxxxxxxx</a><br>
+<a  rel="nofollow" href="https://lore.kernel.org/lkml/202104081118.JbLGAuB9-lkp@xxxxxxxxx">https://lore.kernel.org/lkml/202104081118.JbLGAuB9-lkp@xxxxxxxxx</a><br>
+<br>
+Error/Warning in current branch:<br>
+<br>
+ia64-linux-ld: (.text+0xf9a2): undefined reference to `rcu_spawn_one_boost_kthread'<br>
+kernel/rcu/tree.h:420:13: warning: 'rcu_spawn_one_boost_kthread' used but never defined<br>
+<br>
+possible Error/Warning in current branch:<br>
+<br>
+arc-elf-ld: tree.c:(.text+0x60fe): undefined reference to `rcu_spawn_one_boost_kthread'<br>
+arc-elf-ld: tree.c:(.text+0x6ad6): undefined reference to `rcu_spawn_one_boost_kthread'<br>
+kernel/rcu/tree.c:4205: undefined reference to `rcu_spawn_one_boost_kthread'<br>
+kernel/rcu/tree.h:420:13: warning: function 'rcu_spawn_one_boost_kthread' has internal linkage but is not defined [-Wundefined-internal]<br>
+nds32le-linux-ld: tree.c:(.text+0x6afa): undefined reference to `rcu_spawn_one_boost_kthread'<br>
+tree.c:(.text+0x1b190): undefined reference to `rcu_spawn_one_boost_kthread'<br>
+tree.c:(.text+0x1b1b0): undefined reference to `rcu_spawn_one_boost_kthread'<br>
+tree.c:(.text+0x200c): undefined reference to `rcu_spawn_one_boost_kthread'<br>
+tree.c:(.text+0x24d6): undefined reference to `rcu_spawn_one_boost_kthread'<br>
+tree.c:(.text+0x3571): undefined reference to `rcu_spawn_one_boost_kthread'<br>
+tree.c:(.text+0x4756): undefined reference to `rcu_spawn_one_boost_kthread'<br>
+tree.c:(.text+0x492a): undefined reference to `rcu_spawn_one_boost_kthread'<br>
+tree.c:(.text+0x67c0): undefined reference to `rcu_spawn_one_boost_kthread'<br>
+tree.c:(.text+0x8110): undefined reference to `rcu_spawn_one_boost_kthread'<br>
+tree.c:(.text+0xb1fc): undefined reference to `rcu_spawn_one_boost_kthread'<br>
+<br>
+Error/Warning ids grouped by kconfigs:<br>
+<br>
+gcc_recent_errors<br>
+|-- alpha-allmodconfig<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- alpha-allyesconfig<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- alpha-randconfig-r026-20210407<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- arc-allyesconfig<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- arc-axs101_defconfig<br>
+|   |-- arc-elf-ld:tree.c:(.text):undefined-reference-to-rcu_spawn_one_boost_kthread<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- arc-defconfig<br>
+|   |-- arc-elf-ld:tree.c:(.text):undefined-reference-to-rcu_spawn_one_boost_kthread<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- arc-randconfig-r012-20210407<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- arm-allmodconfig<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- arm-allyesconfig<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- arm-defconfig<br>
+|   |-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|   `-- tree.c:(.text):undefined-reference-to-rcu_spawn_one_boost_kthread<br>
+|-- arm-keystone_defconfig<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- arm-mvebu_v7_defconfig<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- arm-omap2plus_defconfig<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- arm-oxnas_v6_defconfig<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- arm-randconfig-r033-20210407<br>
+|   |-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|   `-- tree.c:(.text):undefined-reference-to-rcu_spawn_one_boost_kthread<br>
+|-- arm-shmobile_defconfig<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- arm-trizeps4_defconfig<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- arm-u8500_defconfig<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- arm64-allmodconfig<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- arm64-allyesconfig<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- arm64-defconfig<br>
+|   |-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|   `-- tree.c:(.text):undefined-reference-to-rcu_spawn_one_boost_kthread<br>
+|-- arm64-randconfig-c024-20210407<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- arm64-randconfig-r011-20210407<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- arm64-randconfig-r014-20210407<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- arm64-randconfig-r021-20210407<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- arm64-randconfig-r023-20210407<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- arm64-randconfig-r024-20210407<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- arm64-randconfig-r026-20210407<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- h8300-randconfig-c004-20210407<br>
+|   |-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|   `-- tree.c:(.text):undefined-reference-to-rcu_spawn_one_boost_kthread<br>
+|-- h8300-randconfig-r016-20210407<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- i386-allmodconfig<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- i386-allyesconfig<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- i386-defconfig<br>
+|   |-- kernel-rcu-tree.c:undefined-reference-to-rcu_spawn_one_boost_kthread<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- i386-randconfig-a002-20210407<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- i386-randconfig-a004-20210407<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- i386-randconfig-a006-20210407<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- i386-randconfig-a011-20210407<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- i386-randconfig-a014-20210407<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- i386-randconfig-a016-20210407<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- i386-randconfig-c001-20210407<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- i386-randconfig-r006-20210407<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- i386-randconfig-s002-20210407<br>
+|   |-- kernel-rcu-tree.c:undefined-reference-to-rcu_spawn_one_boost_kthread<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- ia64-allmodconfig<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- ia64-allyesconfig<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- ia64-defconfig<br>
+|   |-- ia64-linux-ld:(.text):undefined-reference-to-rcu_spawn_one_boost_kthread<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- ia64-randconfig-r014-20210407<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- ia64-randconfig-r015-20210407<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- ia64-randconfig-r033-20210407<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- ia64-randconfig-r035-20210407<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- microblaze-randconfig-r004-20210407<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- mips-allmodconfig<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- mips-allyesconfig<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- mips-bmips_be_defconfig<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- mips-ci20_defconfig<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- mips-loongson3_defconfig<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- mips-maltaup_defconfig<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- mips-nlm_xlr_defconfig<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- mips-pistachio_defconfig<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- nds32-defconfig<br>
+|   |-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|   `-- nds32le-linux-ld:tree.c:(.text):undefined-reference-to-rcu_spawn_one_boost_kthread<br>
+|-- openrisc-allmodconfig<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- openrisc-allyesconfig<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- parisc-allyesconfig<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- parisc-defconfig<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- parisc-randconfig-r022-20210407<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- parisc-randconfig-r032-20210407<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- powerpc-allmodconfig<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- powerpc-allyesconfig<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- powerpc-randconfig-r016-20210407<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- riscv-allmodconfig<br>
+|   |-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|   `-- tree.c:(.text):undefined-reference-to-rcu_spawn_one_boost_kthread<br>
+|-- riscv-allyesconfig<br>
+|   |-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|   `-- tree.c:(.text):undefined-reference-to-rcu_spawn_one_boost_kthread<br>
+|-- riscv-defconfig<br>
+|   |-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|   `-- tree.c:(.text):undefined-reference-to-rcu_spawn_one_boost_kthread<br>
+|-- riscv-nommu_k210_defconfig<br>
+|   |-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|   `-- tree.c:(.text):undefined-reference-to-rcu_spawn_one_boost_kthread<br>
+|-- riscv-nommu_k210_sdcard_defconfig<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- riscv-nommu_virt_defconfig<br>
+|   |-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|   `-- tree.c:(.text):undefined-reference-to-rcu_spawn_one_boost_kthread<br>
+|-- riscv-randconfig-s031-20210407<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- riscv-rv32_defconfig<br>
+|   |-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|   `-- tree.c:(.text):undefined-reference-to-rcu_spawn_one_boost_kthread<br>
+|-- s390-allmodconfig<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- s390-allyesconfig<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- s390-defconfig<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- s390-randconfig-r014-20210407<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- s390-randconfig-r016-20210407<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- s390-randconfig-r023-20210407<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- sh-randconfig-c004-20210407<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- sh-randconfig-r013-20210407<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- sparc-allyesconfig<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- sparc-randconfig-p001-20210407<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- sparc-randconfig-r011-20210407<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- sparc64-randconfig-r021-20210407<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- sparc64-randconfig-r025-20210407<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- x86_64-allmodconfig<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- x86_64-allyesconfig<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- x86_64-defconfig<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- x86_64-kexec<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- x86_64-randconfig-a011-20210407<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- x86_64-randconfig-a013-20210407<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- x86_64-randconfig-a014-20210407<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- x86_64-randconfig-a016-20210407<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- x86_64-randconfig-c022-20210407<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- x86_64-randconfig-c023-20210407<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- x86_64-randconfig-s021-20210407<br>
+|   |-- kernel-rcu-tree.c:undefined-reference-to-rcu_spawn_one_boost_kthread<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- x86_64-rhel-8.3<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- x86_64-rhel-8.3-kbuiltin<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- x86_64-rhel-8.3-kselftests<br>
+|   |-- kernel-rcu-tree.c:undefined-reference-to-rcu_spawn_one_boost_kthread<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+|-- xtensa-randconfig-r011-20210407<br>
+|   `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+`-- xtensa-randconfig-r035-20210407<br>
+    `-- kernel-rcu-tree.h:warning:rcu_spawn_one_boost_kthread-used-but-never-defined<br>
+<br>
+clang_recent_errors<br>
+`-- s390-randconfig-r034-20210407<br>
+    `-- kernel-rcu-tree.h:warning:function-rcu_spawn_one_boost_kthread-has-internal-linkage-but-is-not-defined<br>
+<br>
+elapsed time: 720m<br>
+<br>
+configs tested: 112<br>
+configs skipped: 2<br>
+<br>
+gcc tested configs:<br>
+arm                                 defconfig<br>
+arm64                            allyesconfig<br>
+arm64                               defconfig<br>
+arm                              allyesconfig<br>
+arm                              allmodconfig<br>
+x86_64                           allyesconfig<br>
+riscv                            allmodconfig<br>
+riscv                            allyesconfig<br>
+arm                         hackkit_defconfig<br>
+arm                           u8500_defconfig<br>
+mips                       bmips_be_defconfig<br>
+arm                           h5000_defconfig<br>
+mips                      loongson3_defconfig<br>
+ia64                             allyesconfig<br>
+arc                          axs101_defconfig<br>
+powerpc                      chrp32_defconfig<br>
+arm                        keystone_defconfig<br>
+alpha                            allyesconfig<br>
+sh                            shmin_defconfig<br>
+mips                           ci20_defconfig<br>
+arm                        oxnas_v6_defconfig<br>
+powerpc                      ppc44x_defconfig<br>
+powerpc                     mpc5200_defconfig<br>
+arm                       omap2plus_defconfig<br>
+csky                                defconfig<br>
+arm                        mvebu_v7_defconfig<br>
+arm                        neponset_defconfig<br>
+m68k                        stmark2_defconfig<br>
+arm                        spear3xx_defconfig<br>
+arm                  colibri_pxa300_defconfig<br>
+sh                          kfr2r09_defconfig<br>
+arm                      footbridge_defconfig<br>
+xtensa                           alldefconfig<br>
+powerpc                       maple_defconfig<br>
+arm                        shmobile_defconfig<br>
+mips                        maltaup_defconfig<br>
+riscv             nommu_k210_sdcard_defconfig<br>
+mips                malta_kvm_guest_defconfig<br>
+powerpc                      tqm8xx_defconfig<br>
+powerpc                     tqm8541_defconfig<br>
+mips                            ar7_defconfig<br>
+powerpc                        fsp2_defconfig<br>
+um                               allyesconfig<br>
+nios2                         3c120_defconfig<br>
+powerpc                      ppc40x_defconfig<br>
+mips                        nlm_xlr_defconfig<br>
+sh                         ap325rxa_defconfig<br>
+powerpc                 mpc832x_mds_defconfig<br>
+powerpc                      bamboo_defconfig<br>
+arm                          iop32x_defconfig<br>
+mips                      pistachio_defconfig<br>
+arm                        trizeps4_defconfig<br>
+ia64                             allmodconfig<br>
+ia64                                defconfig<br>
+m68k                             allmodconfig<br>
+m68k                                defconfig<br>
+m68k                             allyesconfig<br>
+nios2                               defconfig<br>
+arc                              allyesconfig<br>
+nds32                             allnoconfig<br>
+nds32                               defconfig<br>
+nios2                            allyesconfig<br>
+alpha                               defconfig<br>
+xtensa                           allyesconfig<br>
+h8300                            allyesconfig<br>
+arc                                 defconfig<br>
+sh                               allmodconfig<br>
+parisc                              defconfig<br>
+s390                             allyesconfig<br>
+s390                             allmodconfig<br>
+parisc                           allyesconfig<br>
+s390                                defconfig<br>
+i386                             allyesconfig<br>
+sparc                            allyesconfig<br>
+sparc                               defconfig<br>
+i386                                defconfig<br>
+mips                             allyesconfig<br>
+mips                             allmodconfig<br>
+powerpc                          allyesconfig<br>
+powerpc                          allmodconfig<br>
+powerpc                           allnoconfig<br>
+i386                 randconfig-a006-20210407<br>
+i386                 randconfig-a003-20210407<br>
+i386                 randconfig-a001-20210407<br>
+i386                 randconfig-a004-20210407<br>
+i386                 randconfig-a002-20210407<br>
+i386                 randconfig-a005-20210407<br>
+x86_64               randconfig-a014-20210407<br>
+x86_64               randconfig-a015-20210407<br>
+x86_64               randconfig-a013-20210407<br>
+x86_64               randconfig-a011-20210407<br>
+x86_64               randconfig-a012-20210407<br>
+x86_64               randconfig-a016-20210407<br>
+i386                 randconfig-a014-20210407<br>
+i386                 randconfig-a011-20210407<br>
+i386                 randconfig-a016-20210407<br>
+i386                 randconfig-a012-20210407<br>
+i386                 randconfig-a015-20210407<br>
+i386                 randconfig-a013-20210407<br>
+riscv                    nommu_k210_defconfig<br>
+riscv                    nommu_virt_defconfig<br>
+riscv                             allnoconfig<br>
+riscv                               defconfig<br>
+riscv                          rv32_defconfig<br>
+um                               allmodconfig<br>
+um                                allnoconfig<br>
+um                                  defconfig<br>
+x86_64                    rhel-8.3-kselftests<br>
+x86_64                              defconfig<br>
+x86_64                               rhel-8.3<br>
+x86_64                      rhel-8.3-kbuiltin<br>
+x86_64                                  kexec<br>
+<br>
+---<br>
+0-DAY CI Kernel Test Service, Intel Corporation<br>
+<a  rel="nofollow" href="https://lists.01.org/hyperkitty/list/kbuild-all@xxxxxxxxxxxx">https://lists.01.org/hyperkitty/list/kbuild-all@xxxxxxxxxxxx</a><br>
+<br>
+<br>
+

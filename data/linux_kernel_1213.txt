@@ -1,0 +1,116 @@
+Hi, Matthias<br>
+<br>
+On Tue, 2021-04-06 at 15:43 +0200, Matthias Brugger wrote:<br>
+><i> Regarding the commit subject:</i><br>
+><i> "soc: mediatek: devapc: rename variable for new IC support"</i><br>
+><i> maybe something like:</i><br>
+><i> "soc: mediatek: devapc: rename register variable infra_base"</i><br>
+><i> </i><br>
+><i> Other then that looks good to me.</i><br>
+><i> </i><br>
+<br>
+OK. I will fix it in the next version.<br>
+<br>
+Thanks<br>
+<br>
+><i> On 01/04/2021 08:38, Nina Wu wrote:</i><br>
+><i> > From: Nina Wu <Nina-CM.Wu@xxxxxxxxxxxx></i><br>
+><i> > </i><br>
+><i> > For new ICs, there are multiple devapc HWs for different subsys.</i><br>
+><i> > For example, there is devapc respectively for infra, peri, peri2, etc.</i><br>
+><i> > So we rename the variable 'infra_base' to 'base' for code readability.</i><br>
+><i> > </i><br>
+><i> > Signed-off-by: Nina Wu <Nina-CM.Wu@xxxxxxxxxxxx></i><br>
+><i> > ---</i><br>
+><i> >  drivers/soc/mediatek/mtk-devapc.c | 24 ++++++++++++------------</i><br>
+><i> >  1 file changed, 12 insertions(+), 12 deletions(-)</i><br>
+><i> > </i><br>
+><i> > diff --git a/drivers/soc/mediatek/mtk-devapc.c b/drivers/soc/mediatek/mtk-devapc.c</i><br>
+><i> > index 68c3e35..bcf6e3c 100644</i><br>
+><i> > --- a/drivers/soc/mediatek/mtk-devapc.c</i><br>
+><i> > +++ b/drivers/soc/mediatek/mtk-devapc.c</i><br>
+><i> > @@ -45,7 +45,7 @@ struct mtk_devapc_data {</i><br>
+><i> >  </i><br>
+><i> >  struct mtk_devapc_context {</i><br>
+><i> >  	struct device *dev;</i><br>
+><i> > -	void __iomem *infra_base;</i><br>
+><i> > +	void __iomem *base;</i><br>
+><i> >  	u32 vio_idx_num;</i><br>
+><i> >  	struct clk *infra_clk;</i><br>
+><i> >  	const struct mtk_devapc_data *data;</i><br>
+><i> > @@ -56,7 +56,7 @@ static void clear_vio_status(struct mtk_devapc_context *ctx)</i><br>
+><i> >  	void __iomem *reg;</i><br>
+><i> >  	int i;</i><br>
+><i> >  </i><br>
+><i> > -	reg = ctx->infra_base + ctx->data->vio_sta_offset;</i><br>
+><i> > +	reg = ctx->base + ctx->data->vio_sta_offset;</i><br>
+><i> >  </i><br>
+><i> >  	for (i = 0; i < VIO_MOD_TO_REG_IND(ctx->vio_idx_num - 1); i++)</i><br>
+><i> >  		writel(GENMASK(31, 0), reg + 4 * i);</i><br>
+><i> > @@ -71,7 +71,7 @@ static void mask_module_irq(struct mtk_devapc_context *ctx, bool mask)</i><br>
+><i> >  	u32 val;</i><br>
+><i> >  	int i;</i><br>
+><i> >  </i><br>
+><i> > -	reg = ctx->infra_base + ctx->data->vio_mask_offset;</i><br>
+><i> > +	reg = ctx->base + ctx->data->vio_mask_offset;</i><br>
+><i> >  </i><br>
+><i> >  	if (mask)</i><br>
+><i> >  		val = GENMASK(31, 0);</i><br>
+><i> > @@ -113,11 +113,11 @@ static int devapc_sync_vio_dbg(struct mtk_devapc_context *ctx)</i><br>
+><i> >  	int ret;</i><br>
+><i> >  	u32 val;</i><br>
+><i> >  </i><br>
+><i> > -	pd_vio_shift_sta_reg = ctx->infra_base +</i><br>
+><i> > +	pd_vio_shift_sta_reg = ctx->base +</i><br>
+><i> >  			       ctx->data->vio_shift_sta_offset;</i><br>
+><i> > -	pd_vio_shift_sel_reg = ctx->infra_base +</i><br>
+><i> > +	pd_vio_shift_sel_reg = ctx->base +</i><br>
+><i> >  			       ctx->data->vio_shift_sel_offset;</i><br>
+><i> > -	pd_vio_shift_con_reg = ctx->infra_base +</i><br>
+><i> > +	pd_vio_shift_con_reg = ctx->base +</i><br>
+><i> >  			       ctx->data->vio_shift_con_offset;</i><br>
+><i> >  </i><br>
+><i> >  	/* Find the minimum shift group which has violation */</i><br>
+><i> > @@ -159,8 +159,8 @@ static void devapc_extract_vio_dbg(struct mtk_devapc_context *ctx)</i><br>
+><i> >  	void __iomem *vio_dbg0_reg;</i><br>
+><i> >  	void __iomem *vio_dbg1_reg;</i><br>
+><i> >  </i><br>
+><i> > -	vio_dbg0_reg = ctx->infra_base + ctx->data->vio_dbg0_offset;</i><br>
+><i> > -	vio_dbg1_reg = ctx->infra_base + ctx->data->vio_dbg1_offset;</i><br>
+><i> > +	vio_dbg0_reg = ctx->base + ctx->data->vio_dbg0_offset;</i><br>
+><i> > +	vio_dbg1_reg = ctx->base + ctx->data->vio_dbg1_offset;</i><br>
+><i> >  </i><br>
+><i> >  	vio_dbgs.vio_dbg0 = readl(vio_dbg0_reg);</i><br>
+><i> >  	vio_dbgs.vio_dbg1 = readl(vio_dbg1_reg);</i><br>
+><i> > @@ -198,7 +198,7 @@ static irqreturn_t devapc_violation_irq(int irq_number, void *data)</i><br>
+><i> >   */</i><br>
+><i> >  static void start_devapc(struct mtk_devapc_context *ctx)</i><br>
+><i> >  {</i><br>
+><i> > -	writel(BIT(31), ctx->infra_base + ctx->data->apc_con_offset);</i><br>
+><i> > +	writel(BIT(31), ctx->base + ctx->data->apc_con_offset);</i><br>
+><i> >  </i><br>
+><i> >  	mask_module_irq(ctx, false);</i><br>
+><i> >  }</i><br>
+><i> > @@ -210,7 +210,7 @@ static void stop_devapc(struct mtk_devapc_context *ctx)</i><br>
+><i> >  {</i><br>
+><i> >  	mask_module_irq(ctx, true);</i><br>
+><i> >  </i><br>
+><i> > -	writel(BIT(2), ctx->infra_base + ctx->data->apc_con_offset);</i><br>
+><i> > +	writel(BIT(2), ctx->base + ctx->data->apc_con_offset);</i><br>
+><i> >  }</i><br>
+><i> >  </i><br>
+><i> >  static const struct mtk_devapc_data devapc_mt6779 = {</i><br>
+><i> > @@ -249,8 +249,8 @@ static int mtk_devapc_probe(struct platform_device *pdev)</i><br>
+><i> >  	ctx->data = of_device_get_match_data(&pdev->dev);</i><br>
+><i> >  	ctx->dev = &pdev->dev;</i><br>
+><i> >  </i><br>
+><i> > -	ctx->infra_base = of_iomap(node, 0);</i><br>
+><i> > -	if (!ctx->infra_base)</i><br>
+><i> > +	ctx->base = of_iomap(node, 0);</i><br>
+><i> > +	if (!ctx->base)</i><br>
+><i> >  		return -EINVAL;</i><br>
+><i> >  </i><br>
+><i> >  	if (of_property_read_u32(node, "vio_idx_num", &ctx->vio_idx_num))</i><br>
+><i> > </i><br>
+<br>
+

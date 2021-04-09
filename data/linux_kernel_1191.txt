@@ -1,0 +1,44 @@
+On Wed, Apr 07, 2021 at 03:17:46PM -0500, Josh Poimboeuf wrote:<br>
+><i> On Fri, Apr 02, 2021 at 09:54:12AM +0200, Greg KH wrote:</i><br>
+><i> > On Thu, Apr 01, 2021 at 11:59:25PM +0000, Luis Chamberlain wrote:</i><br>
+><i> > > As for the syfs deadlock possible with drivers, this fixes it in a generic way:</i><br>
+><i> > > </i><br>
+><i> > > commit fac43d8025727a74f80a183cc5eb74ed902a5d14</i><br>
+><i> > > Author: Luis Chamberlain <mcgrof@xxxxxxxxxx></i><br>
+><i> > > Date:   Sat Mar 27 14:58:15 2021 +0000</i><br>
+><i> > > </i><br>
+><i> > >     sysfs: add optional module_owner to attribute</i><br>
+><i> > >     </i><br>
+><i> > >     This is needed as otherwise the owner of the attribute</i><br>
+><i> > >     or group read/store might have a shared lock used on driver removal,</i><br>
+><i> > >     and deadlock if we race with driver removal.</i><br>
+><i> > >     </i><br>
+><i> > >     Signed-off-by: Luis Chamberlain <mcgrof@xxxxxxxxxx></i><br>
+><i> > </i><br>
+><i> > No, please no.  Module removal is a "best effort", if the system dies</i><br>
+><i> > when it happens, that's on you.  I am not willing to expend extra energy</i><br>
+><i> > and maintance of core things like sysfs for stuff like this that does</i><br>
+><i> > not matter in any system other than a developer's box.</i><br>
+><i> </i><br>
+><i> So I mentioned this on IRC, and some folks were surprised to hear that</i><br>
+><i> module unloading is unsupported and is just a development aid.</i><br>
+><i> </i><br>
+><i> Is this stance documented anywhere?</i><br>
+><i> </i><br>
+><i> If we really believe this to be true, we should make rmmod taint the</i><br>
+><i> kernel.</i><br>
+<br>
+My throw-away comment here seems to have gotten way more attention than<br>
+it deserved, sorry about that everyone.<br>
+<br>
+Nothing is supported for anything here, it's all "best effort" :)<br>
+<br>
+And I would love a taint for rmmod, but what is that going to help out<br>
+with?<br>
+<br>
+thanks,<br>
+<br>
+greg k-h<br>
+<br>
+<br>
+

@@ -1,0 +1,6468 @@
+Add a VF driver for Microsoft Azure Network Adapter (MANA) that will be<br>
+available in the future.<br>
+<br>
+Co-developed-by: Haiyang Zhang <haiyangz@xxxxxxxxxxxxx><br>
+Signed-off-by: Haiyang Zhang <haiyangz@xxxxxxxxxxxxx><br>
+Signed-off-by: Dexuan Cui <decui@xxxxxxxxxxxxx><br>
+---<br>
+ MAINTAINERS                                   |    4 +-<br>
+ drivers/net/ethernet/Kconfig                  |    1 +<br>
+ drivers/net/ethernet/Makefile                 |    1 +<br>
+ drivers/net/ethernet/microsoft/Kconfig        |   30 +<br>
+ drivers/net/ethernet/microsoft/Makefile       |    5 +<br>
+ drivers/net/ethernet/microsoft/mana/Makefile  |    6 +<br>
+ drivers/net/ethernet/microsoft/mana/gdma.h    |  728 +++++++<br>
+ .../net/ethernet/microsoft/mana/gdma_main.c   | 1515 ++++++++++++++<br>
+ .../net/ethernet/microsoft/mana/hw_channel.c  |  859 ++++++++<br>
+ .../net/ethernet/microsoft/mana/hw_channel.h  |  186 ++<br>
+ drivers/net/ethernet/microsoft/mana/mana.h    |  531 +++++<br>
+ drivers/net/ethernet/microsoft/mana/mana_en.c | 1833 +++++++++++++++++<br>
+ .../ethernet/microsoft/mana/mana_ethtool.c    |  278 +++<br>
+ .../net/ethernet/microsoft/mana/shm_channel.c |  292 +++<br>
+ .../net/ethernet/microsoft/mana/shm_channel.h |   21 +<br>
+ 15 files changed, 6289 insertions(+), 1 deletion(-)<br>
+ create mode 100644 drivers/net/ethernet/microsoft/Kconfig<br>
+ create mode 100644 drivers/net/ethernet/microsoft/Makefile<br>
+ create mode 100644 drivers/net/ethernet/microsoft/mana/Makefile<br>
+ create mode 100644 drivers/net/ethernet/microsoft/mana/gdma.h<br>
+ create mode 100644 drivers/net/ethernet/microsoft/mana/gdma_main.c<br>
+ create mode 100644 drivers/net/ethernet/microsoft/mana/hw_channel.c<br>
+ create mode 100644 drivers/net/ethernet/microsoft/mana/hw_channel.h<br>
+ create mode 100644 drivers/net/ethernet/microsoft/mana/mana.h<br>
+ create mode 100644 drivers/net/ethernet/microsoft/mana/mana_en.c<br>
+ create mode 100644 drivers/net/ethernet/microsoft/mana/mana_ethtool.c<br>
+ create mode 100644 drivers/net/ethernet/microsoft/mana/shm_channel.c<br>
+ create mode 100644 drivers/net/ethernet/microsoft/mana/shm_channel.h<br>
+<br>
+<br>
+Changes in v2:<br>
+<br>
+    Removed the module_param(num_queues,...).           [Andrew Lunn]<br>
+    Changed pr_err() to netdev_err() and dev_err().     [Andrew Lunn]<br>
+    Used reverse X-mas tree style in all the functions. [Andrew Lunn]<br>
+<br>
+    Changed "= { 0 };" to "= {};" for struct variables. [Leon Romanovsky]<br>
+<br>
+    Addressed 3 build failures on i386, arc and powerpc by making the<br>
+    the driver dependent on X86_64 in Kconfig: so far, the driver is<br>
+    only validated on X86_64 (in the future, we may enable the driver<br>
+    for ARM64).<br>
+<br>
+    Also made some cosmetic changes.<br>
+<br>
+    Rebased the patch to the latest net-next.<br>
+<br>
+    BTW, the support of XDP and BQL haven't been implemented. They are on<br>
+    our TO-DO list.<br>
+<br>
+diff --git a/MAINTAINERS b/MAINTAINERS<br>
+index 217c7470bfa9..6ab1f9ac8c54 100644<br>
+--- a/MAINTAINERS<br>
++++ b/MAINTAINERS<br>
+@@ -8261,11 +8261,12 @@ S:	Maintained<br>
+ T:	git git://linuxtv.org/media_tree.git<br>
+ F:	drivers/media/i2c/hi556.c<br>
+ <br>
+-Hyper-V CORE AND DRIVERS<br>
++Hyper-V/Azure CORE AND DRIVERS<br>
+ M:	"K. Y. Srinivasan" <kys@xxxxxxxxxxxxx><br>
+ M:	Haiyang Zhang <haiyangz@xxxxxxxxxxxxx><br>
+ M:	Stephen Hemminger <sthemmin@xxxxxxxxxxxxx><br>
+ M:	Wei Liu <wei.liu@xxxxxxxxxx><br>
++M:	Dexuan Cui <decui@xxxxxxxxxxxxx><br>
+ L:	linux-hyperv@xxxxxxxxxxxxxxx<br>
+ S:	Supported<br>
+ T:	git git://git.kernel.org/pub/scm/linux/kernel/git/hyperv/linux.git<br>
+@@ -8282,6 +8283,7 @@ F:	drivers/hid/hid-hyperv.c<br>
+ F:	drivers/hv/<br>
+ F:	drivers/input/serio/hyperv-keyboard.c<br>
+ F:	drivers/iommu/hyperv-iommu.c<br>
++F:	drivers/net/ethernet/microsoft/<br>
+ F:	drivers/net/hyperv/<br>
+ F:	drivers/pci/controller/pci-hyperv-intf.c<br>
+ F:	drivers/pci/controller/pci-hyperv.c<br>
+diff --git a/drivers/net/ethernet/Kconfig b/drivers/net/ethernet/Kconfig<br>
+index 4b85f2b74872..d46460c5b44d 100644<br>
+--- a/drivers/net/ethernet/Kconfig<br>
++++ b/drivers/net/ethernet/Kconfig<br>
+@@ -82,6 +82,7 @@ source "drivers/net/ethernet/huawei/Kconfig"<br>
+ source "drivers/net/ethernet/i825xx/Kconfig"<br>
+ source "drivers/net/ethernet/ibm/Kconfig"<br>
+ source "drivers/net/ethernet/intel/Kconfig"<br>
++source "drivers/net/ethernet/microsoft/Kconfig"<br>
+ source "drivers/net/ethernet/xscale/Kconfig"<br>
+ <br>
+ config JME<br>
+diff --git a/drivers/net/ethernet/Makefile b/drivers/net/ethernet/Makefile<br>
+index 9394493e8187..cb3f9084a21b 100644<br>
+--- a/drivers/net/ethernet/Makefile<br>
++++ b/drivers/net/ethernet/Makefile<br>
+@@ -45,6 +45,7 @@ obj-$(CONFIG_NET_VENDOR_HUAWEI) += huawei/<br>
+ obj-$(CONFIG_NET_VENDOR_IBM) += ibm/<br>
+ obj-$(CONFIG_NET_VENDOR_INTEL) += intel/<br>
+ obj-$(CONFIG_NET_VENDOR_I825XX) += i825xx/<br>
++obj-$(CONFIG_NET_VENDOR_MICROSOFT) += microsoft/<br>
+ obj-$(CONFIG_NET_VENDOR_XSCALE) += xscale/<br>
+ obj-$(CONFIG_JME) += jme.o<br>
+ obj-$(CONFIG_KORINA) += korina.o<br>
+diff --git a/drivers/net/ethernet/microsoft/Kconfig b/drivers/net/ethernet/microsoft/Kconfig<br>
+new file mode 100644<br>
+index 000000000000..12ef6b581566<br>
+--- /dev/null<br>
++++ b/drivers/net/ethernet/microsoft/Kconfig<br>
+@@ -0,0 +1,30 @@<br>
++#<br>
++# Microsoft Azure network device configuration<br>
++#<br>
++<br>
++config NET_VENDOR_MICROSOFT<br>
++	bool "Microsoft Azure Network Device"<br>
++	default y<br>
++	help<br>
++	  If you have a network (Ethernet) device belonging to this class, say Y.<br>
++<br>
++	  Note that the answer to this question doesn't directly affect the<br>
++	  kernel: saying N will just cause the configurator to skip the<br>
++	  question about Microsoft Azure network device. If you say Y, you<br>
++	  will be asked for your specific device in the following question.<br>
++<br>
++if NET_VENDOR_MICROSOFT<br>
++<br>
++config MICROSOFT_MANA<br>
++	tristate "Microsoft Azure Network Adapter (MANA) support"<br>
++	default m<br>
++	depends on PCI_MSI && X86_64<br>
++	select PCI_HYPERV<br>
++	help<br>
++	  This driver supports Microsoft Azure Network Adapter (MANA).<br>
++	  So far, the driver is only validated on X86_64.<br>
++<br>
++	  To compile this driver as a module, choose M here.<br>
++	  The module will be called mana.<br>
++<br>
++endif #NET_VENDOR_MICROSOFT<br>
+diff --git a/drivers/net/ethernet/microsoft/Makefile b/drivers/net/ethernet/microsoft/Makefile<br>
+new file mode 100644<br>
+index 000000000000..d2ddc218135f<br>
+--- /dev/null<br>
++++ b/drivers/net/ethernet/microsoft/Makefile<br>
+@@ -0,0 +1,5 @@<br>
++#<br>
++# Makefile for the Microsoft Azure network device driver.<br>
++#<br>
++<br>
++obj-$(CONFIG_MICROSOFT_MANA) += mana/<br>
+diff --git a/drivers/net/ethernet/microsoft/mana/Makefile b/drivers/net/ethernet/microsoft/mana/Makefile<br>
+new file mode 100644<br>
+index 000000000000..0edd5bb685f3<br>
+--- /dev/null<br>
++++ b/drivers/net/ethernet/microsoft/mana/Makefile<br>
+@@ -0,0 +1,6 @@<br>
++# SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause<br>
++#<br>
++# Makefile for the Microsoft Azure Network Adapter driver<br>
++<br>
++obj-$(CONFIG_MICROSOFT_MANA) += mana.o<br>
++mana-objs := gdma_main.o shm_channel.o hw_channel.o mana_en.o mana_ethtool.o<br>
+diff --git a/drivers/net/ethernet/microsoft/mana/gdma.h b/drivers/net/ethernet/microsoft/mana/gdma.h<br>
+new file mode 100644<br>
+index 000000000000..432229d8e827<br>
+--- /dev/null<br>
++++ b/drivers/net/ethernet/microsoft/mana/gdma.h<br>
+@@ -0,0 +1,728 @@<br>
++/* SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause */<br>
++/* Copyright (c) 2021, Microsoft Corporation. */<br>
++<br>
++#ifndef _GDMA_H<br>
++#define _GDMA_H<br>
++<br>
++#include <linux/dma-mapping.h><br>
++#include <linux/netdevice.h><br>
++<br>
++#include "shm_channel.h"<br>
++<br>
++enum gdma_request_type {<br>
++	GDMA_VERIFY_VF_DRIVER_VERSION	= 1,<br>
++	GDMA_QUERY_MAX_RESOURCES	= 2,<br>
++	GDMA_LIST_DEVICES		= 3,<br>
++	GDMA_REGISTER_DEVICE		= 4,<br>
++	GDMA_DEREGISTER_DEVICE		= 5,<br>
++	GDMA_GENERATE_TEST_EQE		= 10,<br>
++	GDMA_CREATE_QUEUE		= 12,<br>
++	GDMA_DISABLE_QUEUE		= 13,<br>
++	GDMA_CREATE_DMA_REGION		= 25,<br>
++	GDMA_DMA_REGION_ADD_PAGES	= 26,<br>
++	GDMA_DESTROY_DMA_REGION		= 27,<br>
++};<br>
++<br>
++enum gdma_queue_type {<br>
++	GDMA_INVALID_QUEUE,<br>
++	GDMA_SQ,<br>
++	GDMA_RQ,<br>
++	GDMA_CQ,<br>
++	GDMA_EQ,<br>
++};<br>
++<br>
++enum gdma_work_request_flags {<br>
++	GDMA_WR_NONE			= 0,<br>
++	GDMA_WR_OOB_IN_SGL		= BIT(0),<br>
++	GDMA_WR_SGL_DIRECT		= BIT(1),<br>
++	GDMA_WR_CONSUME_CREDIT		= BIT(2),<br>
++	GDMA_WR_FENCE			= BIT(3),<br>
++	GDMA_WR_CHECK_SN		= BIT(4),<br>
++	GDMA_WR_PAD_DATA_BY_FIRST_SGE	= BIT(5),<br>
++};<br>
++<br>
++enum gdma_eqe_type {<br>
++	GDMA_EQE_COMPLETION		= 3,<br>
++	GDMA_EQE_TEST_EVENT		= 64,<br>
++	GDMA_EQE_SOC_TO_VF_EVENT	= 128,<br>
++	GDMA_EQE_HWC_INIT_EQ_ID_DB	= 129,<br>
++	GDMA_EQE_HWC_INIT_DATA		= 130,<br>
++	GDMA_EQE_HWC_INIT_DONE		= 131,<br>
++	GDMA_EQE_APP_START		= 132,<br>
++	GDMA_EQE_APP_END		= 255,<br>
++};<br>
++<br>
++enum {<br>
++	GDMA_DEVICE_NONE = 0,<br>
++	GDMA_DEVICE_HWC = 1,<br>
++	GDMA_DEVICE_ANA = 2,<br>
++};<br>
++<br>
++struct gdma_resource {<br>
++	/* Protect the bitmap */<br>
++	spinlock_t lock;<br>
++<br>
++	/* The bitmap size in bits. */<br>
++	u32 size;<br>
++<br>
++	/* The bitmap tracks the resources. */<br>
++	unsigned long *map;<br>
++};<br>
++<br>
++union gdma_doorbell_entry {<br>
++	u64	as_uint64;<br>
++<br>
++	struct {<br>
++		u64 id		: 24;<br>
++		u64 reserved	: 8;<br>
++		u64 tail_ptr	: 31;<br>
++		u64 arm		: 1;<br>
++	} cq;<br>
++<br>
++	struct {<br>
++		u64 id		: 24;<br>
++		u64 wqe_cnt	: 8;<br>
++		u64 tail_ptr	: 32;<br>
++	} rq;<br>
++<br>
++	struct {<br>
++		u64 id		: 24;<br>
++		u64 reserved	: 8;<br>
++		u64 tail_ptr	: 32;<br>
++	} sq;<br>
++<br>
++	struct {<br>
++		u64 id		: 16;<br>
++		u64 reserved	: 16;<br>
++		u64 tail_ptr	: 31;<br>
++		u64 arm		: 1;<br>
++	} eq;<br>
++} __packed;<br>
++<br>
++struct gdma_msg_hdr {<br>
++	u32 hdr_type;<br>
++	u32 msg_type;<br>
++	u16 msg_version;<br>
++	u16 hwc_msg_id;<br>
++	u32 msg_size;<br>
++} __packed;<br>
++<br>
++struct gdma_dev_id {<br>
++	union {<br>
++		struct {<br>
++			u16 type;<br>
++			u16 instance;<br>
++		};<br>
++<br>
++		u32 as_uint32;<br>
++	};<br>
++} __packed;<br>
++<br>
++struct gdma_req_hdr {<br>
++	struct gdma_msg_hdr req;<br>
++	struct gdma_msg_hdr resp; /* The expected response */<br>
++	struct gdma_dev_id dev_id;<br>
++	u32 activity_id;<br>
++} __packed;<br>
++<br>
++struct gdma_resp_hdr {<br>
++	struct gdma_msg_hdr response;<br>
++	struct gdma_dev_id dev_id;<br>
++	u32 activity_id;<br>
++	u32 status;<br>
++	u32 reserved;<br>
++} __packed;<br>
++<br>
++struct gdma_general_req {<br>
++	struct gdma_req_hdr hdr;<br>
++} __packed;<br>
++<br>
++#define GDMA_MESSAGE_V1 1<br>
++<br>
++struct gdma_general_resp {<br>
++	struct gdma_resp_hdr hdr;<br>
++} __packed;<br>
++<br>
++#define GDMA_STANDARD_HEADER_TYPE 0<br>
++<br>
++static inline void gdma_init_req_hdr(struct gdma_req_hdr *hdr, u32 code,<br>
++				     u32 req_size, u32 resp_size)<br>
++{<br>
++	hdr->req.hdr_type = GDMA_STANDARD_HEADER_TYPE;<br>
++	hdr->req.msg_type = code;<br>
++	hdr->req.msg_version = GDMA_MESSAGE_V1;<br>
++	hdr->req.msg_size = req_size;<br>
++<br>
++	hdr->resp.hdr_type = GDMA_STANDARD_HEADER_TYPE;<br>
++	hdr->resp.msg_type = code;<br>
++	hdr->resp.msg_version = GDMA_MESSAGE_V1;<br>
++	hdr->resp.msg_size = resp_size;<br>
++}<br>
++<br>
++static inline bool is_gdma_msg(const void *req)<br>
++{<br>
++	struct gdma_req_hdr *hdr = (struct gdma_req_hdr *)req;<br>
++<br>
++	if (hdr->req.hdr_type == GDMA_STANDARD_HEADER_TYPE &&<br>
++	    hdr->resp.hdr_type == GDMA_STANDARD_HEADER_TYPE &&<br>
++	    hdr->req.msg_size >= sizeof(struct gdma_req_hdr) &&<br>
++	    hdr->resp.msg_size >= sizeof(struct gdma_resp_hdr) &&<br>
++	    hdr->req.msg_type != 0 && hdr->resp.msg_type != 0)<br>
++		return true;<br>
++<br>
++	return false;<br>
++}<br>
++<br>
++static inline bool is_gdma_msg_len(const u32 req_len, const u32 resp_len,<br>
++				   const void *req)<br>
++{<br>
++	struct gdma_req_hdr *hdr = (struct gdma_req_hdr *)req;<br>
++<br>
++	if (req_len >= sizeof(struct gdma_req_hdr) &&<br>
++	    resp_len >= sizeof(struct gdma_resp_hdr) &&<br>
++	    req_len >= hdr->req.msg_size && resp_len >= hdr->resp.msg_size &&<br>
++	    is_gdma_msg(req)) {<br>
++		return true;<br>
++	}<br>
++<br>
++	return false;<br>
++}<br>
++<br>
++/* The 16-byte struct is part of the GDMA work queue entry (WQE). */<br>
++struct gdma_sge {<br>
++	u64 address;<br>
++	u32 mem_key;<br>
++	u32 size;<br>
++} __packed;<br>
++<br>
++struct gdma_wqe_request {<br>
++	struct gdma_sge *sgl;<br>
++	u32 num_sge;<br>
++<br>
++	u32 inline_oob_size;<br>
++	const void *inline_oob_data;<br>
++<br>
++	u32 flags;<br>
++	u32 client_data_unit;<br>
++};<br>
++<br>
++enum GDMA_PAGE_TYPE {<br>
++	GDMA_PAGE_TYPE_4K,<br>
++	GDMA_PAGE_TYPE_8K,<br>
++	GDMA_PAGE_TYPE_16K,<br>
++	GDMA_PAGE_TYPE_32K,<br>
++	GDMA_PAGE_TYPE_64K,<br>
++	GDMA_PAGE_TYPE_128K,<br>
++	GDMA_PAGE_TYPE_256K,<br>
++	GDMA_PAGE_TYPE_512K,<br>
++	GDMA_PAGE_TYPE_1M,<br>
++	GDMA_PAGE_TYPE_2M,<br>
++};<br>
++<br>
++#define GDMA_INVALID_DMA_REGION 0<br>
++<br>
++struct gdma_mem_info {<br>
++	struct device *dev;<br>
++<br>
++	dma_addr_t dma_handle;<br>
++	void *virt_addr;<br>
++	u64 length;<br>
++<br>
++	/* Allocated from the PF driver */<br>
++	u64 gdma_region;<br>
++};<br>
++<br>
++#define REGISTER_ATB_MST_MKEY_LOWER_SIZE 8<br>
++<br>
++struct gdma_dev {<br>
++	struct gdma_dev_id dev_id;<br>
++<br>
++	u32 pdid;<br>
++	u32 doorbell;<br>
++	u32 gpa_mkey;<br>
++<br>
++	/* GDMA driver specific pointer */<br>
++	void *driver_data;<br>
++};<br>
++<br>
++#define MINIMUM_SUPPORTED_PAGE_SIZE PAGE_SIZE<br>
++<br>
++#define GDMA_CQE_SIZE 64<br>
++#define GDMA_EQE_SIZE 16<br>
++#define GDMA_MAX_SQE_SIZE 512<br>
++#define GDMA_MAX_RQE_SIZE 256<br>
++<br>
++#define GDMA_COMP_DATA_SIZE 0x3C<br>
++<br>
++#define GDMA_EVENT_DATA_SIZE 0xC<br>
++<br>
++/* The WQE size must be a multiple of the Basic Unit, which is 32 bytes. */<br>
++#define GDMA_WQE_BU_SIZE 32<br>
++<br>
++#define INVALID_PDID		UINT_MAX<br>
++#define INVALID_DOORBELL	UINT_MAX<br>
++#define INVALID_MEM_KEY		UINT_MAX<br>
++#define INVALID_QUEUE_ID	UINT_MAX<br>
++#define INVALID_PCI_MSIX_INDEX  UINT_MAX<br>
++<br>
++struct gdma_comp {<br>
++	u32 cqe_data[GDMA_COMP_DATA_SIZE / 4];<br>
++	u32 wq_num;<br>
++	bool is_sq;<br>
++};<br>
++<br>
++struct gdma_event {<br>
++	u32 details[GDMA_EVENT_DATA_SIZE / 4];<br>
++	u8  type;<br>
++};<br>
++<br>
++struct gdma_queue;<br>
++<br>
++#define CQE_POLLING_BUFFER 512<br>
++struct ana_eq {<br>
++	struct gdma_queue *eq;<br>
++	struct gdma_comp cqe_poll[CQE_POLLING_BUFFER];<br>
++};<br>
++<br>
++typedef void gdma_eq_callback(void *context, struct gdma_queue *q,<br>
++			      struct gdma_event *e);<br>
++<br>
++typedef void gdma_cq_callback(void *context, struct gdma_queue *q);<br>
++<br>
++/* The 'head' is the producer index. For SQ/RQ, when the driver posts a WQE<br>
++ * (Note: the WQE size must be a multiple of the 32-byte Basic Unit), the<br>
++ * driver increases the 'head' in BUs rather than in bytes, and notifies<br>
++ * the HW of the updated head. For EQ/CQ, the driver uses the 'head' to track<br>
++ * the HW head, and increases the 'head' by 1 for every processed EQE/CQE.<br>
++ *<br>
++ * The 'tail' is the consumer index for SQ/RQ. After the CQE of the SQ/RQ is<br>
++ * processed, the driver increases the 'tail' to indicate that WQEs have<br>
++ * been consumed by the HW, so the driver can post new WQEs into the SQ/RQ.<br>
++ *<br>
++ * The driver doesn't use the 'tail' for EQ/CQ, because the driver ensures<br>
++ * that the EQ/CQ is big enough so they can't overflow, and the driver uses<br>
++ * the owner bits mechanism to detect if the queue has become empty.<br>
++ */<br>
++struct gdma_queue {<br>
++	struct gdma_dev *gdma_dev;<br>
++<br>
++	enum gdma_queue_type type;<br>
++	u32 id;<br>
++<br>
++	struct gdma_mem_info mem_info;<br>
++<br>
++	void *queue_mem_ptr;<br>
++	u32 queue_size;<br>
++<br>
++	bool monitor_avl_buf;<br>
++<br>
++	u32 head;<br>
++	u32 tail;<br>
++<br>
++	/* Extra fields specific to EQ/CQ. */<br>
++	union {<br>
++		struct {<br>
++			bool disable_needed;<br>
++<br>
++			gdma_eq_callback *callback;<br>
++			void *context;<br>
++<br>
++			unsigned int msix_index;<br>
++<br>
++			u32 log2_throttle_limit;<br>
++<br>
++			/* NAPI data */<br>
++			struct napi_struct napi;<br>
++			int work_done;<br>
++			int budget;<br>
++		} eq;<br>
++<br>
++		struct {<br>
++			gdma_cq_callback *callback;<br>
++			void *context;<br>
++<br>
++			struct gdma_queue *parent; /* For CQ/EQ relationship */<br>
++		} cq;<br>
++	};<br>
++};<br>
++<br>
++struct gdma_queue_spec {<br>
++	enum gdma_queue_type type;<br>
++	bool monitor_avl_buf;<br>
++	unsigned int queue_size;<br>
++<br>
++	/* Extra fields specific to EQ/CQ. */<br>
++	union {<br>
++		struct {<br>
++			gdma_eq_callback *callback;<br>
++			void *context;<br>
++<br>
++			unsigned long log2_throttle_limit;<br>
++		} eq;<br>
++<br>
++		struct {<br>
++			gdma_cq_callback *callback;<br>
++			void *context;<br>
++<br>
++			struct gdma_queue *parent_eq;<br>
++<br>
++		} cq;<br>
++	};<br>
++};<br>
++<br>
++struct gdma_irq_context {<br>
++	void (*handler)(void *arg);<br>
++	void *arg;<br>
++};<br>
++<br>
++struct gdma_context {<br>
++	struct device		*dev;<br>
++<br>
++	unsigned int		max_num_queue;<br>
++	unsigned int		max_num_msix;<br>
++	unsigned int		num_msix_usable;<br>
++	struct gdma_resource	msix_resource;<br>
++	struct gdma_irq_context	*irq_contexts;<br>
++<br>
++	/* This maps a CQ index to the queue structure. */<br>
++	unsigned int		max_num_cq;<br>
++	struct gdma_queue	**cq_table;<br>
++<br>
++	/* Protect eq_test_event and test_event_eq_id  */<br>
++	struct mutex		eq_test_event_mutex;<br>
++	struct completion	eq_test_event;<br>
++	u32			test_event_eq_id;<br>
++<br>
++	void __iomem		*bar0_va;<br>
++	void __iomem		*shm_base;<br>
++	void __iomem		*db_page_base;<br>
++	u32 db_page_size;<br>
++<br>
++	/* Shared memory chanenl (used to bootstrap HWC) */<br>
++	struct shm_channel	shm_channel;<br>
++<br>
++	/* Hardware communication channel (HWC) */<br>
++	struct gdma_dev		hwc;<br>
++<br>
++	/* Azure network adapter */<br>
++	struct gdma_dev		ana;<br>
++};<br>
++<br>
++#define MAX_NUM_GDMA_DEVICES	4<br>
++<br>
++#define ana_to_gdma_context(d) container_of(d, struct gdma_context, ana)<br>
++#define hwc_to_gdma_context(d) container_of(d, struct gdma_context, hwc)<br>
++<br>
++static inline bool gdma_is_ana(struct gdma_dev *gd)<br>
++{<br>
++	return gd->dev_id.type == GDMA_DEVICE_ANA;<br>
++}<br>
++<br>
++static inline bool gdma_is_hwc(struct gdma_dev *gd)<br>
++{<br>
++	return gd->dev_id.type == GDMA_DEVICE_HWC;<br>
++}<br>
++<br>
++static inline struct gdma_context *gdma_dev_to_context(struct gdma_dev *gd)<br>
++{<br>
++	if (gdma_is_hwc(gd))<br>
++		return hwc_to_gdma_context(gd);<br>
++<br>
++	if (gdma_is_ana(gd))<br>
++		return ana_to_gdma_context(gd);<br>
++<br>
++	return NULL;<br>
++}<br>
++<br>
++u8 *gdma_get_wqe_ptr(const struct gdma_queue *wq, u32 wqe_offset);<br>
++u32 gdma_wq_avail_space(struct gdma_queue *wq);<br>
++<br>
++int gdma_test_eq(struct gdma_context *gc, struct gdma_queue *eq);<br>
++<br>
++int gdma_create_hwc_queue(struct gdma_dev *gd,<br>
++			  const struct gdma_queue_spec *spec,<br>
++			  struct gdma_queue **queue_ptr);<br>
++<br>
++int gdma_create_ana_eq(struct gdma_dev *gd, const struct gdma_queue_spec *spec,<br>
++		       struct gdma_queue **queue_ptr);<br>
++<br>
++int gdma_create_ana_wq_cq(struct gdma_dev *gd,<br>
++			  const struct gdma_queue_spec *spec,<br>
++			  struct gdma_queue **queue_ptr);<br>
++<br>
++void gdma_destroy_queue(struct gdma_context *gc, struct gdma_queue *queue);<br>
++<br>
++int gdma_poll_cq(struct gdma_queue *cq, struct gdma_comp *comp, int num_cqe);<br>
++<br>
++void gdma_arm_cq(struct gdma_queue *cq);<br>
++<br>
++struct gdma_wqe {<br>
++	u32 reserved	:24;<br>
++	u32 last_vbytes	:8;<br>
++<br>
++	union {<br>
++		u32 flags;<br>
++<br>
++		struct {<br>
++			u32 num_sge		:8;<br>
++			u32 inline_oob_size_div4:3;<br>
++			u32 client_oob_in_sgl	:1;<br>
++			u32 consume_credit	:1;<br>
++			u32 fence		:1;<br>
++			u32 reserved_1		:2;<br>
++			u32 client_data_unit	:14;<br>
++			u32 check_sn		:1;<br>
++			u32 sgl_direct		:1;<br>
++		};<br>
++	};<br>
++} __packed;<br>
++<br>
++#define INLINE_OOB_SMALL_SIZE 8<br>
++#define INLINE_OOB_LARGE_SIZE 24<br>
++<br>
++static inline u32 gdma_align_inline_oobsize(u32 oob_size)<br>
++{<br>
++	if (oob_size > INLINE_OOB_SMALL_SIZE)<br>
++		return INLINE_OOB_LARGE_SIZE;<br>
++	else<br>
++		return INLINE_OOB_SMALL_SIZE;<br>
++}<br>
++<br>
++#define MAX_TX_WQE_SIZE 512<br>
++#define MAX_RX_WQE_SIZE 256<br>
++<br>
++struct gdma_cqe {<br>
++	u32 cqe_data[GDMA_COMP_DATA_SIZE / 4];<br>
++<br>
++	union {<br>
++		u32 as_uint32;<br>
++<br>
++		struct {<br>
++			u32 wq_num	: 24;<br>
++			u32 is_sq	: 1;<br>
++			u32 reserved	: 4;<br>
++			u32 owner_bits	: 3;<br>
++		};<br>
++	} cqe_info;<br>
++} __packed;<br>
++<br>
++#define GDMA_CQE_OWNER_BITS 3<br>
++<br>
++#define GDMA_CQE_OWNER_MASK ((1 << GDMA_CQE_OWNER_BITS) - 1)<br>
++<br>
++#define SET_ARM_BIT 1<br>
++<br>
++#define GDMA_EQE_OWNER_BITS 3<br>
++<br>
++union gdma_eqe_info {<br>
++	u32 as_uint32;<br>
++<br>
++	struct {<br>
++		u32 type	: 8;<br>
++		u32 reserved_1	: 8;<br>
++		u32 client_id	: 2;<br>
++		u32 reserved_2	: 11;<br>
++		u32 owner_bits	: 3;<br>
++	};<br>
++} __packed;<br>
++<br>
++#define GDMA_EQE_OWNER_MASK ((1 << GDMA_EQE_OWNER_BITS) - 1)<br>
++#define INITIALIZED_OWNER_BIT(log2_num_entries) (1UL << (log2_num_entries))<br>
++<br>
++struct gdma_eqe {<br>
++	u32 details[GDMA_EVENT_DATA_SIZE / 4];<br>
++	u32 eqe_info;<br>
++} __packed;<br>
++<br>
++#define GDMA_REG_DB_PAGE_OFFSET	8<br>
++#define GDMA_REG_DB_PAGE_SIZE	0x10<br>
++#define GDMA_REG_SHM_OFFSET	0x18<br>
++<br>
++struct gdma_posted_wqe_info {<br>
++	u32 wqe_size_in_bu;<br>
++};<br>
++<br>
++/* GDMA_GENERATE_TEST_EQE */<br>
++struct gdma_generate_test_event_req {<br>
++	struct gdma_req_hdr hdr;<br>
++	u32 queue_index;<br>
++} __packed;<br>
++<br>
++/* GDMA_VERIFY_VF_DRIVER_VERSION */<br>
++enum {<br>
++	GDMA_PROTOCOL_V1	= 1,<br>
++	GDMA_PROTOCOL_FIRST	= GDMA_PROTOCOL_V1,<br>
++	GDMA_PROTOCOL_LAST	= GDMA_PROTOCOL_V1,<br>
++};<br>
++<br>
++struct gdma_verify_ver_req {<br>
++	struct gdma_req_hdr hdr;<br>
++<br>
++	/* Mandatory fields required for protocol establishment */<br>
++	u64 protocol_ver_min;<br>
++	u64 protocol_ver_max;<br>
++	u64 drv_cap_flags1;<br>
++	u64 drv_cap_flags2;<br>
++	u64 drv_cap_flags3;<br>
++	u64 drv_cap_flags4;<br>
++<br>
++	/* Advisory fields */<br>
++	u64 drv_ver;<br>
++	u32 os_type; /* Linux = 0x10; Windows = 0x20; Other = 0x30 */<br>
++	u32 reserved;<br>
++	u32 os_ver_major;<br>
++	u32 os_ver_minor;<br>
++	u32 os_ver_build;<br>
++	u32 os_ver_platform;<br>
++	u64 reserved_2;<br>
++	u8 os_ver_str1[128];<br>
++	u8 os_ver_str2[128];<br>
++	u8 os_ver_str3[128];<br>
++	u8 os_ver_str4[128];<br>
++} __packed;<br>
++<br>
++struct gdma_verify_ver_resp {<br>
++	struct gdma_resp_hdr hdr;<br>
++	u64 gdma_protocol_ver;<br>
++	u64 pf_cap_flags1;<br>
++	u64 pf_cap_flags2;<br>
++	u64 pf_cap_flags3;<br>
++	u64 pf_cap_flags4;<br>
++} __packed;<br>
++<br>
++/* GDMA_QUERY_MAX_RESOURCES */<br>
++struct gdma_query_max_resources_resp {<br>
++	struct gdma_resp_hdr hdr;<br>
++	u32 status;<br>
++	u32 max_sq;<br>
++	u32 max_rq;<br>
++	u32 max_cq;<br>
++	u32 max_eq;<br>
++	u32 max_db;<br>
++	u32 max_mst;<br>
++	u32 max_cq_mod_ctx;<br>
++	u32 max_mod_cq;<br>
++	u32 max_msix;<br>
++} __packed;<br>
++<br>
++/* GDMA_LIST_DEVICES */<br>
++struct gdma_list_devices_resp {<br>
++	struct gdma_resp_hdr hdr;<br>
++	u32 num_of_clients;<br>
++	u32 reserved;<br>
++	struct gdma_dev_id clients[64];<br>
++} __packed;<br>
++<br>
++/* GDMA_REGISTER_DEVICE */<br>
++struct gdma_register_device_resp {<br>
++	struct gdma_resp_hdr hdr;<br>
++	u32 pdid;<br>
++	u32 gpa_mkey;<br>
++	u32 db_id;<br>
++} __packed;<br>
++<br>
++/* GDMA_CREATE_QUEUE */<br>
++struct gdma_create_queue_req {<br>
++	struct gdma_req_hdr hdr;<br>
++	u32 type;<br>
++	u32 reserved1;<br>
++	u32 pdid;<br>
++	u32 doolbell_id;<br>
++	u64 gdma_region;<br>
++	u32 reserved2;<br>
++	u32 queue_size;<br>
++	u32 log2_throttle_limit;<br>
++	u32 eq_pci_msix_index;<br>
++	u32 cq_mod_ctx_id;<br>
++	u32 cq_parent_eq_id;<br>
++	u8  rq_drop_on_overrun;<br>
++	u8  rq_err_on_wqe_overflow;<br>
++	u8  rq_chain_rec_wqes;<br>
++	u8  sq_hw_db;<br>
++} __packed;<br>
++<br>
++struct gdma_create_queue_resp {<br>
++	struct gdma_resp_hdr hdr;<br>
++	u32 queue_index;<br>
++} __packed;<br>
++<br>
++/* GDMA_DISABLE_QUEUE */<br>
++struct gdma_disable_queue_req {<br>
++	struct gdma_req_hdr hdr;<br>
++	u32 type;<br>
++	u32 queue_index;<br>
++	u32 alloc_res_id_on_creation;<br>
++} __packed;<br>
++<br>
++/* GDMA_CREATE_DMA_REGION */<br>
++struct gdma_create_dma_region_req {<br>
++	struct gdma_req_hdr hdr;<br>
++<br>
++	/* The total size of the DMA region */<br>
++	u64 length;<br>
++<br>
++	/* The offset in the first page */<br>
++	u32 offset_in_page;<br>
++<br>
++	/* enum GDMA_PAGE_TYPE */<br>
++	u32 gdma_page_type;<br>
++<br>
++	/* The total number of pages */<br>
++	u32 page_count;<br>
++<br>
++	/* If page_addr_list_len is smaller than page_count,<br>
++	 * the remaining page addresses will be added via the<br>
++	 * message GDMA_DMA_REGION_ADD_PAGES.<br>
++	 */<br>
++	u32 page_addr_list_len;<br>
++	u64 page_addr_list[];<br>
++} __packed;<br>
++<br>
++struct gdma_create_dma_region_resp {<br>
++	struct gdma_resp_hdr hdr;<br>
++	u64 gdma_region;<br>
++} __packed;<br>
++<br>
++/* GDMA_DMA_REGION_ADD_PAGES */<br>
++struct gdma_dma_region_add_pages_req {<br>
++	struct gdma_req_hdr hdr;<br>
++<br>
++	u64 gdma_region;<br>
++<br>
++	u32 page_addr_list_len;<br>
++	u64 page_addr_list[];<br>
++} __packed;<br>
++<br>
++/* GDMA_DESTROY_DMA_REGION */<br>
++struct gdma_destroy_dma_region_req {<br>
++	struct gdma_req_hdr hdr;<br>
++<br>
++	u64 gdma_region;<br>
++} __packed;<br>
++<br>
++int gdma_verify_vf_version(struct pci_dev *pdev);<br>
++<br>
++int gdma_register_device(struct gdma_dev *gd);<br>
++int gdma_deregister_device(struct gdma_dev *gd);<br>
++<br>
++int gdma_post_work_request(struct gdma_queue *wq,<br>
++			   const struct gdma_wqe_request *wqe_req,<br>
++			   struct gdma_posted_wqe_info *wqe_info);<br>
++<br>
++int gdma_post_and_ring(struct gdma_queue *queue,<br>
++		       const struct gdma_wqe_request *wqe,<br>
++		       struct gdma_posted_wqe_info *wqe_info);<br>
++<br>
++int gdma_alloc_res_map(u32 res_avail, struct gdma_resource *r);<br>
++void gdma_free_res_map(struct gdma_resource *r);<br>
++<br>
++void gdma_wq_ring_doorbell(struct gdma_context *gc, struct gdma_queue *queue);<br>
++<br>
++int gdma_alloc_memory(struct gdma_context *gc, unsigned int length,<br>
++		      struct gdma_mem_info *gmi);<br>
++<br>
++void gdma_free_memory(struct gdma_mem_info *gmi);<br>
++<br>
++int gdma_send_request(struct gdma_context *gc, u32 req_len, const void *req,<br>
++		      u32 resp_len, void *resp);<br>
++#endif /* _GDMA_H */<br>
+diff --git a/drivers/net/ethernet/microsoft/mana/gdma_main.c b/drivers/net/ethernet/microsoft/mana/gdma_main.c<br>
+new file mode 100644<br>
+index 000000000000..76496ee68d01<br>
+--- /dev/null<br>
++++ b/drivers/net/ethernet/microsoft/mana/gdma_main.c<br>
+@@ -0,0 +1,1515 @@<br>
++// SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause<br>
++/* Copyright (c) 2021, Microsoft Corporation. */<br>
++<br>
++#include <linux/module.h><br>
++#include <linux/pci.h><br>
++<br>
++#include "mana.h"<br>
++<br>
++static u32 gdma_r32(struct gdma_context *g, u64 offset)<br>
++{<br>
++	return readl(g->bar0_va + offset);<br>
++}<br>
++<br>
++static u64 gdma_r64(struct gdma_context *g, u64 offset)<br>
++{<br>
++	return readq(g->bar0_va + offset);<br>
++}<br>
++<br>
++static void gdma_init_registers(struct pci_dev *pdev)<br>
++{<br>
++	struct gdma_context *gc = pci_get_drvdata(pdev);<br>
++<br>
++	gc->db_page_size = gdma_r32(gc, GDMA_REG_DB_PAGE_SIZE) & 0xFFFF;<br>
++<br>
++	gc->db_page_base = gc->bar0_va + gdma_r64(gc, GDMA_REG_DB_PAGE_OFFSET);<br>
++<br>
++	gc->shm_base = gc->bar0_va + gdma_r64(gc, GDMA_REG_SHM_OFFSET);<br>
++}<br>
++<br>
++static int gdma_query_max_resources(struct pci_dev *pdev)<br>
++{<br>
++	struct gdma_context *gc = pci_get_drvdata(pdev);<br>
++	struct gdma_query_max_resources_resp resp = {};<br>
++	struct gdma_general_req req = {};<br>
++	int err;<br>
++<br>
++	gdma_init_req_hdr(&req.hdr, GDMA_QUERY_MAX_RESOURCES,<br>
++			  sizeof(req), sizeof(resp));<br>
++<br>
++	err = gdma_send_request(gc, sizeof(req), &req, sizeof(resp), &resp);<br>
++	if (err || resp.hdr.status) {<br>
++		dev_err(gc->dev, "Failed to query resource info: %d, 0x%x\n",<br>
++			err, resp.hdr.status);<br>
++		return err ? err : -EPROTO;<br>
++	}<br>
++<br>
++	if (gc->num_msix_usable > resp.max_msix)<br>
++		gc->num_msix_usable = resp.max_msix;<br>
++<br>
++	if (gc->num_msix_usable <= 1)<br>
++		return -ENOSPC;<br>
++<br>
++	/* HWC consumes 1 MSI-X interrupt. */<br>
++	gc->max_num_queue = gc->num_msix_usable - 1;<br>
++<br>
++	if (gc->max_num_queue > resp.max_eq)<br>
++		gc->max_num_queue = resp.max_eq;<br>
++<br>
++	if (gc->max_num_queue > resp.max_cq)<br>
++		gc->max_num_queue = resp.max_cq;<br>
++<br>
++	if (gc->max_num_queue > resp.max_sq)<br>
++		gc->max_num_queue = resp.max_sq;<br>
++<br>
++	if (gc->max_num_queue > resp.max_rq)<br>
++		gc->max_num_queue = resp.max_rq;<br>
++<br>
++	return 0;<br>
++}<br>
++<br>
++static int gdma_detect_devices(struct pci_dev *pdev)<br>
++{<br>
++	struct gdma_context *gc = pci_get_drvdata(pdev);<br>
++	struct gdma_list_devices_resp resp = {};<br>
++	struct gdma_general_req req = {};<br>
++	struct gdma_dev_id dev;<br>
++	u32 i, max_num_devs;<br>
++	u16 dev_type;<br>
++	int err;<br>
++<br>
++	gdma_init_req_hdr(&req.hdr, GDMA_LIST_DEVICES, sizeof(req),<br>
++			  sizeof(resp));<br>
++<br>
++	err = gdma_send_request(gc, sizeof(req), &req, sizeof(resp), &resp);<br>
++	if (err || resp.hdr.status) {<br>
++		dev_err(gc->dev, "Failed to detect devices: %d, 0x%x\n", err,<br>
++			resp.hdr.status);<br>
++		return err ? err : -EPROTO;<br>
++	}<br>
++<br>
++	max_num_devs = min_t(u32, MAX_NUM_GDMA_DEVICES, resp.num_of_clients);<br>
++<br>
++	for (i = 0; i < max_num_devs; i++) {<br>
++		dev = resp.clients[i];<br>
++		dev_type = dev.type;<br>
++<br>
++		/* HWC is already detected in hwc_create_channel(). */<br>
++		if (dev_type == GDMA_DEVICE_HWC)<br>
++			continue;<br>
++<br>
++		if (dev_type == GDMA_DEVICE_ANA)<br>
++			gc->ana.dev_id = dev;<br>
++	}<br>
++<br>
++	return gc->ana.dev_id.type == 0 ? -ENODEV : 0;<br>
++}<br>
++<br>
++int gdma_send_request(struct gdma_context *gc, u32 req_len, const void *req,<br>
++		      u32 resp_len, void *resp)<br>
++{<br>
++	struct hw_channel_context *hwc = gc->hwc.driver_data;<br>
++<br>
++	return hwc_send_request(hwc, req_len, req, resp_len, resp);<br>
++}<br>
++<br>
++int gdma_alloc_memory(struct gdma_context *gc, unsigned int length,<br>
++		      struct gdma_mem_info *gmi)<br>
++{<br>
++	dma_addr_t dma_handle;<br>
++	void *buf;<br>
++<br>
++	if (length < PAGE_SIZE || !is_power_of_2(length))<br>
++		return -EINVAL;<br>
++<br>
++	gmi->dev = gc->dev;<br>
++	buf = dma_alloc_coherent(gmi->dev, length, &dma_handle,<br>
++				 GFP_KERNEL | __GFP_ZERO);<br>
++	if (!buf)<br>
++		return -ENOMEM;<br>
++<br>
++	gmi->dma_handle = dma_handle;<br>
++	gmi->virt_addr = buf;<br>
++	gmi->length = length;<br>
++<br>
++	return 0;<br>
++}<br>
++<br>
++void gdma_free_memory(struct gdma_mem_info *gmi)<br>
++{<br>
++	dma_free_coherent(gmi->dev, gmi->length, gmi->virt_addr,<br>
++			  gmi->dma_handle);<br>
++}<br>
++<br>
++static int gdma_create_hw_eq(struct gdma_context *gc, struct gdma_queue *queue)<br>
++{<br>
++	struct gdma_create_queue_resp resp = {};<br>
++	struct gdma_create_queue_req req = {};<br>
++	int err;<br>
++<br>
++	if (queue->type != GDMA_EQ)<br>
++		return -EINVAL;<br>
++<br>
++	gdma_init_req_hdr(&req.hdr, GDMA_CREATE_QUEUE,<br>
++			  sizeof(req), sizeof(resp));<br>
++<br>
++	req.hdr.dev_id = queue->gdma_dev->dev_id;<br>
++	req.type = queue->type;<br>
++	req.pdid = queue->gdma_dev->pdid;<br>
++	req.doolbell_id = queue->gdma_dev->doorbell;<br>
++	req.gdma_region = queue->mem_info.gdma_region;<br>
++	req.queue_size = queue->queue_size;<br>
++	req.log2_throttle_limit = queue->eq.log2_throttle_limit;<br>
++	req.eq_pci_msix_index = queue->eq.msix_index;<br>
++<br>
++	err = gdma_send_request(gc, sizeof(req), &req, sizeof(resp), &resp);<br>
++	if (err || resp.hdr.status) {<br>
++		dev_err(gc->dev, "Failed to create queue: %d, 0x%x\n", err,<br>
++			resp.hdr.status);<br>
++		return err ? err : -EPROTO;<br>
++	}<br>
++<br>
++	queue->id = resp.queue_index;<br>
++	queue->eq.disable_needed = true;<br>
++	queue->mem_info.gdma_region = GDMA_INVALID_DMA_REGION;<br>
++	return 0;<br>
++}<br>
++<br>
++static int gdma_disable_queue(struct gdma_queue *queue)<br>
++{<br>
++	struct gdma_context *gc = gdma_dev_to_context(queue->gdma_dev);<br>
++	struct gdma_disable_queue_req req = {};<br>
++	struct gdma_general_resp resp = {};<br>
++	int err;<br>
++<br>
++	WARN_ON(queue->type != GDMA_EQ);<br>
++<br>
++	gdma_init_req_hdr(&req.hdr, GDMA_DISABLE_QUEUE,<br>
++			  sizeof(req), sizeof(resp));<br>
++<br>
++	req.hdr.dev_id = queue->gdma_dev->dev_id;<br>
++	req.type = queue->type;<br>
++	req.queue_index =  queue->id;<br>
++	req.alloc_res_id_on_creation = 1;<br>
++<br>
++	err = gdma_send_request(gc, sizeof(req), &req, sizeof(resp), &resp);<br>
++	if (err || resp.hdr.status) {<br>
++		dev_err(gc->dev, "Failed to disable queue: %d, 0x%x\n", err,<br>
++			resp.hdr.status);<br>
++		return err ? err : -EPROTO;<br>
++	}<br>
++<br>
++	return 0;<br>
++}<br>
++<br>
++#define DOORBELL_OFFSET_SQ	0x0<br>
++#define DOORBELL_OFFSET_RQ	0x400<br>
++#define DOORBELL_OFFSET_CQ	0x800<br>
++#define DOORBELL_OFFSET_EQ	0xFF8<br>
++<br>
++static void gdma_ring_doorbell(struct gdma_context *gc, u32 db_index,<br>
++			       enum gdma_queue_type q_type, u32 qid,<br>
++			       u32 tail_ptr, u8 num_req)<br>
++{<br>
++	void __iomem *addr = gc->db_page_base + gc->db_page_size * db_index;<br>
++	union gdma_doorbell_entry e = {};<br>
++<br>
++	switch (q_type) {<br>
++	case GDMA_EQ:<br>
++		e.eq.id = qid;<br>
++		e.eq.tail_ptr = tail_ptr;<br>
++		e.eq.arm = num_req;<br>
++<br>
++		addr += DOORBELL_OFFSET_EQ;<br>
++		break;<br>
++<br>
++	case GDMA_CQ:<br>
++		e.cq.id = qid;<br>
++		e.cq.tail_ptr = tail_ptr;<br>
++		e.cq.arm = num_req;<br>
++<br>
++		addr += DOORBELL_OFFSET_CQ;<br>
++		break;<br>
++<br>
++	case GDMA_RQ:<br>
++		e.rq.id = qid;<br>
++		e.rq.tail_ptr = tail_ptr;<br>
++		e.rq.wqe_cnt = num_req;<br>
++<br>
++		addr += DOORBELL_OFFSET_RQ;<br>
++		break;<br>
++<br>
++	case GDMA_SQ:<br>
++		e.sq.id = qid;<br>
++		e.sq.tail_ptr = tail_ptr;<br>
++<br>
++		addr += DOORBELL_OFFSET_SQ;<br>
++		break;<br>
++<br>
++	default:<br>
++		WARN_ON(1);<br>
++		return;<br>
++	}<br>
++<br>
++	/* Ensure all writes are done before ring doorbell */<br>
++	wmb();<br>
++<br>
++	writeq(e.as_uint64, addr);<br>
++}<br>
++<br>
++void gdma_wq_ring_doorbell(struct gdma_context *gc, struct gdma_queue *queue)<br>
++{<br>
++	gdma_ring_doorbell(gc, queue->gdma_dev->doorbell, queue->type,<br>
++			   queue->id, queue->head * GDMA_WQE_BU_SIZE, 1);<br>
++}<br>
++<br>
++void gdma_arm_cq(struct gdma_queue *cq)<br>
++{<br>
++	struct gdma_context *gc = gdma_dev_to_context(cq->gdma_dev);<br>
++<br>
++	u32 num_cqe = cq->queue_size / GDMA_CQE_SIZE;<br>
++<br>
++	u32 head = cq->head % (num_cqe << GDMA_CQE_OWNER_BITS);<br>
++<br>
++	gdma_ring_doorbell(gc, cq->gdma_dev->doorbell, cq->type, cq->id, head,<br>
++			   SET_ARM_BIT);<br>
++}<br>
++<br>
++static void gdma_process_eqe(struct gdma_queue *eq)<br>
++{<br>
++	struct gdma_context *gc = gdma_dev_to_context(eq->gdma_dev);<br>
++	u32 head = eq->head % (eq->queue_size / GDMA_EQE_SIZE);<br>
++	struct gdma_eqe *eq_eqe_ptr = eq->queue_mem_ptr;<br>
++	union gdma_eqe_info eqe_info;<br>
++	enum gdma_eqe_type type;<br>
++	struct gdma_event event;<br>
++	struct gdma_queue *cq;<br>
++	struct gdma_eqe *eqe;<br>
++	u32 cq_id;<br>
++<br>
++	eqe = &eq_eqe_ptr[head];<br>
++	eqe_info.as_uint32 = eqe->eqe_info;<br>
++	type = eqe_info.type;<br>
++<br>
++	if ((type >= GDMA_EQE_APP_START && type <= GDMA_EQE_APP_END) ||<br>
++	    type == GDMA_EQE_SOC_TO_VF_EVENT ||<br>
++	    type == GDMA_EQE_HWC_INIT_EQ_ID_DB ||<br>
++	    type == GDMA_EQE_HWC_INIT_DATA || type == GDMA_EQE_HWC_INIT_DONE) {<br>
++		if (eq->eq.callback) {<br>
++			event.type = type;<br>
++			memcpy(&event.details, &eqe->details,<br>
++			       GDMA_EVENT_DATA_SIZE);<br>
++<br>
++			eq->eq.callback(eq->eq.context, eq, &event);<br>
++		}<br>
++<br>
++		return;<br>
++	}<br>
++<br>
++	switch (type) {<br>
++	case GDMA_EQE_COMPLETION:<br>
++		cq_id = eqe->details[0] & 0xFFFFFF;<br>
++		if (WARN_ON(cq_id >= gc->max_num_cq))<br>
++			break;<br>
++<br>
++		cq = gc->cq_table[cq_id];<br>
++		if (WARN_ON(!cq || cq->type != GDMA_CQ || cq->id != cq_id))<br>
++			break;<br>
++<br>
++		if (cq->cq.callback)<br>
++			cq->cq.callback(cq->cq.context, cq);<br>
++<br>
++		break;<br>
++<br>
++	case GDMA_EQE_TEST_EVENT:<br>
++		gc->test_event_eq_id = eq->id;<br>
++		complete(&gc->eq_test_event);<br>
++		break;<br>
++<br>
++	default:<br>
++		break;<br>
++	}<br>
++}<br>
++<br>
++static void gdma_process_eq_events(void *arg)<br>
++{<br>
++	u32 owner_bits, new_bits, old_bits;<br>
++	union gdma_eqe_info eqe_info;<br>
++	struct gdma_eqe *eq_eqe_ptr;<br>
++	struct gdma_queue *eq = arg;<br>
++	struct gdma_context *gc;<br>
++	struct gdma_eqe *eqe;<br>
++	unsigned int arm_bit;<br>
++	u32 head, num_eqe;<br>
++	int i;<br>
++<br>
++	num_eqe = eq->queue_size / GDMA_EQE_SIZE;<br>
++	eq_eqe_ptr = eq->queue_mem_ptr;<br>
++<br>
++	/* Process up to 5 EQEs at a time, and update the HW head. */<br>
++	for (i = 0; i < 5; i++) {<br>
++		eqe = &eq_eqe_ptr[eq->head % num_eqe];<br>
++		eqe_info.as_uint32 = eqe->eqe_info;<br>
++<br>
++		new_bits = (eq->head / num_eqe) & GDMA_EQE_OWNER_MASK;<br>
++		old_bits = (eq->head / num_eqe - 1) & GDMA_EQE_OWNER_MASK;<br>
++<br>
++		owner_bits = eqe_info.owner_bits;<br>
++<br>
++		if (owner_bits == old_bits)<br>
++			break;<br>
++<br>
++		if (owner_bits != new_bits) {<br>
++			dev_err(gc->dev, "EQ %d: overflow detected\n", eq->id);<br>
++			break;<br>
++		}<br>
++<br>
++		gdma_process_eqe(eq);<br>
++<br>
++		eq->head++;<br>
++	}<br>
++<br>
++	/* Always rearm the EQ for HWC. For ANA, rearm it when NAPI is done. */<br>
++	if (gdma_is_hwc(eq->gdma_dev)) {<br>
++		arm_bit = SET_ARM_BIT;<br>
++	} else if (eq->eq.work_done < eq->eq.budget &&<br>
++		   napi_complete_done(&eq->eq.napi, eq->eq.work_done)) {<br>
++		arm_bit = SET_ARM_BIT;<br>
++	} else {<br>
++		arm_bit = 0;<br>
++	}<br>
++<br>
++	head = eq->head % (num_eqe << GDMA_EQE_OWNER_BITS);<br>
++<br>
++	gc = gdma_dev_to_context(eq->gdma_dev);<br>
++<br>
++	gdma_ring_doorbell(gc, eq->gdma_dev->doorbell, eq->type, eq->id, head,<br>
++			   arm_bit);<br>
++}<br>
++<br>
++static int ana_poll(struct napi_struct *napi, int budget)<br>
++{<br>
++	struct gdma_queue *eq = container_of(napi, struct gdma_queue, eq.napi);<br>
++<br>
++	eq->eq.work_done = 0;<br>
++	eq->eq.budget = budget;<br>
++<br>
++	gdma_process_eq_events(eq);<br>
++<br>
++	return min(eq->eq.work_done, budget);<br>
++}<br>
++<br>
++static void gdma_schedule_napi(void *arg)<br>
++{<br>
++	struct gdma_queue *eq = arg;<br>
++	struct napi_struct *napi;<br>
++<br>
++	napi = &eq->eq.napi;<br>
++	napi_schedule_irqoff(napi);<br>
++}<br>
++<br>
++static int gdma_register_irq(struct gdma_queue *queue)<br>
++{<br>
++	struct gdma_dev *gd = queue->gdma_dev;<br>
++	bool is_ana = gdma_is_ana(gd);<br>
++	struct gdma_irq_context *gic;<br>
++<br>
++	struct gdma_context *gc;<br>
++	struct gdma_resource *r;<br>
++	unsigned int msi_index;<br>
++	unsigned long flags;<br>
++	int err;<br>
++<br>
++	gc = gdma_dev_to_context(gd);<br>
++	r = &gc->msix_resource;<br>
++<br>
++	spin_lock_irqsave(&r->lock, flags);<br>
++<br>
++	msi_index = find_first_zero_bit(r->map, r->size);<br>
++	if (msi_index >= r->size) {<br>
++		err = -ENOSPC;<br>
++	} else {<br>
++		bitmap_set(r->map, msi_index, 1);<br>
++		queue->eq.msix_index = msi_index;<br>
++		err = 0;<br>
++	}<br>
++<br>
++	spin_unlock_irqrestore(&r->lock, flags);<br>
++<br>
++	if (err)<br>
++		return err;<br>
++<br>
++	WARN_ON(msi_index >= gc->num_msix_usable);<br>
++<br>
++	gic = &gc->irq_contexts[msi_index];<br>
++<br>
++	if (is_ana) {<br>
++		netif_napi_add(gd->driver_data, &queue->eq.napi, ana_poll,<br>
++			       NAPI_POLL_WEIGHT);<br>
++<br>
++		napi_enable(&queue->eq.napi);<br>
++	}<br>
++<br>
++	WARN_ON(gic->handler || gic->arg);<br>
++<br>
++	gic->arg = queue;<br>
++	gic->handler = is_ana ? gdma_schedule_napi : gdma_process_eq_events;<br>
++<br>
++	return 0;<br>
++}<br>
++<br>
++static void gdma_deregiser_irq(struct gdma_queue *queue)<br>
++{<br>
++	struct gdma_dev *gd = queue->gdma_dev;<br>
++	struct gdma_irq_context *gic;<br>
++	struct gdma_context *gc;<br>
++	struct gdma_resource *r;<br>
++	unsigned int msix_index;<br>
++	unsigned long flags;<br>
++<br>
++	/* At most num_online_cpus() + 1 interrupts are used. */<br>
++	msix_index = queue->eq.msix_index;<br>
++	if (WARN_ON(msix_index > num_online_cpus()))<br>
++		return;<br>
++<br>
++	gc = gdma_dev_to_context(gd);<br>
++	r = &gc->msix_resource;<br>
++<br>
++	gic = &gc->irq_contexts[msix_index];<br>
++<br>
++	WARN_ON(!gic->handler || !gic->arg);<br>
++	gic->handler = NULL;<br>
++	gic->arg = NULL;<br>
++<br>
++	spin_lock_irqsave(&r->lock, flags);<br>
++	bitmap_clear(r->map, msix_index, 1);<br>
++	spin_unlock_irqrestore(&r->lock, flags);<br>
++<br>
++	queue->eq.msix_index = INVALID_PCI_MSIX_INDEX;<br>
++}<br>
++<br>
++int gdma_test_eq(struct gdma_context *gc, struct gdma_queue *eq)<br>
++{<br>
++	struct gdma_generate_test_event_req req = {};<br>
++	struct gdma_general_resp resp = {};<br>
++	struct device *dev = gc->dev;<br>
++	int err;<br>
++<br>
++	mutex_lock(&gc->eq_test_event_mutex);<br>
++<br>
++	init_completion(&gc->eq_test_event);<br>
++	gc->test_event_eq_id = INVALID_QUEUE_ID;<br>
++<br>
++	gdma_init_req_hdr(&req.hdr, GDMA_GENERATE_TEST_EQE,<br>
++			  sizeof(req), sizeof(resp));<br>
++<br>
++	req.hdr.dev_id = eq->gdma_dev->dev_id;<br>
++	req.queue_index = eq->id;<br>
++<br>
++	err = gdma_send_request(gc, sizeof(req), &req, sizeof(resp), &resp);<br>
++	if (err) {<br>
++		dev_err(dev, "test_eq failed: %d\n", err);<br>
++		goto out;<br>
++	}<br>
++<br>
++	err = -EPROTO;<br>
++<br>
++	if (resp.hdr.status) {<br>
++		dev_err(dev, "test_eq failed: 0x%x\n", resp.hdr.status);<br>
++		goto out;<br>
++	}<br>
++<br>
++	if (!wait_for_completion_timeout(&gc->eq_test_event, 30 * HZ)) {<br>
++		dev_err(dev, "test_eq timed out on queue %d\n", eq->id);<br>
++		goto out;<br>
++	}<br>
++<br>
++	if (eq->id != gc->test_event_eq_id) {<br>
++		dev_err(dev, "test_eq got an event on wrong queue %d (%d)\n",<br>
++			gc->test_event_eq_id, eq->id);<br>
++		goto out;<br>
++	}<br>
++<br>
++	err = 0;<br>
++out:<br>
++	mutex_unlock(&gc->eq_test_event_mutex);<br>
++	return err;<br>
++}<br>
++<br>
++static void gdma_destroy_eq(struct gdma_context *gc, bool flush_evenets,<br>
++			    struct gdma_queue *queue)<br>
++{<br>
++	int err;<br>
++<br>
++	if (flush_evenets) {<br>
++		err = gdma_test_eq(gc, queue);<br>
++		if (err)<br>
++			dev_warn(gc->dev, "Failed to flush EQ: %d\n", err);<br>
++	}<br>
++<br>
++	gdma_deregiser_irq(queue);<br>
++<br>
++	if (gdma_is_ana(queue->gdma_dev)) {<br>
++		napi_disable(&queue->eq.napi);<br>
++		netif_napi_del(&queue->eq.napi);<br>
++	}<br>
++<br>
++	if (queue->eq.disable_needed)<br>
++		gdma_disable_queue(queue);<br>
++}<br>
++<br>
++static int gdma_create_eq(struct gdma_dev *gd,<br>
++			  const struct gdma_queue_spec *spec, bool create_hwq,<br>
++			  struct gdma_queue *queue)<br>
++{<br>
++	struct gdma_context *gc = gdma_dev_to_context(gd);<br>
++	struct device *dev = gc->dev;<br>
++	u32 log2_num_entries;<br>
++	int err;<br>
++<br>
++	queue->eq.msix_index = INVALID_PCI_MSIX_INDEX;<br>
++<br>
++	log2_num_entries = ilog2(queue->queue_size / GDMA_EQE_SIZE);<br>
++<br>
++	if (spec->eq.log2_throttle_limit > log2_num_entries) {<br>
++		dev_err(dev, "EQ throttling limit (%lu) > maximum EQE (%u)\n",<br>
++			spec->eq.log2_throttle_limit, log2_num_entries);<br>
++		return -EINVAL;<br>
++	}<br>
++<br>
++	err = gdma_register_irq(queue);<br>
++	if (err) {<br>
++		dev_err(dev, "Failed to register irq: %d\n", err);<br>
++		return err;<br>
++	}<br>
++<br>
++	queue->eq.callback = spec->eq.callback;<br>
++	queue->eq.context = spec->eq.context;<br>
++	queue->head |= INITIALIZED_OWNER_BIT(log2_num_entries);<br>
++<br>
++	queue->eq.log2_throttle_limit = spec->eq.log2_throttle_limit ?: 1;<br>
++<br>
++	if (create_hwq) {<br>
++		err = gdma_create_hw_eq(gc, queue);<br>
++		if (err)<br>
++			goto out;<br>
++<br>
++		err = gdma_test_eq(gc, queue);<br>
++		if (err)<br>
++			goto out;<br>
++	}<br>
++<br>
++	return 0;<br>
++out:<br>
++	dev_err(dev, "Failed to create EQ: %d\n", err);<br>
++	gdma_destroy_eq(gc, false, queue);<br>
++	return err;<br>
++}<br>
++<br>
++static void gdma_create_cq(const struct gdma_queue_spec *spec,<br>
++			   struct gdma_queue *queue)<br>
++{<br>
++	u32 log2_num_entries = ilog2(spec->queue_size / GDMA_CQE_SIZE);<br>
++<br>
++	queue->head = queue->head | INITIALIZED_OWNER_BIT(log2_num_entries);<br>
++	queue->cq.parent = spec->cq.parent_eq;<br>
++	queue->cq.context = spec->cq.context;<br>
++	queue->cq.callback = spec->cq.callback;<br>
++}<br>
++<br>
++static void gdma_destroy_cq(struct gdma_context *gc, struct gdma_queue *queue)<br>
++{<br>
++	u32 id = queue->id;<br>
++<br>
++	if (id >= gc->max_num_cq)<br>
++		return;<br>
++<br>
++	if (!gc->cq_table[id])<br>
++		return;<br>
++<br>
++	gc->cq_table[id] = NULL;<br>
++}<br>
++<br>
++int gdma_create_hwc_queue(struct gdma_dev *gd,<br>
++			  const struct gdma_queue_spec *spec,<br>
++			  struct gdma_queue **queue_ptr)<br>
++{<br>
++	struct gdma_context *gc = gdma_dev_to_context(gd);<br>
++	struct gdma_mem_info *gmi;<br>
++	struct gdma_queue *queue;<br>
++	int err;<br>
++<br>
++	queue = kzalloc(sizeof(*queue), GFP_KERNEL);<br>
++	if (!queue)<br>
++		return -ENOMEM;<br>
++<br>
++	gmi = &queue->mem_info;<br>
++	err = gdma_alloc_memory(gc, spec->queue_size, gmi);<br>
++	if (err)<br>
++		return err;<br>
++<br>
++	queue->head = 0;<br>
++	queue->tail = 0;<br>
++	queue->queue_mem_ptr = gmi->virt_addr;<br>
++	queue->queue_size = spec->queue_size;<br>
++	queue->monitor_avl_buf = spec->monitor_avl_buf;<br>
++<br>
++	queue->type = spec->type;<br>
++	queue->gdma_dev = gd;<br>
++<br>
++	if (spec->type == GDMA_EQ)<br>
++		err = gdma_create_eq(gd, spec, false, queue);<br>
++	else if (spec->type == GDMA_CQ)<br>
++		gdma_create_cq(spec, queue);<br>
++<br>
++	if (err)<br>
++		goto out;<br>
++<br>
++	*queue_ptr = queue;<br>
++	return 0;<br>
++<br>
++out:<br>
++	gdma_free_memory(gmi);<br>
++	kfree(queue);<br>
++	return err;<br>
++}<br>
++<br>
++static void gdma_destroy_dma_region(struct gdma_context *gc, u64 gdma_region)<br>
++{<br>
++	struct gdma_destroy_dma_region_req req = {};<br>
++	struct gdma_general_resp resp = {};<br>
++	int err;<br>
++<br>
++	if (gdma_region == GDMA_INVALID_DMA_REGION)<br>
++		return;<br>
++<br>
++	gdma_init_req_hdr(&req.hdr, GDMA_DESTROY_DMA_REGION, sizeof(req),<br>
++			  sizeof(resp));<br>
++	req.gdma_region = gdma_region;<br>
++<br>
++	err = gdma_send_request(gc, sizeof(req), &req, sizeof(resp), &resp);<br>
++	if (err || resp.hdr.status)<br>
++		dev_err(gc->dev, "Failed to destroy DMA region: %d, 0x%x\n",<br>
++			err, resp.hdr.status);<br>
++}<br>
++<br>
++static int gdma_create_dma_region(struct gdma_dev *gd,<br>
++				  struct gdma_mem_info *gmi)<br>
++{<br>
++	struct gdma_context *gc = gdma_dev_to_context(gd);<br>
++	unsigned int num_page = gmi->length / PAGE_SIZE;<br>
++	struct gdma_create_dma_region_req *req = NULL;<br>
++	struct gdma_create_dma_region_resp resp = {};<br>
++	struct hw_channel_context *hwc;<br>
++	u32 length = gmi->length;<br>
++	u32 req_msg_size;<br>
++	int err;<br>
++	int i;<br>
++<br>
++	if (length < PAGE_SIZE || !is_power_of_2(length))<br>
++		return -EINVAL;<br>
++<br>
++	if (offset_in_page(gmi->virt_addr) != 0)<br>
++		return -EINVAL;<br>
++<br>
++	hwc = gc->hwc.driver_data;<br>
++	req_msg_size = sizeof(*req) + num_page * sizeof(u64);<br>
++	if (req_msg_size > hwc->max_req_msg_size)<br>
++		return -EINVAL;<br>
++<br>
++	req = kzalloc(req_msg_size, GFP_KERNEL);<br>
++	if (!req)<br>
++		return -ENOMEM;<br>
++<br>
++	gdma_init_req_hdr(&req->hdr, GDMA_CREATE_DMA_REGION,<br>
++			  req_msg_size, sizeof(resp));<br>
++	req->length = length;<br>
++	req->offset_in_page = 0;<br>
++	req->gdma_page_type = GDMA_PAGE_TYPE_4K;<br>
++	req->page_count = num_page;<br>
++	req->page_addr_list_len = num_page;<br>
++<br>
++	for (i = 0; i < num_page; i++)<br>
++		req->page_addr_list[i] = gmi->dma_handle +  i * PAGE_SIZE;<br>
++<br>
++	err = gdma_send_request(gc, req_msg_size, req, sizeof(resp), &resp);<br>
++	if (err)<br>
++		goto out;<br>
++<br>
++	if (resp.hdr.status || resp.gdma_region == GDMA_INVALID_DMA_REGION) {<br>
++		dev_err(gc->dev, "Failed to create DMA region: 0x%x\n",<br>
++			resp.hdr.status);<br>
++		err = -EPROTO;<br>
++		goto out;<br>
++	}<br>
++<br>
++	gmi->gdma_region = resp.gdma_region;<br>
++<br>
++out:<br>
++	kfree(req);<br>
++	return err;<br>
++}<br>
++<br>
++int gdma_create_ana_eq(struct gdma_dev *gd, const struct gdma_queue_spec *spec,<br>
++		       struct gdma_queue **queue_ptr)<br>
++{<br>
++	struct gdma_context *gc = gdma_dev_to_context(gd);<br>
++	struct gdma_mem_info *gmi;<br>
++	struct gdma_queue *queue;<br>
++	int err;<br>
++<br>
++	if (spec->type != GDMA_EQ)<br>
++		return -EINVAL;<br>
++<br>
++	queue = kzalloc(sizeof(*queue), GFP_KERNEL);<br>
++	if (!queue)<br>
++		return -ENOMEM;<br>
++<br>
++	gmi = &queue->mem_info;<br>
++	err = gdma_alloc_memory(gc, spec->queue_size, gmi);<br>
++	if (err)<br>
++		return err;<br>
++<br>
++	err = gdma_create_dma_region(gd, gmi);<br>
++	if (err)<br>
++		goto out;<br>
++<br>
++	queue->head = 0;<br>
++	queue->tail = 0;<br>
++	queue->queue_mem_ptr = gmi->virt_addr;<br>
++	queue->queue_size = spec->queue_size;<br>
++	queue->monitor_avl_buf = spec->monitor_avl_buf;<br>
++<br>
++	queue->type = spec->type;<br>
++	queue->gdma_dev = gd;<br>
++<br>
++	err = gdma_create_eq(gd, spec, true, queue);<br>
++	if (err)<br>
++		goto out;<br>
++<br>
++	*queue_ptr = queue;<br>
++	return 0;<br>
++out:<br>
++	gdma_free_memory(gmi);<br>
++	kfree(queue);<br>
++	return err;<br>
++}<br>
++<br>
++int gdma_create_ana_wq_cq(struct gdma_dev *gd,<br>
++			  const struct gdma_queue_spec *spec,<br>
++			  struct gdma_queue **queue_ptr)<br>
++{<br>
++	struct gdma_context *gc = gdma_dev_to_context(gd);<br>
++	struct gdma_mem_info *gmi;<br>
++	struct gdma_queue *queue;<br>
++	int err;<br>
++<br>
++	if (spec->type != GDMA_CQ && spec->type != GDMA_SQ &&<br>
++	    spec->type != GDMA_RQ)<br>
++		return -EINVAL;<br>
++<br>
++	queue = kzalloc(sizeof(*queue), GFP_KERNEL);<br>
++	if (!queue)<br>
++		return -ENOMEM;<br>
++<br>
++	gmi = &queue->mem_info;<br>
++	err = gdma_alloc_memory(gc, spec->queue_size, gmi);<br>
++	if (err)<br>
++		return err;<br>
++<br>
++	err = gdma_create_dma_region(gd, gmi);<br>
++	if (err)<br>
++		goto out;<br>
++<br>
++	queue->head = 0;<br>
++	queue->tail = 0;<br>
++	queue->queue_mem_ptr = gmi->virt_addr;<br>
++	queue->queue_size = spec->queue_size;<br>
++	queue->monitor_avl_buf = spec->monitor_avl_buf;<br>
++<br>
++	queue->type = spec->type;<br>
++	queue->gdma_dev = gd;<br>
++<br>
++	if (spec->type == GDMA_CQ)<br>
++		gdma_create_cq(spec, queue);<br>
++<br>
++	*queue_ptr = queue;<br>
++	return 0;<br>
++<br>
++out:<br>
++	gdma_free_memory(gmi);<br>
++	kfree(queue);<br>
++	return err;<br>
++}<br>
++<br>
++void gdma_destroy_queue(struct gdma_context *gc, struct gdma_queue *queue)<br>
++{<br>
++	struct gdma_mem_info *gmi = &queue->mem_info;<br>
++<br>
++	switch (queue->type) {<br>
++	case GDMA_EQ:<br>
++		gdma_destroy_eq(gc, queue->eq.disable_needed, queue);<br>
++		break;<br>
++<br>
++	case GDMA_CQ:<br>
++		gdma_destroy_cq(gc, queue);<br>
++		break;<br>
++<br>
++	case GDMA_RQ:<br>
++		break;<br>
++<br>
++	case GDMA_SQ:<br>
++		break;<br>
++<br>
++	default:<br>
++		dev_err(gc->dev, "Can't destroy unknown queue: type=%d\n",<br>
++			queue->type);<br>
++		return;<br>
++	}<br>
++<br>
++	gdma_destroy_dma_region(gc, gmi->gdma_region);<br>
++<br>
++	gdma_free_memory(gmi);<br>
++<br>
++	kfree(queue);<br>
++}<br>
++<br>
++int gdma_verify_vf_version(struct pci_dev *pdev)<br>
++{<br>
++	struct gdma_context *gc = pci_get_drvdata(pdev);<br>
++	struct gdma_verify_ver_resp resp = {};<br>
++	struct gdma_verify_ver_req req = {};<br>
++	int err;<br>
++<br>
++	gdma_init_req_hdr(&req.hdr, GDMA_VERIFY_VF_DRIVER_VERSION,<br>
++			  sizeof(req), sizeof(resp));<br>
++<br>
++	req.protocol_ver_min = GDMA_PROTOCOL_FIRST;<br>
++	req.protocol_ver_max = GDMA_PROTOCOL_LAST;<br>
++<br>
++	err = gdma_send_request(gc, sizeof(req), &req, sizeof(resp), &resp);<br>
++	if (err || resp.hdr.status) {<br>
++		dev_err(gc->dev, "VfVerifyVersionOutput: %d, status=0x%x\n",<br>
++			err, resp.hdr.status);<br>
++		return err ? err : -EPROTO;<br>
++	}<br>
++<br>
++	return 0;<br>
++}<br>
++<br>
++int gdma_register_device(struct gdma_dev *gd)<br>
++{<br>
++	struct gdma_context *gc = gdma_dev_to_context(gd);<br>
++	struct gdma_register_device_resp resp = {};<br>
++	struct gdma_general_req req = {};<br>
++	int err;<br>
++<br>
++	gdma_init_req_hdr(&req.hdr, GDMA_REGISTER_DEVICE, sizeof(req),<br>
++			  sizeof(resp));<br>
++<br>
++	req.hdr.dev_id = gd->dev_id;<br>
++<br>
++	err = gdma_send_request(gc, sizeof(req), &req, sizeof(resp), &resp);<br>
++	if (err || resp.hdr.status) {<br>
++		dev_err(gc->dev, "gdma_register_device_resp failed: %d, 0x%x\n",<br>
++			err, resp.hdr.status);<br>
++		return err ? err : -EPROTO;<br>
++	}<br>
++<br>
++	gd->pdid = resp.pdid;<br>
++	gd->gpa_mkey = resp.gpa_mkey;<br>
++	gd->doorbell = resp.db_id;<br>
++<br>
++	return 0;<br>
++}<br>
++<br>
++int gdma_deregister_device(struct gdma_dev *gd)<br>
++{<br>
++	struct gdma_context *gc = gdma_dev_to_context(gd);<br>
++	struct gdma_general_resp resp = {};<br>
++	struct gdma_general_req req = {};<br>
++	int err;<br>
++<br>
++	if (WARN_ON(gd->pdid == INVALID_PDID))<br>
++		return -EINVAL;<br>
++<br>
++	gdma_init_req_hdr(&req.hdr, GDMA_DEREGISTER_DEVICE, sizeof(req),<br>
++			  sizeof(resp));<br>
++<br>
++	req.hdr.dev_id = gd->dev_id;<br>
++<br>
++	err = gdma_send_request(gc, sizeof(req), &req, sizeof(resp), &resp);<br>
++	if (err || resp.hdr.status) {<br>
++		dev_err(gc->dev, "Failed to deregister device: %d, 0x%x\n",<br>
++			err, resp.hdr.status);<br>
++		return err ? err : -EPROTO;<br>
++	}<br>
++<br>
++	gd->pdid = INVALID_PDID;<br>
++	gd->doorbell = INVALID_DOORBELL;<br>
++	gd->gpa_mkey = INVALID_MEM_KEY;<br>
++<br>
++	return 0;<br>
++}<br>
++<br>
++static u32 gdma_calc_sgl_size(const struct gdma_wqe_request *wqe_req)<br>
++{<br>
++	u32 sgl_data_size = 0;<br>
++	int i;<br>
++<br>
++	if (wqe_req->flags & GDMA_WR_SGL_DIRECT) {<br>
++		for (i = 0; i < wqe_req->num_sge; i++)<br>
++			sgl_data_size += wqe_req->sgl[i].size;<br>
++	} else {<br>
++		sgl_data_size += sizeof(struct gdma_sge) *<br>
++				 max_t(u32, 1, wqe_req->num_sge);<br>
++	}<br>
++<br>
++	return sgl_data_size;<br>
++}<br>
++<br>
++u32 gdma_wq_avail_space(struct gdma_queue *wq)<br>
++{<br>
++	u32 used_space = (wq->head - wq->tail) * GDMA_WQE_BU_SIZE;<br>
++	u32 wq_size = wq->queue_size;<br>
++<br>
++	WARN_ON(used_space > wq_size);<br>
++<br>
++	return wq_size - used_space;<br>
++}<br>
++<br>
++u8 *gdma_get_wqe_ptr(const struct gdma_queue *wq, u32 wqe_offset)<br>
++{<br>
++	u32 offset = (wqe_offset * GDMA_WQE_BU_SIZE) & (wq->queue_size - 1);<br>
++<br>
++	WARN_ON((offset + GDMA_WQE_BU_SIZE) > wq->queue_size);<br>
++<br>
++	return wq->queue_mem_ptr + offset;<br>
++}<br>
++<br>
++static u32 gdma_write_client_oob(u8 *wqe_ptr,<br>
++				 const struct gdma_wqe_request *wqe_req,<br>
++				 enum gdma_queue_type q_type,<br>
++				 u32 client_oob_size, u32 sgl_data_size)<br>
++{<br>
++	bool pad_data = !!(wqe_req->flags & GDMA_WR_PAD_DATA_BY_FIRST_SGE);<br>
++	bool sgl_direct = !!(wqe_req->flags & GDMA_WR_SGL_DIRECT);<br>
++	bool oob_in_sgl = !!(wqe_req->flags & GDMA_WR_OOB_IN_SGL);<br>
++	struct gdma_wqe *header = (struct gdma_wqe *)wqe_ptr;<br>
++	u8 *ptr;<br>
++<br>
++	memset(header, 0, sizeof(struct gdma_wqe));<br>
++<br>
++	WARN_ON(client_oob_size != INLINE_OOB_SMALL_SIZE &&<br>
++		client_oob_size != INLINE_OOB_LARGE_SIZE);<br>
++<br>
++	if (sgl_direct) {<br>
++		header->num_sge = sgl_data_size / sizeof(struct gdma_sge);<br>
++		header->last_vbytes = sgl_data_size % sizeof(struct gdma_sge);<br>
++<br>
++		if (header->last_vbytes)<br>
++			header->num_sge++;<br>
++	} else {<br>
++		header->num_sge = wqe_req->num_sge;<br>
++	}<br>
++<br>
++	/* Support for empty SGL: account for the dummy SGE to be written. */<br>
++	if (wqe_req->num_sge == 0)<br>
++		header->num_sge = 1;<br>
++<br>
++	header->inline_oob_size_div4 = client_oob_size / sizeof(u32);<br>
++<br>
++	if (oob_in_sgl) {<br>
++		WARN_ON(!pad_data || wqe_req->num_sge <= 0);<br>
++<br>
++		header->client_oob_in_sgl = 1;<br>
++<br>
++		if (wqe_req->num_sge == 1) {<br>
++			/* Support for empty SGL with oob_in_sgl */<br>
++			header->num_sge = 2;<br>
++		}<br>
++<br>
++		if (pad_data)<br>
++			header->last_vbytes = wqe_req->sgl[0].size;<br>
++	}<br>
++<br>
++	if (q_type == GDMA_SQ)<br>
++		header->client_data_unit = wqe_req->client_data_unit;<br>
++<br>
++	header->consume_credit = !!(wqe_req->flags & GDMA_WR_CONSUME_CREDIT);<br>
++	header->fence = !!(wqe_req->flags & GDMA_WR_FENCE);<br>
++	header->check_sn = !!(wqe_req->flags & GDMA_WR_CHECK_SN);<br>
++	header->sgl_direct = sgl_direct;<br>
++<br>
++	/* The size of gdma_wqe + client_oob_size must be less than or equal<br>
++	 * to the basic unit, so the pointer here won't be beyond the queue<br>
++	 * buffer boundary.<br>
++	 */<br>
++	ptr = wqe_ptr + sizeof(header);<br>
++<br>
++	if (wqe_req->inline_oob_data && wqe_req->inline_oob_size > 0) {<br>
++		memcpy(ptr, wqe_req->inline_oob_data, wqe_req->inline_oob_size);<br>
++<br>
++		if (client_oob_size > wqe_req->inline_oob_size)<br>
++			memset(ptr + wqe_req->inline_oob_size, 0,<br>
++			       client_oob_size - wqe_req->inline_oob_size);<br>
++	}<br>
++<br>
++	return sizeof(header) + client_oob_size;<br>
++}<br>
++<br>
++static u32 gdma_write_sgl(struct gdma_queue *wq, u8 *wqe_ptr,<br>
++			  const struct gdma_wqe_request *wqe_req)<br>
++{<br>
++	bool sgl_direct = !!(wqe_req->flags & GDMA_WR_SGL_DIRECT);<br>
++	bool oob_in_sgl = !!(wqe_req->flags & GDMA_WR_OOB_IN_SGL);<br>
++	const struct gdma_sge *sgl = wqe_req->sgl;<br>
++	u32 queue_size = wq->queue_size;<br>
++	u32 num_sge = wqe_req->num_sge;<br>
++	struct gdma_sge dummy_sgl[2];<br>
++	u8 *wq_base_ptr, *wq_end_ptr;<br>
++	u32 size_to_queue_end;<br>
++	const u8 *address;<br>
++	u32 sgl_size;<br>
++	u32 size;<br>
++	int i;<br>
++<br>
++	if (num_sge == 0 || (oob_in_sgl && num_sge == 1)) {<br>
++		/* Per spec, the case of an empty SGL should be handled as<br>
++		 * follows to avoid corrupted WQE errors:<br>
++		 * Write one dummy SGL entry;<br>
++		 * Set the address to 1, leave the rest as 0.<br>
++		 */<br>
++		dummy_sgl[num_sge].address = 1;<br>
++		dummy_sgl[num_sge].size = 0;<br>
++		dummy_sgl[num_sge].mem_key = 0;<br>
++		if (num_sge == 1)<br>
++			memcpy(dummy_sgl, wqe_req->sgl,<br>
++			       sizeof(struct gdma_sge));<br>
++<br>
++		num_sge++;<br>
++		sgl = dummy_sgl;<br>
++		sgl_direct = false;<br>
++	}<br>
++<br>
++	sgl_size = 0;<br>
++	wq_base_ptr = wq->queue_mem_ptr;<br>
++	wq_end_ptr = wq_base_ptr + queue_size;<br>
++	size_to_queue_end = (u32)(wq_end_ptr - wqe_ptr);<br>
++<br>
++	if (sgl_direct) {<br>
++		for (i = 0; i < num_sge; i++) {<br>
++			address = (u8 *)wqe_req->sgl[i].address;<br>
++			size = wqe_req->sgl[i].size;<br>
++<br>
++			if (size_to_queue_end < size) {<br>
++				memcpy(wqe_ptr, address, size_to_queue_end);<br>
++				wqe_ptr = wq_base_ptr;<br>
++				address += size_to_queue_end;<br>
++				size -= size_to_queue_end;<br>
++			}<br>
++<br>
++			memcpy(wqe_ptr, address, size);<br>
++<br>
++			wqe_ptr += size;<br>
++<br>
++			if (wqe_ptr >= wq_end_ptr)<br>
++				wqe_ptr -= queue_size;<br>
++<br>
++			size_to_queue_end = (u32)(wq_end_ptr - wqe_ptr);<br>
++<br>
++			sgl_size += size;<br>
++		}<br>
++	} else {<br>
++		address = (u8 *)sgl;<br>
++<br>
++		size = sizeof(struct gdma_sge) * num_sge;<br>
++<br>
++		if (size_to_queue_end < size) {<br>
++			memcpy(wqe_ptr, address, size_to_queue_end);<br>
++<br>
++			wqe_ptr = wq_base_ptr;<br>
++			address += size_to_queue_end;<br>
++			size -= size_to_queue_end;<br>
++		}<br>
++<br>
++		memcpy(wqe_ptr, address, size);<br>
++<br>
++		sgl_size = size;<br>
++	}<br>
++<br>
++	return sgl_size;<br>
++}<br>
++<br>
++int gdma_post_work_request(struct gdma_queue *wq,<br>
++			   const struct gdma_wqe_request *wqe_req,<br>
++			   struct gdma_posted_wqe_info *wqe_info)<br>
++{<br>
++	bool sgl_direct = !!(wqe_req->flags & GDMA_WR_SGL_DIRECT);<br>
++	bool oob_in_sgl = !!(wqe_req->flags & GDMA_WR_OOB_IN_SGL);<br>
++	struct gdma_context *gc;<br>
++	u32 client_oob_size;<br>
++	u32 sgl_data_size;<br>
++	u32 max_wqe_size;<br>
++	u32 wqe_size;<br>
++	u8 *wqe_ptr;<br>
++<br>
++	if (sgl_direct && (wq->type != GDMA_SQ || oob_in_sgl))<br>
++		return -EINVAL;<br>
++<br>
++	if (wqe_req->inline_oob_size > INLINE_OOB_LARGE_SIZE)<br>
++		return -EINVAL;<br>
++<br>
++	if (oob_in_sgl && wqe_req->num_sge == 0)<br>
++		return -EINVAL;<br>
++<br>
++	client_oob_size = gdma_align_inline_oobsize(wqe_req->inline_oob_size);<br>
++<br>
++	sgl_data_size = gdma_calc_sgl_size(wqe_req);<br>
++<br>
++	wqe_size = ALIGN(sizeof(struct gdma_wqe) + client_oob_size +<br>
++			 sgl_data_size, GDMA_WQE_BU_SIZE);<br>
++<br>
++	if (wq->type == GDMA_RQ)<br>
++		max_wqe_size = GDMA_MAX_RQE_SIZE;<br>
++	else<br>
++		max_wqe_size = GDMA_MAX_SQE_SIZE;<br>
++<br>
++	if (wqe_size > max_wqe_size)<br>
++		return -EINVAL;<br>
++<br>
++	if (wq->monitor_avl_buf && wqe_size > gdma_wq_avail_space(wq)) {<br>
++		gc = gdma_dev_to_context(wq->gdma_dev);<br>
++		dev_err(gc->dev, "unsuccessful flow control!\n");<br>
++		return -ENOSPC;<br>
++	}<br>
++<br>
++	if (wqe_info)<br>
++		wqe_info->wqe_size_in_bu = wqe_size / GDMA_WQE_BU_SIZE;<br>
++<br>
++	wqe_ptr = gdma_get_wqe_ptr(wq, wq->head);<br>
++<br>
++	wqe_ptr += gdma_write_client_oob(wqe_ptr, wqe_req, wq->type,<br>
++					 client_oob_size, sgl_data_size);<br>
++<br>
++	if (wqe_ptr >= (u8 *)wq->queue_mem_ptr + wq->queue_size)<br>
++		wqe_ptr -= wq->queue_size;<br>
++<br>
++	gdma_write_sgl(wq, wqe_ptr, wqe_req);<br>
++<br>
++	wq->head += wqe_size / GDMA_WQE_BU_SIZE;<br>
++<br>
++	return 0;<br>
++}<br>
++<br>
++int gdma_post_and_ring(struct gdma_queue *queue,<br>
++		       const struct gdma_wqe_request *wqe,<br>
++		       struct gdma_posted_wqe_info *wqe_info)<br>
++{<br>
++	struct gdma_context *gc = gdma_dev_to_context(queue->gdma_dev);<br>
++<br>
++	int err = gdma_post_work_request(queue, wqe, wqe_info);<br>
++<br>
++	if (err)<br>
++		return err;<br>
++<br>
++	gdma_wq_ring_doorbell(gc, queue);<br>
++<br>
++	return 0;<br>
++}<br>
++<br>
++static int gdma_read_cqe(struct gdma_queue *cq, struct gdma_comp *comp)<br>
++{<br>
++	unsigned int cq_num_cqe = cq->queue_size / sizeof(struct gdma_cqe);<br>
++	struct gdma_cqe *cq_cqe = cq->queue_mem_ptr;<br>
++	u32 owner_bits, new_bits, old_bits;<br>
++	struct gdma_cqe *cqe;<br>
++<br>
++	new_bits = (cq->head / cq_num_cqe) & GDMA_CQE_OWNER_MASK;<br>
++	old_bits = (cq->head / cq_num_cqe - 1) & GDMA_CQE_OWNER_MASK;<br>
++<br>
++	cqe = &cq_cqe[cq->head % cq_num_cqe];<br>
++	owner_bits = cqe->cqe_info.owner_bits;<br>
++<br>
++	/* Return 0 if no new entry. */<br>
++	if (owner_bits == old_bits)<br>
++		return 0;<br>
++<br>
++	/* Return -1 if overflow detected. */<br>
++	if (owner_bits != new_bits)<br>
++		return -1;<br>
++<br>
++	comp->wq_num = cqe->cqe_info.wq_num;<br>
++	comp->is_sq = cqe->cqe_info.is_sq;<br>
++	memcpy(comp->cqe_data, cqe->cqe_data, GDMA_COMP_DATA_SIZE);<br>
++<br>
++	return 1;<br>
++}<br>
++<br>
++int gdma_poll_cq(struct gdma_queue *cq, struct gdma_comp *comp, int num_cqe)<br>
++{<br>
++	int cqe_idx;<br>
++	int ret;<br>
++<br>
++	for (cqe_idx = 0; cqe_idx < num_cqe; cqe_idx++) {<br>
++		ret = gdma_read_cqe(cq, &comp[cqe_idx]);<br>
++<br>
++		if (ret < 0) {<br>
++			cq->head -= cqe_idx;<br>
++			return ret;<br>
++		}<br>
++<br>
++		if (ret == 0)<br>
++			break;<br>
++<br>
++		cq->head++;<br>
++	}<br>
++<br>
++	return cqe_idx;<br>
++}<br>
++<br>
++static irqreturn_t gdma_intr(int irq, void *arg)<br>
++{<br>
++	struct gdma_irq_context *gic = arg;<br>
++<br>
++	if (gic->handler)<br>
++		gic->handler(gic->arg);<br>
++<br>
++	return IRQ_HANDLED;<br>
++}<br>
++<br>
++int gdma_alloc_res_map(u32 res_avail, struct gdma_resource *r)<br>
++{<br>
++	r->map = bitmap_zalloc(res_avail, GFP_KERNEL);<br>
++	if (!r->map)<br>
++		return -ENOMEM;<br>
++<br>
++	r->size = res_avail;<br>
++	spin_lock_init(&r->lock);<br>
++<br>
++	return 0;<br>
++}<br>
++<br>
++void gdma_free_res_map(struct gdma_resource *r)<br>
++{<br>
++	bitmap_free(r->map);<br>
++	r->map = NULL;<br>
++	r->size = 0;<br>
++}<br>
++<br>
++static int gdma_setup_irqs(struct pci_dev *pdev)<br>
++{<br>
++	struct gdma_context *gc = pci_get_drvdata(pdev);<br>
++	struct gdma_irq_context *gic;<br>
++	unsigned int max_irqs;<br>
++	int nvec, irq;<br>
++	int err, i, j;<br>
++<br>
++	max_irqs = min_t(uint, ANA_MAX_NUM_QUEUE + 1, num_online_cpus() + 1);<br>
++	nvec = pci_alloc_irq_vectors(pdev, 2, max_irqs, PCI_IRQ_MSIX);<br>
++	if (nvec < 0)<br>
++		return nvec;<br>
++<br>
++	gc->irq_contexts = kcalloc(nvec, sizeof(struct gdma_irq_context),<br>
++				   GFP_KERNEL);<br>
++	if (!gc->irq_contexts) {<br>
++		err = -ENOMEM;<br>
++		goto free_irq_vector;<br>
++	}<br>
++<br>
++	for (i = 0; i < nvec; i++) {<br>
++		gic = &gc->irq_contexts[i];<br>
++		gic->handler = NULL;<br>
++		gic->arg = NULL;<br>
++<br>
++		irq = pci_irq_vector(pdev, i);<br>
++		if (irq < 0) {<br>
++			err = irq;<br>
++			goto free_irq;<br>
++		}<br>
++<br>
++		err = request_irq(irq, gdma_intr, 0, "gdma_intr", gic);<br>
++		if (err)<br>
++			goto free_irq;<br>
++	}<br>
++<br>
++	err = gdma_alloc_res_map(nvec, &gc->msix_resource);<br>
++	if (err)<br>
++		goto free_irq;<br>
++<br>
++	gc->max_num_msix = nvec;<br>
++	gc->num_msix_usable = nvec;<br>
++<br>
++	return 0;<br>
++<br>
++free_irq:<br>
++	for (j = i - 1; j >= 0; j--) {<br>
++		irq = pci_irq_vector(pdev, j);<br>
++		gic = &gc->irq_contexts[j];<br>
++		free_irq(irq, gic);<br>
++	}<br>
++<br>
++	kfree(gc->irq_contexts);<br>
++	gc->irq_contexts = NULL;<br>
++free_irq_vector:<br>
++	pci_free_irq_vectors(pdev);<br>
++	return err;<br>
++}<br>
++<br>
++static void gdma_remove_irqs(struct pci_dev *pdev)<br>
++{<br>
++	struct gdma_context *gc = pci_get_drvdata(pdev);<br>
++	struct gdma_irq_context *gic;<br>
++	int irq, i;<br>
++<br>
++	if (gc->max_num_msix < 1)<br>
++		return;<br>
++<br>
++	gdma_free_res_map(&gc->msix_resource);<br>
++<br>
++	for (i = 0; i < gc->max_num_msix; i++) {<br>
++		irq = pci_irq_vector(pdev, i);<br>
++		if (WARN_ON(irq < 0))<br>
++			continue;<br>
++<br>
++		gic = &gc->irq_contexts[i];<br>
++		free_irq(irq, gic);<br>
++	}<br>
++<br>
++	pci_free_irq_vectors(pdev);<br>
++<br>
++	gc->max_num_msix = 0;<br>
++	gc->num_msix_usable = 0;<br>
++	kfree(gc->irq_contexts);<br>
++	gc->irq_contexts = NULL;<br>
++}<br>
++<br>
++static int gdma_probe(struct pci_dev *pdev, const struct pci_device_id *ent)<br>
++{<br>
++	struct gdma_context *gc;<br>
++	void __iomem *bar0_va;<br>
++	int bar = 0;<br>
++	int err;<br>
++<br>
++	err = pci_enable_device(pdev);<br>
++	if (err)<br>
++		return -ENXIO;<br>
++<br>
++	pci_set_master(pdev);<br>
++<br>
++	err = pci_request_regions(pdev, "gdma");<br>
++	if (err)<br>
++		goto disable_dev;<br>
++<br>
++	err = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(64));<br>
++	if (err)<br>
++		goto release_region;<br>
++<br>
++	err = -ENOMEM;<br>
++	gc = vzalloc(sizeof(*gc));<br>
++	if (!gc)<br>
++		goto release_region;<br>
++<br>
++	bar0_va = pci_iomap(pdev, bar, 0);<br>
++	if (!bar0_va)<br>
++		goto free_gc;<br>
++<br>
++	gc->bar0_va = bar0_va;<br>
++	gc->dev = &pdev->dev;<br>
++<br>
++	pci_set_drvdata(pdev, gc);<br>
++<br>
++	gdma_init_registers(pdev);<br>
++<br>
++	shm_channel_init(&gc->shm_channel, gc->dev, gc->shm_base);<br>
++<br>
++	err = gdma_setup_irqs(pdev);<br>
++	if (err)<br>
++		goto unmap_bar;<br>
++<br>
++	mutex_init(&gc->eq_test_event_mutex);<br>
++<br>
++	err = hwc_create_channel(gc);<br>
++	if (err)<br>
++		goto remove_irq;<br>
++<br>
++	err = gdma_verify_vf_version(pdev);<br>
++	if (err)<br>
++		goto remove_irq;<br>
++<br>
++	err = gdma_query_max_resources(pdev);<br>
++	if (err)<br>
++		goto remove_irq;<br>
++<br>
++	err = gdma_detect_devices(pdev);<br>
++	if (err)<br>
++		goto remove_irq;<br>
++<br>
++	err = ana_probe(&gc->ana);<br>
++	if (err)<br>
++		goto clean_up_gdma;<br>
++<br>
++	return 0;<br>
++<br>
++clean_up_gdma:<br>
++	hwc_destroy_channel(gc);<br>
++	vfree(gc->cq_table);<br>
++	gc->cq_table = NULL;<br>
++remove_irq:<br>
++	gdma_remove_irqs(pdev);<br>
++unmap_bar:<br>
++	pci_iounmap(pdev, bar0_va);<br>
++free_gc:<br>
++	vfree(gc);<br>
++release_region:<br>
++	pci_release_regions(pdev);<br>
++disable_dev:<br>
++	pci_clear_master(pdev);<br>
++	pci_disable_device(pdev);<br>
++	dev_err(gc->dev, "gdma probe failed: err = %d\n", err);<br>
++	return err;<br>
++}<br>
++<br>
++static void gdma_remove(struct pci_dev *pdev)<br>
++{<br>
++	struct gdma_context *gc = pci_get_drvdata(pdev);<br>
++<br>
++	ana_remove(&gc->ana);<br>
++<br>
++	hwc_destroy_channel(gc);<br>
++	vfree(gc->cq_table);<br>
++	gc->cq_table = NULL;<br>
++<br>
++	gdma_remove_irqs(pdev);<br>
++<br>
++	pci_iounmap(pdev, gc->bar0_va);<br>
++<br>
++	vfree(gc);<br>
++<br>
++	pci_release_regions(pdev);<br>
++	pci_clear_master(pdev);<br>
++	pci_disable_device(pdev);<br>
++}<br>
++<br>
++#ifndef PCI_VENDOR_ID_MICROSOFT<br>
++#define PCI_VENDOR_ID_MICROSOFT 0x1414<br>
++#endif<br>
++<br>
++static const struct pci_device_id mana_id_table[] = {<br>
++	{ PCI_DEVICE(PCI_VENDOR_ID_MICROSOFT, 0x00ba) },<br>
++	{ }<br>
++};<br>
++<br>
++static struct pci_driver mana_driver = {<br>
++	.name		= "mana",<br>
++	.id_table	= mana_id_table,<br>
++	.probe		= gdma_probe,<br>
++	.remove		= gdma_remove,<br>
++};<br>
++<br>
++module_pci_driver(mana_driver);<br>
++<br>
++MODULE_DEVICE_TABLE(pci, mana_id_table);<br>
++<br>
++MODULE_LICENSE("Dual BSD/GPL");<br>
++MODULE_DESCRIPTION("Microsoft Azure Network Adapter driver");<br>
+diff --git a/drivers/net/ethernet/microsoft/mana/hw_channel.c b/drivers/net/ethernet/microsoft/mana/hw_channel.c<br>
+new file mode 100644<br>
+index 000000000000..f070688ec55a<br>
+--- /dev/null<br>
++++ b/drivers/net/ethernet/microsoft/mana/hw_channel.c<br>
+@@ -0,0 +1,859 @@<br>
++// SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause<br>
++/* Copyright (c) 2021, Microsoft Corporation. */<br>
++<br>
++#include "gdma.h"<br>
++#include "hw_channel.h"<br>
++<br>
++static int hwc_get_msg_index(struct hw_channel_context *hwc, u16 *msg_idx)<br>
++{<br>
++	struct gdma_resource *r = &hwc->inflight_msg_res;<br>
++	unsigned long flags;<br>
++	u32 index;<br>
++<br>
++	down(&hwc->sema);<br>
++<br>
++	spin_lock_irqsave(&r->lock, flags);<br>
++<br>
++	index = find_first_zero_bit(hwc->inflight_msg_res.map,<br>
++				    hwc->inflight_msg_res.size);<br>
++<br>
++	bitmap_set(hwc->inflight_msg_res.map, index, 1);<br>
++<br>
++	spin_unlock_irqrestore(&r->lock, flags);<br>
++<br>
++	*msg_idx = index;<br>
++<br>
++	return 0;<br>
++}<br>
++<br>
++static void hwc_put_msg_index(struct hw_channel_context *hwc, u16 msg_idx)<br>
++{<br>
++	struct gdma_resource *r = &hwc->inflight_msg_res;<br>
++	unsigned long flags;<br>
++<br>
++	spin_lock_irqsave(&r->lock, flags);<br>
++	bitmap_clear(hwc->inflight_msg_res.map, msg_idx, 1);<br>
++	spin_unlock_irqrestore(&r->lock, flags);<br>
++<br>
++	up(&hwc->sema);<br>
++}<br>
++<br>
++static int hwc_verify_resp_msg(const struct hwc_caller_ctx *caller_ctx,<br>
++			       u32 resp_msglen,<br>
++			       const struct gdma_resp_hdr *resp_msg)<br>
++{<br>
++	if (resp_msglen < sizeof(*resp_msg))<br>
++		return -EPROTO;<br>
++<br>
++	if (resp_msglen > caller_ctx->output_buflen)<br>
++		return -EPROTO;<br>
++<br>
++	return 0;<br>
++}<br>
++<br>
++static void hwc_handle_resp(struct hw_channel_context *hwc, u32 resp_msglen,<br>
++			    const struct gdma_resp_hdr *resp_msg)<br>
++{<br>
++	struct hwc_caller_ctx *ctx;<br>
++	int err = -EPROTO;<br>
++<br>
++	if (!test_bit(resp_msg->response.hwc_msg_id,<br>
++		      hwc->inflight_msg_res.map)) {<br>
++		dev_err(hwc->dev, "hwc_rx: invalid msg_id = %u\n",<br>
++			resp_msg->response.hwc_msg_id);<br>
++		goto out;<br>
++	}<br>
++<br>
++	ctx = hwc->caller_ctx + resp_msg->response.hwc_msg_id;<br>
++	err = hwc_verify_resp_msg(ctx, resp_msglen, resp_msg);<br>
++	if (err)<br>
++		goto out;<br>
++<br>
++	ctx->status_code = resp_msg->status;<br>
++<br>
++	memcpy(ctx->output_buf, resp_msg, resp_msglen);<br>
++<br>
++out:<br>
++	ctx->error = err;<br>
++	complete(&ctx->comp_event);<br>
++}<br>
++<br>
++static int hwc_post_rx_wqe(const struct hwc_wq *hwc_rxq,<br>
++			   struct hwc_work_request *req)<br>
++{<br>
++	struct device *dev = hwc_rxq->hwc->dev;<br>
++	struct gdma_sge *sge;<br>
++	int err;<br>
++<br>
++	sge = &req->sge;<br>
++	sge->address = (u64)req->buf_sge_addr;<br>
++	sge->mem_key = hwc_rxq->msg_buf->gpa_mkey;<br>
++	sge->size = req->buf_len;<br>
++<br>
++	memset(&req->wqe_req, 0, sizeof(struct gdma_wqe_request));<br>
++	req->wqe_req.sgl = sge;<br>
++	req->wqe_req.num_sge = 1;<br>
++	req->wqe_req.client_data_unit = 0;<br>
++<br>
++	err = gdma_post_and_ring(hwc_rxq->gdma_wq, &req->wqe_req, NULL);<br>
++	if (err)<br>
++		dev_err(dev, "Failed to post WQE on HWC RQ: %d\n", err);<br>
++<br>
++	return err;<br>
++}<br>
++<br>
++static void hwc_init_event_handler(void *ctx, struct gdma_queue *q_self,<br>
++				   struct gdma_event *event)<br>
++{<br>
++	struct hw_channel_context *hwc = ctx;<br>
++	struct gdma_dev *gd = hwc->gdma_dev;<br>
++	union hwc_init_type_data type_data;<br>
++	union hwc_init_eq_id_db eq_db;<br>
++	struct gdma_context *gc;<br>
++	u32 type, val;<br>
++<br>
++	switch (event->type) {<br>
++	case GDMA_EQE_HWC_INIT_EQ_ID_DB:<br>
++		eq_db.as_uint32 = event->details[0];<br>
++		hwc->cq->gdma_eq->id = eq_db.eq_id;<br>
++		gd->doorbell = eq_db.doorbell;<br>
++		break;<br>
++<br>
++	case GDMA_EQE_HWC_INIT_DATA:<br>
++<br>
++		type_data.as_uint32 = event->details[0];<br>
++		type = type_data.type;<br>
++		val = type_data.value;<br>
++<br>
++		switch (type) {<br>
++		case HWC_INIT_DATA_CQID:<br>
++			hwc->cq->gdma_cq->id = val;<br>
++			break;<br>
++<br>
++		case HWC_INIT_DATA_RQID:<br>
++			hwc->rxq->gdma_wq->id = val;<br>
++			break;<br>
++<br>
++		case HWC_INIT_DATA_SQID:<br>
++			hwc->txq->gdma_wq->id = val;<br>
++			break;<br>
++<br>
++		case HWC_INIT_DATA_QUEUE_DEPTH:<br>
++			hwc->hwc_init_q_depth_max = (u16)val;<br>
++			break;<br>
++<br>
++		case HWC_INIT_DATA_MAX_REQUEST:<br>
++			hwc->hwc_init_max_req_msg_size = val;<br>
++			break;<br>
++<br>
++		case HWC_INIT_DATA_MAX_RESPONSE:<br>
++			hwc->hwc_init_max_resp_msg_size = val;<br>
++			break;<br>
++<br>
++		case HWC_INIT_DATA_MAX_NUM_CQS:<br>
++			gc = hwc_to_gdma_context(gd);<br>
++			gc->max_num_cq = val;<br>
++			break;<br>
++<br>
++		case HWC_INIT_DATA_PDID:<br>
++			hwc->gdma_dev->pdid = val;<br>
++			break;<br>
++<br>
++		case HWC_INIT_DATA_GPA_MKEY:<br>
++			hwc->rxq->msg_buf->gpa_mkey = val;<br>
++			hwc->txq->msg_buf->gpa_mkey = val;<br>
++			break;<br>
++		}<br>
++<br>
++		break;<br>
++<br>
++	case GDMA_EQE_HWC_INIT_DONE:<br>
++		complete(&hwc->hwc_init_eqe_comp);<br>
++		break;<br>
++<br>
++	default:<br>
++		WARN_ON(1);<br>
++		break;<br>
++	}<br>
++}<br>
++<br>
++static void hwc_rx_event_handler(void *ctx, u32 gdma_rxq_id,<br>
++				 const struct hwc_rx_oob *rx_oob)<br>
++{<br>
++	struct hw_channel_context *hwc = ctx;<br>
++	struct hwc_wq *hwc_rxq = hwc->rxq;<br>
++	struct hwc_work_request *rx_req;<br>
++	struct gdma_resp_hdr *resp;<br>
++	struct gdma_wqe *dma_oob;<br>
++	struct gdma_queue *rq;<br>
++	struct gdma_sge *sge;<br>
++	u64 rq_base_addr;<br>
++	u64 rx_req_idx;<br>
++	u16 msg_id;<br>
++	u8 *wqe;<br>
++<br>
++	if (WARN_ON(hwc_rxq->gdma_wq->id != gdma_rxq_id))<br>
++		return;<br>
++<br>
++	rq = hwc_rxq->gdma_wq;<br>
++	wqe = gdma_get_wqe_ptr(rq, rx_oob->wqe_offset / GDMA_WQE_BU_SIZE);<br>
++	dma_oob = (struct gdma_wqe *)wqe;<br>
++<br>
++	sge = (struct gdma_sge *)(wqe + 8 + dma_oob->inline_oob_size_div4 * 4);<br>
++	WARN_ON(dma_oob->inline_oob_size_div4 != 2 &&<br>
++		dma_oob->inline_oob_size_div4 != 6);<br>
++<br>
++	/* Select the rx WorkRequest for access to virtual address if not in SGE<br>
++	 * and for reposting.  The receive reqs index may not match<br>
++	 * channel msg_id if sender posted send WQE's out of order. The rx WR<br>
++	 * that should be recycled here is the one we're currently using. Its<br>
++	 * index can be calculated based on the current address's location in<br>
++	 * the memory region.<br>
++	 */<br>
++	rq_base_addr = hwc_rxq->msg_buf->mem_info.dma_handle;<br>
++	rx_req_idx = (sge->address - rq_base_addr) / hwc->max_req_msg_size;<br>
++<br>
++	rx_req = &hwc_rxq->msg_buf->reqs[rx_req_idx];<br>
++	resp = (struct gdma_resp_hdr *)rx_req->buf_va;<br>
++<br>
++	if (resp->response.hwc_msg_id >= hwc->num_inflight_msg) {<br>
++		dev_err(hwc->dev, "HWC RX: wrong msg_id=%u\n",<br>
++			resp->response.hwc_msg_id);<br>
++		return;<br>
++	}<br>
++<br>
++	hwc_handle_resp(hwc, rx_oob->tx_oob_data_size, resp);<br>
++<br>
++	msg_id = resp->response.hwc_msg_id;<br>
++	resp = NULL;<br>
++<br>
++	hwc_post_rx_wqe(hwc_rxq, rx_req);<br>
++<br>
++	hwc_put_msg_index(hwc, msg_id);<br>
++}<br>
++<br>
++static void hwc_tx_event_handler(void *ctx, u32 gdma_txq_id,<br>
++				 const struct hwc_rx_oob *rx_oob)<br>
++{<br>
++	struct hw_channel_context *hwc = ctx;<br>
++	struct hwc_wq *hwc_txq = hwc->txq;<br>
++<br>
++	WARN_ON(!hwc_txq || hwc_txq->gdma_wq->id != gdma_txq_id);<br>
++}<br>
++<br>
++static int hwc_create_gdma_wq(struct hw_channel_context *hwc,<br>
++			      enum gdma_queue_type type, u64 queue_size,<br>
++			      struct gdma_queue **queue)<br>
++{<br>
++	struct gdma_queue_spec spec = {};<br>
++<br>
++	if (type != GDMA_SQ && type != GDMA_RQ)<br>
++		return -EINVAL;<br>
++<br>
++	spec.type = type;<br>
++	spec.monitor_avl_buf = false;<br>
++	spec.queue_size = queue_size;<br>
++<br>
++	return gdma_create_hwc_queue(hwc->gdma_dev, &spec, queue);<br>
++}<br>
++<br>
++static int hwc_create_gdma_cq(struct hw_channel_context *hwc, u64 queue_size,<br>
++			      void *ctx, gdma_cq_callback *cb,<br>
++			      struct gdma_queue *parent_eq,<br>
++			      struct gdma_queue **queue)<br>
++{<br>
++	struct gdma_queue_spec spec = {};<br>
++<br>
++	spec.type = GDMA_CQ;<br>
++	spec.monitor_avl_buf = false;<br>
++	spec.queue_size = queue_size;<br>
++	spec.cq.context = ctx;<br>
++	spec.cq.callback = cb;<br>
++	spec.cq.parent_eq = parent_eq;<br>
++<br>
++	return gdma_create_hwc_queue(hwc->gdma_dev, &spec, queue);<br>
++}<br>
++<br>
++static int hwc_create_gdma_eq(struct hw_channel_context *hwc, u64 queue_size,<br>
++			      void *ctx, gdma_eq_callback *cb,<br>
++			      struct gdma_queue **queue)<br>
++{<br>
++	struct gdma_queue_spec spec = {};<br>
++<br>
++	spec.type = GDMA_EQ;<br>
++	spec.monitor_avl_buf = false;<br>
++	spec.queue_size = queue_size;<br>
++	spec.eq.context = ctx;<br>
++	spec.eq.callback = cb;<br>
++	spec.eq.log2_throttle_limit = DEFAULT_LOG2_THROTTLING_FOR_ERROR_EQ;<br>
++<br>
++	return gdma_create_hwc_queue(hwc->gdma_dev, &spec, queue);<br>
++}<br>
++<br>
++static void hwc_comp_event(void *ctx, struct gdma_queue *q_self)<br>
++{<br>
++	struct hwc_rx_oob comp_data = {};<br>
++	struct gdma_comp *completions;<br>
++	struct hwc_cq *hwc_cq = ctx;<br>
++	u32 comp_read, i;<br>
++<br>
++	WARN_ON(hwc_cq->gdma_cq != q_self);<br>
++<br>
++	completions = hwc_cq->comp_buf;<br>
++	comp_read = gdma_poll_cq(q_self, completions, hwc_cq->queue_depth);<br>
++	WARN_ON(comp_read <= 0 || comp_read > hwc_cq->queue_depth);<br>
++<br>
++	for (i = 0; i < comp_read; ++i) {<br>
++		comp_data = *(struct hwc_rx_oob *)completions[i].cqe_data;<br>
++<br>
++		if (completions[i].is_sq)<br>
++			hwc_cq->tx_event_handler(hwc_cq->tx_event_ctx,<br>
++						completions[i].wq_num,<br>
++						&comp_data);<br>
++		else<br>
++			hwc_cq->rx_event_handler(hwc_cq->rx_event_ctx,<br>
++						completions[i].wq_num,<br>
++						&comp_data);<br>
++	}<br>
++<br>
++	gdma_arm_cq(q_self);<br>
++}<br>
++<br>
++static void hwc_destroy_cq(struct gdma_context *gc, struct hwc_cq *hwc_cq)<br>
++{<br>
++	if (!hwc_cq)<br>
++		return;<br>
++<br>
++	kfree(hwc_cq->comp_buf);<br>
++<br>
++	if (hwc_cq->gdma_cq)<br>
++		gdma_destroy_queue(gc, hwc_cq->gdma_cq);<br>
++<br>
++	if (hwc_cq->gdma_eq)<br>
++		gdma_destroy_queue(gc, hwc_cq->gdma_eq);<br>
++<br>
++	kfree(hwc_cq);<br>
++}<br>
++<br>
++static int hwc_create_cq(struct hw_channel_context *hwc, u16 q_depth,<br>
++			 gdma_eq_callback *callback, void *ctx,<br>
++			 hwc_rx_event_handler_t *rx_ev_hdlr, void *rx_ev_ctx,<br>
++			 hwc_tx_event_handler_t *tx_ev_hdlr, void *tx_ev_ctx,<br>
++			 struct hwc_cq **hwc_cq_p)<br>
++{<br>
++	struct gdma_queue *eq, *cq;<br>
++	struct gdma_comp *comp_buf;<br>
++	struct hwc_cq *hwc_cq;<br>
++	u32 eq_size, cq_size;<br>
++	int err;<br>
++<br>
++	eq_size = roundup_pow_of_two(GDMA_EQE_SIZE * q_depth);<br>
++	WARN_ON(eq_size != 16 * 2 * HW_CHANNEL_VF_BOOTSTRAP_QUEUE_DEPTH);<br>
++	if (eq_size < MINIMUM_SUPPORTED_PAGE_SIZE)<br>
++		eq_size = MINIMUM_SUPPORTED_PAGE_SIZE;<br>
++<br>
++	cq_size = roundup_pow_of_two(GDMA_CQE_SIZE * q_depth);<br>
++	WARN_ON(cq_size != 64 * 2 * HW_CHANNEL_VF_BOOTSTRAP_QUEUE_DEPTH);<br>
++	if (cq_size < MINIMUM_SUPPORTED_PAGE_SIZE)<br>
++		cq_size = MINIMUM_SUPPORTED_PAGE_SIZE;<br>
++<br>
++	hwc_cq = kzalloc(sizeof(*hwc_cq), GFP_KERNEL);<br>
++	if (!hwc_cq)<br>
++		return -ENOMEM;<br>
++<br>
++	err = hwc_create_gdma_eq(hwc, eq_size, ctx, callback, &eq);<br>
++	if (err) {<br>
++		dev_err(hwc->dev, "Failed to create HWC EQ for RQ: %d\n", err);<br>
++		goto out;<br>
++	}<br>
++	hwc_cq->gdma_eq = eq;<br>
++<br>
++	err = hwc_create_gdma_cq(hwc, cq_size, hwc_cq, hwc_comp_event, eq, &cq);<br>
++	if (err) {<br>
++		dev_err(hwc->dev, "Failed to create HWC CQ for RQ: %d\n", err);<br>
++		goto out;<br>
++	}<br>
++	hwc_cq->gdma_cq = cq;<br>
++<br>
++	comp_buf = kcalloc(q_depth, sizeof(struct gdma_comp), GFP_KERNEL);<br>
++	if (!comp_buf) {<br>
++		err = -ENOMEM;<br>
++		goto out;<br>
++	}<br>
++<br>
++	hwc_cq->hwc = hwc;<br>
++	hwc_cq->comp_buf = comp_buf;<br>
++	hwc_cq->queue_depth = q_depth;<br>
++	hwc_cq->rx_event_handler = rx_ev_hdlr;<br>
++	hwc_cq->rx_event_ctx = rx_ev_ctx;<br>
++	hwc_cq->tx_event_handler = tx_ev_hdlr;<br>
++	hwc_cq->tx_event_ctx = tx_ev_ctx;<br>
++<br>
++	*hwc_cq_p = hwc_cq;<br>
++	return 0;<br>
++<br>
++out:<br>
++	hwc_destroy_cq(hwc_to_gdma_context(hwc->gdma_dev), hwc_cq);<br>
++	return err;<br>
++}<br>
++<br>
++static int hwc_alloc_dma_buf(struct hw_channel_context *hwc, u16 q_depth,<br>
++			     u32 max_msg_size, struct hwc_dma_buf **dma_buf_p)<br>
++{<br>
++	struct gdma_context *gc = hwc_to_gdma_context(hwc->gdma_dev);<br>
++	struct hwc_work_request *hwc_wr;<br>
++	struct hwc_dma_buf *dma_buf;<br>
++	struct gdma_mem_info *gmi;<br>
++	void *virt_addr;<br>
++	u32 buf_size;<br>
++	u8 *base_pa;<br>
++	int err;<br>
++	u16 i;<br>
++<br>
++	dma_buf = kzalloc(sizeof(*dma_buf) +<br>
++			  q_depth * sizeof(struct hwc_work_request),<br>
++			  GFP_KERNEL);<br>
++	if (!dma_buf)<br>
++		return -ENOMEM;<br>
++<br>
++	dma_buf->num_reqs = q_depth;<br>
++<br>
++	buf_size = ALIGN(q_depth * max_msg_size, PAGE_SIZE);<br>
++<br>
++	gmi = &dma_buf->mem_info;<br>
++	err = gdma_alloc_memory(gc, buf_size, gmi);<br>
++	if (err) {<br>
++		dev_err(hwc->dev, "Failed to allocate DMA buffer: %d\n", err);<br>
++		goto out;<br>
++	}<br>
++<br>
++	virt_addr = dma_buf->mem_info.virt_addr;<br>
++	base_pa = (u8 *)dma_buf->mem_info.dma_handle;<br>
++<br>
++	for (i = 0; i < q_depth; i++) {<br>
++		hwc_wr = &dma_buf->reqs[i];<br>
++<br>
++		hwc_wr->buf_va = virt_addr + i * max_msg_size;<br>
++		hwc_wr->buf_sge_addr = base_pa + i * max_msg_size;<br>
++<br>
++		hwc_wr->buf_len = max_msg_size;<br>
++	}<br>
++<br>
++	*dma_buf_p = dma_buf;<br>
++	return 0;<br>
++out:<br>
++	kfree(dma_buf);<br>
++	return err;<br>
++}<br>
++<br>
++static void hwc_dealloc_dma_buf(struct hw_channel_context *hwc,<br>
++				struct hwc_dma_buf *dma_buf)<br>
++{<br>
++	if (!dma_buf)<br>
++		return;<br>
++<br>
++	gdma_free_memory(&dma_buf->mem_info);<br>
++<br>
++	kfree(dma_buf);<br>
++}<br>
++<br>
++static void hwc_destroy_wq(struct hw_channel_context *hwc,<br>
++			   struct hwc_wq *hwc_wq)<br>
++{<br>
++	if (!hwc_wq)<br>
++		return;<br>
++<br>
++	hwc_dealloc_dma_buf(hwc, hwc_wq->msg_buf);<br>
++<br>
++	if (hwc_wq->gdma_wq)<br>
++		gdma_destroy_queue(hwc_to_gdma_context(hwc->gdma_dev),<br>
++				   hwc_wq->gdma_wq);<br>
++<br>
++	kfree(hwc_wq);<br>
++}<br>
++<br>
++static int hwc_create_wq(struct hw_channel_context *hwc,<br>
++			 enum gdma_queue_type q_type, u16 q_depth,<br>
++			 u32 max_msg_size, struct hwc_cq *hwc_cq,<br>
++			 struct hwc_wq **hwc_wq_p)<br>
++{<br>
++	struct gdma_queue *queue;<br>
++	struct hwc_wq *hwc_wq;<br>
++	u32 queue_size;<br>
++	int err;<br>
++<br>
++	WARN_ON(q_type != GDMA_SQ && q_type != GDMA_RQ);<br>
++<br>
++	if (q_type == GDMA_RQ)<br>
++		queue_size = roundup_pow_of_two(GDMA_MAX_RQE_SIZE * q_depth);<br>
++	else<br>
++		queue_size = roundup_pow_of_two(GDMA_MAX_SQE_SIZE * q_depth);<br>
++<br>
++	if (queue_size < MINIMUM_SUPPORTED_PAGE_SIZE)<br>
++		queue_size = MINIMUM_SUPPORTED_PAGE_SIZE;<br>
++<br>
++	hwc_wq = kzalloc(sizeof(*hwc_wq), GFP_KERNEL);<br>
++	if (!hwc_wq)<br>
++		return -ENOMEM;<br>
++<br>
++	err = hwc_create_gdma_wq(hwc, q_type, queue_size, &queue);<br>
++	if (err)<br>
++		goto out;<br>
++<br>
++	err = hwc_alloc_dma_buf(hwc, q_depth, max_msg_size, &hwc_wq->msg_buf);<br>
++	if (err)<br>
++		goto out;<br>
++<br>
++	hwc_wq->hwc = hwc;<br>
++	hwc_wq->gdma_wq = queue;<br>
++	hwc_wq->queue_depth = q_depth;<br>
++	hwc_wq->hwc_cq = hwc_cq;<br>
++<br>
++	*hwc_wq_p = hwc_wq;<br>
++	return 0;<br>
++<br>
++out:<br>
++	if (err)<br>
++		hwc_destroy_wq(hwc, hwc_wq);<br>
++	return err;<br>
++}<br>
++<br>
++static int hwc_post_tx_wqe(const struct hwc_wq *hwc_txq,<br>
++			   struct hwc_work_request *req,<br>
++			   u32 dest_virt_rq_id, u32 dest_virt_rcq_id,<br>
++			   bool dest_pf)<br>
++{<br>
++	struct device *dev = hwc_txq->hwc->dev;<br>
++	struct hwc_tx_oob *tx_oob;<br>
++	struct gdma_sge *sge;<br>
++	int err;<br>
++<br>
++	if (req->msg_size == 0 || req->msg_size > req->buf_len) {<br>
++		dev_err(dev, "wrong msg_size: %u, buf_len: %u\n",<br>
++			req->msg_size, req->buf_len);<br>
++		return -EINVAL;<br>
++	}<br>
++<br>
++	tx_oob = &req->tx_oob;<br>
++<br>
++	tx_oob->vrq_id = dest_virt_rq_id;<br>
++	tx_oob->dest_vfid = 0;<br>
++	tx_oob->vrcq_id = dest_virt_rcq_id;<br>
++	tx_oob->vscq_id = hwc_txq->hwc_cq->gdma_cq->id;<br>
++	tx_oob->loopback = false;<br>
++	tx_oob->lso_override = false;<br>
++	tx_oob->dest_pf = dest_pf;<br>
++	tx_oob->vsq_id = hwc_txq->gdma_wq->id;<br>
++<br>
++	sge = &req->sge;<br>
++	sge->address = (u64)req->buf_sge_addr;<br>
++	sge->mem_key = hwc_txq->msg_buf->gpa_mkey;<br>
++	sge->size = req->msg_size;<br>
++<br>
++	memset(&req->wqe_req, 0, sizeof(struct gdma_wqe_request));<br>
++	req->wqe_req.sgl = sge;<br>
++	req->wqe_req.num_sge = 1;<br>
++	req->wqe_req.inline_oob_size = sizeof(struct hwc_tx_oob);<br>
++	req->wqe_req.inline_oob_data = tx_oob;<br>
++	req->wqe_req.client_data_unit = 0;<br>
++<br>
++	err = gdma_post_and_ring(hwc_txq->gdma_wq, &req->wqe_req, NULL);<br>
++	if (err)<br>
++		dev_err(dev, "Failed to post WQE on HWC RQ: %d\n", err);<br>
++<br>
++	return err;<br>
++}<br>
++<br>
++static int hwc_init_inflight_msg(struct hw_channel_context *hwc, u16 num_msg)<br>
++{<br>
++	int err;<br>
++<br>
++	sema_init(&hwc->sema, num_msg);<br>
++<br>
++	WARN_ON(num_msg != HW_CHANNEL_VF_BOOTSTRAP_QUEUE_DEPTH);<br>
++<br>
++	err = gdma_alloc_res_map(num_msg, &hwc->inflight_msg_res);<br>
++	if (err)<br>
++		dev_err(hwc->dev, "Failed to init inflight_msg_res: %d\n", err);<br>
++<br>
++	return err;<br>
++}<br>
++<br>
++static int hwc_test_channel(struct hw_channel_context *hwc, u16 q_depth,<br>
++			    u32 max_req_msg_size, u32 max_resp_msg_size)<br>
++{<br>
++	struct gdma_context *gc = hwc_to_gdma_context(hwc->gdma_dev);<br>
++	struct hwc_wq *hwc_rxq = hwc->rxq;<br>
++	struct hwc_work_request *req;<br>
++	struct hwc_caller_ctx *ctx;<br>
++	int err;<br>
++	int i;<br>
++<br>
++	/* Post all WQEs on the RQ */<br>
++	for (i = 0; i < q_depth; i++) {<br>
++		req = &hwc_rxq->msg_buf->reqs[i];<br>
++		err = hwc_post_rx_wqe(hwc_rxq, req);<br>
++		if (err)<br>
++			return err;<br>
++	}<br>
++<br>
++	ctx = kzalloc(q_depth * sizeof(struct hwc_caller_ctx), GFP_KERNEL);<br>
++	if (!ctx)<br>
++		return -ENOMEM;<br>
++<br>
++	for (i = 0; i < q_depth; ++i)<br>
++		init_completion(&ctx[i].comp_event);<br>
++<br>
++	hwc->caller_ctx = ctx;<br>
++<br>
++	err = gdma_test_eq(gc, hwc->cq->gdma_eq);<br>
++	return err;<br>
++}<br>
++<br>
++void hwc_destroy_channel(struct gdma_context *gc)<br>
++{<br>
++	struct hw_channel_context *hwc = gc->hwc.driver_data;<br>
++	struct hwc_caller_ctx *ctx;<br>
++<br>
++	shm_channel_teardown_hwc(&gc->shm_channel, false);<br>
++<br>
++	ctx = hwc->caller_ctx;<br>
++	kfree(ctx);<br>
++	hwc->caller_ctx = NULL;<br>
++<br>
++	hwc_destroy_wq(hwc, hwc->txq);<br>
++	hwc->txq = NULL;<br>
++<br>
++	hwc_destroy_wq(hwc, hwc->rxq);<br>
++	hwc->rxq = NULL;<br>
++<br>
++	hwc_destroy_cq(hwc_to_gdma_context(hwc->gdma_dev), hwc->cq);<br>
++	hwc->cq = NULL;<br>
++<br>
++	gdma_free_res_map(&hwc->inflight_msg_res);<br>
++<br>
++	hwc->num_inflight_msg = 0;<br>
++<br>
++	if (hwc->gdma_dev->pdid != INVALID_PDID) {<br>
++		hwc->gdma_dev->doorbell = INVALID_DOORBELL;<br>
++		hwc->gdma_dev->pdid = INVALID_PDID;<br>
++	}<br>
++<br>
++	kfree(hwc);<br>
++	gc->hwc.driver_data = NULL;<br>
++}<br>
++<br>
++static int hwc_establish_channel(struct gdma_context *gc, u16 *q_depth,<br>
++				 u32 *max_req_msg_size, u32 *max_resp_msg_size)<br>
++{<br>
++	struct hw_channel_context *hwc = gc->hwc.driver_data;<br>
++	struct gdma_queue *rq = hwc->rxq->gdma_wq;<br>
++	struct gdma_queue *sq = hwc->txq->gdma_wq;<br>
++	struct gdma_queue *eq = hwc->cq->gdma_eq;<br>
++	struct gdma_queue *cq = hwc->cq->gdma_cq;<br>
++	int err;<br>
++<br>
++	init_completion(&hwc->hwc_init_eqe_comp);<br>
++<br>
++	err = shm_channel_setup_hwc(&gc->shm_channel, false,<br>
++				    eq->mem_info.dma_handle,<br>
++				    cq->mem_info.dma_handle,<br>
++				    rq->mem_info.dma_handle,<br>
++				    sq->mem_info.dma_handle,<br>
++				    eq->eq.msix_index);<br>
++	if (err)<br>
++		return err;<br>
++<br>
++	if (!wait_for_completion_timeout(&hwc->hwc_init_eqe_comp, 60 * HZ))<br>
++		return -ETIMEDOUT;<br>
++<br>
++	*q_depth = hwc->hwc_init_q_depth_max;<br>
++	*max_req_msg_size = hwc->hwc_init_max_req_msg_size;<br>
++	*max_resp_msg_size = hwc->hwc_init_max_resp_msg_size;<br>
++<br>
++	WARN_ON(*q_depth < HW_CHANNEL_VF_BOOTSTRAP_QUEUE_DEPTH);<br>
++	WARN_ON(*max_req_msg_size != HW_CHANNEL_MAX_REQUEST_SIZE);<br>
++	WARN_ON(*max_resp_msg_size != HW_CHANNEL_MAX_RESPONSE_SIZE);<br>
++<br>
++	WARN_ON(gc->max_num_cq == 0);<br>
++	if (WARN_ON(cq->id >= gc->max_num_cq))<br>
++		return -EPROTO;<br>
++<br>
++	gc->cq_table = vzalloc(gc->max_num_cq * sizeof(struct gdma_queue *));<br>
++	if (!gc->cq_table)<br>
++		return -ENOMEM;<br>
++<br>
++	gc->cq_table[cq->id] = cq;<br>
++<br>
++	return 0;<br>
++}<br>
++<br>
++static int hwc_init_queues(struct hw_channel_context *hwc, u16 q_depth,<br>
++			   u32 max_req_msg_size, u32 max_resp_msg_size)<br>
++{<br>
++	struct hwc_wq *hwc_rxq = NULL;<br>
++	struct hwc_wq *hwc_txq = NULL;<br>
++	struct hwc_cq *hwc_cq = NULL;<br>
++	int err;<br>
++<br>
++	err = hwc_init_inflight_msg(hwc, q_depth);<br>
++	if (err)<br>
++		return err;<br>
++<br>
++	/* CQ is shared by SQ and RQ, so CQ's queue depth is the sum of SQ<br>
++	 * queue depth and RQ queue depth.<br>
++	 */<br>
++	err = hwc_create_cq(hwc, q_depth * 2, hwc_init_event_handler, hwc,<br>
++			    hwc_rx_event_handler, hwc, hwc_tx_event_handler,<br>
++			    hwc, &hwc_cq);<br>
++	if (err) {<br>
++		WARN(1, "Failed to create HWC CQ: %d\n", err);<br>
++		goto out;<br>
++	}<br>
++	hwc->cq = hwc_cq;<br>
++<br>
++	err = hwc_create_wq(hwc, GDMA_RQ, q_depth, max_req_msg_size,<br>
++			    hwc_cq, &hwc_rxq);<br>
++	if (err) {<br>
++		WARN(1, "Failed to create HWC RQ: %d\n", err);<br>
++		goto out;<br>
++	}<br>
++	hwc->rxq = hwc_rxq;<br>
++<br>
++	err = hwc_create_wq(hwc, GDMA_SQ, q_depth, max_resp_msg_size,<br>
++			    hwc_cq, &hwc_txq);<br>
++	if (err) {<br>
++		WARN(1, "Failed to create HWC SQ: %d\n", err);<br>
++		goto out;<br>
++	}<br>
++	hwc->txq = hwc_txq;<br>
++<br>
++	hwc->num_inflight_msg = q_depth;<br>
++	hwc->max_req_msg_size = max_req_msg_size;<br>
++<br>
++	return 0;<br>
++out:<br>
++	if (hwc_txq)<br>
++		hwc_destroy_wq(hwc, hwc_txq);<br>
++<br>
++	if (hwc_rxq)<br>
++		hwc_destroy_wq(hwc, hwc_rxq);<br>
++<br>
++	if (hwc_cq)<br>
++		hwc_destroy_cq(hwc_to_gdma_context(hwc->gdma_dev),<br>
++			       hwc_cq);<br>
++<br>
++	gdma_free_res_map(&hwc->inflight_msg_res);<br>
++	return err;<br>
++}<br>
++<br>
++int hwc_create_channel(struct gdma_context *gc)<br>
++{<br>
++	u32 max_req_msg_size, max_resp_msg_size;<br>
++	struct gdma_dev *gd = &gc->hwc;<br>
++	struct hw_channel_context *hwc;<br>
++	u16 q_depth_max;<br>
++	int err;<br>
++<br>
++	hwc = kzalloc(sizeof(*hwc), GFP_KERNEL);<br>
++	if (!hwc)<br>
++		return -ENOMEM;<br>
++<br>
++	gd->driver_data = hwc;<br>
++	hwc->gdma_dev = gd;<br>
++	hwc->dev = gc->dev;<br>
++<br>
++	/* HWC's instance number is always 0. */<br>
++	gd->dev_id.as_uint32 = 0;<br>
++	gd->dev_id.type = GDMA_DEVICE_HWC;<br>
++<br>
++	gd->pdid = INVALID_PDID;<br>
++	gd->doorbell = INVALID_DOORBELL;<br>
++<br>
++	err = hwc_init_queues(hwc, HW_CHANNEL_VF_BOOTSTRAP_QUEUE_DEPTH,<br>
++			      HW_CHANNEL_MAX_REQUEST_SIZE,<br>
++			      HW_CHANNEL_MAX_RESPONSE_SIZE);<br>
++	if (err) {<br>
++		dev_err(hwc->dev, "Failed to initialize HWC: %d\n", err);<br>
++		goto out;<br>
++	}<br>
++<br>
++	err = hwc_establish_channel(gc, &q_depth_max, &max_req_msg_size,<br>
++				    &max_resp_msg_size);<br>
++	if (err) {<br>
++		dev_err(hwc->dev, "Failed to establish HWC: %d\n", err);<br>
++		goto out;<br>
++	}<br>
++<br>
++	WARN_ON(q_depth_max < HW_CHANNEL_VF_BOOTSTRAP_QUEUE_DEPTH);<br>
++	WARN_ON(max_req_msg_size < HW_CHANNEL_MAX_REQUEST_SIZE);<br>
++	WARN_ON(max_resp_msg_size > HW_CHANNEL_MAX_RESPONSE_SIZE);<br>
++<br>
++	err = hwc_test_channel(gc->hwc.driver_data,<br>
++			       HW_CHANNEL_VF_BOOTSTRAP_QUEUE_DEPTH,<br>
++			       max_req_msg_size, max_resp_msg_size);<br>
++	if (err) {<br>
++		dev_err(hwc->dev, "Failed to establish HWC: %d\n", err);<br>
++		goto out;<br>
++	}<br>
++<br>
++	return 0;<br>
++out:<br>
++	kfree(hwc);<br>
++	return err;<br>
++}<br>
++<br>
++int hwc_send_request(struct hw_channel_context *hwc, u32 req_len,<br>
++		     const void *req, u32 resp_len, void *resp)<br>
++{<br>
++	struct hwc_work_request *tx_wr;<br>
++	struct hwc_wq *txq = hwc->txq;<br>
++	struct gdma_req_hdr *req_msg;<br>
++	struct hwc_caller_ctx *ctx;<br>
++	u16 msg_idx;<br>
++	int err;<br>
++<br>
++	hwc_get_msg_index(hwc, &msg_idx);<br>
++<br>
++	tx_wr = &txq->msg_buf->reqs[msg_idx];<br>
++<br>
++	if (req_len > tx_wr->buf_len) {<br>
++		dev_err(hwc->dev, "HWC: req msg size: %d > %d\n", req_len,<br>
++			tx_wr->buf_len);<br>
++		return -EINVAL;<br>
++	}<br>
++<br>
++	ctx = hwc->caller_ctx + msg_idx;<br>
++	ctx->output_buf = resp;<br>
++	ctx->output_buflen = resp_len;<br>
++<br>
++	req_msg = (struct gdma_req_hdr *)tx_wr->buf_va;<br>
++	if (req)<br>
++		memcpy(req_msg, req, req_len);<br>
++<br>
++	req_msg->req.hwc_msg_id = msg_idx;<br>
++<br>
++	tx_wr->msg_size = req_len;<br>
++<br>
++	err = hwc_post_tx_wqe(txq, tx_wr, 0, 0, false);<br>
++	if (err) {<br>
++		dev_err(hwc->dev, "HWC: Failed to post send WQE: %d\n", err);<br>
++		return err;<br>
++	}<br>
++<br>
++	if (!wait_for_completion_timeout(&ctx->comp_event, 30 * HZ)) {<br>
++		dev_err(hwc->dev, "HWC: Request timed out!\n");<br>
++		return -ETIMEDOUT;<br>
++	}<br>
++<br>
++	if (ctx->error)<br>
++		return ctx->error;<br>
++<br>
++	if (ctx->status_code) {<br>
++		dev_err(hwc->dev, "HWC: Failed hw_channel req: 0x%x\n",<br>
++			ctx->status_code);<br>
++		return -EPROTO;<br>
++	}<br>
++<br>
++	return 0;<br>
++}<br>
+diff --git a/drivers/net/ethernet/microsoft/mana/hw_channel.h b/drivers/net/ethernet/microsoft/mana/hw_channel.h<br>
+new file mode 100644<br>
+index 000000000000..54c07c1ad551<br>
+--- /dev/null<br>
++++ b/drivers/net/ethernet/microsoft/mana/hw_channel.h<br>
+@@ -0,0 +1,186 @@<br>
++/* SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause */<br>
++/* Copyright (c) 2021, Microsoft Corporation. */<br>
++<br>
++#ifndef _HW_CHANNEL_H<br>
++#define _HW_CHANNEL_H<br>
++<br>
++#define DEFAULT_LOG2_THROTTLING_FOR_ERROR_EQ  4<br>
++<br>
++#define HW_CHANNEL_MAX_REQUEST_SIZE  0x1000<br>
++#define HW_CHANNEL_MAX_RESPONSE_SIZE 0x1000<br>
++<br>
++#define HW_CHANNEL_VF_BOOTSTRAP_QUEUE_DEPTH 1<br>
++<br>
++#define HWC_INIT_DATA_CQID		1<br>
++#define HWC_INIT_DATA_RQID		2<br>
++#define HWC_INIT_DATA_SQID		3<br>
++#define HWC_INIT_DATA_QUEUE_DEPTH	4<br>
++#define HWC_INIT_DATA_MAX_REQUEST	5<br>
++#define HWC_INIT_DATA_MAX_RESPONSE	6<br>
++#define HWC_INIT_DATA_MAX_NUM_CQS	7<br>
++#define HWC_INIT_DATA_PDID		8<br>
++#define HWC_INIT_DATA_GPA_MKEY		9<br>
++<br>
++union hwc_init_eq_id_db {<br>
++	u32 as_uint32;<br>
++<br>
++	struct {<br>
++		u32 eq_id	: 16;<br>
++		u32 doorbell	: 16;<br>
++	};<br>
++} __packed;<br>
++<br>
++union hwc_init_type_data {<br>
++	u32 as_uint32;<br>
++<br>
++	struct {<br>
++		u32 value	: 24;<br>
++		u32 type	:  8;<br>
++	};<br>
++} __packed;<br>
++<br>
++struct hwc_rx_oob {<br>
++	u32 type	: 6;<br>
++	u32 eom		: 1;<br>
++	u32 som		: 1;<br>
++	u32 vendor_err	: 8;<br>
++	u32 reserved1	: 16;<br>
++<br>
++	u32 src_virt_wq	: 24;<br>
++	u32 src_vfid	: 8;<br>
++<br>
++	u32 reserved2;<br>
++<br>
++	union {<br>
++		u32 wqe_addr_low;<br>
++		u32 wqe_offset;<br>
++	};<br>
++<br>
++	u32 wqe_addr_high;<br>
++<br>
++	u32 client_data_unit	: 14;<br>
++	u32 reserved3		: 18;<br>
++<br>
++	u32 tx_oob_data_size;<br>
++<br>
++	u32 chunk_offset	: 21;<br>
++	u32 reserved4		: 11;<br>
++} __packed;<br>
++<br>
++struct hwc_tx_oob {<br>
++	u32 reserved1;<br>
++<br>
++	u32 reserved2;<br>
++<br>
++	u32 vrq_id	: 24;<br>
++	u32 dest_vfid	: 8;<br>
++<br>
++	u32 vrcq_id	: 24;<br>
++	u32 reserved3	: 8;<br>
++<br>
++	u32 vscq_id	: 24;<br>
++	u32 loopback	: 1;<br>
++	u32 lso_override: 1;<br>
++	u32 dest_pf	: 1;<br>
++	u32 reserved4	: 5;<br>
++<br>
++	u32 vsq_id	: 24;<br>
++	u32 reserved5	: 8;<br>
++} __packed;<br>
++<br>
++struct hwc_work_request {<br>
++	void *buf_va;<br>
++	void *buf_sge_addr;<br>
++	u32 buf_len;<br>
++	u32 msg_size;<br>
++<br>
++	struct gdma_wqe_request wqe_req;<br>
++	struct hwc_tx_oob tx_oob;<br>
++<br>
++	struct gdma_sge sge;<br>
++};<br>
++<br>
++/* hwc_dma_buf represents the array of in-flight WQEs.<br>
++ * mem_info as know as the GDMA mapped memory is partitioned and used by<br>
++ * in-flight WQEs.<br>
++ * The number of WQEs is determined by the number of in-flight messages.<br>
++ */<br>
++struct hwc_dma_buf {<br>
++	struct gdma_mem_info mem_info;<br>
++<br>
++	u32 gpa_mkey;<br>
++<br>
++	u32 num_reqs;<br>
++	struct hwc_work_request reqs[];<br>
++};<br>
++<br>
++typedef void hwc_rx_event_handler_t(void *ctx, u32 gdma_rxq_id,<br>
++				    const struct hwc_rx_oob *rx_oob);<br>
++<br>
++typedef void hwc_tx_event_handler_t(void *ctx, u32 gdma_txq_id,<br>
++				    const struct hwc_rx_oob *rx_oob);<br>
++<br>
++struct hwc_cq {<br>
++	struct hw_channel_context *hwc;<br>
++<br>
++	struct gdma_queue *gdma_cq;<br>
++	struct gdma_queue *gdma_eq;<br>
++	struct gdma_comp *comp_buf;<br>
++	u16 queue_depth;<br>
++<br>
++	hwc_rx_event_handler_t *rx_event_handler;<br>
++	void *rx_event_ctx;<br>
++<br>
++	hwc_tx_event_handler_t *tx_event_handler;<br>
++	void *tx_event_ctx;<br>
++};<br>
++<br>
++struct hwc_wq {<br>
++	struct hw_channel_context *hwc;<br>
++<br>
++	struct gdma_queue *gdma_wq;<br>
++	struct hwc_dma_buf *msg_buf;<br>
++	u16 queue_depth;<br>
++<br>
++	struct hwc_cq *hwc_cq;<br>
++};<br>
++<br>
++struct hwc_caller_ctx {<br>
++	struct completion comp_event;<br>
++	void *output_buf;<br>
++	u32 output_buflen;<br>
++<br>
++	u32 error; /* Linux error code */<br>
++	u32 status_code;<br>
++};<br>
++<br>
++struct hw_channel_context {<br>
++	struct gdma_dev *gdma_dev;<br>
++	struct device *dev;<br>
++<br>
++	u16 num_inflight_msg;<br>
++	u32 max_req_msg_size;<br>
++<br>
++	u16 hwc_init_q_depth_max;<br>
++	u32 hwc_init_max_req_msg_size;<br>
++	u32 hwc_init_max_resp_msg_size;<br>
++<br>
++	struct completion hwc_init_eqe_comp;<br>
++<br>
++	struct hwc_wq *rxq;<br>
++	struct hwc_wq *txq;<br>
++	struct hwc_cq *cq;<br>
++<br>
++	struct semaphore sema;<br>
++	struct gdma_resource inflight_msg_res;<br>
++<br>
++	struct hwc_caller_ctx *caller_ctx;<br>
++};<br>
++<br>
++int hwc_create_channel(struct gdma_context *gc);<br>
++void hwc_destroy_channel(struct gdma_context *gc);<br>
++<br>
++int hwc_send_request(struct hw_channel_context *hwc, u32 req_len,<br>
++		     const void *req, u32 resp_len, void *resp);<br>
++<br>
++#endif /* _HW_CHANNEL_H */<br>
+diff --git a/drivers/net/ethernet/microsoft/mana/mana.h b/drivers/net/ethernet/microsoft/mana/mana.h<br>
+new file mode 100644<br>
+index 000000000000..71173553ae6d<br>
+--- /dev/null<br>
++++ b/drivers/net/ethernet/microsoft/mana/mana.h<br>
+@@ -0,0 +1,531 @@<br>
++/* SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause */<br>
++/* Copyright (c) 2021, Microsoft Corporation. */<br>
++<br>
++#ifndef _MANA_H<br>
++#define _MANA_H<br>
++<br>
++#include "gdma.h"<br>
++#include "hw_channel.h"<br>
++<br>
++/* Microsoft Azure Network Adapter (ANA)'s definitions */<br>
++<br>
++#define ANA_MAJOR_VERSION	0<br>
++#define ANA_MINOR_VERSION	1<br>
++#define ANA_MICRO_VERSION	1<br>
++<br>
++typedef u64 ana_handle_t;<br>
++#define INVALID_ANA_HANDLE ((ana_handle_t)-1)<br>
++<br>
++enum TRI_STATE {<br>
++	TRI_STATE_UNKNOWN = -1,<br>
++	TRI_STATE_FALSE = 0,<br>
++	TRI_STATE_TRUE = 1<br>
++};<br>
++<br>
++/* Number of entries for hardware indirection table must be in power of 2 */<br>
++#define ANA_INDIRECT_TABLE_SIZE 64<br>
++<br>
++/* The Toeplitz hash key's length in bytes: should be multiple of 8 */<br>
++#define ANA_HASH_KEY_SIZE 40<br>
++<br>
++#define INVALID_GDMA_DEVICE_ID (~((u32)0))<br>
++<br>
++#define COMP_ENTRY_SIZE 64<br>
++<br>
++#define ADAPTER_MTU_SIZE 1500<br>
++#define MAX_FRAME_SIZE (ADAPTER_MTU_SIZE + 14)<br>
++<br>
++#define RX_BUFFERS_PER_QUEUE 512<br>
++<br>
++#define MAX_SEND_BUFFERS_PER_QUEUE 256<br>
++<br>
++#define EQ_SIZE (8 * PAGE_SIZE)<br>
++#define LOG2_EQ_THROTTLE 3<br>
++<br>
++struct ana_stats {<br>
++	u64 packets;<br>
++	u64 bytes;<br>
++	struct u64_stats_sync syncp;<br>
++};<br>
++<br>
++struct ana_txq {<br>
++	struct gdma_queue *gdma_sq;<br>
++<br>
++	union {<br>
++		u32 gdma_txq_id;<br>
++		struct {<br>
++			u32 reserved1	: 10;<br>
++			u32 vsq_frame	: 14;<br>
++			u32 reserved2	: 8;<br>
++		};<br>
++	};<br>
++<br>
++	u16 vp_offset;<br>
++<br>
++	/* The SKBs are sent to the HW and we are waiting for the CQEs. */<br>
++	struct sk_buff_head pending_skbs;<br>
++	struct netdev_queue *net_txq;<br>
++<br>
++	atomic_t pending_sends;<br>
++<br>
++	struct ana_stats stats;<br>
++};<br>
++<br>
++/* skb data and frags dma mappings */<br>
++struct ana_skb_head {<br>
++	dma_addr_t dma_handle[MAX_SKB_FRAGS + 1];<br>
++	u32 size[MAX_SKB_FRAGS + 1];<br>
++};<br>
++<br>
++#define ANA_HEADROOM sizeof(struct ana_skb_head)<br>
++<br>
++enum ana_tx_pkt_format { ANA_SHORT_PKT_FMT = 0, ANA_LONG_PKT_FMT = 1 };<br>
++<br>
++struct ana_tx_short_oob {<br>
++	u32 pkt_fmt		: 2;<br>
++	u32 is_outer_ipv4	: 1;<br>
++	u32 is_outer_ipv6	: 1;<br>
++	u32 comp_iphdr_csum	: 1;<br>
++	u32 comp_tcp_csum	: 1;<br>
++	u32 comp_udp_csum	: 1;<br>
++	u32 supress_txcqe_gen	: 1;<br>
++	u32 vcq_num		: 24;<br>
++<br>
++	u32 trans_off		: 10; /* Transport header offset */<br>
++	u32 vsq_frame		: 14;<br>
++	u32 short_vp_offset	: 8;<br>
++} __packed;<br>
++<br>
++struct ana_tx_long_oob {<br>
++	u32 is_encap		: 1;<br>
++	u32 inner_is_ipv6	: 1;<br>
++	u32 inner_tcp_opt	: 1;<br>
++	u32 inject_vlan_pri_tag : 1;<br>
++	u32 reserved1		: 12;<br>
++	u32 pcp			: 3;  /* 802.1Q */<br>
++	u32 dei			: 1;  /* 802.1Q */<br>
++	u32 vlan_id		: 12; /* 802.1Q */<br>
++<br>
++	u32 inner_frame_offset	: 10;<br>
++	u32 inner_ip_rel_offset : 6;<br>
++	u32 long_vp_offset	: 12;<br>
++	u32 reserved2		: 4;<br>
++<br>
++	u32 reserved3;<br>
++	u32 reserved4;<br>
++} __packed;<br>
++<br>
++struct ana_tx_oob {<br>
++	struct ana_tx_short_oob s_oob;<br>
++	struct ana_tx_long_oob l_oob;<br>
++} __packed;<br>
++<br>
++enum ana_cq_type {<br>
++	ANA_CQ_TYPE_RX,<br>
++	ANA_CQ_TYPE_TX<br>
++};<br>
++<br>
++enum ana_cqe_type {<br>
++	CQE_INVALID = 0,<br>
++	CQE_RX_OKAY = 1,<br>
++	CQE_RX_COALESCED_4 = 2,<br>
++	CQE_RX_OBJECT_FENCE = 3,<br>
++	CQE_RX_TRUNCATED = 4,<br>
++<br>
++	CQE_TX_OKAY = 32,<br>
++	CQE_TX_SA_DROP = 33,<br>
++	CQE_TX_MTU_DROP = 34,<br>
++	CQE_TX_INVALID_OOB = 35,<br>
++	CQE_TX_INVALID_ETH_TYPE = 36,<br>
++	CQE_TX_HDR_PROCESSING_ERROR = 37,<br>
++	CQE_TX_VF_DISABLED = 38,<br>
++	CQE_TX_VPORT_IDX_OUT_OF_RANGE = 39,<br>
++	CQE_TX_VPORT_DISABLED = 40,<br>
++	CQE_TX_VLAN_TAGGING_VIOLATION = 41,<br>
++<br>
++	CQE_INVALID_CQ_PDID = 60,<br>
++	CQE_INVALID_SQ_PDID = 61,<br>
++	CQE_LINK_DOWN = 62,<br>
++	CQE_LINK_UP = 63<br>
++};<br>
++<br>
++#define ANA_CQE_COMPLETION 1<br>
++<br>
++struct ana_cqe_header {<br>
++	u32 cqe_type	: 6;<br>
++	u32 client_type	: 2;<br>
++	u32 vendor_err	: 24;<br>
++} __packed;<br>
++<br>
++/* NDIS HASH Types */<br>
++#define NDIS_HASH_IPV4		BIT(0)<br>
++#define NDIS_HASH_TCP_IPV4	BIT(1)<br>
++#define NDIS_HASH_UDP_IPV4	BIT(2)<br>
++#define NDIS_HASH_IPV6		BIT(3)<br>
++#define NDIS_HASH_TCP_IPV6	BIT(4)<br>
++#define NDIS_HASH_UDP_IPV6	BIT(5)<br>
++#define NDIS_HASH_IPV6_EX	BIT(6)<br>
++#define NDIS_HASH_TCP_IPV6_EX	BIT(7)<br>
++#define NDIS_HASH_UDP_IPV6_EX	BIT(8)<br>
++<br>
++#define ANA_HASH_L3 (NDIS_HASH_IPV4 | NDIS_HASH_IPV6 | NDIS_HASH_IPV6_EX)<br>
++#define ANA_HASH_L4                                                          \<br>
++	(NDIS_HASH_TCP_IPV4 | NDIS_HASH_UDP_IPV4 | NDIS_HASH_TCP_IPV6 |      \<br>
++	 NDIS_HASH_UDP_IPV6 | NDIS_HASH_TCP_IPV6_EX | NDIS_HASH_UDP_IPV6_EX)<br>
++<br>
++struct ana_rxcomp_perpkt_info {<br>
++	u32 pkt_len	: 16;<br>
++	u32 reserved1	: 16;<br>
++	u32 reserved2;<br>
++	u32 pkt_hash;<br>
++} __packed;<br>
++<br>
++#define ANA_RXCOMP_OOB_NUM_PPI 4<br>
++<br>
++/* Receive completion OOB */<br>
++struct ana_rxcomp_oob {<br>
++	struct ana_cqe_header cqe_hdr;<br>
++<br>
++	u32 rx_vlan_id			: 12;<br>
++	u32 rx_vlantag_present		: 1;<br>
++	u32 rx_outer_iphdr_csum_succeed	: 1;<br>
++	u32 rx_outer_iphdr_csum_fail	: 1;<br>
++	u32 reserved1			: 1;<br>
++	u32 rx_hashtype			: 9;<br>
++	u32 rx_iphdr_csum_succeed	: 1;<br>
++	u32 rx_iphdr_csum_fail		: 1;<br>
++	u32 rx_tcp_csum_succeed		: 1;<br>
++	u32 rx_tcp_csum_fail		: 1;<br>
++	u32 rx_udp_csum_succeed		: 1;<br>
++	u32 rx_udp_csum_fail		: 1;<br>
++	u32 reserved2			: 1;<br>
++<br>
++	struct ana_rxcomp_perpkt_info ppi[ANA_RXCOMP_OOB_NUM_PPI];<br>
++<br>
++	u32 rx_wqe_offset;<br>
++} __packed;<br>
++<br>
++struct ana_tx_comp_oob {<br>
++	struct ana_cqe_header cqe_hdr;<br>
++<br>
++	u32 tx_data_offset;<br>
++<br>
++	u32 tx_sgl_offset	: 5;<br>
++	u32 tx_wqe_offset	: 27;<br>
++<br>
++	u32 reserved[12];<br>
++} __packed;<br>
++<br>
++struct ana_rxq;<br>
++<br>
++struct ana_cq {<br>
++	struct gdma_queue *gdma_cq;<br>
++<br>
++	/* Cache the CQ id (used to verify if each CQE comes to the right CQ. */<br>
++	u32 gdma_id;<br>
++<br>
++	/* Type of the CQ: TX or RX */<br>
++	enum ana_cq_type type;<br>
++<br>
++	/* Pointer to the ana_rxq that is pushing RX CQEs to the queue.<br>
++	 * Only and must be non-NULL if type is ANA_CQ_TYPE_RX.<br>
++	 */<br>
++	struct ana_rxq *rxq;<br>
++<br>
++	/* Pointer to the ana_txq that is pushing TX CQEs to the queue.<br>
++	 * Only and must be non-NULL if type is ANA_CQ_TYPE_TX.<br>
++	 */<br>
++	struct ana_txq *txq;<br>
++<br>
++	/* Pointer to a buffer which the CQ handler can copy the CQE's into. */<br>
++	struct gdma_comp *gdma_comp_buf;<br>
++};<br>
++<br>
++#define GDMA_MAX_RQE_SGES 15<br>
++<br>
++struct ana_recv_buf_oob {<br>
++	/* A valid GDMA work request representing the data buffer. */<br>
++	struct gdma_wqe_request wqe_req;<br>
++<br>
++	void *buf_va;<br>
++	dma_addr_t buf_dma_addr;<br>
++<br>
++	/* SGL of the buffer going to be sent has part of the work request. */<br>
++	u32 num_sge;<br>
++	struct gdma_sge sgl[GDMA_MAX_RQE_SGES];<br>
++<br>
++	/* Required to store the result of gdma_post_work_request.<br>
++	 * gdma_posted_wqe_info.wqe_size_in_bu is required for progressing the<br>
++	 * work queue when the WQE is consumed.<br>
++	 */<br>
++	struct gdma_posted_wqe_info wqe_inf;<br>
++};<br>
++<br>
++struct ana_rxq {<br>
++	struct {<br>
++		struct gdma_queue *gdma_rq;<br>
++<br>
++		/* Total number of receive buffers to be allocated */<br>
++		u32 num_rx_buf;<br>
++<br>
++		/* Index of RQ in the vPort, not gdma receive queue id */<br>
++		u32 rxq_idx;<br>
++<br>
++		/* Cache the gdma receive queue id */<br>
++		u32 gdma_id;<br>
++		u32 datasize;<br>
++		ana_handle_t rxobj;<br>
++	};<br>
++<br>
++	struct ana_cq rx_cq;<br>
++<br>
++	struct net_device *ndev;<br>
++	struct completion fencing_done;<br>
++<br>
++	u32 buf_index;<br>
++<br>
++	struct ana_stats stats;<br>
++<br>
++	/* MUST BE THE LAST MEMBER:<br>
++	 * Each receive buffer has an associated ana_recv_buf_oob.<br>
++	 */<br>
++	struct ana_recv_buf_oob rx_oobs[];<br>
++};<br>
++<br>
++struct ana_tx_qp {<br>
++	struct ana_txq txq;<br>
++	struct ana_cq tx_cq;<br>
++	ana_handle_t tx_object;<br>
++};<br>
++<br>
++struct ana_ethtool_stats {<br>
++	u64 stop_queue;<br>
++	u64 wake_queue;<br>
++};<br>
++<br>
++struct ana_context {<br>
++	struct gdma_dev *gdma_dev;<br>
++	struct net_device *ndev;<br>
++<br>
++	u8 mac_addr[ETH_ALEN];<br>
++<br>
++	struct ana_eq *eqs;<br>
++<br>
++	enum TRI_STATE rss_state;<br>
++<br>
++	ana_handle_t default_rxobj;<br>
++	bool tx_shortform_allowed;<br>
++	u16 tx_vp_offset;<br>
++<br>
++	struct ana_tx_qp *tx_qp;<br>
++<br>
++	/* Indirection Table for RX & TX. The values are queue indexes */<br>
++	u32 ind_table[ANA_INDIRECT_TABLE_SIZE];<br>
++<br>
++	/* Indirection table containing RxObject Handles */<br>
++	ana_handle_t rxobj_table[ANA_INDIRECT_TABLE_SIZE];<br>
++<br>
++	/*  Hash key used by the NIC */<br>
++	u8 hashkey[ANA_HASH_KEY_SIZE];<br>
++<br>
++	/* This points to an array of num_queues of RQ pointers. */<br>
++	struct ana_rxq **rxqs;<br>
++<br>
++	/* Create num_queues EQs, SQs, SQ-CQs, RQs and RQ-CQs, respectively. */<br>
++	unsigned int max_queues;<br>
++	unsigned int num_queues;<br>
++<br>
++	ana_handle_t default_vport;<br>
++<br>
++	bool port_is_up;<br>
++	bool port_st_save; /* Saved port state */<br>
++	bool start_remove;<br>
++<br>
++	struct ana_ethtool_stats eth_stats;<br>
++};<br>
++<br>
++int ana_config_rss(struct ana_context *ac, enum TRI_STATE rx,<br>
++		   bool update_hash, bool update_tab);<br>
++<br>
++int ana_do_attach(struct net_device *ndev, bool reset_hash);<br>
++int ana_detach(struct net_device *ndev);<br>
++<br>
++int ana_probe(struct gdma_dev *gd);<br>
++void ana_remove(struct gdma_dev *gd);<br>
++<br>
++extern const struct ethtool_ops ana_ethtool_ops;<br>
++<br>
++struct ana_obj_spec {<br>
++	u32 queue_index;<br>
++	u64 gdma_region;<br>
++	u32 queue_size;<br>
++	u32 attached_eq;<br>
++	u32 modr_ctx_id;<br>
++};<br>
++<br>
++struct gdma_send_ana_message_req {<br>
++	struct gdma_req_hdr hdr;<br>
++	u32 msg_size;<br>
++	u32 response_size;<br>
++	u8 message[];<br>
++} __packed;<br>
++<br>
++struct gdma_send_ana_message_resp {<br>
++	struct gdma_resp_hdr hdr;<br>
++	u8 response[];<br>
++} __packed;<br>
++<br>
++enum ana_command_code {<br>
++	ANA_QUERY_CLIENT_CONFIG	= 0x20001,<br>
++	ANA_QUERY_GF_STAT	= 0x20002,<br>
++	ANA_CONFIG_VPORT_TX	= 0x20003,<br>
++	ANA_CREATE_WQ_OBJ	= 0x20004,<br>
++	ANA_DESTROY_WQ_OBJ	= 0x20005,<br>
++	ANA_FENCE_RQ		= 0x20006,<br>
++	ANA_CONFIG_VPORT_RX	= 0x20007,<br>
++	ANA_QUERY_VPORT_CONFIG	= 0x20008,<br>
++};<br>
++<br>
++/* Query Client Configuration */<br>
++struct ana_query_client_cfg_req {<br>
++	struct gdma_req_hdr hdr;<br>
++<br>
++	/* Driver Capability flags */<br>
++	u64 drv_cap_flags1;<br>
++	u64 drv_cap_flags2;<br>
++	u64 drv_cap_flags3;<br>
++	u64 drv_cap_flags4;<br>
++<br>
++	/* Driver versions */<br>
++	u32 drv_major_ver;<br>
++	u32 drv_minor_ver;<br>
++	u32 drv_micro_ver;<br>
++} __packed;<br>
++<br>
++struct ana_query_client_cfg_resp {<br>
++	struct gdma_resp_hdr hdr;<br>
++<br>
++	u64 pf_cap_flags1;<br>
++	u64 pf_cap_flags2;<br>
++	u64 pf_cap_flags3;<br>
++	u64 pf_cap_flags4;<br>
++<br>
++	u16 max_num_vports;<br>
++	u16 reserved;<br>
++	u32 max_num_eqs;<br>
++} __packed;<br>
++<br>
++/* Query Vport Configuration */<br>
++struct ana_query_vport_cfg_req {<br>
++	struct gdma_req_hdr hdr;<br>
++	u32 vport_index;<br>
++} __packed;<br>
++<br>
++struct ana_query_vport_cfg_resp {<br>
++	struct gdma_resp_hdr hdr;<br>
++	u32 max_num_sq;<br>
++	u32 max_num_rq;<br>
++	u32 num_indirection_ent;<br>
++	u32 reserved1;<br>
++	u8 mac_addr[6];<br>
++	u8 reserved2[2];<br>
++	ana_handle_t vport;<br>
++} __packed;<br>
++<br>
++/* Configure Vport */<br>
++struct ana_config_vport_req {<br>
++	struct gdma_req_hdr hdr;<br>
++	ana_handle_t vport;<br>
++	u32 pdid;<br>
++	u32 doorbell_pageid;<br>
++} __packed;<br>
++<br>
++struct ana_config_vport_resp {<br>
++	struct gdma_resp_hdr hdr;<br>
++	u16 tx_vport_offset;<br>
++	u8 short_form_allowed;<br>
++	u8 reserved;<br>
++} __packed;<br>
++<br>
++/* Create WQ Object */<br>
++struct ana_create_wqobj_req {<br>
++	struct gdma_req_hdr hdr;<br>
++	ana_handle_t vport;<br>
++	u32 wq_type;<br>
++	u32 reserved;<br>
++	u64 wq_gdma_region;<br>
++	u64 cq_gdma_region;<br>
++	u32 wq_size;<br>
++	u32 cq_size;<br>
++	u32 cq_moderation_ctx_id;<br>
++	u32 cq_parent_qid;<br>
++} __packed;<br>
++<br>
++struct ana_create_wqobj_resp {<br>
++	struct gdma_resp_hdr hdr;<br>
++	u32 wq_id;<br>
++	u32 cq_id;<br>
++	ana_handle_t wq_obj;<br>
++} __packed;<br>
++<br>
++/* Destroy WQ Object */<br>
++struct ana_destroy_wqobj_req {<br>
++	struct gdma_req_hdr hdr;<br>
++	u32 wq_type;<br>
++	u32 reserved;<br>
++	ana_handle_t wqobj_handle;<br>
++} __packed;<br>
++<br>
++struct ana_destroy_wqobj_resp {<br>
++	struct gdma_resp_hdr hdr;<br>
++} __packed;<br>
++<br>
++/* Fence RQ */<br>
++struct ana_fence_rq_req {<br>
++	struct gdma_req_hdr hdr;<br>
++	ana_handle_t wqobj_handle;<br>
++} __packed;<br>
++<br>
++struct ana_fence_rq_resp {<br>
++	struct gdma_resp_hdr hdr;<br>
++} __packed;<br>
++<br>
++/* Configure Vport Rx Steering */<br>
++struct ana_cfg_rx_steer_req {<br>
++	struct gdma_req_hdr hdr;<br>
++	ana_handle_t vport;<br>
++	u16 num_indir_entries;<br>
++	u16 indir_tab_offset;<br>
++	u32 rx_enable;<br>
++	u32 rss_enable;<br>
++	u8 update_default_rxobj;<br>
++	u8 update_hashkey;<br>
++	u8 update_indir_tab;<br>
++	u8 reserved;<br>
++	ana_handle_t default_rxobj;<br>
++	u8 hashkey[ANA_HASH_KEY_SIZE];<br>
++} __packed;<br>
++<br>
++struct ana_cfg_rx_steer_resp {<br>
++	struct gdma_resp_hdr hdr;<br>
++} __packed;<br>
++<br>
++/* The max number of queues that are potentially supported. */<br>
++#define ANA_MAX_NUM_QUEUE 64<br>
++<br>
++/* ANA uses 1 SQ and 1 RQ for every cpu, but up to 16 by default. */<br>
++#define ANA_DEFAULT_NUM_QUEUE 16<br>
++<br>
++#define ANA_SHORT_VPORT_OFFSET_MAX ((1U << 8) - 1)<br>
++<br>
++struct ana_tx_package {<br>
++	struct gdma_wqe_request wqe_req;<br>
++	struct gdma_sge sgl_array[5];<br>
++	struct gdma_sge *sgl_ptr;<br>
++<br>
++	struct ana_tx_oob tx_oob;<br>
++<br>
++	struct gdma_posted_wqe_info wqe_info;<br>
++};<br>
++<br>
++#endif /* _MANA_H */<br>
+diff --git a/drivers/net/ethernet/microsoft/mana/mana_en.c b/drivers/net/ethernet/microsoft/mana/mana_en.c<br>
+new file mode 100644<br>
+index 000000000000..8d2ecabf9413<br>
+--- /dev/null<br>
++++ b/drivers/net/ethernet/microsoft/mana/mana_en.c<br>
+@@ -0,0 +1,1833 @@<br>
++// SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause<br>
++/* Copyright (c) 2021, Microsoft Corporation. */<br>
++<br>
++#include <linux/inetdevice.h><br>
++#include <linux/etherdevice.h><br>
++<br>
++#include <net/checksum.h><br>
++#include <net/ip6_checksum.h><br>
++<br>
++#include "mana.h"<br>
++<br>
++/* Microsoft Azure Network Adapter (ANA) functions */<br>
++<br>
++static int ana_open(struct net_device *ndev)<br>
++{<br>
++	struct ana_context *ac = netdev_priv(ndev);<br>
++<br>
++	ac->port_is_up = true;<br>
++<br>
++	/* Ensure port state updated before txq state */<br>
++	smp_wmb();<br>
++<br>
++	netif_carrier_on(ndev);<br>
++	netif_tx_wake_all_queues(ndev);<br>
++<br>
++	return 0;<br>
++}<br>
++<br>
++static int ana_close(struct net_device *ndev)<br>
++{<br>
++	struct ana_context *ac = netdev_priv(ndev);<br>
++<br>
++	ac->port_is_up = false;<br>
++<br>
++	/* Ensure port state updated before txq state */<br>
++	smp_wmb();<br>
++<br>
++	netif_tx_disable(ndev);<br>
++	netif_carrier_off(ndev);<br>
++<br>
++	return 0;<br>
++}<br>
++<br>
++static bool gdma_can_tx(struct gdma_queue *wq)<br>
++{<br>
++	return gdma_wq_avail_space(wq) >= MAX_TX_WQE_SIZE;<br>
++}<br>
++<br>
++static unsigned int  ana_checksum_info(struct sk_buff *skb)<br>
++{<br>
++	if (skb->protocol == htons(ETH_P_IP)) {<br>
++		struct iphdr *ip = ip_hdr(skb);<br>
++<br>
++		if (ip->protocol == IPPROTO_TCP)<br>
++			return IPPROTO_TCP;<br>
++<br>
++		if (ip->protocol == IPPROTO_UDP)<br>
++			return IPPROTO_UDP;<br>
++	} else if (skb->protocol == htons(ETH_P_IPV6)) {<br>
++		struct ipv6hdr *ip6 = ipv6_hdr(skb);<br>
++<br>
++		if (ip6->nexthdr == IPPROTO_TCP)<br>
++			return IPPROTO_TCP;<br>
++<br>
++		if (ip6->nexthdr == IPPROTO_UDP)<br>
++			return IPPROTO_UDP;<br>
++	}<br>
++<br>
++	/* No csum offloading */<br>
++	return 0;<br>
++}<br>
++<br>
++static int ana_map_skb(struct sk_buff *skb, struct ana_context *ac,<br>
++		       struct ana_tx_package *tp)<br>
++{<br>
++	struct ana_skb_head *ash = (struct ana_skb_head *)skb->head;<br>
++	struct gdma_dev *gd = ac->gdma_dev;<br>
++	struct gdma_context *gc;<br>
++	struct device *dev;<br>
++	skb_frag_t *frag;<br>
++	dma_addr_t da;<br>
++	int i;<br>
++<br>
++	gc = ana_to_gdma_context(gd);<br>
++	dev = gc->dev;<br>
++	da = dma_map_single(dev, skb->data, skb_headlen(skb), DMA_TO_DEVICE);<br>
++<br>
++	if (dma_mapping_error(dev, da))<br>
++		return -ENOMEM;<br>
++<br>
++	ash->dma_handle[0] = da;<br>
++	ash->size[0] = skb_headlen(skb);<br>
++<br>
++	tp->wqe_req.sgl[0].address = ash->dma_handle[0];<br>
++	tp->wqe_req.sgl[0].mem_key = gd->gpa_mkey;<br>
++	tp->wqe_req.sgl[0].size = ash->size[0];<br>
++<br>
++	for (i = 0; i < skb_shinfo(skb)->nr_frags; i++) {<br>
++		frag = &skb_shinfo(skb)->frags[i];<br>
++		da = skb_frag_dma_map(dev, frag, 0, skb_frag_size(frag),<br>
++				      DMA_TO_DEVICE);<br>
++<br>
++		if (dma_mapping_error(dev, da))<br>
++			goto frag_err;<br>
++<br>
++		ash->dma_handle[i + 1] = da;<br>
++		ash->size[i + 1] = skb_frag_size(frag);<br>
++<br>
++		tp->wqe_req.sgl[i + 1].address = ash->dma_handle[i + 1];<br>
++		tp->wqe_req.sgl[i + 1].mem_key = gd->gpa_mkey;<br>
++		tp->wqe_req.sgl[i + 1].size = ash->size[i + 1];<br>
++	}<br>
++<br>
++	return 0;<br>
++<br>
++frag_err:<br>
++	for (i = i - 1; i >= 0; i--)<br>
++		dma_unmap_page(dev, ash->dma_handle[i + 1], ash->size[i + 1],<br>
++			       DMA_TO_DEVICE);<br>
++<br>
++	dma_unmap_single(dev, ash->dma_handle[0], ash->size[0], DMA_TO_DEVICE);<br>
++<br>
++	return -ENOMEM;<br>
++}<br>
++<br>
++static int ana_start_xmit(struct sk_buff *skb, struct net_device *ndev)<br>
++{<br>
++	enum ana_tx_pkt_format pkt_fmt = ANA_SHORT_PKT_FMT;<br>
++	struct ana_context *ac = netdev_priv(ndev);<br>
++	u16 txq_idx = skb_get_queue_mapping(skb);<br>
++	bool ipv4 = false, ipv6 = false;<br>
++	struct ana_tx_package pkg = {};<br>
++	struct netdev_queue *net_txq;<br>
++	struct ana_stats *tx_stats;<br>
++	struct gdma_queue *gdma_sq;<br>
++	unsigned int csum_type;<br>
++	struct ana_txq *txq;<br>
++	struct ana_cq *cq;<br>
++	int err, len;<br>
++<br>
++	if (unlikely(!ac->port_is_up))<br>
++		goto tx_drop;<br>
++<br>
++	if (skb_cow_head(skb, ANA_HEADROOM))<br>
++		goto tx_drop_count;<br>
++<br>
++	txq = &ac->tx_qp[txq_idx].txq;<br>
++	gdma_sq = txq->gdma_sq;<br>
++	cq = &ac->tx_qp[txq_idx].tx_cq;<br>
++<br>
++	pkg.tx_oob.s_oob.vcq_num = cq->gdma_id;<br>
++	pkg.tx_oob.s_oob.vsq_frame = txq->vsq_frame;<br>
++<br>
++	if (txq->vp_offset > ANA_SHORT_VPORT_OFFSET_MAX) {<br>
++		pkg.tx_oob.l_oob.long_vp_offset = txq->vp_offset;<br>
++		pkt_fmt = ANA_LONG_PKT_FMT;<br>
++	} else {<br>
++		pkg.tx_oob.s_oob.short_vp_offset = txq->vp_offset;<br>
++	}<br>
++<br>
++	pkg.tx_oob.s_oob.pkt_fmt = pkt_fmt;<br>
++<br>
++	if (pkt_fmt == ANA_SHORT_PKT_FMT)<br>
++		pkg.wqe_req.inline_oob_size = sizeof(struct ana_tx_short_oob);<br>
++	else<br>
++		pkg.wqe_req.inline_oob_size = sizeof(struct ana_tx_oob);<br>
++<br>
++	pkg.wqe_req.inline_oob_data = &pkg.tx_oob;<br>
++	pkg.wqe_req.flags = 0;<br>
++	pkg.wqe_req.client_data_unit = 0;<br>
++<br>
++	pkg.wqe_req.num_sge = 1 + skb_shinfo(skb)->nr_frags;<br>
++	WARN_ON(pkg.wqe_req.num_sge > 30);<br>
++<br>
++	if (pkg.wqe_req.num_sge <= ARRAY_SIZE(pkg.sgl_array)) {<br>
++		pkg.wqe_req.sgl = pkg.sgl_array;<br>
++	} else {<br>
++		pkg.sgl_ptr = kmalloc_array(pkg.wqe_req.num_sge,<br>
++					    sizeof(struct gdma_sge),<br>
++					    GFP_ATOMIC);<br>
++		if (!pkg.sgl_ptr)<br>
++			goto tx_drop_count;<br>
++<br>
++		pkg.wqe_req.sgl = pkg.sgl_ptr;<br>
++	}<br>
++<br>
++	if (skb->protocol == htons(ETH_P_IP))<br>
++		ipv4 = true;<br>
++	else if (skb->protocol == htons(ETH_P_IPV6))<br>
++		ipv6 = true;<br>
++<br>
++	if (skb_is_gso(skb)) {<br>
++		pkg.tx_oob.s_oob.is_outer_ipv4 = ipv4;<br>
++		pkg.tx_oob.s_oob.is_outer_ipv6 = ipv6;<br>
++<br>
++		pkg.tx_oob.s_oob.comp_iphdr_csum = 1;<br>
++		pkg.tx_oob.s_oob.comp_tcp_csum = 1;<br>
++		pkg.tx_oob.s_oob.trans_off = skb_transport_offset(skb);<br>
++<br>
++		pkg.wqe_req.client_data_unit = skb_shinfo(skb)->gso_size;<br>
++		pkg.wqe_req.flags = GDMA_WR_OOB_IN_SGL |<br>
++				    GDMA_WR_PAD_DATA_BY_FIRST_SGE;<br>
++		if (ipv4) {<br>
++			ip_hdr(skb)->tot_len = 0;<br>
++			ip_hdr(skb)->check = 0;<br>
++			tcp_hdr(skb)->check =<br>
++				~csum_tcpudp_magic(ip_hdr(skb)->saddr,<br>
++						   ip_hdr(skb)->daddr, 0,<br>
++						   IPPROTO_TCP, 0);<br>
++		} else {<br>
++			ipv6_hdr(skb)->payload_len = 0;<br>
++			tcp_hdr(skb)->check =<br>
++				~csum_ipv6_magic(&ipv6_hdr(skb)->saddr,<br>
++						 &ipv6_hdr(skb)->daddr, 0,<br>
++						 IPPROTO_TCP, 0);<br>
++		}<br>
++	} else if (skb->ip_summed == CHECKSUM_PARTIAL) {<br>
++		csum_type = ana_checksum_info(skb);<br>
++<br>
++		if (csum_type == IPPROTO_TCP) {<br>
++			pkg.tx_oob.s_oob.is_outer_ipv4 = ipv4;<br>
++			pkg.tx_oob.s_oob.is_outer_ipv6 = ipv6;<br>
++<br>
++			pkg.tx_oob.s_oob.comp_tcp_csum = 1;<br>
++			pkg.tx_oob.s_oob.trans_off = skb_transport_offset(skb);<br>
++<br>
++		} else if (csum_type == IPPROTO_UDP) {<br>
++			pkg.tx_oob.s_oob.is_outer_ipv4 = ipv4;<br>
++			pkg.tx_oob.s_oob.is_outer_ipv6 = ipv6;<br>
++<br>
++			pkg.tx_oob.s_oob.comp_udp_csum = 1;<br>
++		} else {<br>
++			/* Can't do offload of this type of checksum */<br>
++			if (skb_checksum_help(skb))<br>
++				goto free_sgl_ptr;<br>
++		}<br>
++	}<br>
++<br>
++	if (ana_map_skb(skb, ac, &pkg))<br>
++		goto free_sgl_ptr;<br>
++<br>
++	skb_queue_tail(&txq->pending_skbs, skb);<br>
++<br>
++	len = skb->len;<br>
++	net_txq = netdev_get_tx_queue(ndev, txq_idx);<br>
++<br>
++	err = gdma_post_work_request(gdma_sq, &pkg.wqe_req,<br>
++				     (struct gdma_posted_wqe_info *)skb->cb);<br>
++	if (!gdma_can_tx(gdma_sq)) {<br>
++		netif_tx_stop_queue(net_txq);<br>
++		ac->eth_stats.stop_queue++;<br>
++	}<br>
++<br>
++	if (err) {<br>
++		(void)skb_dequeue_tail(&txq->pending_skbs);<br>
++		netdev_warn(ndev, "Failed to post TX OOB: %d\n", err);<br>
++		err = NETDEV_TX_BUSY;<br>
++		goto tx_busy;<br>
++	}<br>
++<br>
++	err = NETDEV_TX_OK;<br>
++	atomic_inc(&txq->pending_sends);<br>
++<br>
++	gdma_wq_ring_doorbell(ana_to_gdma_context(gdma_sq->gdma_dev), gdma_sq);<br>
++<br>
++	/* skb may be freed after gdma_post_work_request. Do not use it. */<br>
++	skb = NULL;<br>
++<br>
++	tx_stats = &txq->stats;<br>
++	u64_stats_update_begin(&tx_stats->syncp);<br>
++	tx_stats->packets++;<br>
++	tx_stats->bytes += len;<br>
++	u64_stats_update_end(&tx_stats->syncp);<br>
++<br>
++tx_busy:<br>
++	if (netif_tx_queue_stopped(net_txq) && gdma_can_tx(gdma_sq)) {<br>
++		netif_tx_wake_queue(net_txq);<br>
++		ac->eth_stats.wake_queue++;<br>
++	}<br>
++<br>
++	kfree(pkg.sgl_ptr);<br>
++	return err;<br>
++<br>
++free_sgl_ptr:<br>
++	kfree(pkg.sgl_ptr);<br>
++tx_drop_count:<br>
++	ndev->stats.tx_dropped++;<br>
++tx_drop:<br>
++	dev_kfree_skb_any(skb);<br>
++	return NETDEV_TX_OK;<br>
++}<br>
++<br>
++static void ana_get_stats64(struct net_device *ndev,<br>
++			    struct rtnl_link_stats64 *st)<br>
++{<br>
++	struct ana_context *ac = netdev_priv(ndev);<br>
++	unsigned int num_queues = ac->num_queues;<br>
++	struct ana_stats *stats;<br>
++	unsigned int start;<br>
++	u64 packets, bytes;<br>
++	int q;<br>
++<br>
++	if (ac->start_remove)<br>
++		return;<br>
++<br>
++	netdev_stats_to_stats64(st, &ndev->stats);<br>
++<br>
++	for (q = 0; q < num_queues; q++) {<br>
++		stats = &ac->rxqs[q]->stats;<br>
++<br>
++		do {<br>
++			start = u64_stats_fetch_begin_irq(&stats->syncp);<br>
++			packets = stats->packets;<br>
++			bytes = stats->bytes;<br>
++		} while (u64_stats_fetch_retry_irq(&stats->syncp, start));<br>
++<br>
++		st->rx_packets += packets;<br>
++		st->rx_bytes += bytes;<br>
++	}<br>
++<br>
++	for (q = 0; q < num_queues; q++) {<br>
++		stats = &ac->tx_qp[q].txq.stats;<br>
++<br>
++		do {<br>
++			start = u64_stats_fetch_begin_irq(&stats->syncp);<br>
++			packets = stats->packets;<br>
++			bytes = stats->bytes;<br>
++		} while (u64_stats_fetch_retry_irq(&stats->syncp, start));<br>
++<br>
++		st->tx_packets += packets;<br>
++		st->tx_bytes += bytes;<br>
++	}<br>
++}<br>
++<br>
++static int ana_get_tx_queue(struct net_device *ndev, struct sk_buff *skb,<br>
++			    int old_q)<br>
++{<br>
++	struct ana_context *ac = netdev_priv(ndev);<br>
++	struct sock *sk = skb->sk;<br>
++	int txq;<br>
++<br>
++	txq = ac->ind_table[skb_get_hash(skb) & (ANA_INDIRECT_TABLE_SIZE - 1)];<br>
++<br>
++	if (txq != old_q && sk && sk_fullsock(sk) &&<br>
++	    rcu_access_pointer(sk->sk_dst_cache))<br>
++		sk_tx_queue_set(sk, txq);<br>
++<br>
++	return txq;<br>
++}<br>
++<br>
++static u16 ana_select_queue(struct net_device *ndev, struct sk_buff *skb,<br>
++			    struct net_device *sb_dev)<br>
++{<br>
++	int txq;<br>
++<br>
++	if (ndev->real_num_tx_queues == 1)<br>
++		return 0;<br>
++<br>
++	txq = sk_tx_queue_get(skb->sk);<br>
++<br>
++	if (txq < 0 || skb->ooo_okay || txq >= ndev->real_num_tx_queues) {<br>
++		if (skb_rx_queue_recorded(skb))<br>
++			txq = skb_get_rx_queue(skb);<br>
++		else<br>
++			txq = ana_get_tx_queue(ndev, skb, txq);<br>
++	}<br>
++<br>
++	return txq;<br>
++}<br>
++<br>
++static const struct net_device_ops ana_devops = {<br>
++	.ndo_open = ana_open,<br>
++	.ndo_stop = ana_close,<br>
++	.ndo_select_queue = ana_select_queue,<br>
++	.ndo_start_xmit = ana_start_xmit,<br>
++	.ndo_validate_addr = eth_validate_addr,<br>
++	.ndo_get_stats64 = ana_get_stats64,<br>
++};<br>
++<br>
++static void ana_cleanup_context(struct ana_context *ac)<br>
++{<br>
++	struct gdma_dev *gd = ac->gdma_dev;<br>
++<br>
++	gdma_deregister_device(gd);<br>
++<br>
++	kfree(ac->rxqs);<br>
++	ac->rxqs = NULL;<br>
++}<br>
++<br>
++static int ana_init_context(struct ana_context *ac)<br>
++{<br>
++	struct gdma_dev *gd = ac->gdma_dev;<br>
++	int err;<br>
++<br>
++	gd->pdid = INVALID_PDID;<br>
++	gd->doorbell = INVALID_DOORBELL;<br>
++<br>
++	ac->rxqs = kcalloc(ac->num_queues, sizeof(struct ana_rxq *),<br>
++			   GFP_KERNEL);<br>
++	if (!ac->rxqs)<br>
++		return -ENOMEM;<br>
++<br>
++	err = gdma_register_device(gd);<br>
++	if (err) {<br>
++		kfree(ac->rxqs);<br>
++		ac->rxqs = NULL;<br>
++		return err;<br>
++	}<br>
++<br>
++	return 0;<br>
++}<br>
++<br>
++static int ana_send_request(struct ana_context *ac, void *in_buf,<br>
++			    u32 in_buf_len, void *out_buf, u32 out_buf_len)<br>
++{<br>
++	struct gdma_context *gc = ana_to_gdma_context(ac->gdma_dev);<br>
++	struct gdma_send_ana_message_resp *resp = NULL;<br>
++	struct gdma_send_ana_message_req *req = NULL;<br>
++	struct net_device *ndev = ac->ndev;<br>
++	int err;<br>
++<br>
++	if (is_gdma_msg_len(in_buf_len, out_buf_len, in_buf)) {<br>
++		struct gdma_req_hdr *g_req = in_buf;<br>
++		struct gdma_resp_hdr *g_resp = out_buf;<br>
++<br>
++		static atomic_t act_id;<br>
++<br>
++		g_req->dev_id = gc->ana.dev_id;<br>
++		g_req->activity_id = atomic_inc_return(&act_id);<br>
++<br>
++		err = gdma_send_request(gc, in_buf_len, in_buf, out_buf_len,<br>
++					out_buf);<br>
++		if (err || g_resp->status) {<br>
++			netdev_err(ndev, "Send GDMA message failed: %d, 0x%x\n",<br>
++				   err, g_resp->status);<br>
++			return -EPROTO;<br>
++		}<br>
++<br>
++		if (g_req->dev_id.as_uint32 != g_resp->dev_id.as_uint32 ||<br>
++		    g_req->activity_id != g_resp->activity_id) {<br>
++			netdev_err(ndev, "Wrong GDMA response: %x,%x,%x,%x\n",<br>
++				   g_req->dev_id.as_uint32,<br>
++				   g_resp->dev_id.as_uint32, g_req->activity_id,<br>
++				   g_resp->activity_id);<br>
++			return -EPROTO;<br>
++		}<br>
++<br>
++		return 0;<br>
++<br>
++	} else {<br>
++		u32 req_size = sizeof(*req) + in_buf_len;<br>
++		u32 resp_size = sizeof(*resp) + out_buf_len;<br>
++<br>
++		req = kzalloc(req_size, GFP_KERNEL);<br>
++		if (!req) {<br>
++			err = -ENOMEM;<br>
++			goto out;<br>
++		}<br>
++<br>
++		resp = kzalloc(resp_size, GFP_KERNEL);<br>
++		if (!resp) {<br>
++			err = -ENOMEM;<br>
++			goto out;<br>
++		}<br>
++<br>
++		req->hdr.dev_id = gc->ana.dev_id;<br>
++		req->msg_size = in_buf_len;<br>
++		req->response_size = out_buf_len;<br>
++		memcpy(req->message, in_buf, in_buf_len);<br>
++<br>
++		err = gdma_send_request(gc, req_size, req, resp_size, resp);<br>
++		if (err || resp->hdr.status) {<br>
++			netdev_err(ndev, "Send ANA message failed: %d, 0x%x\n",<br>
++				   err, resp->hdr.status);<br>
++			if (!err)<br>
++				err = -EPROTO;<br>
++			goto out;<br>
++		}<br>
++<br>
++		memcpy(out_buf, resp->response, out_buf_len);<br>
++	}<br>
++<br>
++out:<br>
++	kfree(resp);<br>
++	kfree(req);<br>
++	return err;<br>
++}<br>
++<br>
++static int ana_verify_gdma_resp_hdr(const struct gdma_resp_hdr *resp_hdr,<br>
++				    const enum ana_command_code expected_code,<br>
++				    const u32 min_size)<br>
++{<br>
++	if (resp_hdr->response.msg_type != expected_code)<br>
++		return -EPROTO;<br>
++<br>
++	if (resp_hdr->response.msg_version < GDMA_MESSAGE_V1)<br>
++		return -EPROTO;<br>
++<br>
++	if (resp_hdr->response.msg_size < min_size)<br>
++		return -EPROTO;<br>
++<br>
++	return 0;<br>
++}<br>
++<br>
++static int ana_query_client_cfg(struct ana_context *ac, u32 drv_major_ver,<br>
++				u32 drv_minor_ver, u32 drv_micro_ver,<br>
++				u16 *max_num_vports)<br>
++{<br>
++	struct ana_query_client_cfg_resp resp = {};<br>
++	struct ana_query_client_cfg_req req = {};<br>
++	int err = 0;<br>
++<br>
++	gdma_init_req_hdr(&req.hdr, ANA_QUERY_CLIENT_CONFIG,<br>
++			  sizeof(req), sizeof(resp));<br>
++	req.drv_major_ver = drv_major_ver;<br>
++	req.drv_minor_ver = drv_minor_ver;<br>
++	req.drv_micro_ver = drv_micro_ver;<br>
++<br>
++	err = ana_send_request(ac, &req, sizeof(req), &resp, sizeof(resp));<br>
++	if (err) {<br>
++		netdev_err(ac->ndev, "Failed to query config: %d", err);<br>
++		return err;<br>
++	}<br>
++<br>
++	err = ana_verify_gdma_resp_hdr(&resp.hdr, ANA_QUERY_CLIENT_CONFIG,<br>
++				       sizeof(resp));<br>
++	if (err || resp.hdr.status) {<br>
++		netdev_err(ac->ndev, "Invalid query result: %d, 0x%x\n", err,<br>
++			   resp.hdr.status);<br>
++		if (!err)<br>
++			err = -EPROTO;<br>
++		return err;<br>
++	}<br>
++<br>
++	*max_num_vports = resp.max_num_vports;<br>
++<br>
++	return 0;<br>
++}<br>
++<br>
++static int ana_query_vport_cfg(struct ana_context *ac, u32 vport_index,<br>
++			       u32 *max_sq, u32 *max_rq, u32 *num_indir_entry)<br>
++{<br>
++	struct ana_query_vport_cfg_resp resp = {};<br>
++	struct ana_query_vport_cfg_req req = {};<br>
++	int err;<br>
++<br>
++	gdma_init_req_hdr(&req.hdr, ANA_QUERY_VPORT_CONFIG,<br>
++			  sizeof(req), sizeof(resp));<br>
++<br>
++	req.vport_index = vport_index;<br>
++<br>
++	err = ana_send_request(ac, &req, sizeof(req), &resp, sizeof(resp));<br>
++	if (err)<br>
++		return err;<br>
++<br>
++	err = ana_verify_gdma_resp_hdr(&resp.hdr, ANA_QUERY_VPORT_CONFIG,<br>
++				       sizeof(resp));<br>
++	if (err)<br>
++		return err;<br>
++<br>
++	if (resp.hdr.status)<br>
++		return -EPROTO;<br>
++<br>
++	*max_sq = resp.max_num_sq;<br>
++	*max_rq = resp.max_num_rq;<br>
++	*num_indir_entry = resp.num_indirection_ent;<br>
++<br>
++	ac->default_vport = resp.vport;<br>
++	memcpy(ac->mac_addr, resp.mac_addr, ETH_ALEN);<br>
++<br>
++	return 0;<br>
++}<br>
++<br>
++static int ana_cfg_vport(struct ana_context *ac, u32 protection_dom_id,<br>
++			 u32 doorbell_pg_id)<br>
++{<br>
++	struct ana_config_vport_resp resp = {};<br>
++	struct ana_config_vport_req req = {};<br>
++	int err;<br>
++<br>
++	gdma_init_req_hdr(&req.hdr, ANA_CONFIG_VPORT_TX,<br>
++			  sizeof(req), sizeof(resp));<br>
++	req.vport = ac->default_vport;<br>
++	req.pdid = protection_dom_id;<br>
++	req.doorbell_pageid = doorbell_pg_id;<br>
++<br>
++	err = ana_send_request(ac, &req, sizeof(req), &resp, sizeof(resp));<br>
++	if (err) {<br>
++		netdev_err(ac->ndev, "Failed to configure vPort TX: %d\n", err);<br>
++		goto out;<br>
++	}<br>
++<br>
++	err = ana_verify_gdma_resp_hdr(&resp.hdr, ANA_CONFIG_VPORT_TX,<br>
++				       sizeof(resp));<br>
++	if (err || resp.hdr.status) {<br>
++		netdev_err(ac->ndev, "Failed to configure vPort TX: %d, 0x%x\n",<br>
++			   err, resp.hdr.status);<br>
++		if (!err)<br>
++			err = -EPROTO;<br>
++<br>
++		goto out;<br>
++	}<br>
++<br>
++	ac->tx_shortform_allowed = resp.short_form_allowed;<br>
++	ac->tx_vp_offset = resp.tx_vport_offset;<br>
++out:<br>
++	return err;<br>
++}<br>
++<br>
++static int ana_cfg_vport_steering(struct ana_context *ac, enum TRI_STATE rx,<br>
++				  bool update_default_rxobj, bool update_key,<br>
++				  bool update_tab)<br>
++{<br>
++	u16 num_entries = ANA_INDIRECT_TABLE_SIZE;<br>
++	struct ana_cfg_rx_steer_req *req = NULL;<br>
++	struct ana_cfg_rx_steer_resp resp = {};<br>
++	struct net_device *ndev = ac->ndev;<br>
++	ana_handle_t *req_indir_tab;<br>
++	u32 req_buf_size;<br>
++	int err;<br>
++<br>
++	if (update_key && !ac->hashkey)<br>
++		return -EINVAL;<br>
++<br>
++	if (update_tab && !ac->rxobj_table)<br>
++		return -EINVAL;<br>
++<br>
++	req_buf_size = sizeof(*req) + sizeof(ana_handle_t) * num_entries;<br>
++	req = kzalloc(req_buf_size, GFP_KERNEL);<br>
++	if (!req)<br>
++		return -ENOMEM;<br>
++<br>
++	gdma_init_req_hdr(&req->hdr, ANA_CONFIG_VPORT_RX, req_buf_size,<br>
++			  sizeof(resp));<br>
++<br>
++	req->vport = ac->default_vport;<br>
++	req->num_indir_entries = num_entries;<br>
++	req->indir_tab_offset = sizeof(*req);<br>
++	req->rx_enable = rx;<br>
++	req->rss_enable = ac->rss_state;<br>
++	req->update_default_rxobj = update_default_rxobj;<br>
++	req->update_hashkey = update_key;<br>
++	req->update_indir_tab = update_tab;<br>
++	req->default_rxobj = ac->default_rxobj;<br>
++<br>
++	if (update_key)<br>
++		memcpy(&req->hashkey, ac->hashkey, ANA_HASH_KEY_SIZE);<br>
++<br>
++	if (update_tab) {<br>
++		req_indir_tab = (ana_handle_t *)(req + 1);<br>
++		memcpy(req_indir_tab, ac->rxobj_table,<br>
++		       req->num_indir_entries * sizeof(ana_handle_t));<br>
++	}<br>
++<br>
++	err = ana_send_request(ac, req, req_buf_size, &resp, sizeof(resp));<br>
++	if (err) {<br>
++		netdev_err(ndev, "Failed to configure vPort RX: %d\n", err);<br>
++		goto out;<br>
++	}<br>
++<br>
++	err = ana_verify_gdma_resp_hdr(&resp.hdr, ANA_CONFIG_VPORT_RX,<br>
++				       sizeof(resp));<br>
++	if (err) {<br>
++		netdev_err(ndev, "vPort RX configuration failed: %d\n", err);<br>
++		goto out;<br>
++	}<br>
++<br>
++	if (resp.hdr.status) {<br>
++		netdev_err(ndev, "vPort RX configuration failed: 0x%x\n",<br>
++			   resp.hdr.status);<br>
++		err = -EPROTO;<br>
++	}<br>
++out:<br>
++	kfree(req);<br>
++	return err;<br>
++}<br>
++<br>
++static int ana_create_wq_obj(struct ana_context *ac, ana_handle_t vport,<br>
++			     u32 wq_type, struct ana_obj_spec *wq_spec,<br>
++			     struct ana_obj_spec *cq_spec, ana_handle_t *wq_obj)<br>
++{<br>
++	struct ana_create_wqobj_resp resp = {};<br>
++	struct ana_create_wqobj_req req = {};<br>
++	struct net_device *ndev = ac->ndev;<br>
++	int err;<br>
++<br>
++	gdma_init_req_hdr(&req.hdr, ANA_CREATE_WQ_OBJ,<br>
++			  sizeof(req), sizeof(resp));<br>
++	req.vport = vport;<br>
++	req.wq_type = wq_type;<br>
++	req.wq_gdma_region = wq_spec->gdma_region;<br>
++	req.cq_gdma_region = cq_spec->gdma_region;<br>
++	req.wq_size = wq_spec->queue_size;<br>
++	req.cq_size = cq_spec->queue_size;<br>
++	req.cq_moderation_ctx_id = cq_spec->modr_ctx_id;<br>
++	req.cq_parent_qid = cq_spec->attached_eq;<br>
++<br>
++	err = ana_send_request(ac, &req, sizeof(req), &resp, sizeof(resp));<br>
++	if (err) {<br>
++		netdev_err(ndev, "Failed to create WQ object: %d\n", err);<br>
++		goto out;<br>
++	}<br>
++<br>
++	err = ana_verify_gdma_resp_hdr(&resp.hdr, ANA_CREATE_WQ_OBJ,<br>
++				       sizeof(resp));<br>
++	if (err || resp.hdr.status) {<br>
++		netdev_err(ndev, "Failed to create WQ object: %d, 0x%x\n", err,<br>
++			   resp.hdr.status);<br>
++		if (!err)<br>
++			err = -EPROTO;<br>
++		goto out;<br>
++	}<br>
++<br>
++	if (resp.wq_obj == INVALID_ANA_HANDLE) {<br>
++		netdev_err(ndev, "Failed to create WQ object: invalid handle\n");<br>
++		err = -EPROTO;<br>
++		goto out;<br>
++	}<br>
++<br>
++	*wq_obj = resp.wq_obj;<br>
++	wq_spec->queue_index = resp.wq_id;<br>
++	cq_spec->queue_index = resp.cq_id;<br>
++<br>
++	return 0;<br>
++<br>
++out:<br>
++	return err;<br>
++}<br>
++<br>
++static void ana_destroy_wq_obj(struct ana_context *ac, u32 wq_type,<br>
++			       ana_handle_t wq_obj)<br>
++{<br>
++	struct ana_destroy_wqobj_resp resp = {};<br>
++	struct ana_destroy_wqobj_req req = {};<br>
++	struct net_device *ndev = ac->ndev;<br>
++	int err;<br>
++<br>
++	gdma_init_req_hdr(&req.hdr, ANA_DESTROY_WQ_OBJ,<br>
++			  sizeof(req), sizeof(resp));<br>
++	req.wq_type = wq_type;<br>
++	req.wqobj_handle = wq_obj;<br>
++<br>
++	err = ana_send_request(ac, &req, sizeof(req), &resp, sizeof(resp));<br>
++	if (err) {<br>
++		netdev_err(ndev, "Failed to destroy WQ object: %d\n", err);<br>
++		return;<br>
++	}<br>
++<br>
++	err = ana_verify_gdma_resp_hdr(&resp.hdr, ANA_DESTROY_WQ_OBJ,<br>
++				       sizeof(resp));<br>
++	if (err || resp.hdr.status)<br>
++		netdev_err(ndev, "Failed to destroy WQ object: %d, 0x%x\n", err,<br>
++			   resp.hdr.status);<br>
++}<br>
++<br>
++static void ana_init_cqe_pollbuf(struct gdma_comp *cqe_poll_buf)<br>
++{<br>
++	int i;<br>
++<br>
++	for (i = 0; i < CQE_POLLING_BUFFER; i++)<br>
++		memset(&cqe_poll_buf[i], 0, sizeof(struct gdma_comp));<br>
++}<br>
++<br>
++static void ana_destroy_eq(struct gdma_context *gc, struct ana_context *ac)<br>
++{<br>
++	struct gdma_queue *eq;<br>
++	int i;<br>
++<br>
++	if (!ac->eqs)<br>
++		return;<br>
++<br>
++	for (i = 0; i < ac->num_queues; i++) {<br>
++		eq = ac->eqs[i].eq;<br>
++		if (!eq)<br>
++			continue;<br>
++<br>
++		gdma_destroy_queue(gc, eq);<br>
++	}<br>
++<br>
++	kfree(ac->eqs);<br>
++	ac->eqs = NULL;<br>
++}<br>
++<br>
++static int ana_create_eq(struct ana_context *ac)<br>
++{<br>
++	struct gdma_dev *gd = ac->gdma_dev;<br>
++	struct gdma_queue_spec spec = {};<br>
++	int err;<br>
++	int i;<br>
++<br>
++	ac->eqs = kcalloc(ac->num_queues, sizeof(struct ana_eq),<br>
++			  GFP_KERNEL);<br>
++	if (!ac->eqs)<br>
++		return -ENOMEM;<br>
++<br>
++	spec.type = GDMA_EQ;<br>
++	spec.monitor_avl_buf = false;<br>
++	spec.queue_size = EQ_SIZE;<br>
++	spec.eq.callback = NULL;<br>
++	spec.eq.context = ac->eqs;<br>
++	spec.eq.log2_throttle_limit = LOG2_EQ_THROTTLE;<br>
++<br>
++	for (i = 0; i < ac->num_queues; i++) {<br>
++		ana_init_cqe_pollbuf(ac->eqs[i].cqe_poll);<br>
++<br>
++		err = gdma_create_ana_eq(gd, &spec, &ac->eqs[i].eq);<br>
++		if (err)<br>
++			goto out;<br>
++	}<br>
++<br>
++	return 0;<br>
++out:<br>
++	ana_destroy_eq(ana_to_gdma_context(gd), ac);<br>
++	return err;<br>
++}<br>
++<br>
++static int gdma_move_wq_tail(struct gdma_queue *wq, u32 num_units)<br>
++{<br>
++	u32 used_space_old;<br>
++	u32 used_space_new;<br>
++<br>
++	used_space_old = wq->head - wq->tail;<br>
++	used_space_new = wq->head - (wq->tail + num_units);<br>
++<br>
++	if (used_space_new > used_space_old) {<br>
++		WARN_ON(1);<br>
++		return -ERANGE;<br>
++	}<br>
++<br>
++	wq->tail += num_units;<br>
++	return 0;<br>
++}<br>
++<br>
++static void ana_unmap_skb(struct sk_buff *skb, struct ana_context *ac)<br>
++{<br>
++	struct gdma_context *gc = ana_to_gdma_context(ac->gdma_dev);<br>
++	struct ana_skb_head *ash = (struct ana_skb_head *)skb->head;<br>
++	struct device *dev = gc->dev;<br>
++	int i;<br>
++<br>
++	dma_unmap_single(dev, ash->dma_handle[0], ash->size[0], DMA_TO_DEVICE);<br>
++<br>
++	for (i = 1; i < skb_shinfo(skb)->nr_frags + 1; i++)<br>
++		dma_unmap_page(dev, ash->dma_handle[i], ash->size[i],<br>
++			       DMA_TO_DEVICE);<br>
++}<br>
++<br>
++static void ana_poll_tx_cq(struct ana_cq *cq)<br>
++{<br>
++	struct net_device *ndev = cq->gdma_cq->gdma_dev->driver_data;<br>
++	struct gdma_comp *completions = cq->gdma_comp_buf;<br>
++	struct gdma_queue *eqkb = cq->gdma_cq->cq.parent;<br>
++	struct ana_context *ac = netdev_priv(ndev);<br>
++	struct gdma_posted_wqe_info *wqe_info;<br>
++	unsigned int pkt_transmitted = 0;<br>
++	unsigned int wqe_unit_cnt = 0;<br>
++	struct ana_txq *txq = cq->txq;<br>
++	struct netdev_queue *net_txq;<br>
++	unsigned int avail_space;<br>
++	struct gdma_queue *wq;<br>
++	struct sk_buff *skb;<br>
++	bool txq_stopped;<br>
++	int comp_read;<br>
++	int i;<br>
++<br>
++	comp_read = gdma_poll_cq(cq->gdma_cq, completions, CQE_POLLING_BUFFER);<br>
++<br>
++	for (i = 0; i < comp_read; i++) {<br>
++		struct ana_tx_comp_oob *cqe_oob;<br>
++<br>
++		if (WARN_ON(!completions[i].is_sq))<br>
++			return;<br>
++<br>
++		cqe_oob = (struct ana_tx_comp_oob *)completions[i].cqe_data;<br>
++		if (WARN_ON(cqe_oob->cqe_hdr.client_type != ANA_CQE_COMPLETION))<br>
++			return;<br>
++<br>
++		switch (cqe_oob->cqe_hdr.cqe_type) {<br>
++		case CQE_TX_OKAY:<br>
++			break;<br>
++<br>
++		case CQE_TX_SA_DROP:<br>
++		case CQE_TX_MTU_DROP:<br>
++		case CQE_TX_INVALID_OOB:<br>
++		case CQE_TX_INVALID_ETH_TYPE:<br>
++		case CQE_TX_HDR_PROCESSING_ERROR:<br>
++		case CQE_TX_VF_DISABLED:<br>
++		case CQE_TX_VPORT_IDX_OUT_OF_RANGE:<br>
++		case CQE_TX_VPORT_DISABLED:<br>
++		case CQE_TX_VLAN_TAGGING_VIOLATION:<br>
++			WARN(1, "TX: CQE error %d: ignored.\n",<br>
++			     cqe_oob->cqe_hdr.cqe_type);<br>
++			break;<br>
++<br>
++		default:<br>
++			/* If the CQE type is unexpected, log an error, assert,<br>
++			 * and go through the error path.<br>
++			 */<br>
++			WARN(1, "TX: Unexpected CQE type %d: HW BUG?\n",<br>
++			     cqe_oob->cqe_hdr.cqe_type);<br>
++			return;<br>
++		}<br>
++<br>
++		if (WARN_ON(txq->gdma_txq_id != completions[i].wq_num))<br>
++			return;<br>
++<br>
++		skb = skb_dequeue(&txq->pending_skbs);<br>
++		if (WARN_ON(!skb))<br>
++			return;<br>
++<br>
++		wqe_info = (struct gdma_posted_wqe_info *)skb->cb;<br>
++		wqe_unit_cnt += wqe_info->wqe_size_in_bu;<br>
++<br>
++		ana_unmap_skb(skb, ac);<br>
++<br>
++		napi_consume_skb(skb, eqkb->eq.budget);<br>
++<br>
++		pkt_transmitted++;<br>
++	}<br>
++<br>
++	if (WARN_ON(wqe_unit_cnt == 0))<br>
++		return;<br>
++<br>
++	gdma_move_wq_tail(txq->gdma_sq, wqe_unit_cnt);<br>
++<br>
++	wq = txq->gdma_sq;<br>
++	avail_space = gdma_wq_avail_space(wq);<br>
++<br>
++	/* Ensure tail updated before checking q stop */<br>
++	smp_mb();<br>
++<br>
++	net_txq = txq->net_txq;<br>
++	txq_stopped = netif_tx_queue_stopped(net_txq);<br>
++<br>
++	if (txq_stopped && ac->port_is_up && avail_space >= MAX_TX_WQE_SIZE) {<br>
++		netif_tx_wake_queue(net_txq);<br>
++		ac->eth_stats.wake_queue++;<br>
++	}<br>
++<br>
++	if (atomic_sub_return(pkt_transmitted, &txq->pending_sends) < 0)<br>
++		WARN_ON(1);<br>
++}<br>
++<br>
++static void ana_post_pkt_rxq(struct ana_rxq *rxq)<br>
++{<br>
++	struct ana_recv_buf_oob *recv_buf_oob;<br>
++	u32 curr_index;<br>
++	int err;<br>
++<br>
++	curr_index = rxq->buf_index++;<br>
++	if (rxq->buf_index == rxq->num_rx_buf)<br>
++		rxq->buf_index = 0;<br>
++<br>
++	recv_buf_oob = &rxq->rx_oobs[curr_index];<br>
++<br>
++	err = gdma_post_and_ring(rxq->gdma_rq, &recv_buf_oob->wqe_req,<br>
++				 &recv_buf_oob->wqe_inf);<br>
++	if (WARN_ON(err))<br>
++		return;<br>
++<br>
++	WARN_ON(recv_buf_oob->wqe_inf.wqe_size_in_bu != 1);<br>
++}<br>
++<br>
++static void ana_rx_skb(void *buf_va, struct ana_rxcomp_oob *cqe,<br>
++		       struct ana_rxq *rxq)<br>
++{<br>
++	struct ana_stats *rx_stats = &rxq->stats;<br>
++	struct net_device *ndev = rxq->ndev;<br>
++	uint pkt_len = cqe->ppi[0].pkt_len;<br>
++	u16 rxq_idx = rxq->rxq_idx;<br>
++	struct napi_struct *napi;<br>
++	struct ana_context *ac;<br>
++	struct gdma_queue *eq;<br>
++	struct sk_buff *skb;<br>
++	u32 hash_value;<br>
++<br>
++	ac = netdev_priv(ndev);<br>
++	eq = ac->eqs[rxq_idx].eq;<br>
++	eq->eq.work_done++;<br>
++	napi = &eq->eq.napi;<br>
++<br>
++	if (!buf_va) {<br>
++		++ndev->stats.rx_dropped;<br>
++		return;<br>
++	}<br>
++<br>
++	skb = build_skb(buf_va, PAGE_SIZE);<br>
++<br>
++	if (!skb) {<br>
++		free_page((unsigned long)buf_va);<br>
++		++ndev->stats.rx_dropped;<br>
++		return;<br>
++	}<br>
++<br>
++	skb_put(skb, pkt_len);<br>
++	skb->dev = napi->dev;<br>
++<br>
++	skb->protocol = eth_type_trans(skb, ndev);<br>
++	skb_checksum_none_assert(skb);<br>
++	skb_record_rx_queue(skb, rxq_idx);<br>
++<br>
++	if ((ndev->features & NETIF_F_RXCSUM) && cqe->rx_iphdr_csum_succeed) {<br>
++		if (cqe->rx_tcp_csum_succeed || cqe->rx_udp_csum_succeed)<br>
++			skb->ip_summed = CHECKSUM_UNNECESSARY;<br>
++	}<br>
++<br>
++	if (cqe->rx_hashtype != 0 && (ndev->features & NETIF_F_RXHASH)) {<br>
++		hash_value = cqe->ppi[0].pkt_hash;<br>
++<br>
++		if (cqe->rx_hashtype & ANA_HASH_L4)<br>
++			skb_set_hash(skb, hash_value, PKT_HASH_TYPE_L4);<br>
++		else<br>
++			skb_set_hash(skb, hash_value, PKT_HASH_TYPE_L3);<br>
++	}<br>
++<br>
++	napi_gro_receive(napi, skb);<br>
++<br>
++	u64_stats_update_begin(&rx_stats->syncp);<br>
++	rx_stats->packets++;<br>
++	rx_stats->bytes += pkt_len;<br>
++	u64_stats_update_end(&rx_stats->syncp);<br>
++}<br>
++<br>
++static void ana_process_rx_cqe(struct ana_rxq *rxq, struct ana_cq *cq,<br>
++			       struct gdma_comp *cqe)<br>
++{<br>
++	struct gdma_context *gc = ana_to_gdma_context(rxq->gdma_rq->gdma_dev);<br>
++	struct ana_rxcomp_oob *oob = (struct ana_rxcomp_oob *)cqe->cqe_data;<br>
++	struct net_device *ndev = rxq->ndev;<br>
++	struct ana_recv_buf_oob *rxbuf_oob;<br>
++	struct device *dev = gc->dev;<br>
++	void *new_buf, *old_buf;<br>
++	struct page *new_page;<br>
++	u32 curr, pktlen;<br>
++	dma_addr_t da;<br>
++<br>
++	switch (oob->cqe_hdr.cqe_type) {<br>
++	case CQE_RX_OKAY:<br>
++		break;<br>
++<br>
++	case CQE_RX_TRUNCATED:<br>
++		netdev_err(ndev, "Dropped a truncated packet\n");<br>
++		return;<br>
++<br>
++	case CQE_RX_COALESCED_4:<br>
++		netdev_err(ndev, "RX coalescing is unsupported\n");<br>
++		return;<br>
++<br>
++	case CQE_RX_OBJECT_FENCE:<br>
++		netdev_err(ndev, "RX Fencing is unsupported\n");<br>
++		return;<br>
++<br>
++	default:<br>
++		netdev_err(ndev, "Unknown RX CQE type = %d\n",<br>
++			   oob->cqe_hdr.cqe_type);<br>
++		return;<br>
++	}<br>
++<br>
++	if (oob->cqe_hdr.cqe_type != CQE_RX_OKAY)<br>
++		return;<br>
++<br>
++	pktlen = oob->ppi[0].pkt_len;<br>
++<br>
++	if (pktlen == 0) {<br>
++		/* data packets should never have packetlength of zero */<br>
++		netdev_err(ndev, "RX pkt len=0, rq=%u, cq=%u, rxobj=0x%llx\n",<br>
++			   rxq->gdma_id, cq->gdma_id, rxq->rxobj);<br>
++		return;<br>
++	}<br>
++<br>
++	curr = rxq->buf_index;<br>
++	rxbuf_oob = &rxq->rx_oobs[curr];<br>
++	WARN_ON(rxbuf_oob->wqe_inf.wqe_size_in_bu != 1);<br>
++<br>
++	new_page = alloc_page(GFP_ATOMIC);<br>
++<br>
++	if (new_page) {<br>
++		da = dma_map_page(dev, new_page, 0, rxq->datasize,<br>
++				  DMA_FROM_DEVICE);<br>
++<br>
++		if (dma_mapping_error(dev, da)) {<br>
++			__free_page(new_page);<br>
++			new_page = NULL;<br>
++		}<br>
++	}<br>
++<br>
++	new_buf = new_page ? page_to_virt(new_page) : NULL;<br>
++<br>
++	if (new_buf) {<br>
++		dma_unmap_page(dev, rxbuf_oob->buf_dma_addr, rxq->datasize,<br>
++			       DMA_FROM_DEVICE);<br>
++<br>
++		old_buf = rxbuf_oob->buf_va;<br>
++<br>
++		/* refresh the rxbuf_oob with the new page */<br>
++		rxbuf_oob->buf_va = new_buf;<br>
++		rxbuf_oob->buf_dma_addr = da;<br>
++		rxbuf_oob->sgl[0].address = rxbuf_oob->buf_dma_addr;<br>
++	} else {<br>
++		old_buf = NULL; /* drop the packet if no memory */<br>
++	}<br>
++<br>
++	ana_rx_skb(old_buf, oob, rxq);<br>
++<br>
++	gdma_move_wq_tail(rxq->gdma_rq, rxbuf_oob->wqe_inf.wqe_size_in_bu);<br>
++<br>
++	ana_post_pkt_rxq(rxq);<br>
++}<br>
++<br>
++static void ana_poll_rx_cq(struct ana_cq *cq)<br>
++{<br>
++	struct gdma_comp *comp = cq->gdma_comp_buf;<br>
++	u32 comp_read, i;<br>
++<br>
++	comp_read = gdma_poll_cq(cq->gdma_cq, comp, CQE_POLLING_BUFFER);<br>
++	WARN_ON(comp_read > CQE_POLLING_BUFFER);<br>
++<br>
++	for (i = 0; i < comp_read; i++) {<br>
++		if (WARN_ON(comp[i].is_sq))<br>
++			return;<br>
++<br>
++		/* verify recv cqe references the right rxq */<br>
++		if (WARN_ON(comp[i].wq_num != cq->rxq->gdma_id))<br>
++			return;<br>
++<br>
++		ana_process_rx_cqe(cq->rxq, cq, &comp[i]);<br>
++	}<br>
++}<br>
++<br>
++static void ana_cq_handler(void *context, struct gdma_queue *gdma_queue)<br>
++{<br>
++	struct ana_cq *cq = context;<br>
++<br>
++	WARN_ON(cq->gdma_cq != gdma_queue);<br>
++<br>
++	if (cq->type == ANA_CQ_TYPE_RX)<br>
++		ana_poll_rx_cq(cq);<br>
++	else<br>
++		ana_poll_tx_cq(cq);<br>
++<br>
++	gdma_arm_cq(gdma_queue);<br>
++}<br>
++<br>
++static void ana_deinit_cq(struct ana_context *ac, struct ana_cq *cq)<br>
++{<br>
++	if (!cq->gdma_cq)<br>
++		return;<br>
++<br>
++	gdma_destroy_queue(ana_to_gdma_context(ac->gdma_dev), cq->gdma_cq);<br>
++}<br>
++<br>
++static void ana_deinit_txq(struct ana_context *ac, struct ana_txq *txq)<br>
++{<br>
++	if (!txq->gdma_sq)<br>
++		return;<br>
++<br>
++	gdma_destroy_queue(ana_to_gdma_context(ac->gdma_dev), txq->gdma_sq);<br>
++}<br>
++<br>
++static void ana_destroy_txq(struct ana_context *ac)<br>
++{<br>
++	int i;<br>
++<br>
++	if (!ac->tx_qp)<br>
++		return;<br>
++<br>
++	for (i = 0; i < ac->num_queues; i++) {<br>
++		ana_destroy_wq_obj(ac, GDMA_SQ, ac->tx_qp[i].tx_object);<br>
++<br>
++		ana_deinit_cq(ac, &ac->tx_qp[i].tx_cq);<br>
++<br>
++		ana_deinit_txq(ac, &ac->tx_qp[i].txq);<br>
++	}<br>
++<br>
++	kfree(ac->tx_qp);<br>
++	ac->tx_qp = NULL;<br>
++}<br>
++<br>
++static int ana_create_txq(struct ana_context *ac, struct net_device *net)<br>
++{<br>
++	struct gdma_dev *gd = ac->gdma_dev;<br>
++	struct ana_obj_spec wq_spec;<br>
++	struct ana_obj_spec cq_spec;<br>
++	struct gdma_queue_spec spec;<br>
++	struct gdma_context *gc;<br>
++	struct ana_txq *txq;<br>
++	struct ana_cq *cq;<br>
++	u32 txq_size;<br>
++	u32 cq_size;<br>
++	int err;<br>
++	int i;<br>
++<br>
++	ac->tx_qp = kcalloc(ac->num_queues, sizeof(struct ana_tx_qp),<br>
++			    GFP_KERNEL);<br>
++	if (!ac->tx_qp)<br>
++		return -ENOMEM;<br>
++<br>
++	/*  The minimum size of the WQE is 32 bytes, hence<br>
++	 *  MAX_SEND_BUFFERS_PER_QUEUE represents the maximum number of WQEs<br>
++	 *  the send queue can store. This value is then used to size other<br>
++	 *  queues in the driver to prevent overflow.<br>
++	 *  SQ size must be divisible by PAGE_SIZE.<br>
++	 */<br>
++	txq_size = MAX_SEND_BUFFERS_PER_QUEUE * 32;<br>
++	BUILD_BUG_ON(txq_size % PAGE_SIZE != 0);<br>
++<br>
++	cq_size = MAX_SEND_BUFFERS_PER_QUEUE * COMP_ENTRY_SIZE;<br>
++	cq_size = ALIGN(cq_size, PAGE_SIZE);<br>
++<br>
++	gc = ana_to_gdma_context(gd);<br>
++<br>
++	for (i = 0; i < ac->num_queues; i++) {<br>
++		ac->tx_qp[i].tx_object = INVALID_ANA_HANDLE;<br>
++<br>
++		/* create SQ */<br>
++		txq = &ac->tx_qp[i].txq;<br>
++<br>
++		u64_stats_init(&txq->stats.syncp);<br>
++		txq->net_txq = netdev_get_tx_queue(net, i);<br>
++		txq->vp_offset = ac->tx_vp_offset;<br>
++		skb_queue_head_init(&txq->pending_skbs);<br>
++<br>
++		memset(&spec, 0, sizeof(spec));<br>
++		spec.type = GDMA_SQ;<br>
++		spec.monitor_avl_buf = true;<br>
++		spec.queue_size = txq_size;<br>
++		err = gdma_create_ana_wq_cq(gd, &spec, &txq->gdma_sq);<br>
++		if (err)<br>
++			goto out;<br>
++<br>
++		/* create SQ's CQ */<br>
++		cq = &ac->tx_qp[i].tx_cq;<br>
++		cq->gdma_comp_buf = ac->eqs[i].cqe_poll;<br>
++		cq->type = ANA_CQ_TYPE_TX;<br>
++<br>
++		cq->txq = txq;<br>
++<br>
++		memset(&spec, 0, sizeof(spec));<br>
++		spec.type = GDMA_CQ;<br>
++		spec.monitor_avl_buf = false;<br>
++		spec.queue_size = cq_size;<br>
++		spec.cq.callback = ana_cq_handler;<br>
++		spec.cq.parent_eq = ac->eqs[i].eq;<br>
++		spec.cq.context = cq;<br>
++		err = gdma_create_ana_wq_cq(gd, &spec, &cq->gdma_cq);<br>
++		if (err)<br>
++			goto out;<br>
++<br>
++		memset(&wq_spec, 0, sizeof(wq_spec));<br>
++		memset(&cq_spec, 0, sizeof(cq_spec));<br>
++<br>
++		wq_spec.gdma_region = txq->gdma_sq->mem_info.gdma_region;<br>
++		wq_spec.queue_size = txq->gdma_sq->queue_size;<br>
++<br>
++		cq_spec.gdma_region = cq->gdma_cq->mem_info.gdma_region;<br>
++		cq_spec.queue_size = cq->gdma_cq->queue_size;<br>
++		cq_spec.modr_ctx_id = 0;<br>
++		cq_spec.attached_eq = cq->gdma_cq->cq.parent->id;<br>
++<br>
++		err = ana_create_wq_obj(ac, ac->default_vport, GDMA_SQ,<br>
++					&wq_spec, &cq_spec,<br>
++					&ac->tx_qp[i].tx_object);<br>
++<br>
++		if (err)<br>
++			goto out;<br>
++<br>
++		txq->gdma_sq->id = wq_spec.queue_index;<br>
++		cq->gdma_cq->id = cq_spec.queue_index;<br>
++<br>
++		txq->gdma_sq->mem_info.gdma_region = GDMA_INVALID_DMA_REGION;<br>
++		cq->gdma_cq->mem_info.gdma_region = GDMA_INVALID_DMA_REGION;<br>
++<br>
++		txq->gdma_txq_id = txq->gdma_sq->id;<br>
++<br>
++		cq->gdma_id = cq->gdma_cq->id;<br>
++<br>
++		if (cq->gdma_id >= gc->max_num_cq) {<br>
++			WARN_ON(1);<br>
++			return -EINVAL;<br>
++		}<br>
++<br>
++		gc->cq_table[cq->gdma_id] = cq->gdma_cq;<br>
++<br>
++		gdma_arm_cq(cq->gdma_cq);<br>
++	}<br>
++<br>
++	return 0;<br>
++<br>
++out:<br>
++	ana_destroy_txq(ac);<br>
++	return err;<br>
++}<br>
++<br>
++static void gdma_napi_sync_for_rx(struct ana_rxq *rxq)<br>
++{<br>
++	struct net_device *ndev = rxq->ndev;<br>
++	u16 rxq_idx = rxq->rxq_idx;<br>
++	struct napi_struct *napi;<br>
++	struct ana_context *ac;<br>
++	struct gdma_queue *eq;<br>
++<br>
++	ac = netdev_priv(ndev);<br>
++	eq = ac->eqs[rxq_idx].eq;<br>
++	napi = &eq->eq.napi;<br>
++<br>
++	napi_synchronize(napi);<br>
++}<br>
++<br>
++static void ana_destroy_rxq(struct ana_context *ac, struct ana_rxq *rxq,<br>
++			    bool validate_state)<br>
++<br>
++{<br>
++	struct gdma_context *gc = ana_to_gdma_context(ac->gdma_dev);<br>
++	struct ana_recv_buf_oob *rx_oob;<br>
++	struct device *dev = gc->dev;<br>
++	int i;<br>
++<br>
++	if (!rxq)<br>
++		return;<br>
++<br>
++	if (validate_state)<br>
++		gdma_napi_sync_for_rx(rxq);<br>
++<br>
++	ana_destroy_wq_obj(ac, GDMA_RQ, rxq->rxobj);<br>
++<br>
++	ana_deinit_cq(ac, &rxq->rx_cq);<br>
++<br>
++	for (i = 0; i < rxq->num_rx_buf; i++) {<br>
++		rx_oob = &rxq->rx_oobs[i];<br>
++<br>
++		if (!rx_oob->buf_va)<br>
++			continue;<br>
++<br>
++		dma_unmap_page(dev, rx_oob->buf_dma_addr, rxq->datasize,<br>
++			       DMA_FROM_DEVICE);<br>
++<br>
++		free_page((unsigned long)rx_oob->buf_va);<br>
++		rx_oob->buf_va = NULL;<br>
++	}<br>
++<br>
++	if (rxq->gdma_rq)<br>
++		gdma_destroy_queue(ana_to_gdma_context(ac->gdma_dev),<br>
++				   rxq->gdma_rq);<br>
++<br>
++	kfree(rxq);<br>
++}<br>
++<br>
++#define ANA_WQE_HEADER_SIZE 16<br>
++#define ANA_WQE_SGE_SIZE 16<br>
++<br>
++static int ana_alloc_rx_wqe(struct ana_context *ac, struct ana_rxq *rxq,<br>
++			    u32 *rxq_size, u32 *cq_size)<br>
++{<br>
++	struct gdma_context *gc = ana_to_gdma_context(ac->gdma_dev);<br>
++	struct ana_recv_buf_oob *rx_oob;<br>
++	struct device *dev = gc->dev;<br>
++	struct page *page;<br>
++	dma_addr_t da;<br>
++	u32 buf_idx;<br>
++<br>
++	WARN_ON(rxq->datasize == 0 || rxq->datasize > PAGE_SIZE);<br>
++<br>
++	*rxq_size = 0;<br>
++	*cq_size = 0;<br>
++<br>
++	for (buf_idx = 0; buf_idx < rxq->num_rx_buf; buf_idx++) {<br>
++		rx_oob = &rxq->rx_oobs[buf_idx];<br>
++		memset(rx_oob, 0, sizeof(*rx_oob));<br>
++<br>
++		page = alloc_page(GFP_KERNEL);<br>
++		if (!page)<br>
++			return -ENOMEM;<br>
++<br>
++		da = dma_map_page(dev, page, 0, rxq->datasize, DMA_FROM_DEVICE);<br>
++<br>
++		if (dma_mapping_error(dev, da)) {<br>
++			__free_page(page);<br>
++			return -ENOMEM;<br>
++		}<br>
++<br>
++		rx_oob->buf_va = page_to_virt(page);<br>
++		rx_oob->buf_dma_addr = da;<br>
++<br>
++		rx_oob->num_sge = 1;<br>
++		rx_oob->sgl[0].address = rx_oob->buf_dma_addr;<br>
++		rx_oob->sgl[0].size = rxq->datasize;<br>
++		rx_oob->sgl[0].mem_key = ac->gdma_dev->gpa_mkey;<br>
++<br>
++		rx_oob->wqe_req.sgl = rx_oob->sgl;<br>
++		rx_oob->wqe_req.num_sge = rx_oob->num_sge;<br>
++		rx_oob->wqe_req.inline_oob_size = 0;<br>
++		rx_oob->wqe_req.inline_oob_data = NULL;<br>
++		rx_oob->wqe_req.flags = 0;<br>
++		rx_oob->wqe_req.client_data_unit = 0;<br>
++<br>
++		*rxq_size += ALIGN(ANA_WQE_HEADER_SIZE +<br>
++				   ANA_WQE_SGE_SIZE * rx_oob->num_sge, 32);<br>
++		*cq_size += COMP_ENTRY_SIZE;<br>
++	}<br>
++<br>
++	return 0;<br>
++}<br>
++<br>
++static int ana_push_wqe(struct ana_rxq *rxq)<br>
++{<br>
++	struct ana_recv_buf_oob *rx_oob;<br>
++	u32 buf_idx;<br>
++	int err;<br>
++<br>
++	for (buf_idx = 0; buf_idx < rxq->num_rx_buf; buf_idx++) {<br>
++		rx_oob = &rxq->rx_oobs[buf_idx];<br>
++<br>
++		err = gdma_post_and_ring(rxq->gdma_rq, &rx_oob->wqe_req,<br>
++					 &rx_oob->wqe_inf);<br>
++		if (err)<br>
++			return -ENOSPC;<br>
++	}<br>
++<br>
++	return 0;<br>
++}<br>
++<br>
++static struct ana_rxq *ana_create_rxq(struct ana_context *ac, u32 rxq_idx,<br>
++				      struct ana_eq *eq,<br>
++				      struct net_device *ndev)<br>
++{<br>
++	struct gdma_dev *gd = ac->gdma_dev;<br>
++	struct ana_obj_spec wq_spec;<br>
++	struct ana_obj_spec cq_spec;<br>
++	struct gdma_queue_spec spec;<br>
++	struct ana_cq *cq = NULL;<br>
++	struct gdma_context *gc;<br>
++	u32 cq_size, rq_size;<br>
++	struct ana_rxq *rxq;<br>
++	int err;<br>
++<br>
++	gc = ana_to_gdma_context(gd);<br>
++<br>
++	rxq = kzalloc(sizeof(*rxq) +<br>
++		      RX_BUFFERS_PER_QUEUE * sizeof(struct ana_recv_buf_oob),<br>
++		      GFP_KERNEL);<br>
++	if (!rxq)<br>
++		return NULL;<br>
++<br>
++	rxq->ndev = ndev;<br>
++	rxq->num_rx_buf = RX_BUFFERS_PER_QUEUE;<br>
++	rxq->rxq_idx = rxq_idx;<br>
++	rxq->datasize = ALIGN(MAX_FRAME_SIZE, 64);<br>
++	rxq->rxobj = INVALID_ANA_HANDLE;<br>
++<br>
++	err = ana_alloc_rx_wqe(ac, rxq, &rq_size, &cq_size);<br>
++	if (err)<br>
++		goto out;<br>
++<br>
++	rq_size = ALIGN(rq_size, PAGE_SIZE);<br>
++	cq_size = ALIGN(cq_size, PAGE_SIZE);<br>
++<br>
++	/* Create RQ */<br>
++	memset(&spec, 0, sizeof(spec));<br>
++	spec.type = GDMA_RQ;<br>
++	spec.monitor_avl_buf = true;<br>
++	spec.queue_size = rq_size;<br>
++	err = gdma_create_ana_wq_cq(gd, &spec, &rxq->gdma_rq);<br>
++	if (err)<br>
++		goto out;<br>
++<br>
++	/* Create RQ's CQ */<br>
++	cq = &rxq->rx_cq;<br>
++	cq->gdma_comp_buf = eq->cqe_poll;<br>
++	cq->type = ANA_CQ_TYPE_RX;<br>
++	cq->rxq = rxq;<br>
++<br>
++	memset(&spec, 0, sizeof(spec));<br>
++	spec.type = GDMA_CQ;<br>
++	spec.monitor_avl_buf = false;<br>
++	spec.queue_size = cq_size;<br>
++	spec.cq.callback = ana_cq_handler;<br>
++	spec.cq.parent_eq = eq->eq;<br>
++	spec.cq.context = cq;<br>
++	err = gdma_create_ana_wq_cq(gd, &spec, &cq->gdma_cq);<br>
++	if (err)<br>
++		goto out;<br>
++<br>
++	memset(&wq_spec, 0, sizeof(wq_spec));<br>
++	memset(&cq_spec, 0, sizeof(cq_spec));<br>
++	wq_spec.gdma_region = rxq->gdma_rq->mem_info.gdma_region;<br>
++	wq_spec.queue_size = rxq->gdma_rq->queue_size;<br>
++<br>
++	cq_spec.gdma_region = cq->gdma_cq->mem_info.gdma_region;<br>
++	cq_spec.queue_size = cq->gdma_cq->queue_size;<br>
++	cq_spec.modr_ctx_id = 0;<br>
++	cq_spec.attached_eq = cq->gdma_cq->cq.parent->id;<br>
++<br>
++	err = ana_create_wq_obj(ac, ac->default_vport, GDMA_RQ,<br>
++				&wq_spec, &cq_spec, &rxq->rxobj);<br>
++	if (err)<br>
++		goto out;<br>
++<br>
++	rxq->gdma_rq->id = wq_spec.queue_index;<br>
++	cq->gdma_cq->id = cq_spec.queue_index;<br>
++<br>
++	rxq->gdma_rq->mem_info.gdma_region = GDMA_INVALID_DMA_REGION;<br>
++	cq->gdma_cq->mem_info.gdma_region = GDMA_INVALID_DMA_REGION;<br>
++<br>
++	rxq->gdma_id = rxq->gdma_rq->id;<br>
++	cq->gdma_id = cq->gdma_cq->id;<br>
++<br>
++	err = ana_push_wqe(rxq);<br>
++	if (err)<br>
++		goto out;<br>
++<br>
++	if (cq->gdma_id >= gc->max_num_cq)<br>
++		goto out;<br>
++<br>
++	gc->cq_table[cq->gdma_id] = cq->gdma_cq;<br>
++<br>
++	gdma_arm_cq(cq->gdma_cq);<br>
++<br>
++out:<br>
++	if (!err)<br>
++		return rxq;<br>
++<br>
++	netdev_err(ndev, "Failed to create RXQ: err = %d\n", err);<br>
++<br>
++	ana_destroy_rxq(ac, rxq, false);<br>
++<br>
++	if (cq)<br>
++		ana_deinit_cq(ac, cq);<br>
++<br>
++	return NULL;<br>
++}<br>
++<br>
++static int ana_add_rx_queues(struct ana_context *ac, struct net_device *ndev)<br>
++{<br>
++	struct ana_rxq *rxq;<br>
++	int err = 0;<br>
++	int i;<br>
++<br>
++	for (i = 0; i < ac->num_queues; i++) {<br>
++		rxq = ana_create_rxq(ac, i, &ac->eqs[i], ndev);<br>
++		if (!rxq) {<br>
++			err = -ENOMEM;<br>
++			goto out;<br>
++		}<br>
++<br>
++		u64_stats_init(&rxq->stats.syncp);<br>
++<br>
++		ac->rxqs[i] = rxq;<br>
++	}<br>
++<br>
++	ac->default_rxobj = ac->rxqs[0]->rxobj;<br>
++out:<br>
++	return err;<br>
++}<br>
++<br>
++static void ana_destroy_vport(struct ana_context *ac)<br>
++{<br>
++	struct ana_rxq *rxq;<br>
++	u32 rxq_idx;<br>
++<br>
++	for (rxq_idx = 0; rxq_idx < ac->num_queues; rxq_idx++) {<br>
++		rxq = ac->rxqs[rxq_idx];<br>
++		if (!rxq)<br>
++			continue;<br>
++<br>
++		ana_destroy_rxq(ac, rxq, true);<br>
++		ac->rxqs[rxq_idx] = NULL;<br>
++	}<br>
++<br>
++	ana_destroy_txq(ac);<br>
++}<br>
++<br>
++static int ana_create_vport(struct ana_context *ac, struct net_device *net)<br>
++{<br>
++	struct gdma_dev *gd = ac->gdma_dev;<br>
++	int err;<br>
++<br>
++	ac->default_rxobj = INVALID_ANA_HANDLE;<br>
++<br>
++	err = ana_cfg_vport(ac, gd->pdid, gd->doorbell);<br>
++	if (err)<br>
++		return err;<br>
++<br>
++	err = ana_create_txq(ac, net);<br>
++	return err;<br>
++}<br>
++<br>
++static void ana_key_table_init(struct ana_context *ac, bool reset_hash)<br>
++{<br>
++	int i;<br>
++<br>
++	if (reset_hash)<br>
++		get_random_bytes(ac->hashkey, ANA_HASH_KEY_SIZE);<br>
++<br>
++	for (i = 0; i < ANA_INDIRECT_TABLE_SIZE; i++)<br>
++		ac->ind_table[i] = i % ac->num_queues;<br>
++}<br>
++<br>
++int ana_config_rss(struct ana_context *ac, enum TRI_STATE rx,<br>
++		   bool update_hash, bool update_tab)<br>
++{<br>
++	int err;<br>
++	int i;<br>
++<br>
++	if (update_tab) {<br>
++		for (i = 0; i < ANA_INDIRECT_TABLE_SIZE; i++)<br>
++			ac->rxobj_table[i] = ac->rxqs[ac->ind_table[i]]->rxobj;<br>
++	}<br>
++<br>
++	err = ana_cfg_vport_steering(ac, rx, true, update_hash, update_tab);<br>
++	return err;<br>
++}<br>
++<br>
++int ana_detach(struct net_device *ndev)<br>
++{<br>
++	struct ana_context *ac = netdev_priv(ndev);<br>
++	struct ana_txq *txq;<br>
++	int i, err;<br>
++<br>
++	ASSERT_RTNL();<br>
++<br>
++	ac->port_st_save = ac->port_is_up;<br>
++	ac->port_is_up = false;<br>
++	ac->start_remove = true;<br>
++<br>
++	/* Ensure port state updated before txq state */<br>
++	smp_wmb();<br>
++<br>
++	netif_tx_disable(ndev);<br>
++	netif_carrier_off(ndev);<br>
++<br>
++	/* No packet can be transmitted now since ac->port_is_up is false.<br>
++	 * There is still a tiny chance that ana_poll_tx_cq() can re-enable<br>
++	 * a txq because it may not timely see ac->port_is_up being cleared<br>
++	 * to false, but it doesn't matter since ana_start_xmit() drops any<br>
++	 * new packets due to ac->port_is_up being false.<br>
++	 *<br>
++	 * Drain all the in-flight TX packets<br>
++	 */<br>
++	for (i = 0; i < ac->num_queues; i++) {<br>
++		txq = &ac->tx_qp[i].txq;<br>
++<br>
++		while (atomic_read(&txq->pending_sends) > 0)<br>
++			usleep_range(1000, 2000);<br>
++	}<br>
++<br>
++	/* We're 100% sure the queues can no longer be woken up, because<br>
++	 * we're sure now ana_poll_tx_cq() can't be running.<br>
++	 */<br>
++	netif_device_detach(ndev);<br>
++<br>
++	ac->rss_state = TRI_STATE_FALSE;<br>
++	err = ana_config_rss(ac, TRI_STATE_FALSE, false, false);<br>
++	if (err)<br>
++		netdev_err(ndev, "Failed to disable vPort: %d\n", err);<br>
++<br>
++	ana_destroy_vport(ac);<br>
++<br>
++	ana_destroy_eq(ana_to_gdma_context(ac->gdma_dev), ac);<br>
++<br>
++	ana_cleanup_context(ac);<br>
++<br>
++	/* TODO: Implement RX fencing */<br>
++	ssleep(1);<br>
++<br>
++	return 0;<br>
++}<br>
++<br>
++int ana_do_attach(struct net_device *ndev, bool reset_hash)<br>
++{<br>
++	struct ana_context *ac = netdev_priv(ndev);<br>
++	struct gdma_dev *gd = ac->gdma_dev;<br>
++	u32 max_txq, max_rxq, max_queues;<br>
++	u32 num_indirect_entries;<br>
++	u16 max_vports = 1;<br>
++	int err;<br>
++<br>
++	err = ana_init_context(ac);<br>
++	if (err)<br>
++		return err;<br>
++<br>
++	err = ana_query_client_cfg(ac, ANA_MAJOR_VERSION, ANA_MINOR_VERSION,<br>
++				   ANA_MICRO_VERSION, &max_vports);<br>
++	if (err)<br>
++		goto reset_ac;<br>
++<br>
++	err = ana_query_vport_cfg(ac, 0, &max_txq, &max_rxq,<br>
++				  &num_indirect_entries);<br>
++	if (err) {<br>
++		netdev_err(ndev, "Failed to query info for vPort 0\n");<br>
++		goto reset_ac;<br>
++	}<br>
++<br>
++	max_queues = min_t(u32, max_txq, max_rxq);<br>
++	if (ac->max_queues > max_queues)<br>
++		ac->max_queues = max_queues;<br>
++<br>
++	if (ac->num_queues > ac->max_queues)<br>
++		ac->num_queues = ac->max_queues;<br>
++<br>
++	memcpy(ndev->dev_addr, ac->mac_addr, ETH_ALEN);<br>
++<br>
++	err = ana_create_eq(ac);<br>
++	if (err)<br>
++		goto reset_ac;<br>
++<br>
++	err = ana_create_vport(ac, ndev);<br>
++	if (err)<br>
++		goto destroy_eq;<br>
++<br>
++	netif_set_real_num_tx_queues(ndev, ac->num_queues);<br>
++<br>
++	err = ana_add_rx_queues(ac, ndev);<br>
++	if (err)<br>
++		goto destroy_vport;<br>
++<br>
++	ac->rss_state = ac->num_queues > 1 ? TRI_STATE_TRUE : TRI_STATE_FALSE;<br>
++<br>
++	netif_set_real_num_rx_queues(ndev, ac->num_queues);<br>
++<br>
++	ana_key_table_init(ac, reset_hash);<br>
++<br>
++	err = ana_config_rss(ac, TRI_STATE_TRUE, true, true);<br>
++	if (err)<br>
++		goto destroy_vport;<br>
++<br>
++	return 0;<br>
++<br>
++destroy_vport:<br>
++	ana_destroy_vport(ac);<br>
++destroy_eq:<br>
++	ana_destroy_eq(ana_to_gdma_context(gd), ac);<br>
++reset_ac:<br>
++	gdma_deregister_device(gd);<br>
++	kfree(ac->rxqs);<br>
++	ac->rxqs = NULL;<br>
++	return err;<br>
++}<br>
++<br>
++int ana_probe(struct gdma_dev *gd)<br>
++{<br>
++	struct gdma_context *gc = ana_to_gdma_context(gd);<br>
++	struct device *dev = gc->dev;<br>
++	struct net_device *ndev;<br>
++	struct ana_context *ac;<br>
++	int err;<br>
++<br>
++	dev_info(dev, "Azure Network Adapter (ANA) Driver version: %d.%d.%d\n",<br>
++		 ANA_MAJOR_VERSION, ANA_MINOR_VERSION, ANA_MICRO_VERSION);<br>
++<br>
++	ndev = alloc_etherdev_mq(sizeof(struct ana_context), gc->max_num_queue);<br>
++	if (!ndev)<br>
++		return -ENOMEM;<br>
++<br>
++	gd->driver_data = ndev;<br>
++<br>
++	ac = netdev_priv(ndev);<br>
++	ac->gdma_dev = gd;<br>
++	ac->ndev = ndev;<br>
++	ac->max_queues = gc->max_num_queue;<br>
++	ac->num_queues = min_t(uint, gc->max_num_queue, ANA_DEFAULT_NUM_QUEUE);<br>
++	ac->default_vport = INVALID_ANA_HANDLE;<br>
++<br>
++	ndev->netdev_ops = &ana_devops;<br>
++	ndev->ethtool_ops = &ana_ethtool_ops;<br>
++	ndev->mtu = ETH_DATA_LEN;<br>
++	ndev->max_mtu = ndev->mtu;<br>
++	ndev->min_mtu = ndev->mtu;<br>
++	ndev->needed_headroom = ANA_HEADROOM;<br>
++	SET_NETDEV_DEV(ndev, gc->dev);<br>
++<br>
++	netif_carrier_off(ndev);<br>
++	err = ana_do_attach(ndev, true);<br>
++	if (err)<br>
++		goto free_net;<br>
++<br>
++	rtnl_lock();<br>
++<br>
++	netdev_lockdep_set_classes(ndev);<br>
++<br>
++	ndev->hw_features = NETIF_F_SG | NETIF_F_IP_CSUM | NETIF_F_IPV6_CSUM;<br>
++	ndev->hw_features |= NETIF_F_RXCSUM;<br>
++	ndev->hw_features |= NETIF_F_TSO | NETIF_F_TSO6;<br>
++	ndev->hw_features |= NETIF_F_RXHASH;<br>
++	ndev->features = ndev->hw_features;<br>
++	ndev->vlan_features = 0;<br>
++<br>
++	err = register_netdevice(ndev);<br>
++	if (err) {<br>
++		netdev_err(ndev, "Unable to register netdev.\n");<br>
++		goto destroy_vport;<br>
++	}<br>
++<br>
++	rtnl_unlock();<br>
++<br>
++	return 0;<br>
++destroy_vport:<br>
++	rtnl_unlock();<br>
++<br>
++	ana_destroy_vport(ac);<br>
++	ana_destroy_eq(gc, ac);<br>
++free_net:<br>
++	gd->driver_data = NULL;<br>
++	netdev_err(ndev, "Failed to probe net device:  %d\n", err);<br>
++	free_netdev(ndev);<br>
++	return err;<br>
++}<br>
++<br>
++void ana_remove(struct gdma_dev *gd)<br>
++{<br>
++	struct gdma_context *gc = ana_to_gdma_context(gd);<br>
++	struct net_device *ndev = gd->driver_data;<br>
++	struct device *dev = gc->dev;<br>
++<br>
++	if (!ndev) {<br>
++		dev_err(dev, "Failed to find a net device to remove\n");<br>
++		return;<br>
++	}<br>
++<br>
++	/* All cleanup actions should stay after rtnl_lock(), otherwise<br>
++	 * other functions may access partially cleaned up data.<br>
++	 */<br>
++	rtnl_lock();<br>
++<br>
++	ana_detach(ndev);<br>
++<br>
++	unregister_netdevice(ndev);<br>
++<br>
++	rtnl_unlock();<br>
++<br>
++	free_netdev(ndev);<br>
++<br>
++	gd->driver_data = NULL;<br>
++}<br>
+diff --git a/drivers/net/ethernet/microsoft/mana/mana_ethtool.c b/drivers/net/ethernet/microsoft/mana/mana_ethtool.c<br>
+new file mode 100644<br>
+index 000000000000..8e438fe96eab<br>
+--- /dev/null<br>
++++ b/drivers/net/ethernet/microsoft/mana/mana_ethtool.c<br>
+@@ -0,0 +1,278 @@<br>
++// SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause<br>
++/* Copyright (c) 2021, Microsoft Corporation. */<br>
++<br>
++#include <linux/inetdevice.h><br>
++#include <linux/etherdevice.h><br>
++#include <linux/ethtool.h><br>
++<br>
++#include "mana.h"<br>
++<br>
++static const struct {<br>
++	char name[ETH_GSTRING_LEN];<br>
++	u16 offset;<br>
++} ana_eth_stats[] = {<br>
++	{"stop_queue", offsetof(struct ana_ethtool_stats, stop_queue)},<br>
++	{"wake_queue", offsetof(struct ana_ethtool_stats, wake_queue)},<br>
++};<br>
++<br>
++static int ana_get_sset_count(struct net_device *ndev, int stringset)<br>
++{<br>
++	struct ana_context *ac = netdev_priv(ndev);<br>
++	unsigned int num_queues = ac->num_queues;<br>
++<br>
++	if (stringset != ETH_SS_STATS)<br>
++		return -EINVAL;<br>
++<br>
++	return ARRAY_SIZE(ana_eth_stats) + num_queues * 4;<br>
++}<br>
++<br>
++static void ana_get_strings(struct net_device *ndev, u32 stringset, u8 *data)<br>
++{<br>
++	struct ana_context *ac = netdev_priv(ndev);<br>
++	unsigned int num_queues = ac->num_queues;<br>
++	u8 *p = data;<br>
++	int i;<br>
++<br>
++	if (stringset != ETH_SS_STATS)<br>
++		return;<br>
++<br>
++	for (i = 0; i < ARRAY_SIZE(ana_eth_stats); i++) {<br>
++		memcpy(p, ana_eth_stats[i].name, ETH_GSTRING_LEN);<br>
++		p += ETH_GSTRING_LEN;<br>
++	}<br>
++<br>
++	for (i = 0; i < num_queues; i++) {<br>
++		sprintf(p, "rx_%d_packets", i);<br>
++		p += ETH_GSTRING_LEN;<br>
++		sprintf(p, "rx_%d_bytes", i);<br>
++		p += ETH_GSTRING_LEN;<br>
++	}<br>
++<br>
++	for (i = 0; i < num_queues; i++) {<br>
++		sprintf(p, "tx_%d_packets", i);<br>
++		p += ETH_GSTRING_LEN;<br>
++		sprintf(p, "tx_%d_bytes", i);<br>
++		p += ETH_GSTRING_LEN;<br>
++	}<br>
++}<br>
++<br>
++static void ana_get_ethtool_stats(struct net_device *ndev,<br>
++				  struct ethtool_stats *e_stats, u64 *data)<br>
++{<br>
++	struct ana_context *ac = netdev_priv(ndev);<br>
++	unsigned int num_queues = ac->num_queues;<br>
++	void *eth_stats = &ac->eth_stats;<br>
++	struct ana_stats *stats;<br>
++	unsigned int start;<br>
++	u64 packets, bytes;<br>
++	int q, i = 0;<br>
++<br>
++	for (q = 0; q < ARRAY_SIZE(ana_eth_stats); q++)<br>
++		data[i++] = *(u64 *)(eth_stats + ana_eth_stats[q].offset);<br>
++<br>
++	for (q = 0; q < num_queues; q++) {<br>
++		stats = &ac->rxqs[q]->stats;<br>
++<br>
++		do {<br>
++			start = u64_stats_fetch_begin_irq(&stats->syncp);<br>
++			packets = stats->packets;<br>
++			bytes = stats->bytes;<br>
++		} while (u64_stats_fetch_retry_irq(&stats->syncp, start));<br>
++<br>
++		data[i++] = packets;<br>
++		data[i++] = bytes;<br>
++	}<br>
++<br>
++	for (q = 0; q < num_queues; q++) {<br>
++		stats = &ac->tx_qp[q].txq.stats;<br>
++<br>
++		do {<br>
++			start = u64_stats_fetch_begin_irq(&stats->syncp);<br>
++			packets = stats->packets;<br>
++			bytes = stats->bytes;<br>
++		} while (u64_stats_fetch_retry_irq(&stats->syncp, start));<br>
++<br>
++		data[i++] = packets;<br>
++		data[i++] = bytes;<br>
++	}<br>
++}<br>
++<br>
++static int ana_get_rxnfc(struct net_device *ndev, struct ethtool_rxnfc *cmd,<br>
++			 u32 *rules)<br>
++{<br>
++	struct ana_context *ac = netdev_priv(ndev);<br>
++<br>
++	switch (cmd->cmd) {<br>
++	case ETHTOOL_GRXRINGS:<br>
++		cmd->data = ac->num_queues;<br>
++		return 0;<br>
++	}<br>
++<br>
++	return -EOPNOTSUPP;<br>
++}<br>
++<br>
++static u32 ana_get_rxfh_key_size(struct net_device *ndev)<br>
++{<br>
++	return ANA_HASH_KEY_SIZE;<br>
++}<br>
++<br>
++static u32 ana_rss_indir_size(struct net_device *ndev)<br>
++{<br>
++	return ANA_INDIRECT_TABLE_SIZE;<br>
++}<br>
++<br>
++static int ana_get_rxfh(struct net_device *ndev, u32 *indir, u8 *key, u8 *hfunc)<br>
++{<br>
++	struct ana_context *ac = netdev_priv(ndev);<br>
++	int i;<br>
++<br>
++	if (hfunc)<br>
++		*hfunc = ETH_RSS_HASH_TOP; /* Toeplitz */<br>
++<br>
++	if (indir) {<br>
++		for (i = 0; i < ANA_INDIRECT_TABLE_SIZE; i++)<br>
++			indir[i] = ac->ind_table[i];<br>
++	}<br>
++<br>
++	if (key)<br>
++		memcpy(key, ac->hashkey, ANA_HASH_KEY_SIZE);<br>
++<br>
++	return 0;<br>
++}<br>
++<br>
++static int ana_set_rxfh(struct net_device *ndev, const u32 *indir,<br>
++			const u8 *key, const u8 hfunc)<br>
++{<br>
++	bool update_hash = false, update_table = false;<br>
++	struct ana_context *ac = netdev_priv(ndev);<br>
++	u32 save_table[ANA_INDIRECT_TABLE_SIZE];<br>
++	u8 save_key[ANA_HASH_KEY_SIZE];<br>
++	int i, err;<br>
++<br>
++	if (hfunc != ETH_RSS_HASH_NO_CHANGE && hfunc != ETH_RSS_HASH_TOP)<br>
++		return -EOPNOTSUPP;<br>
++<br>
++	if (indir) {<br>
++		for (i = 0; i < ANA_INDIRECT_TABLE_SIZE; i++)<br>
++			if (indir[i] >= ac->num_queues)<br>
++				return -EINVAL;<br>
++<br>
++		update_table = true;<br>
++		for (i = 0; i < ANA_INDIRECT_TABLE_SIZE; i++) {<br>
++			save_table[i] = ac->ind_table[i];<br>
++			ac->ind_table[i] = indir[i];<br>
++		}<br>
++	}<br>
++<br>
++	if (key) {<br>
++		update_hash = true;<br>
++		memcpy(save_key, ac->hashkey, ANA_HASH_KEY_SIZE);<br>
++		memcpy(ac->hashkey, key, ANA_HASH_KEY_SIZE);<br>
++	}<br>
++<br>
++	err = ana_config_rss(ac, TRI_STATE_TRUE, update_hash, update_table);<br>
++<br>
++	if (err) { /* recover to original values */<br>
++		if (update_table) {<br>
++			for (i = 0; i < ANA_INDIRECT_TABLE_SIZE; i++)<br>
++				ac->ind_table[i] = save_table[i];<br>
++		}<br>
++<br>
++		if (update_hash)<br>
++			memcpy(ac->hashkey, save_key, ANA_HASH_KEY_SIZE);<br>
++<br>
++		ana_config_rss(ac, TRI_STATE_TRUE, update_hash, update_table);<br>
++	}<br>
++<br>
++	return err;<br>
++}<br>
++<br>
++static int ana_attach(struct net_device *ndev)<br>
++{<br>
++	struct ana_context *ac = netdev_priv(ndev);<br>
++	int err;<br>
++<br>
++	ASSERT_RTNL();<br>
++<br>
++	err = ana_do_attach(ndev, false);<br>
++	if (err)<br>
++		return err;<br>
++<br>
++	netif_device_attach(ndev);<br>
++<br>
++	ac->port_is_up = ac->port_st_save;<br>
++	ac->start_remove = false;<br>
++<br>
++	/* Ensure port state updated before txq state */<br>
++	smp_wmb();<br>
++<br>
++	if (ac->port_is_up) {<br>
++		netif_carrier_on(ndev);<br>
++		netif_tx_wake_all_queues(ndev);<br>
++	}<br>
++<br>
++	return 0;<br>
++}<br>
++<br>
++static void ana_get_channels(struct net_device *ndev,<br>
++			     struct ethtool_channels *channel)<br>
++{<br>
++	struct ana_context *ac = netdev_priv(ndev);<br>
++<br>
++	channel->max_combined = ac->max_queues;<br>
++	channel->combined_count = ac->num_queues;<br>
++}<br>
++<br>
++static int ana_set_channels(struct net_device *ndev,<br>
++			    struct ethtool_channels *channels)<br>
++{<br>
++	struct ana_context *ac = netdev_priv(ndev);<br>
++	unsigned int new_count;<br>
++	unsigned int old_count;<br>
++	int err, err2;<br>
++<br>
++	new_count = channels->combined_count;<br>
++	old_count = ac->num_queues;<br>
++<br>
++	if (new_count < 1 || new_count > ac->max_queues ||<br>
++	    channels->rx_count || channels->tx_count || channels->other_count)<br>
++		return -EINVAL;<br>
++<br>
++	if (new_count == old_count)<br>
++		return 0;<br>
++<br>
++	err = ana_detach(ndev);<br>
++	if (err) {<br>
++		netdev_err(ndev, "ana_detach failed: %d\n", err);<br>
++		return err;<br>
++	}<br>
++<br>
++	ac->num_queues = new_count;<br>
++<br>
++	err = ana_attach(ndev);<br>
++	if (!err)<br>
++		return 0;<br>
++<br>
++	netdev_err(ndev, "ana_attach failed: %d\n", err);<br>
++<br>
++	/* Try to roll it back to the old configuration. */<br>
++	ac->num_queues = old_count;<br>
++	err2 = ana_attach(ndev);<br>
++	if (err2)<br>
++		netdev_err(ndev, "ana re-attach failed: %d\n", err2);<br>
++<br>
++	return err;<br>
++}<br>
++<br>
++const struct ethtool_ops ana_ethtool_ops = {<br>
++	.get_ethtool_stats = ana_get_ethtool_stats,<br>
++	.get_sset_count = ana_get_sset_count,<br>
++	.get_strings = ana_get_strings,<br>
++	.get_rxnfc = ana_get_rxnfc,<br>
++	.get_rxfh_key_size = ana_get_rxfh_key_size,<br>
++	.get_rxfh_indir_size = ana_rss_indir_size,<br>
++	.get_rxfh = ana_get_rxfh,<br>
++	.set_rxfh = ana_set_rxfh,<br>
++	.get_channels = ana_get_channels,<br>
++	.set_channels = ana_set_channels,<br>
++};<br>
+diff --git a/drivers/net/ethernet/microsoft/mana/shm_channel.c b/drivers/net/ethernet/microsoft/mana/shm_channel.c<br>
+new file mode 100644<br>
+index 000000000000..128bd02ebd99<br>
+--- /dev/null<br>
++++ b/drivers/net/ethernet/microsoft/mana/shm_channel.c<br>
+@@ -0,0 +1,292 @@<br>
++// SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause<br>
++/* Copyright (c) 2021, Microsoft Corporation. */<br>
++<br>
++#include <linux/delay.h><br>
++#include <linux/device.h><br>
++#include <linux/io.h><br>
++<br>
++#include "shm_channel.h"<br>
++<br>
++#define PAGE_FRAME_L48_WIDTH_BYTES 6<br>
++#define PAGE_FRAME_L48_WIDTH_BITS (PAGE_FRAME_L48_WIDTH_BYTES * 8)<br>
++#define PAGE_FRAME_L48_MASK 0x0000FFFFFFFFFFFF<br>
++#define PAGE_FRAME_H4_WIDTH_BITS 4<br>
++#define VECTOR_MASK 0xFFFF<br>
++#define SHMEM_VF_RESET_STATE ((u32)-1)<br>
++<br>
++#define SMC_MSG_TYPE_ESTABLISH_HWC 1<br>
++#define SMC_MSG_TYPE_ESTABLISH_HWC_VERSION 0<br>
++<br>
++#define SMC_MSG_TYPE_DESTROY_HWC 2<br>
++#define SMC_MSG_TYPE_DESTROY_HWC_VERSION 0<br>
++<br>
++#define SMC_MSG_DIRECTION_REQUEST 0<br>
++#define SMC_MSG_DIRECTION_RESPONSE 1<br>
++<br>
++/* Shared memory channel protocol header<br>
++ * 4 bytes<br>
++ *<br>
++ * msg_type: set on request and response; response matches request.<br>
++ * msg_version: newer PF writes back older response (matching request)<br>
++ *  older PF acts on latest version known and sets that version in result<br>
++ *  (less than request).<br>
++ * direction: 0 for request, VF->PF; 1 for response, PF->VF.<br>
++ * status: 0 on request,<br>
++ *   operation result on response (success = 0, failure = 1 or greater).<br>
++ * reset_vf: If set on either establish or destroy request, indicates perform<br>
++ *  FLR before/after the operation.<br>
++ * owner_is_pf: 1 indicates PF owned, 0 indicates VF owned.<br>
++ */<br>
++union shm_channel_proto_hdr {<br>
++	u32 as_uint32;<br>
++<br>
++	struct {<br>
++		u8 msg_type	: 3;<br>
++		u8 msg_version	: 3;<br>
++		u8 reserved_1	: 1;<br>
++		u8 direction	: 1;<br>
++<br>
++		u8 status;<br>
++<br>
++		u8 reserved_2;<br>
++<br>
++		u8 reset_vf	: 1;<br>
++		u8 reserved_3	: 6;<br>
++		u8 owner_is_pf	: 1;<br>
++	};<br>
++} __packed;<br>
++<br>
++#define SMC_APERTURE_BITS 256<br>
++#define SMC_BASIC_UNIT (sizeof(u32))<br>
++#define SMC_APERTURE_DWORDS (SMC_APERTURE_BITS / (SMC_BASIC_UNIT * 8))<br>
++#define SMC_LAST_DWORD (SMC_APERTURE_DWORDS - 1)<br>
++<br>
++static int shm_channel_poll_register(void __iomem *base, bool reset)<br>
++{<br>
++	void __iomem *ptr = base + SMC_LAST_DWORD * SMC_BASIC_UNIT;<br>
++	u32 last_dword;<br>
++	int i;<br>
++<br>
++	/* wait up to 20 seconds */<br>
++	for (i = 0; i < 20 * 100; i++)  {<br>
++		last_dword = readl(ptr);<br>
++<br>
++		/* shmem reads as 0xFFFFFFFF in the reset case */<br>
++		if (reset && last_dword == SHMEM_VF_RESET_STATE)<br>
++			return 0;<br>
++<br>
++		/* If bit_31 is set, the PF currently owns the SMC. */<br>
++		if (!(last_dword & BIT(31)))<br>
++			return 0;<br>
++<br>
++		usleep_range(1000, 2000);<br>
++	}<br>
++<br>
++	return -ETIMEDOUT;<br>
++}<br>
++<br>
++static int shm_channel_read_response(struct shm_channel *sc, u32 msg_type,<br>
++				     u32 msg_version, bool reset_vf)<br>
++{<br>
++	union shm_channel_proto_hdr hdr;<br>
++	void __iomem *base = sc->base;<br>
++	int err;<br>
++<br>
++	/* Wait for PF to respond. */<br>
++	err = shm_channel_poll_register(base, reset_vf);<br>
++	if (err)<br>
++		return err;<br>
++<br>
++	hdr.as_uint32 = readl(base + SMC_LAST_DWORD * SMC_BASIC_UNIT);<br>
++<br>
++	if (reset_vf && hdr.as_uint32 == SHMEM_VF_RESET_STATE)<br>
++		return 0;<br>
++<br>
++	/* Validate protocol fields from the PF driver */<br>
++	if (hdr.msg_type != msg_type || hdr.msg_version > msg_version ||<br>
++	    hdr.direction != SMC_MSG_DIRECTION_RESPONSE) {<br>
++		dev_err(sc->dev, "Wrong SMC response 0x%x, type=%d, ver=%d\n",<br>
++			hdr.as_uint32, msg_type, msg_version);<br>
++		return -EPROTO;<br>
++	}<br>
++<br>
++	/* Validate the operation result */<br>
++	if (hdr.status != 0) {<br>
++		dev_err(sc->dev, "SMC operation failed: 0x%x\n", hdr.status);<br>
++		return -EPROTO;<br>
++	}<br>
++<br>
++	return 0;<br>
++}<br>
++<br>
++void shm_channel_init(struct shm_channel *sc, struct device *dev,<br>
++		      void __iomem *base)<br>
++{<br>
++	sc->dev = dev;<br>
++	sc->base = base;<br>
++}<br>
++<br>
++int shm_channel_setup_hwc(struct shm_channel *sc, bool reset_vf, u64 eq_addr,<br>
++			  u64 cq_addr, u64 rq_addr, u64 sq_addr,<br>
++			  u32 eq_msix_index)<br>
++{<br>
++	union shm_channel_proto_hdr *hdr;<br>
++	u16 all_addr_h4bits = 0;<br>
++	u16 frame_addr_seq = 0;<br>
++	u64 frame_addr = 0;<br>
++	u8 shm_buf[32];<br>
++	u64 *shmem;<br>
++	u32 *dword;<br>
++	u8 *ptr;<br>
++	int err;<br>
++	int i;<br>
++<br>
++	/* Ensure VF already has possession of shared memory */<br>
++	err = shm_channel_poll_register(sc->base, false);<br>
++	if (err) {<br>
++		dev_err(sc->dev, "Timeout when setting up HWC: %d\n", err);<br>
++		return err;<br>
++	}<br>
++<br>
++	if ((eq_addr & PAGE_MASK) != eq_addr)<br>
++		return -EINVAL;<br>
++<br>
++	if ((cq_addr & PAGE_MASK) != cq_addr)<br>
++		return -EINVAL;<br>
++<br>
++	if ((rq_addr & PAGE_MASK) != rq_addr)<br>
++		return -EINVAL;<br>
++<br>
++	if ((sq_addr & PAGE_MASK) != sq_addr)<br>
++		return -EINVAL;<br>
++<br>
++	if ((eq_msix_index & VECTOR_MASK) != eq_msix_index)<br>
++		return -EINVAL;<br>
++<br>
++	/* Scheme for packing four addresses and extra info into 256 bits.<br>
++	 *<br>
++	 * Addresses must be page frame aligned, so only frame address bits<br>
++	 * are transferred.<br>
++	 *<br>
++	 * 52-bit frame addresses are split into the lower 48 bits and upper<br>
++	 * 4 bits. Lower 48 bits of 4 address are written sequentially from<br>
++	 * the start of the 256-bit shared memory region followed by 16 bits<br>
++	 * containing the upper 4 bits of the 4 addresses in sequence.<br>
++	 *<br>
++	 * A 16 bit EQ vector number fills out the next-to-last 32-bit dword.<br>
++	 *<br>
++	 * The final 32-bit dword is used for protocol control information as<br>
++	 * defined in shm_channel_proto_hdr.<br>
++	 */<br>
++<br>
++	memset(shm_buf, 0, sizeof(shm_buf));<br>
++	ptr = shm_buf;<br>
++<br>
++	/* EQ addr: low 48 bits of frame address */<br>
++	shmem = (u64 *)ptr;<br>
++	frame_addr = (eq_addr >> PAGE_SHIFT);<br>
++	*shmem = (frame_addr & PAGE_FRAME_L48_MASK);<br>
++	all_addr_h4bits |= (frame_addr >> PAGE_FRAME_L48_WIDTH_BITS) <<<br>
++		(frame_addr_seq++ * PAGE_FRAME_H4_WIDTH_BITS);<br>
++	ptr += PAGE_FRAME_L48_WIDTH_BYTES;<br>
++<br>
++	/* CQ addr: low 48 bits of frame address */<br>
++	shmem = (u64 *)ptr;<br>
++	frame_addr = (cq_addr >> PAGE_SHIFT);<br>
++	*shmem = (frame_addr & PAGE_FRAME_L48_MASK);<br>
++	all_addr_h4bits |= (frame_addr >> PAGE_FRAME_L48_WIDTH_BITS) <<<br>
++		(frame_addr_seq++ * PAGE_FRAME_H4_WIDTH_BITS);<br>
++	ptr += PAGE_FRAME_L48_WIDTH_BYTES;<br>
++<br>
++	/* RQ addr: low 48 bits of frame address */<br>
++	shmem = (u64 *)ptr;<br>
++	frame_addr = (rq_addr >> PAGE_SHIFT);<br>
++	*shmem = (frame_addr & PAGE_FRAME_L48_MASK);<br>
++	all_addr_h4bits |= (frame_addr >> PAGE_FRAME_L48_WIDTH_BITS) <<<br>
++		(frame_addr_seq++ * PAGE_FRAME_H4_WIDTH_BITS);<br>
++	ptr += PAGE_FRAME_L48_WIDTH_BYTES;<br>
++<br>
++	/* SQ addr: low 48 bits of frame address */<br>
++	shmem = (u64 *)ptr;<br>
++	frame_addr = (sq_addr >> PAGE_SHIFT);<br>
++	*shmem = (frame_addr & PAGE_FRAME_L48_MASK);<br>
++	all_addr_h4bits |= (frame_addr >> PAGE_FRAME_L48_WIDTH_BITS) <<<br>
++		(frame_addr_seq++ * PAGE_FRAME_H4_WIDTH_BITS);<br>
++	ptr += PAGE_FRAME_L48_WIDTH_BYTES;<br>
++<br>
++	/* High 4 bits of the four frame addresses */<br>
++	*((u16 *)ptr) = all_addr_h4bits;<br>
++	ptr += sizeof(u16);<br>
++<br>
++	/* EQ MSIX vector number */<br>
++	*((u16 *)ptr) = (u16)eq_msix_index;<br>
++	ptr += sizeof(u16);<br>
++<br>
++	/* 32-bit protocol header in final dword */<br>
++	*((u32 *)ptr) = 0;<br>
++<br>
++	hdr = (union shm_channel_proto_hdr *)ptr;<br>
++	hdr->msg_type = SMC_MSG_TYPE_ESTABLISH_HWC;<br>
++	hdr->msg_version = SMC_MSG_TYPE_ESTABLISH_HWC_VERSION;<br>
++	hdr->direction = SMC_MSG_DIRECTION_REQUEST;<br>
++	hdr->reset_vf = reset_vf;<br>
++<br>
++	/* Write 256-message buffer to shared memory (final 32-bit write<br>
++	 * triggers HW to set possession bit to PF).<br>
++	 */<br>
++	dword = (u32 *)shm_buf;<br>
++	for (i = 0; i < SMC_APERTURE_DWORDS; i++)<br>
++		writel(*dword++, sc->base + i * SMC_BASIC_UNIT);<br>
++<br>
++	/* Read shmem response (polling for VF possession) and validate.<br>
++	 * For setup, waiting for response on shared memory is not strictly<br>
++	 * necessary, since wait occurs later for results to appear in EQE's.<br>
++	 */<br>
++	err = shm_channel_read_response(sc, SMC_MSG_TYPE_ESTABLISH_HWC,<br>
++					SMC_MSG_TYPE_ESTABLISH_HWC_VERSION,<br>
++					reset_vf);<br>
++	if (err) {<br>
++		dev_err(sc->dev, "Error when setting up HWC: %d\n", err);<br>
++		return err;<br>
++	}<br>
++<br>
++	return 0;<br>
++}<br>
++<br>
++int shm_channel_teardown_hwc(struct shm_channel *sc, bool reset_vf)<br>
++{<br>
++	union shm_channel_proto_hdr hdr = {};<br>
++	int err;<br>
++<br>
++	/* Ensure already has possession of shared memory */<br>
++	err = shm_channel_poll_register(sc->base, false);<br>
++	if (err) {<br>
++		dev_err(sc->dev, "Timeout when tearing down HWC\n");<br>
++		return err;<br>
++	}<br>
++<br>
++	/* Set up protocol header for HWC destroy message */<br>
++	hdr.msg_type = SMC_MSG_TYPE_DESTROY_HWC;<br>
++	hdr.msg_version = SMC_MSG_TYPE_DESTROY_HWC_VERSION;<br>
++	hdr.direction = SMC_MSG_DIRECTION_REQUEST;<br>
++	hdr.reset_vf = reset_vf;<br>
++<br>
++	/* Write message in high 32 bits of 256-bit shared memory, causing HW<br>
++	 * to set possession bit to PF.<br>
++	 */<br>
++	writel(hdr.as_uint32, sc->base + SMC_LAST_DWORD * SMC_BASIC_UNIT);<br>
++<br>
++	/* Read shmem response (polling for VF possession) and validate.<br>
++	 * For teardown, waiting for response is required to ensure hardware<br>
++	 * invalidates MST entries before software frees memory.<br>
++	 */<br>
++	err = shm_channel_read_response(sc, SMC_MSG_TYPE_DESTROY_HWC,<br>
++					SMC_MSG_TYPE_DESTROY_HWC_VERSION,<br>
++					reset_vf);<br>
++	if (err) {<br>
++		dev_err(sc->dev, "Error when tearing down HWC: %d\n", err);<br>
++		return err;<br>
++	}<br>
++<br>
++	return 0;<br>
++}<br>
+diff --git a/drivers/net/ethernet/microsoft/mana/shm_channel.h b/drivers/net/ethernet/microsoft/mana/shm_channel.h<br>
+new file mode 100644<br>
+index 000000000000..aa55837239d7<br>
+--- /dev/null<br>
++++ b/drivers/net/ethernet/microsoft/mana/shm_channel.h<br>
+@@ -0,0 +1,21 @@<br>
++/* SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause */<br>
++/* Copyright (c) 2021, Microsoft Corporation. */<br>
++<br>
++#ifndef _SHM_CHANNEL_H<br>
++#define _SHM_CHANNEL_H<br>
++<br>
++struct shm_channel {<br>
++	struct device *dev;<br>
++	void __iomem *base;<br>
++};<br>
++<br>
++void shm_channel_init(struct shm_channel *sc, struct device *dev,<br>
++		      void __iomem *base);<br>
++<br>
++int shm_channel_setup_hwc(struct shm_channel *sc, bool reset_vf, u64 eq_addr,<br>
++			  u64 cq_addr, u64 rq_addr, u64 sq_addr,<br>
++			  u32 eq_msix_index);<br>
++<br>
++int shm_channel_teardown_hwc(struct shm_channel *sc, bool reset_vf);<br>
++<br>
++#endif /* _SHM_CHANNEL_H */<br>
+-- <br>
+2.20.1<br>
+<br>
+<br>
+

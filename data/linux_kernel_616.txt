@@ -1,0 +1,68 @@
+Siddharth Chandrasekaran <sidcha@xxxxxxxxx> writes:<br>
+<br>
+><i> On Thu, Apr 08, 2021 at 02:05:53PM +0200, Vitaly Kuznetsov wrote:</i><br>
+><i>> Siddharth Chandrasekaran <sidcha@xxxxxxxxx> writes:</i><br>
+><i>></i><br>
+><i>> > Now that all extant hypercalls that can use XMM registers (based on</i><br>
+><i>> > spec) for input/outputs are patched to support them, we can start</i><br>
+><i>> > advertising this feature to guests.</i><br>
+><i>> ></i><br>
+><i>> > Cc: Alexander Graf <graf@xxxxxxxxxx></i><br>
+><i>> > Cc: Evgeny Iakovlev <eyakovl@xxxxxxxxx></i><br>
+><i>> > Signed-off-by: Siddharth Chandrasekaran <sidcha@xxxxxxxxx></i><br>
+><i>> > ---</i><br>
+><i>> >  arch/x86/include/asm/hyperv-tlfs.h | 4 ++--</i><br>
+><i>> >  arch/x86/kvm/hyperv.c              | 1 +</i><br>
+><i>> >  2 files changed, 3 insertions(+), 2 deletions(-)</i><br>
+><i>> ></i><br>
+><i>> > diff --git a/arch/x86/include/asm/hyperv-tlfs.h b/arch/x86/include/asm/hyperv-tlfs.h</i><br>
+><i>> > index e6cd3fee562b..1f160ef60509 100644</i><br>
+><i>> > --- a/arch/x86/include/asm/hyperv-tlfs.h</i><br>
+><i>> > +++ b/arch/x86/include/asm/hyperv-tlfs.h</i><br>
+><i>> > @@ -49,10 +49,10 @@</i><br>
+><i>> >  /* Support for physical CPU dynamic partitioning events is available*/</i><br>
+><i>> >  #define HV_X64_CPU_DYNAMIC_PARTITIONING_AVAILABLE    BIT(3)</i><br>
+><i>> >  /*</i><br>
+><i>> > - * Support for passing hypercall input parameter block via XMM</i><br>
+><i>> > + * Support for passing hypercall input and output parameter block via XMM</i><br>
+><i>> >   * registers is available</i><br>
+><i>> >   */</i><br>
+><i>> > -#define HV_X64_HYPERCALL_PARAMS_XMM_AVAILABLE                BIT(4)</i><br>
+><i>> > +#define HV_X64_HYPERCALL_PARAMS_XMM_AVAILABLE                BIT(4) | BIT(15)</i><br>
+><i>></i><br>
+><i>> TLFS 6.0b states that there are two distinct bits for input and output:</i><br>
+><i>></i><br>
+><i>> CPUID Leaf 0x40000003.EDX:</i><br>
+><i>> Bit 4: support for passing hypercall input via XMM registers is available.</i><br>
+><i>> Bit 15: support for returning hypercall output via XMM registers is available.</i><br>
+><i>></i><br>
+><i>> and HV_X64_HYPERCALL_PARAMS_XMM_AVAILABLE is not currently used</i><br>
+><i>> anywhere, I'd suggest we just rename</i><br>
+><i>></i><br>
+><i>> HV_X64_HYPERCALL_PARAMS_XMM_AVAILABLE to HV_X64_HYPERCALL_XMM_INPUT_AVAILABLE</i><br>
+><i>> and add HV_X64_HYPERCALL_XMM_OUTPUT_AVAILABLE (bit 15).</i><br>
+><i></i><br>
+><i> That is how I had it initially; but then noticed that we would never</i><br>
+><i> need to use either of them separately. So it seemed like a reasonable</i><br>
+><i> abstraction to put them together.</i><br>
+><i></i><br>
+<br>
+Actually, we may. In theory, KVM userspace may decide to expose just<br>
+one of these two to the guest as it is not obliged to copy everything<br>
+from KVM_GET_SUPPORTED_HV_CPUID so we will need separate<br>
+guest_cpuid_has() checks.<br>
+<br>
+(This reminds me of something I didn't see in your series:<br>
+we need to check that XMM hypercall parameters support was actually<br>
+exposed to the guest as it is illegal for a guest to use it otherwise --<br>
+and we will likely need two checks, for input and output).<br>
+<br>
+Also, (and that's what triggered my comment) all other HV_ACCESS_* in<br>
+kvm_get_hv_cpuid() are single bits so my first impression was that you<br>
+forgot one bit, but then I saw that you combined them together.<br>
+<br>
+-- <br>
+Vitaly<br>
+<br>
+<br>
+

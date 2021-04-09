@@ -1,0 +1,139 @@
+Hi, Rui Wang,<br>
+<br>
+On Fri, Feb 12, 2021 at 4:21 PM Rui Wang <wangrui@xxxxxxxxxxx> wrote:<br>
+><i></i><br>
+><i> From: wangrui <wangrui@xxxxxxxxxxx></i><br>
+><i></i><br>
+><i> When user-space program accessing a virtual address and falls into TLB invalid</i><br>
+><i> exception handling. at almost the same time, if the pmd which that contains this</i><br>
+><i> virtual address is hit by THP scanning, and then a invalid address access may</i><br>
+><i> occurs in the tlb handler:</i><br>
+><i></i><br>
+><i>    CPU 0: (userspace)                 | CPU 1: (khugepaged)</i><br>
+><i> 1:                                    | scan hit: set pmde to invalid_pmd_table</i><br>
+><i>                                       |  (by pmd_clear)</i><br>
+><i> 2: handle_tlbl(tlb invalid):          |</i><br>
+><i>     load pmde for huge page testing,  |</i><br>
+><i>     pmde doesn't contains _PAGE_HUGE  |</i><br>
+><i>     bit                               |</i><br>
+><i> 3:                                    | collapsed: set pmde to huge page format</i><br>
+><i> 4: handle_tlbl(normal page case):     |</i><br>
+><i>     load pmde again as base address,  |</i><br>
+><i>     pmde doesn't contains an address, |</i><br>
+><i>     access invalid address            |</i><br>
+><i></i><br>
+><i> This patch avoids the inconsistency of two memory loads by reusing the result</i><br>
+><i> of one load.</i><br>
+><i></i><br>
+You can CC stable@xxxxxxxxxxxxxxx here.<br>
+<br>
+><i> Signed-off-by: wangrui <wangrui@xxxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  arch/mips/mm/tlbex.c | 27 ++++++++++++---------------</i><br>
+><i>  1 file changed, 12 insertions(+), 15 deletions(-)</i><br>
+><i></i><br>
+><i> diff --git a/arch/mips/mm/tlbex.c b/arch/mips/mm/tlbex.c</i><br>
+><i> index a7521b8f7658..2295f1e2db81 100644</i><br>
+><i> --- a/arch/mips/mm/tlbex.c</i><br>
+><i> +++ b/arch/mips/mm/tlbex.c</i><br>
+><i> @@ -721,13 +721,12 @@ static void build_huge_tlb_write_entry(u32 **p, struct uasm_label **l,</i><br>
+><i>   */</i><br>
+><i>  static void</i><br>
+><i>  build_is_huge_pte(u32 **p, struct uasm_reloc **r, unsigned int tmp,</i><br>
+><i> -                 unsigned int pmd, int lid)</i><br>
+><i> +                 unsigned int pmde, int lid)</i><br>
+><i>  {</i><br>
+><i> -       UASM_i_LW(p, tmp, 0, pmd);</i><br>
+><i>         if (use_bbit_insns()) {</i><br>
+><i> -               uasm_il_bbit1(p, r, tmp, ilog2(_PAGE_HUGE), lid);</i><br>
+><i> +               uasm_il_bbit1(p, r, pmde, ilog2(_PAGE_HUGE), lid);</i><br>
+><i>         } else {</i><br>
+><i> -               uasm_i_andi(p, tmp, tmp, _PAGE_HUGE);</i><br>
+><i> +               uasm_i_andi(p, tmp, pmde, _PAGE_HUGE);</i><br>
+><i>                 uasm_il_bnez(p, r, tmp, lid);</i><br>
+><i>         }</i><br>
+><i>  }</i><br>
+><i> @@ -1103,7 +1102,6 @@ EXPORT_SYMBOL_GPL(build_update_entries);</i><br>
+><i>  struct mips_huge_tlb_info {</i><br>
+><i>         int huge_pte;</i><br>
+><i>         int restore_scratch;</i><br>
+><i> -       bool need_reload_pte;</i><br>
+><i>  };</i><br>
+><i></i><br>
+><i>  static struct mips_huge_tlb_info</i><br>
+><i> @@ -1118,7 +1116,6 @@ build_fast_tlb_refill_handler (u32 **p, struct uasm_label **l,</i><br>
+><i></i><br>
+><i>         rv.huge_pte = scratch;</i><br>
+><i>         rv.restore_scratch = 0;</i><br>
+><i> -       rv.need_reload_pte = false;</i><br>
+><i></i><br>
+><i>         if (check_for_high_segbits) {</i><br>
+><i>                 UASM_i_MFC0(p, tmp, C0_BADVADDR);</i><br>
+><i> @@ -1323,7 +1320,6 @@ static void build_r4000_tlb_refill_handler(void)</i><br>
+><i>         } else {</i><br>
+><i>                 htlb_info.huge_pte = K0;</i><br>
+><i>                 htlb_info.restore_scratch = 0;</i><br>
+><i> -               htlb_info.need_reload_pte = true;</i><br>
+><i>                 vmalloc_mode = refill_noscratch;</i><br>
+><i>                 /*</i><br>
+><i>                  * create the plain linear handler</i><br>
+><i> @@ -1348,11 +1344,14 @@ static void build_r4000_tlb_refill_handler(void)</i><br>
+><i>                 build_get_pgde32(&p, K0, K1); /* get pgd in K1 */</i><br>
+><i>  #endif</i><br>
+><i></i><br>
+><i> +               UASM_i_LW(&p, K0, 0, K1); /* get pmd entry in K0 */</i><br>
+><i>  #ifdef CONFIG_MIPS_HUGE_TLB_SUPPORT</i><br>
+><i> -               build_is_huge_pte(&p, &r, K0, K1, label_tlb_huge_update);</i><br>
+><i> +               build_is_huge_pte(&p, &r, K1, K0, label_tlb_huge_update);</i><br>
+><i>  #endif</i><br>
+><i></i><br>
+><i> -               build_get_ptep(&p, K0, K1);</i><br>
+You remove the build_get_ptep here, but this may be wrong for NEVADA.<br>
+<br>
+Huacai<br>
+><i> +               GET_CONTEXT(&p, K1); /* get context reg */</i><br>
+><i> +               build_adjust_context(&p, K1);</i><br>
+><i> +               UASM_i_ADDU(&p, K1, K0, K1); /* add in offset */</i><br>
+><i>                 build_update_entries(&p, K0, K1);</i><br>
+><i>                 build_tlb_write_entry(&p, &l, &r, tlb_random);</i><br>
+><i>                 uasm_l_leave(&l, p);</i><br>
+><i> @@ -1360,8 +1359,6 @@ static void build_r4000_tlb_refill_handler(void)</i><br>
+><i>         }</i><br>
+><i>  #ifdef CONFIG_MIPS_HUGE_TLB_SUPPORT</i><br>
+><i>         uasm_l_tlb_huge_update(&l, p);</i><br>
+><i> -       if (htlb_info.need_reload_pte)</i><br>
+><i> -               UASM_i_LW(&p, htlb_info.huge_pte, 0, K1);</i><br>
+><i>         build_huge_update_entries(&p, htlb_info.huge_pte, K1);</i><br>
+><i>         build_huge_tlb_write_entry(&p, &l, &r, K0, tlb_random,</i><br>
+><i>                                    htlb_info.restore_scratch);</i><br>
+><i> @@ -2059,20 +2056,20 @@ build_r4000_tlbchange_handler_head(u32 **p, struct uasm_label **l,</i><br>
+><i>         build_get_pgde32(p, wr.r1, wr.r2); /* get pgd in ptr */</i><br>
+><i>  #endif</i><br>
+><i></i><br>
+><i> +       UASM_i_LW(p, wr.r3, 0, wr.r2); /* get pmd entry in wr.r3 */</i><br>
+><i>  #ifdef CONFIG_MIPS_HUGE_TLB_SUPPORT</i><br>
+><i>         /*</i><br>
+><i> -        * For huge tlb entries, pmd doesn't contain an address but</i><br>
+><i> +        * For huge tlb entries, pmde doesn't contain an address but</i><br>
+><i>          * instead contains the tlb pte. Check the PAGE_HUGE bit and</i><br>
+><i>          * see if we need to jump to huge tlb processing.</i><br>
+><i>          */</i><br>
+><i> -       build_is_huge_pte(p, r, wr.r1, wr.r2, label_tlb_huge_update);</i><br>
+><i> +       build_is_huge_pte(p, r, wr.r1, wr.r3, label_tlb_huge_update);</i><br>
+><i>  #endif</i><br>
+><i></i><br>
+><i>         UASM_i_MFC0(p, wr.r1, C0_BADVADDR);</i><br>
+><i> -       UASM_i_LW(p, wr.r2, 0, wr.r2);</i><br>
+><i>         UASM_i_SRL(p, wr.r1, wr.r1, PAGE_SHIFT + PTE_ORDER - PTE_T_LOG2);</i><br>
+><i>         uasm_i_andi(p, wr.r1, wr.r1, (PTRS_PER_PTE - 1) << PTE_T_LOG2);</i><br>
+><i> -       UASM_i_ADDU(p, wr.r2, wr.r2, wr.r1);</i><br>
+><i> +       UASM_i_ADDU(p, wr.r2, wr.r3, wr.r1);</i><br>
+><i></i><br>
+><i>  #ifdef CONFIG_SMP</i><br>
+><i>         uasm_l_smp_pgtable_change(l, *p);</i><br>
+><i> --</i><br>
+><i> 2.30.1</i><br>
+><i></i><br>
+<br>
+<br>
+

@@ -1,0 +1,37 @@
+Add optional brcm,ccode-map property to support translation from ISO3166<br>
+country code to brcmfmac firmware country code and revision.<br>
+<br>
+Signed-off-by: Shawn Guo <shawn.guo@xxxxxxxxxx><br>
+---<br>
+ .../devicetree/bindings/net/wireless/brcm,bcm43xx-fmac.txt | 7 +++++++<br>
+ 1 file changed, 7 insertions(+)<br>
+<br>
+diff --git a/Documentation/devicetree/bindings/net/wireless/brcm,bcm43xx-fmac.txt b/Documentation/devicetree/bindings/net/wireless/brcm,bcm43xx-fmac.txt<br>
+index cffb2d6876e3..a65ac4384c04 100644<br>
+--- a/Documentation/devicetree/bindings/net/wireless/brcm,bcm43xx-fmac.txt<br>
++++ b/Documentation/devicetree/bindings/net/wireless/brcm,bcm43xx-fmac.txt<br>
+@@ -15,6 +15,12 @@ Optional properties:<br>
+ 	When not specified the device will use in-band SDIO interrupts.<br>
+  - interrupt-names : name of the out-of-band interrupt, which must be set<br>
+ 	to "host-wake".<br>
++ - brcm,ccode-map : multiple strings for translating ISO3166 country code to<br>
++	brcmfmac firmware country code and revision.  Each string must be in<br>
++	format "AA-BB-num" where:<br>
++	  AA is the ISO3166 country code which must be 2 characters.<br>
++	  BB is the firmware country code which must be 2 characters.<br>
++	  num is the revision number which must fit into signed integer.<br>
+ <br>
+ Example:<br>
+ <br>
+@@ -34,5 +40,6 @@ mmc3: mmc@1c12000 {<br>
+ 		interrupt-parent = <&pio>;<br>
+ 		interrupts = <10 8>; /* PH10 / EINT10 */<br>
+ 		interrupt-names = "host-wake";<br>
++		brcm,ccode-map = "JP-JP-78", "US-Q2-86";<br>
+ 	};<br>
+ };<br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+

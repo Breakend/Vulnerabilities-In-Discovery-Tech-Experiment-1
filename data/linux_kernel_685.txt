@@ -1,0 +1,41 @@
+On Sat, 3 Apr 2021 20:30:53 +0200 (CEST)<br>
+"Maciej W. Rozycki" <macro@xxxxxxxxxxx> wrote:<br>
+<br>
+><i> CAUTION: Email originated externally, do not click links or open attachments unless you recognize the sender and know the content is safe.</i><br>
+><i> </i><br>
+><i> </i><br>
+><i> On Thu, 1 Apr 2021, Masami Hiramatsu wrote:</i><br>
+><i> </i><br>
+><i> > > > > Current riscv's kprobe handlers are run with both preemption and</i><br>
+><i> > > > > interrupt enabled, this violates kprobe requirements. Fix this issue</i><br>
+><i> > > > > by keeping interrupts disabled for BREAKPOINT exception.  </i><br>
+><i> > > ></i><br>
+><i> > > > Not only while the breakpoint exception but also until the end of</i><br>
+><i> > > > the single step (maybe you are using __BUG_INSN_32 ??) need to be</i><br>
+><i> > > > disable interrupts. Can this do that?</i><br>
+><i> > > >  </i><br>
+><i> > ></i><br>
+><i> > > interrupt is disabled during "single step" by kprobes_save_local_irqflag()</i><br>
+><i> > > and kprobes_restore_local_irqflag(). The code flow looks like:</i><br>
+><i> > ></i><br>
+><i> > > do_trap_break()   // for bp</i><br>
+><i> > >   kprobe_breakpoint_handler()</i><br>
+><i> > >     setup_singlestep()</i><br>
+><i> > >       kprobes_restore_local_irqflag()</i><br>
+><i> > ></i><br>
+><i> > > do_trap_break()  // for ss</i><br>
+><i> > >   kprobe_single_step_handler()</i><br>
+><i> > >     kprobes_restore_local_irqflag()  </i><br>
+><i> ></i><br>
+><i> > OK, thanks for the confirmation!  </i><br>
+><i> </i><br>
+><i>  Is this approach guaranteed to keep interrupt handling latency low enough</i><br>
+><i> for the system not to be negatively affected, e.g. for the purpose of NTP</i><br>
+><i> timekeeping?</i><br>
+<br>
+IMHO, interrupt latency can't be ensured if kprobes is triggered.<br>
+<br>
+thanks<br>
+<br>
+<br>
+

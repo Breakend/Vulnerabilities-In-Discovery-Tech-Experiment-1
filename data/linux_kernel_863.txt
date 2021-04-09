@@ -1,0 +1,39 @@
+Add an interrupt which is EINT usually to support runtime PM,<br>
+meanwhile add "interrupt-names" property, for backward<br>
+compatibility, it's optional and used when wakeup interrupt<br>
+exists<br>
+<br>
+Signed-off-by: Chunfeng Yun <chunfeng.yun@xxxxxxxxxxxx><br>
+---<br>
+ .../devicetree/bindings/usb/mediatek,mtk-xhci.yaml  | 13 ++++++++++++-<br>
+ 1 file changed, 12 insertions(+), 1 deletion(-)<br>
+<br>
+diff --git a/Documentation/devicetree/bindings/usb/mediatek,mtk-xhci.yaml b/Documentation/devicetree/bindings/usb/mediatek,mtk-xhci.yaml<br>
+index 45bf4ea00c9e..4fe8a301d03f 100644<br>
+--- a/Documentation/devicetree/bindings/usb/mediatek,mtk-xhci.yaml<br>
++++ b/Documentation/devicetree/bindings/usb/mediatek,mtk-xhci.yaml<br>
+@@ -46,7 +46,18 @@ properties:<br>
+       - const: ippc  # optional, only needed for case 1.<br>
+ <br>
+   interrupts:<br>
+-    maxItems: 1<br>
++    description:<br>
++      use "interrupts-extended" when the interrupts are connected to the<br>
++      separate interrupt controllers<br>
++    minItems: 1<br>
++    items:<br>
++      - description: xHCI host controller interrupt<br>
++      - description: optional, wakeup interrupt used to support runtime PM<br>
++<br>
++  interrupt-names:<br>
++    items:<br>
++      - const: host<br>
++      - const: wakeup<br>
+ <br>
+   power-domains:<br>
+     description: A phandle to USB power domain node to control USB's MTCMOS<br>
+-- <br>
+2.18.0<br>
+<br>
+<br>
+

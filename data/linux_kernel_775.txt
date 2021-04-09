@@ -1,0 +1,99 @@
+On 4/8/21 1:08 AM, Sergei Trofimovich wrote:<br>
+><i> When page_poison detects page corruption it's useful to see who</i><br>
+><i> freed a page recently to have a guess where write-after-free</i><br>
+><i> corruption happens.</i><br>
+><i> </i><br>
+><i> After this change corruption report has extra page data.</i><br>
+><i> Example report from real corruption (includes only page_pwner part):</i><br>
+><i> </i><br>
+><i>     pagealloc: memory corruption</i><br>
+><i>     e00000014cd61d10: 11 00 00 00 00 00 00 00 30 1d d2 ff ff 0f 00 60  ........0......`</i><br>
+><i>     e00000014cd61d20: b0 1d d2 ff ff 0f 00 60 90 fe 1c 00 08 00 00 20  .......`.......</i><br>
+><i>     ...</i><br>
+><i>     CPU: 1 PID: 220402 Comm: cc1plus Not tainted 5.12.0-rc5-00107-g9720c6f59ecf #245</i><br>
+><i>     Hardware name: hp server rx3600, BIOS 04.03 04/08/2008</i><br>
+><i>     ...</i><br>
+><i>     Call Trace:</i><br>
+><i>      [<a000000100015210>] show_stack+0x90/0xc0</i><br>
+><i>      [<a000000101163390>] dump_stack+0x150/0x1c0</i><br>
+><i>      [<a0000001003f1e90>] __kernel_unpoison_pages+0x410/0x440</i><br>
+><i>      [<a0000001003c2460>] get_page_from_freelist+0x1460/0x2ca0</i><br>
+><i>      [<a0000001003c6be0>] __alloc_pages_nodemask+0x3c0/0x660</i><br>
+><i>      [<a0000001003ed690>] alloc_pages_vma+0xb0/0x500</i><br>
+><i>      [<a00000010037deb0>] __handle_mm_fault+0x1230/0x1fe0</i><br>
+><i>      [<a00000010037ef70>] handle_mm_fault+0x310/0x4e0</i><br>
+><i>      [<a00000010005dc70>] ia64_do_page_fault+0x1f0/0xb80</i><br>
+><i>      [<a00000010000ca00>] ia64_leave_kernel+0x0/0x270</i><br>
+><i>     page_owner tracks the page as freed</i><br>
+><i>     page allocated via order 0, migratetype Movable,</i><br>
+><i>       gfp_mask 0x100dca(GFP_HIGHUSER_MOVABLE|__GFP_ZERO), pid 37, ts 8173444098740</i><br>
+><i>      __reset_page_owner+0x40/0x200</i><br>
+><i>      free_pcp_prepare+0x4d0/0x600</i><br>
+><i>      free_unref_page+0x20/0x1c0</i><br>
+><i>      __put_page+0x110/0x1a0</i><br>
+><i>      migrate_pages+0x16d0/0x1dc0</i><br>
+><i>      compact_zone+0xfc0/0x1aa0</i><br>
+><i>      proactive_compact_node+0xd0/0x1e0</i><br>
+><i>      kcompactd+0x550/0x600</i><br>
+><i>      kthread+0x2c0/0x2e0</i><br>
+><i>      call_payload+0x50/0x80</i><br>
+><i> </i><br>
+><i> Here we can see that page was freed by page migration but something</i><br>
+><i> managed to write to it afterwards.</i><br>
+><i> </i><br>
+><i> CC: Vlastimil Babka <vbabka@xxxxxxx></i><br>
+><i> CC: Andrew Morton <akpm@xxxxxxxxxxxxxxxxxxxx></i><br>
+><i> CC: linux-mm@xxxxxxxxx</i><br>
+><i> Signed-off-by: Sergei Trofimovich <slyfox@xxxxxxxxxx></i><br>
+<br>
+Acked-by: Vlastimil Babka <vbabka@xxxxxxx><br>
+<br>
+><i> ---</i><br>
+><i> Change since v1: use more generic 'dump_page()' suggested by Vlastimil</i><br>
+><i> Should supersede existing mm-page_poison-print-page-owner-info-when-corruption-is-caught.patch</i><br>
+><i> </i><br>
+><i>  mm/page_poison.c | 6 ++++--</i><br>
+><i>  1 file changed, 4 insertions(+), 2 deletions(-)</i><br>
+><i> </i><br>
+><i> diff --git a/mm/page_poison.c b/mm/page_poison.c</i><br>
+><i> index 65cdf844c8ad..df03126f3b2b 100644</i><br>
+><i> --- a/mm/page_poison.c</i><br>
+><i> +++ b/mm/page_poison.c</i><br>
+><i> @@ -2,6 +2,7 @@</i><br>
+><i>  #include <linux/kernel.h></i><br>
+><i>  #include <linux/string.h></i><br>
+><i>  #include <linux/mm.h></i><br>
+><i> +#include <linux/mmdebug.h></i><br>
+><i>  #include <linux/highmem.h></i><br>
+><i>  #include <linux/page_ext.h></i><br>
+><i>  #include <linux/poison.h></i><br>
+><i> @@ -45,7 +46,7 @@ static bool single_bit_flip(unsigned char a, unsigned char b)</i><br>
+><i>  	return error && !(error & (error - 1));</i><br>
+><i>  }</i><br>
+><i>  </i><br>
+><i> -static void check_poison_mem(unsigned char *mem, size_t bytes)</i><br>
+><i> +static void check_poison_mem(struct page *page, unsigned char *mem, size_t bytes)</i><br>
+><i>  {</i><br>
+><i>  	static DEFINE_RATELIMIT_STATE(ratelimit, 5 * HZ, 10);</i><br>
+><i>  	unsigned char *start;</i><br>
+><i> @@ -70,6 +71,7 @@ static void check_poison_mem(unsigned char *mem, size_t bytes)</i><br>
+><i>  	print_hex_dump(KERN_ERR, "", DUMP_PREFIX_ADDRESS, 16, 1, start,</i><br>
+><i>  			end - start + 1, 1);</i><br>
+><i>  	dump_stack();</i><br>
+><i> +	dump_page(page, "pagealloc: corrupted page details");</i><br>
+><i>  }</i><br>
+><i>  </i><br>
+><i>  static void unpoison_page(struct page *page)</i><br>
+><i> @@ -82,7 +84,7 @@ static void unpoison_page(struct page *page)</i><br>
+><i>  	 * that is freed to buddy. Thus no extra check is done to</i><br>
+><i>  	 * see if a page was poisoned.</i><br>
+><i>  	 */</i><br>
+><i> -	check_poison_mem(addr, PAGE_SIZE);</i><br>
+><i> +	check_poison_mem(page, addr, PAGE_SIZE);</i><br>
+><i>  	kunmap_atomic(addr);</i><br>
+><i>  }</i><br>
+><i>  </i><br>
+><i> </i><br>
+<br>
+<br>
+

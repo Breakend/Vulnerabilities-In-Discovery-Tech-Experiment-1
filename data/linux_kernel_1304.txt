@@ -1,0 +1,102 @@
+From: Quanyang Wang <quanyang.wang@xxxxxxxxxxxxx><br>
+<br>
+There is a data corruption issue that occurs in the reading operation<br>
+(cmd:0x6c) when transmitting common data as dummy circles.<br>
+<br>
+The gqspi controller has the functionality to send dummy clock circles.<br>
+When writing data with the fields [receive, transmit, data_xfer] = [0,0,1]<br>
+to the Generic FIFO, and configuring the correct SPI mode, the controller<br>
+will transmit dummy circles.<br>
+<br>
+So let's switch to hardware dummy cycles transfer to fix this issue.<br>
+<br>
+Fixes: 1c26372e5aa9 ("spi: spi-zynqmp-gqspi: Update driver to use spi-mem framework")<br>
+Signed-off-by: Quanyang Wang <quanyang.wang@xxxxxxxxxxxxx><br>
+Reviewed-by: Amit Kumar Mahapatra <amit.kumar-mahapatra@xxxxxxxxxx><br>
+---<br>
+ drivers/spi/spi-zynqmp-gqspi.c | 40 +++++++++++++++-------------------<br>
+ 1 file changed, 18 insertions(+), 22 deletions(-)<br>
+<br>
+diff --git a/drivers/spi/spi-zynqmp-gqspi.c b/drivers/spi/spi-zynqmp-gqspi.c<br>
+index 3b39461d58b3..cf73a069b759 100644<br>
+--- a/drivers/spi/spi-zynqmp-gqspi.c<br>
++++ b/drivers/spi/spi-zynqmp-gqspi.c<br>
+@@ -521,7 +521,7 @@ static void zynqmp_qspi_filltxfifo(struct zynqmp_qspi *xqspi, int size)<br>
+ {<br>
+ 	u32 count = 0, intermediate;<br>
+ <br>
+-	while ((xqspi->bytes_to_transfer > 0) && (count < size)) {<br>
++	while ((xqspi->bytes_to_transfer > 0) && (count < size) && (xqspi->txbuf)) {<br>
+ 		memcpy(&intermediate, xqspi->txbuf, 4);<br>
+ 		zynqmp_gqspi_write(xqspi, GQSPI_TXD_OFST, intermediate);<br>
+ <br>
+@@ -580,7 +580,7 @@ static void zynqmp_qspi_fillgenfifo(struct zynqmp_qspi *xqspi, u8 nbits,<br>
+ 		genfifoentry |= GQSPI_GENFIFO_DATA_XFER;<br>
+ 		genfifoentry |= GQSPI_GENFIFO_TX;<br>
+ 		transfer_len = xqspi->bytes_to_transfer;<br>
+-	} else {<br>
++	} else if (xqspi->rxbuf) {<br>
+ 		genfifoentry &= ~GQSPI_GENFIFO_TX;<br>
+ 		genfifoentry |= GQSPI_GENFIFO_DATA_XFER;<br>
+ 		genfifoentry |= GQSPI_GENFIFO_RX;<br>
+@@ -588,6 +588,11 @@ static void zynqmp_qspi_fillgenfifo(struct zynqmp_qspi *xqspi, u8 nbits,<br>
+ 			transfer_len = xqspi->dma_rx_bytes;<br>
+ 		else<br>
+ 			transfer_len = xqspi->bytes_to_receive;<br>
++	} else {<br>
++		/* Sending dummy circles here */<br>
++		genfifoentry &= ~(GQSPI_GENFIFO_TX | GQSPI_GENFIFO_RX);<br>
++		genfifoentry |= GQSPI_GENFIFO_DATA_XFER;<br>
++		transfer_len = xqspi->bytes_to_transfer;<br>
+ 	}<br>
+ 	genfifoentry |= zynqmp_qspi_selectspimode(xqspi, nbits);<br>
+ 	xqspi->genfifoentry = genfifoentry;<br>
+@@ -1011,32 +1016,23 @@ static int zynqmp_qspi_exec_op(struct spi_mem *mem,<br>
+ 	}<br>
+ <br>
+ 	if (op->dummy.nbytes) {<br>
+-		tmpbuf = kzalloc(op->dummy.nbytes, GFP_KERNEL | GFP_DMA);<br>
+-		if (!tmpbuf)<br>
+-			return -ENOMEM;<br>
+-		memset(tmpbuf, 0xff, op->dummy.nbytes);<br>
+-		reinit_completion(&xqspi->data_completion);<br>
+-		xqspi->txbuf = tmpbuf;<br>
++		xqspi->txbuf = NULL;<br>
+ 		xqspi->rxbuf = NULL;<br>
+-		xqspi->bytes_to_transfer = op->dummy.nbytes;<br>
++		/*<br>
++		 * xqspi->bytes_to_transfer here represents the dummy circles<br>
++		 * which need to be sent.<br>
++		 */<br>
++		xqspi->bytes_to_transfer = op->dummy.nbytes * 8 / op->dummy.buswidth;<br>
+ 		xqspi->bytes_to_receive = 0;<br>
+-		zynqmp_qspi_write_op(xqspi, op->dummy.buswidth,<br>
++		/*<br>
++		 * Using op->data.buswidth instead of op->dummy.buswidth here because<br>
++		 * we need to use it to configure the correct SPI mode.<br>
++		 */<br>
++		zynqmp_qspi_write_op(xqspi, op->data.buswidth,<br>
+ 				     genfifoentry);<br>
+ 		zynqmp_gqspi_write(xqspi, GQSPI_CONFIG_OFST,<br>
+ 				   zynqmp_gqspi_read(xqspi, GQSPI_CONFIG_OFST) |<br>
+ 				   GQSPI_CFG_START_GEN_FIFO_MASK);<br>
+-		zynqmp_gqspi_write(xqspi, GQSPI_IER_OFST,<br>
+-				   GQSPI_IER_TXEMPTY_MASK |<br>
+-				   GQSPI_IER_GENFIFOEMPTY_MASK |<br>
+-				   GQSPI_IER_TXNOT_FULL_MASK);<br>
+-		if (!wait_for_completion_interruptible_timeout<br>
+-		    (&xqspi->data_completion, msecs_to_jiffies(1000))) {<br>
+-			err = -ETIMEDOUT;<br>
+-			kfree(tmpbuf);<br>
+-			goto return_err;<br>
+-		}<br>
+-<br>
+-		kfree(tmpbuf);<br>
+ 	}<br>
+ <br>
+ 	if (op->data.nbytes) {<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

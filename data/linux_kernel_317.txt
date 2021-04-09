@@ -1,0 +1,28 @@
+The change in the series has been inspired by [1], which, I think,<br>
+can be improved. Here I present the view how it can be done.<br>
+<br>
+The series marked as RFT since I have no hardware and I perform<br>
+compile test only.<br>
+<br>
+The patches 1 and 2 can be (independently) applied for v5.13, but I'm not in<br>
+hurry with the series, due to above (lack of real testing). So I'm flexible in<br>
+a way how it can be proceed.<br>
+<br>
+[1]: cover.1617380819.git.syednwaris@xxxxxxxxx<br>
+<br>
+Andy Shevchenko (5):<br>
+  bitmap: Make bitmap_remap() and bitmap_bitremap() available to users<br>
+  gpio: xilinx: Correct kernel doc for xgpio_probe()<br>
+  gpio: xilinx: Introduce xgpio_read_chan() / xgpio_write_chan()<br>
+  gpio: xilinx: Switch to use bitmap APIs<br>
+  gpio: xilinx: No need to disable IRQs in the handler<br>
+<br>
+ drivers/gpio/gpio-xilinx.c | 377 ++++++++++++++++++-------------------<br>
+ lib/bitmap.c               |   5 +-<br>
+ 2 files changed, 190 insertions(+), 192 deletions(-)<br>
+<br>
+-- <br>
+2.30.2<br>
+<br>
+<br>
+

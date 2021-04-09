@@ -1,0 +1,12 @@
+On Mon, Mar 22, 2021 at 11:43 AM Jianqun Xu <jay.xu@xxxxxxxxxxxxxx> wrote:<br>
+<br>
+><i> Separate gpio driver from pinctrl driver.</i><br>
+<br>
+I tried to apply this too, but it fails, can you rebase on the pinctrl "devel"<br>
+branch (I suppose the RK3568 driver got in the way).<br>
+<br>
+Yours,<br>
+Linus Walleij<br>
+<br>
+<br>
+

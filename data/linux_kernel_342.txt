@@ -1,0 +1,28 @@
+><i> +--threads=<spec>::</i><br>
+><i> +Write collected trace data into several data files using parallel threads.</i><br>
+><i> +<spec> value can be user defined list of masks. Masks separated by colon</i><br>
+><i> +define cpus to be monitored by a thread and affinity mask of that thread</i><br>
+><i> +is separated by slash. For example user specification like the following:</i><br>
+><i> +<cpus mask 1>/<affinity mask 1>:<cpu mask 2>/<affinity mask 2> specifies</i><br>
+<br>
+You need to be more clear on the exact syntax of a mask. Ideally<br>
+some full examples too.<br>
+<br>
+><i> +parallel threads layout that consists of two threads with corresponding</i><br>
+><i> +assigned cpus to be monitored. <spec> value can also be a string meaning</i><br>
+><i> +predefined parallel threads layout:</i><br>
+><i> +    cpu    - create new data streaming thread for every monitored cpu</i><br>
+><i> +    core   - create new thread to monitor cpus grouped by a core</i><br>
+><i> +    socket - create new thread to monitor cpus grouped by a socket</i><br>
+><i> +    numa   - create new threed to monitor cpus grouped by a numa domain</i><br>
+><i> +Predefined layouts can be used on systems with large number of cpus in</i><br>
+><i> +order not to spawn multiple per-cpu streaming threads but still avoid LOST</i><br>
+><i> +events in data directory files. Option specified with no or empty value</i><br>
+><i> +defaults to cpu layout. Masks defined or provided by the option value are</i><br>
+><i> +filtered through the mask provided by -C option.</i><br>
+><i>  </i><br>
+><i> </i><br>
+><i> </i><br>
+<br>
+<br>
+

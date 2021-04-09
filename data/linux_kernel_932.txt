@@ -1,0 +1,72 @@
+When rebooting the EHCI driver, ehci_shutdown() will be called.<br>
+if the sbrn flag is 0, ehci_shutdown() will return directly.<br>
+<br>
+Kunpeng920's EHCI hardware does not define the SBRN register, which cause<br>
+its value to default to 0. The sbrn flag being 0 will cause the<br>
+EHCI interrupt signal to not be turned off after reboot. An interrupt<br>
+that is not closed will cause an exception to the device sharing<br>
+the interrupt.<br>
+<br>
+Currently, Kunpeng920's EHCI hardware has this problem. We hope to<br>
+solve this problem by skipping reading the sbrn register value.<br>
+On the EHCI hardware of the next-generation Kunpeng930, we will define<br>
+this SBRN register in accordance with the controller standard.<br>
+<br>
+Signed-off-by: Longfang Liu <liulongfang@xxxxxxxxxx><br>
+---<br>
+ drivers/usb/host/ehci-pci.c | 30 ++++++++++++++++++++++++++----<br>
+ 1 file changed, 26 insertions(+), 4 deletions(-)<br>
+<br>
+diff --git a/drivers/usb/host/ehci-pci.c b/drivers/usb/host/ehci-pci.c<br>
+index 3c3820a..738d773 100644<br>
+--- a/drivers/usb/host/ehci-pci.c<br>
++++ b/drivers/usb/host/ehci-pci.c<br>
+@@ -47,6 +47,31 @@ static inline bool is_bypassed_id(struct pci_dev *pdev)<br>
+ 	return !!pci_match_id(bypass_pci_id_table, pdev);<br>
+ }<br>
+ <br>
++static const struct usb_sbrn_whitelist_entry {<br>
++	unsigned short vendor;<br>
++	unsigned short device;<br>
++} usb_sbrn_whitelist[] = {<br>
++	/* STMICRO ConneXT has no sbrn register */<br>
++	{PCI_VENDOR_ID_STMICRO, PCI_DEVICE_ID_STMICRO_USB_HOST},<br>
++	/* HUAWEI sbrn register is undefined */<br>
++	{PCI_VENDOR_ID_HUAWEI, 0xa239},<br>
++	{}<br>
++};<br>
++<br>
++static bool usb_sbrn_whitelist_check(struct pci_dev *pdev)<br>
++{<br>
++	const struct usb_sbrn_whitelist_entry *entry;<br>
++	unsigned short vendor = pdev->vendor;<br>
++	unsigned short device = pdev->device;<br>
++<br>
++	for (entry = usb_sbrn_whitelist; entry->vendor; entry++) {<br>
++		if (vendor == entry->vendor && device == entry->device)<br>
++			return true;<br>
++	}<br>
++<br>
++	return false;<br>
++}<br>
++<br>
+ /*<br>
+  * 0x84 is the offset of in/out threshold register,<br>
+  * and it is the same offset as the register of 'hostpc'.<br>
+@@ -288,10 +313,7 @@ static int ehci_pci_setup(struct usb_hcd *hcd)<br>
+ 	}<br>
+ <br>
+ 	/* Serial Bus Release Number is at PCI 0x60 offset */<br>
+-	if (pdev->vendor == PCI_VENDOR_ID_STMICRO<br>
+-	    && pdev->device == PCI_DEVICE_ID_STMICRO_USB_HOST)<br>
+-		;	/* ConneXT has no sbrn register */<br>
+-	else<br>
++	if (!usb_sbrn_whitelist_check(pdev))<br>
+ 		pci_read_config_byte(pdev, 0x60, &ehci->sbrn);<br>
+ <br>
+ 	/* Keep this around for a while just in case some EHCI<br>
+-- <br>
+2.8.1<br>
+<br>
+<br>
+

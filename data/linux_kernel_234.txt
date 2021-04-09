@@ -1,0 +1,130 @@
+Some IRQ chips such as the Arm GICs automagically mask / unmask an<br>
+IRQ during the handling of said IRQ. This renders further mask / unmask<br>
+operations within the flow handlers redundant, which we do want to leverage<br>
+as masking by itself is not cheap (Distributor access via MMIO for GICs).<br>
+<br>
+This is different from having a chip->irq_mask_ack() callback as this<br>
+masking is:<br>
+- inherent to the chip->irq_ack() and *cannot* be omitted<br>
+- a *different* masking state than chip->irq_mask() (chip->irq_mask() is<br>
+  idempotent, chip->irq_ack() really isn't)<br>
+<br>
+Add a chip flag, IRQCHIP_AUTOMASKS_FLOW, to denote chips with such<br>
+behaviour. Add a new IRQ data flag, IRQD_IRQ_FLOW_MASKED, to keep this<br>
+flow-induced mask state separate from regular mask / unmask operations<br>
+(IRQD_IRQ_MASKED).<br>
+<br>
+Signed-off-by: Valentin Schneider <valentin.schneider@xxxxxxx><br>
+---<br>
+ include/linux/irq.h    | 10 ++++++++++<br>
+ kernel/irq/chip.c      |  5 +++++<br>
+ kernel/irq/debugfs.c   |  2 ++<br>
+ kernel/irq/internals.h |  5 +++++<br>
+ 4 files changed, 22 insertions(+)<br>
+<br>
+diff --git a/include/linux/irq.h b/include/linux/irq.h<br>
+index bee82809107c..580b1b6b1799 100644<br>
+--- a/include/linux/irq.h<br>
++++ b/include/linux/irq.h<br>
+@@ -219,6 +219,8 @@ struct irq_data {<br>
+  *				  irq_chip::irq_set_affinity() when deactivated.<br>
+  * IRQD_IRQ_ENABLED_ON_SUSPEND	- Interrupt is enabled on suspend by irq pm if<br>
+  *				  irqchip have flag IRQCHIP_ENABLE_WAKEUP_ON_SUSPEND set.<br>
++ * IRQD_IRQ_FLOW_MASKED         - Interrupt is masked by ACK. Only EOI can<br>
++ *                                clear this.<br>
+  */<br>
+ enum {<br>
+ 	IRQD_TRIGGER_MASK		= 0xf,<br>
+@@ -245,6 +247,7 @@ enum {<br>
+ 	IRQD_HANDLE_ENFORCE_IRQCTX	= (1 << 28),<br>
+ 	IRQD_AFFINITY_ON_ACTIVATE	= (1 << 29),<br>
+ 	IRQD_IRQ_ENABLED_ON_SUSPEND	= (1 << 30),<br>
++	IRQD_IRQ_FLOW_MASKED            = (1 << 31),<br>
+ };<br>
+ <br>
+ #define __irqd_to_state(d) ACCESS_PRIVATE((d)->common, state_use_accessors)<br>
+@@ -349,6 +352,11 @@ static inline bool irqd_irq_masked(struct irq_data *d)<br>
+ 	return __irqd_to_state(d) & IRQD_IRQ_MASKED;<br>
+ }<br>
+ <br>
++static inline bool irqd_irq_flow_masked(struct irq_data *d)<br>
++{<br>
++	return __irqd_to_state(d) & IRQD_IRQ_FLOW_MASKED;<br>
++}<br>
++<br>
+ static inline bool irqd_irq_inprogress(struct irq_data *d)<br>
+ {<br>
+ 	return __irqd_to_state(d) & IRQD_IRQ_INPROGRESS;<br>
+@@ -567,6 +575,7 @@ struct irq_chip {<br>
+  * IRQCHIP_SUPPORTS_NMI:              Chip can deliver NMIs, only for root irqchips<br>
+  * IRQCHIP_ENABLE_WAKEUP_ON_SUSPEND:  Invokes __enable_irq()/__disable_irq() for wake irqs<br>
+  *                                    in the suspend path if they are in disabled state<br>
++ * IRQCHIP_AUTOMASKS_FLOW:            chip->ack() masks and chip->eoi() unmasks<br>
+  */<br>
+ enum {<br>
+ 	IRQCHIP_SET_TYPE_MASKED			= (1 <<  0),<br>
+@@ -579,6 +588,7 @@ enum {<br>
+ 	IRQCHIP_SUPPORTS_LEVEL_MSI		= (1 <<  7),<br>
+ 	IRQCHIP_SUPPORTS_NMI			= (1 <<  8),<br>
+ 	IRQCHIP_ENABLE_WAKEUP_ON_SUSPEND	= (1 <<  9),<br>
++	IRQCHIP_AUTOMASKS_FLOW                  = (1 <<  10),<br>
+ };<br>
+ <br>
+ #include <linux/irqdesc.h><br>
+diff --git a/kernel/irq/chip.c b/kernel/irq/chip.c<br>
+index 8cc8e5713287..18c3b0e1568a 100644<br>
+--- a/kernel/irq/chip.c<br>
++++ b/kernel/irq/chip.c<br>
+@@ -173,6 +173,11 @@ static void irq_state_clr_masked(struct irq_desc *desc)<br>
+ 	irqd_clear(&desc->irq_data, IRQD_IRQ_MASKED);<br>
+ }<br>
+ <br>
++static void irq_state_clr_flow_masked(struct irq_desc *desc)<br>
++{<br>
++	irqd_clear(&desc->irq_data, IRQD_IRQ_FLOW_MASKED);<br>
++}<br>
++<br>
+ static void irq_state_clr_started(struct irq_desc *desc)<br>
+ {<br>
+ 	irqd_clear(&desc->irq_data, IRQD_IRQ_STARTED);<br>
+diff --git a/kernel/irq/debugfs.c b/kernel/irq/debugfs.c<br>
+index e4cff358b437..3ae83622d701 100644<br>
+--- a/kernel/irq/debugfs.c<br>
++++ b/kernel/irq/debugfs.c<br>
+@@ -58,6 +58,7 @@ static const struct irq_bit_descr irqchip_flags[] = {<br>
+ 	BIT_MASK_DESCR(IRQCHIP_SUPPORTS_LEVEL_MSI),<br>
+ 	BIT_MASK_DESCR(IRQCHIP_SUPPORTS_NMI),<br>
+ 	BIT_MASK_DESCR(IRQCHIP_ENABLE_WAKEUP_ON_SUSPEND),<br>
++	BIT_MASK_DESCR(IRQCHIP_AUTOMASKS_FLOW),<br>
+ };<br>
+ <br>
+ static void<br>
+@@ -103,6 +104,7 @@ static const struct irq_bit_descr irqdata_states[] = {<br>
+ 	BIT_MASK_DESCR(IRQD_IRQ_STARTED),<br>
+ 	BIT_MASK_DESCR(IRQD_IRQ_DISABLED),<br>
+ 	BIT_MASK_DESCR(IRQD_IRQ_MASKED),<br>
++	BIT_MASK_DESCR(IRQD_IRQ_FLOW_MASKED),<br>
+ 	BIT_MASK_DESCR(IRQD_IRQ_INPROGRESS),<br>
+ <br>
+ 	BIT_MASK_DESCR(IRQD_PER_CPU),<br>
+diff --git a/kernel/irq/internals.h b/kernel/irq/internals.h<br>
+index 54363527feea..b6c1cceddec0 100644<br>
+--- a/kernel/irq/internals.h<br>
++++ b/kernel/irq/internals.h<br>
+@@ -245,6 +245,11 @@ static inline void irq_state_set_masked(struct irq_desc *desc)<br>
+ 	irqd_set(&desc->irq_data, IRQD_IRQ_MASKED);<br>
+ }<br>
+ <br>
++static inline void irq_state_set_flow_masked(struct irq_desc *desc)<br>
++{<br>
++	irqd_set(&desc->irq_data, IRQD_IRQ_FLOW_MASKED);<br>
++}<br>
++<br>
+ #undef __irqd_to_state<br>
+ <br>
+ static inline void __kstat_incr_irqs_this_cpu(struct irq_desc *desc)<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

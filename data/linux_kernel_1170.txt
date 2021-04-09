@@ -1,0 +1,26 @@
+The snd_soc_dai_ops structures is only stored in the ops field of a<br>
+snd_soc_dai_driver structure, so make the snd_soc_dai_ops structure<br>
+const to allow the compiler to put it in read-only memory.<br>
+<br>
+Reported-by: Hulk Robot <hulkci@xxxxxxxxxx><br>
+Signed-off-by: Ye Bin <yebin10@xxxxxxxxxx><br>
+---<br>
+ sound/soc/codecs/wsa881x.c | 2 +-<br>
+ 1 file changed, 1 insertion(+), 1 deletion(-)<br>
+<br>
+diff --git a/sound/soc/codecs/wsa881x.c b/sound/soc/codecs/wsa881x.c<br>
+index db87e07b11c9..2da4a5fa7a18 100644<br>
+--- a/sound/soc/codecs/wsa881x.c<br>
++++ b/sound/soc/codecs/wsa881x.c<br>
+@@ -1014,7 +1014,7 @@ static int wsa881x_digital_mute(struct snd_soc_dai *dai, int mute, int stream)<br>
+ 	return 0;<br>
+ }<br>
+ <br>
+-static struct snd_soc_dai_ops wsa881x_dai_ops = {<br>
++static const struct snd_soc_dai_ops wsa881x_dai_ops = {<br>
+ 	.hw_params = wsa881x_hw_params,<br>
+ 	.hw_free = wsa881x_hw_free,<br>
+ 	.mute_stream = wsa881x_digital_mute,<br>
+<br>
+<br>
+

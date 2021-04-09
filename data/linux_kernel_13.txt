@@ -1,0 +1,166 @@
+When memory.low is overcommitted - i.e. the children claim more<br>
+protection than their shared ancestor grants them - the allowance is<br>
+distributed in proportion to how much each sibling uses their own<br>
+declared protection:<br>
+<br>
+	low_usage = min(memory.low, memory.current)<br>
+	elow = parent_elow * (low_usage / siblings_low_usage)<br>
+<br>
+However, siblings_low_usage is not the sum of all low_usages. It sums<br>
+up the usages of *only those cgroups that are within their memory.low*<br>
+That means that low_usage can be *bigger* than siblings_low_usage, and<br>
+consequently the total protection afforded to the children can be<br>
+bigger than what the ancestor grants the subtree.<br>
+<br>
+Consider three groups where two are in excess of their protection:<br>
+<br>
+  A/memory.low = 10G<br>
+  A/A1/memory.low = 10G, memory.current = 20G<br>
+  A/A2/memory.low = 10G, memory.current = 20G<br>
+  A/A3/memory.low = 10G, memory.current =  8G<br>
+  siblings_low_usage = 8G (only A3 contributes)<br>
+<br>
+  A1/elow = parent_elow(10G) * low_usage(10G) / siblings_low_usage(8G) = 12.5G -> 10G<br>
+  A2/elow = parent_elow(10G) * low_usage(10G) / siblings_low_usage(8G) = 12.5G -> 10G<br>
+  A3/elow = parent_elow(10G) * low_usage(8G) / siblings_low_usage(8G) = 10.0G<br>
+<br>
+  (the 12.5G are capped to the explicit memory.low setting of 10G)<br>
+<br>
+With that, the sum of all awarded protection below A is 30G, when A<br>
+only grants 10G for the entire subtree.<br>
+<br>
+What does this mean in practice? A1 and A2 would still be in excess of<br>
+their 10G allowance and would be reclaimed, whereas A3 would not. As<br>
+they eventually drop below their protection setting, they would be<br>
+counted in siblings_low_usage again and the error would right itself.<br>
+<br>
+When reclaim was applied in a binary fashion (cgroup is reclaimed when<br>
+it's above its protection, otherwise it's skipped) this would actually<br>
+work out just fine. However, since 1bc63fb1272b ("mm, memcg: make scan<br>
+aggression always exclude protection"), reclaim pressure is scaled to<br>
+how much a cgroup is above its protection. As a result this<br>
+calculation error unduly skews pressure away from A1 and A2 toward the<br>
+rest of the system.<br>
+<br>
+But why did we do it like this in the first place?<br>
+<br>
+The reasoning behind exempting groups in excess from<br>
+siblings_low_usage was to go after them first during reclaim in an<br>
+overcommitted subtree:<br>
+<br>
+  A/memory.low = 2G, memory.current = 4G<br>
+  A/A1/memory.low = 3G, memory.current = 2G<br>
+  A/A2/memory.low = 1G, memory.current = 2G<br>
+<br>
+  siblings_low_usage = 2G (only A1 contributes)<br>
+  A1/elow = parent_elow(2G) * low_usage(2G) / siblings_low_usage(2G) = 2G<br>
+  A2/elow = parent_elow(2G) * low_usage(1G) / siblings_low_usage(2G) = 1G<br>
+<br>
+While the children combined are overcomitting A and are technically<br>
+both at fault, A2 is actively declaring unprotected memory and we<br>
+would like to reclaim that first.<br>
+<br>
+However, while this sounds like a noble goal on the face of it, it<br>
+doesn't make much difference in actual memory distribution: Because A<br>
+is overcommitted, reclaim will not stop once A2 gets pushed back to<br>
+within its allowance; we'll have to reclaim A1 either way. The end<br>
+result is still that protection is distributed proportionally, with A1<br>
+getting 3/4 (1.5G) and A2 getting 1/4 (0.5G) of A's allowance.<br>
+<br>
+[ If A weren't overcommitted, it wouldn't make a difference since each<br>
+  cgroup would just get the protection it declares:<br>
+<br>
+  A/memory.low = 2G, memory.current = 3G<br>
+  A/A1/memory.low = 1G, memory.current = 1G<br>
+  A/A2/memory.low = 1G, memory.current = 2G<br>
+<br>
+  With the current calculation:<br>
+<br>
+  siblings_low_usage = 1G (only A1 contributes)<br>
+  A1/elow = parent_elow(2G) * low_usage(1G) / siblings_low_usage(1G) = 2G -> 1G<br>
+  A2/elow = parent_elow(2G) * low_usage(1G) / siblings_low_usage(1G) = 2G -> 1G<br>
+<br>
+  Including excess groups in siblings_low_usage:<br>
+<br>
+  siblings_low_usage = 2G<br>
+  A1/elow = parent_elow(2G) * low_usage(1G) / siblings_low_usage(2G) = 1G -> 1G<br>
+  A2/elow = parent_elow(2G) * low_usage(1G) / siblings_low_usage(2G) = 1G -> 1G ]<br>
+<br>
+Simplify the calculation and fix the proportional reclaim bug by<br>
+including excess cgroups in siblings_low_usage.<br>
+<br>
+After this patch, the effective memory.low distribution from the<br>
+example above would be as follows:<br>
+<br>
+  A/memory.low = 10G<br>
+  A/A1/memory.low = 10G, memory.current = 20G<br>
+  A/A2/memory.low = 10G, memory.current = 20G<br>
+  A/A3/memory.low = 10G, memory.current =  8G<br>
+  siblings_low_usage = 28G<br>
+<br>
+  A1/elow = parent_elow(10G) * low_usage(10G) / siblings_low_usage(28G) = 3.5G<br>
+  A2/elow = parent_elow(10G) * low_usage(10G) / siblings_low_usage(28G) = 3.5G<br>
+  A3/elow = parent_elow(10G) * low_usage(8G) / siblings_low_usage(28G) = 2.8G<br>
+<br>
+Fixes: 1bc63fb1272b ("mm, memcg: make scan aggression always exclude protection")<br>
+Fixes: 230671533d64 ("mm: memory.low hierarchical behavior")<br>
+Acked-by: Tejun Heo <tj@xxxxxxxxxx><br>
+Acked-by: Roman Gushchin <guro@xxxxxx><br>
+Acked-by: Chris Down <chris@xxxxxxxxxxxxxx><br>
+Acked-by: Michal Hocko <mhocko@xxxxxxxx><br>
+Signed-off-by: Johannes Weiner <hannes@xxxxxxxxxxx><br>
+---<br>
+ mm/memcontrol.c   |  4 +---<br>
+ mm/page_counter.c | 12 ++----------<br>
+ 2 files changed, 3 insertions(+), 13 deletions(-)<br>
+<br>
+diff --git a/mm/memcontrol.c b/mm/memcontrol.c<br>
+index c5b5f74cfd4d..874a0b00f89b 100644<br>
+--- a/mm/memcontrol.c<br>
++++ b/mm/memcontrol.c<br>
+@@ -6236,9 +6236,7 @@ struct cgroup_subsys memory_cgrp_subsys = {<br>
+  * elow = min( memory.low, parent->elow * ------------------ ),<br>
+  *                                        siblings_low_usage<br>
+  *<br>
+- *             | memory.current, if memory.current < memory.low<br>
+- * low_usage = |<br>
+- *	       | 0, otherwise.<br>
++ * low_usage = min(memory.low, memory.current)<br>
+  *<br>
+  *<br>
+  * Such definition of the effective memory.low provides the expected<br>
+diff --git a/mm/page_counter.c b/mm/page_counter.c<br>
+index de31470655f6..75d53f15f040 100644<br>
+--- a/mm/page_counter.c<br>
++++ b/mm/page_counter.c<br>
+@@ -23,11 +23,7 @@ static void propagate_protected_usage(struct page_counter *c,<br>
+ 		return;<br>
+ <br>
+ 	if (c->min || atomic_long_read(&c->min_usage)) {<br>
+-		if (usage <= c->min)<br>
+-			protected = usage;<br>
+-		else<br>
+-			protected = 0;<br>
+-<br>
++		protected = min(usage, c->min);<br>
+ 		old_protected = atomic_long_xchg(&c->min_usage, protected);<br>
+ 		delta = protected - old_protected;<br>
+ 		if (delta)<br>
+@@ -35,11 +31,7 @@ static void propagate_protected_usage(struct page_counter *c,<br>
+ 	}<br>
+ <br>
+ 	if (c->low || atomic_long_read(&c->low_usage)) {<br>
+-		if (usage <= c->low)<br>
+-			protected = usage;<br>
+-		else<br>
+-			protected = 0;<br>
+-<br>
++		protected = min(usage, c->low);<br>
+ 		old_protected = atomic_long_xchg(&c->low_usage, protected);<br>
+ 		delta = protected - old_protected;<br>
+ 		if (delta)<br>
+-- <br>
+2.24.1<br>
+<br>
+<br>
+

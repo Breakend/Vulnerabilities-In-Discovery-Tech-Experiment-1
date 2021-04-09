@@ -1,0 +1,70 @@
+On Thu, Apr 08, 2021 at 08:13:43AM +0100, Matthew Wilcox wrote:<br>
+><i> On Thu, Apr 08, 2021 at 09:00:26AM +0200, Peter Zijlstra wrote:</i><br>
+><i> > On Wed, Apr 07, 2021 at 10:27:12PM +0100, Matthew Wilcox wrote:</i><br>
+><i> > > Doing I/O without any lock held already works; it just uses the file</i><br>
+><i> > > refcount.  It would be better to use a vma refcount, as I already said.</i><br>
+><i> > </i><br>
+><i> > The original workload that I developed SPF for (waaaay back when) was</i><br>
+><i> > prefaulting a single huge vma. Using a vma refcount was a total loss</i><br>
+><i> > because it resulted in the same cacheline contention that down_read()</i><br>
+><i> > was having.</i><br>
+><i> > </i><br>
+><i> > As such, I'm always incredibly sad to see mention of vma refcounts.</i><br>
+><i> > They're fundamentally not solving the problem :/</i><br>
+><i> </i><br>
+><i> OK, let me outline my locking scheme because I think it's rather better</i><br>
+><i> than Michel's.  The vma refcount is the slow path.</i><br>
+><i> </i><br>
+><i> 1. take the RCU read lock</i><br>
+><i> 2. walk the pgd/p4d/pud/pmd</i><br>
+><i> 3. allocate page tables if necessary.  *handwave GFP flags*.</i><br>
+<br>
+The problem with allocating page-tables was that you can race with<br>
+zap_page_range() if you're not holding mmap_sem, and as such can install<br>
+a page-table after, in which case it leaks.<br>
+<br>
+IIRC that was solvable, but it did need a bit of care.<br>
+<br>
+><i> 4. walk the vma tree</i><br>
+><i> 5. call ->map_pages</i><br>
+<br>
+I can't remember ->map_pages().. I think that's 'new'. git-blame tells<br>
+me that's 2014, and I did the original SPF in 2010.<br>
+<br>
+Yes, that looks like a useful thing to have, it does the non-blocking<br>
+part of ->fault().<br>
+<br>
+I suppose the thing missing here is that if ->map_pages() does not<br>
+return a page, we have:<br>
+<br>
+  goto 9<br>
+<br>
+><i> 6. take ptlock</i><br>
+><i> 7. insert page(s)</i><br>
+><i> 8. drop ptlock</i><br>
+><i> if this all worked out, we're done, drop the RCU read lock and return.</i><br>
+<br>
+><i> 9. increment vma refcount</i><br>
+><i> 10. drop RCU read lock</i><br>
+><i> 11. call ->fault</i><br>
+><i> 12. decrement vma refcount</i><br>
+<br>
+And here we do 6-8 again, right?<br>
+<br>
+><i> Compared to today, where we bump the refcount on the file underlying the</i><br>
+><i> vma, this is _better_ scalability -- different mappings of the same file</i><br>
+><i> will not contend on the file's refcount.</i><br>
+><i></i><br>
+><i> I suspect your huge VMA was anon, and that wouldn't need a vma refcount</i><br>
+><i> as faulting in new pages doesn't need to do I/O, just drop the RCU</i><br>
+><i> lock, allocate and retry.</i><br>
+<br>
+IIRC yes, it was either a huge matrix setup or some database thing, I<br>
+can't remember. But the thing was, we didn't have that ->map_pages(), so<br>
+we had to call ->fault(), which can sleep, so I had to use SRCU across<br>
+the whole thing (or rather, I hacked up preemptible-rcu, because SRCU<br>
+was super primitive back then). It did kick start significant SRCU<br>
+rework IIRC. Anyway, that's all ancient history.<br>
+<br>
+<br>
+

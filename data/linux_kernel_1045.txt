@@ -1,0 +1,9 @@
+On Thu, Apr 08, 2021 at 01:17:49PM +0530, Mitali Borkar wrote:<br>
+><i> Cleanup patch for CHECK: blank lines aren't necessary after an open</i><br>
+><i> brace '{'</i><br>
+><i> Reported by checkpatch</i><br>
+<br>
+But you did more than just the above in this patch, which is not ok :(<br>
+<br>
+<br>
+

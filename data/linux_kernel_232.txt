@@ -1,0 +1,65 @@
+This can easily be coccinelle'd to replace all existing chip->irq_{ack,<br>
+eoi} callsites, however not all callsites benefit from this<br>
+replacement: fasteoi flow handlers for instance only deal with an<br>
+->irq_eoi() callback. Instead, only patch callsites that can benefit from<br>
+the added functionality.<br>
+<br>
+Signed-off-by: Valentin Schneider <valentin.schneider@xxxxxxx><br>
+---<br>
+ kernel/irq/chip.c | 12 +++++++-----<br>
+ 1 file changed, 7 insertions(+), 5 deletions(-)<br>
+<br>
+diff --git a/kernel/irq/chip.c b/kernel/irq/chip.c<br>
+index 046b4486c88c..936ef247b13d 100644<br>
+--- a/kernel/irq/chip.c<br>
++++ b/kernel/irq/chip.c<br>
+@@ -429,10 +429,12 @@ static inline void mask_ack_irq(struct irq_desc *desc)<br>
+ 	if (desc->irq_data.chip->irq_mask_ack) {<br>
+ 		desc->irq_data.chip->irq_mask_ack(&desc->irq_data);<br>
+ 		irq_state_set_masked(desc);<br>
++		if (desc->irq_data.chip->flags & IRQCHIP_AUTOMASKS_FLOW)<br>
++			irq_state_set_flow_masked(desc);<br>
+ 	} else {<br>
+ 		mask_irq(desc);<br>
+ 		if (desc->irq_data.chip->irq_ack)<br>
+-			desc->irq_data.chip->irq_ack(&desc->irq_data);<br>
++			ack_irq(desc);<br>
+ 	}<br>
+ }<br>
+ <br>
+@@ -463,7 +465,7 @@ void unmask_threaded_irq(struct irq_desc *desc)<br>
+ 	struct irq_chip *chip = desc->irq_data.chip;<br>
+ <br>
+ 	if (chip->flags & IRQCHIP_EOI_THREADED)<br>
+-		chip->irq_eoi(&desc->irq_data);<br>
++		eoi_irq(desc);<br>
+ <br>
+ 	unmask_irq(desc);<br>
+ }<br>
+@@ -680,7 +682,7 @@ EXPORT_SYMBOL_GPL(handle_level_irq);<br>
+ static void cond_unmask_eoi_irq(struct irq_desc *desc, struct irq_chip *chip)<br>
+ {<br>
+ 	if (!(desc->istate & IRQS_ONESHOT)) {<br>
+-		chip->irq_eoi(&desc->irq_data);<br>
++		eoi_irq(desc);<br>
+ 		return;<br>
+ 	}<br>
+ 	/*<br>
+@@ -691,10 +693,10 @@ static void cond_unmask_eoi_irq(struct irq_desc *desc, struct irq_chip *chip)<br>
+ 	 */<br>
+ 	if (!irqd_irq_disabled(&desc->irq_data) &&<br>
+ 	    irqd_irq_masked(&desc->irq_data) && !desc->threads_oneshot) {<br>
+-		chip->irq_eoi(&desc->irq_data);<br>
++		eoi_irq(desc);<br>
+ 		unmask_irq(desc);<br>
+ 	} else if (!(chip->flags & IRQCHIP_EOI_THREADED)) {<br>
+-		chip->irq_eoi(&desc->irq_data);<br>
++		eoi_irq(desc);<br>
+ 	}<br>
+ }<br>
+ <br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

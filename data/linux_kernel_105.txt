@@ -1,0 +1,58 @@
+On Thu, Apr 8, 2021 at 12:23 PM Sven Van Asbroeck <thesven73@xxxxxxxxx> wrote:<br>
+><i></i><br>
+><i> From: Sven Van Asbroeck <thesven73@xxxxxxxxx></i><br>
+><i></i><br>
+><i> This reverts commit 3e21a10fdea3c2e4e4d1b72cb9d720256461af40.</i><br>
+><i></i><br>
+><i> The reverted patch completely breaks all network connectivity on the</i><br>
+><i> lan7430. tcpdump indicates missing bytes when receiving ping</i><br>
+><i> packets from an external host:</i><br>
+<br>
+Can you explain the difference in behavior with what I was observing<br>
+on the LAN7431? I'll retest but if this is reverted I'm going to start<br>
+seeing 2 extra bytes on the end of frames and it's going to break DSA<br>
+with the LAN7431 again.<br>
+<br>
+><i></i><br>
+><i> host$ ping $lan7430_ip</i><br>
+><i> lan7430$ tcpdump -v</i><br>
+><i> IP truncated-ip - 2 bytes missing! (tos 0x0, ttl 64, id 21715,</i><br>
+><i>     offset 0, flags [DF], proto ICMP (1), length 84)</i><br>
+><i></i><br>
+><i> Fixes: 3e21a10fdea3 ("lan743x: trim all 4 bytes of the FCS; not just 2")</i><br>
+><i> Signed-off-by: Sven Van Asbroeck <thesven73@xxxxxxxxx></i><br>
+><i> ---</i><br>
+><i></i><br>
+><i> To: Bryan Whitehead <bryan.whitehead@xxxxxxxxxxxxx></i><br>
+><i> To: "David S. Miller" <davem@xxxxxxxxxxxxx></i><br>
+><i> To: Jakub Kicinski <kuba@xxxxxxxxxx></i><br>
+><i> To: George McCollister <george.mccollister@xxxxxxxxx></i><br>
+><i> Cc: UNGLinuxDriver@xxxxxxxxxxxxx</i><br>
+><i> Cc: netdev@xxxxxxxxxxxxxxx</i><br>
+><i> Cc: linux-kernel@xxxxxxxxxxxxxxx</i><br>
+><i></i><br>
+><i>  drivers/net/ethernet/microchip/lan743x_main.c | 2 +-</i><br>
+><i>  1 file changed, 1 insertion(+), 1 deletion(-)</i><br>
+><i></i><br>
+><i> diff --git a/drivers/net/ethernet/microchip/lan743x_main.c b/drivers/net/ethernet/microchip/lan743x_main.c</i><br>
+><i> index 1c3e204d727c..dbdfabff3b00 100644</i><br>
+><i> --- a/drivers/net/ethernet/microchip/lan743x_main.c</i><br>
+><i> +++ b/drivers/net/ethernet/microchip/lan743x_main.c</i><br>
+><i> @@ -2040,7 +2040,7 @@ lan743x_rx_trim_skb(struct sk_buff *skb, int frame_length)</i><br>
+><i>                 dev_kfree_skb_irq(skb);</i><br>
+><i>                 return NULL;</i><br>
+><i>         }</i><br>
+><i> -       frame_length = max_t(int, 0, frame_length - RX_HEAD_PADDING - 4);</i><br>
+><i> +       frame_length = max_t(int, 0, frame_length - RX_HEAD_PADDING - 2);</i><br>
+><i>         if (skb->len > frame_length) {</i><br>
+><i>                 skb->tail -= skb->len - frame_length;</i><br>
+><i>                 skb->len = frame_length;</i><br>
+><i> --</i><br>
+><i> 2.17.1</i><br>
+><i></i><br>
+<br>
+Regards,<br>
+George<br>
+<br>
+<br>
+

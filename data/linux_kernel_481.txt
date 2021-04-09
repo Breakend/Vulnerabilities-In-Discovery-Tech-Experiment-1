@@ -1,0 +1,515 @@
+On 2021/4/8 2:55, Bjorn Helgaas wrote:<br>
+><i> Move important info in the subject earlier, e.g.,</i><br>
+><i> </i><br>
+><i>   docs: Add HiSilicon PTT device documentation</i><br>
+><i> </i><br>
+><i> On Tue, Apr 06, 2021 at 08:45:53PM +0800, Yicong Yang wrote:</i><br>
+><i>> Document the introduction and usage of HiSilicon PTT device driver.</i><br>
+><i>></i><br>
+><i>> Signed-off-by: Yicong Yang <yangyicong@xxxxxxxxxxxxx></i><br>
+><i>> ---</i><br>
+><i>>  Documentation/trace/hisi-ptt.rst | 316 +++++++++++++++++++++++++++++++++++++++</i><br>
+><i>>  1 file changed, 316 insertions(+)</i><br>
+><i>>  create mode 100644 Documentation/trace/hisi-ptt.rst</i><br>
+><i>></i><br>
+><i>> diff --git a/Documentation/trace/hisi-ptt.rst b/Documentation/trace/hisi-ptt.rst</i><br>
+><i>> new file mode 100644</i><br>
+><i>> index 0000000..215676f</i><br>
+><i>> --- /dev/null</i><br>
+><i>> +++ b/Documentation/trace/hisi-ptt.rst</i><br>
+><i>> @@ -0,0 +1,316 @@</i><br>
+><i>> +.. SPDX-License-Identifier: GPL-2.0</i><br>
+><i>> +</i><br>
+><i>> +======================================</i><br>
+><i>> +HiSilicon PCIe Tune and Trace device</i><br>
+><i>> +======================================</i><br>
+><i>> +</i><br>
+><i>> +Introduction</i><br>
+><i>> +============</i><br>
+><i>> +</i><br>
+><i>> +HiSilicon PCIe tune and trace device (PTT) is a PCIe Root Complex</i><br>
+><i>> +integrated Endpoint (RCiEP) device, providing the capability</i><br>
+><i>> +to dynamically monitor and tune the PCIe link's events (tune),</i><br>
+><i>> +and trace the TLP headers (trace). The two functions are independent,</i><br>
+><i>> +but is recommended to use them together to analyze and enhance the</i><br>
+><i>> +PCIe link's performance.</i><br>
+><i> </i><br>
+><i>> +On Kunpeng 930 SoC, the PCIe root complex is composed of several</i><br>
+><i>> +PCIe cores.</i><br>
+><i>> +Each core is composed of several root ports, RCiEPs, and one</i><br>
+><i>> +PTT device, like below. The PTT device is capable of tuning and</i><br>
+><i>> +tracing the link of the PCIe core.</i><br>
+><i> </i><br>
+><i> s/root complex/Root Complex/ to match spec, diagram, RCiEP above</i><br>
+><i> s/root ports/Root Ports/ to match spec, etc (also below)</i><br>
+><i> </i><br>
+<br>
+thanks. will fix here and below in this doc.<br>
+<br>
+><i> Can you connect "Kunpeng 930" to something in the kernel tree?</i><br>
+><i> "git grep -i kunpeng" shows nothing that's obviously relevant.</i><br>
+><i> I assume there's a related driver in drivers/pci/controller/?</i><br>
+><i> </i><br>
+<br>
+Kunpeng 930 is the product name of Hip09 platform. The PCIe<br>
+controller uses the generic PCIe driver based on ACPI.<br>
+<br>
+><i> Is this one paragraph or two?  If one, reflow.  If two, add blank line</i><br>
+><i> between.</i><br>
+><i> </i><br>
+<br>
+will reflow here and below. it's one paragraph.<br>
+<br>
+><i> IIUC, the diagram below shows two PCIe cores, each with three Root</i><br>
+><i> Ports and a PTT RCiEP.  Your text mentions "RCiEPs, and one PTT" which</i><br>
+><i> suggests RCiEPs in addition to the PTT, but the diagram doesn't show</i><br>
+><i> any, and if there are other RCiEPs, they don't seem relevant to this</i><br>
+><i> doc.  Maybe something like this?</i><br>
+><i> </i><br>
+><i>   Each PCIe core includes several Root Ports and a PTT RCiEP ...</i><br>
+><i> </i><br>
+<br>
+will fix.<br>
+<br>
+><i>> +::</i><br>
+><i>> +          +--------------Core 0-------+</i><br>
+><i>> +          |       |       [   PTT   ] |</i><br>
+><i>> +          |       |       [Root Port]---[Endpoint]</i><br>
+><i>> +          |       |       [Root Port]---[Endpoint]</i><br>
+><i>> +          |       |       [Root Port]---[Endpoint]</i><br>
+><i>> +    Root Complex  |------Core 1-------+</i><br>
+><i>> +          |       |       [   PTT   ] |</i><br>
+><i>> +          |       |       [Root Port]---[ Switch ]---[Endpoint]</i><br>
+><i>> +          |       |       [Root Port]---[Endpoint] `-[Endpoint]</i><br>
+><i>> +          |       |       [Root Port]---[Endpoint]</i><br>
+><i>> +          +---------------------------+</i><br>
+><i>> +</i><br>
+><i>> +The PTT device driver cannot be loaded if debugfs is not mounted.</i><br>
+><i>> +Each PTT device will be presented under /sys/kernel/debugfs/hisi_ptt</i><br>
+><i>> +as its root directory, with name of its BDF number.</i><br>
+><i>> +::</i><br>
+><i>> +</i><br>
+><i>> +    /sys/kernel/debug/hisi_ptt/<domain>:<bus>:<device>.<function></i><br>
+><i>> +</i><br>
+><i>> +Tune</i><br>
+><i>> +====</i><br>
+><i>> +</i><br>
+><i>> +PTT tune is designed for monitoring and adjusting PCIe link parameters(events).</i><br>
+><i> </i><br>
+><i> Add a space before "(".</i><br>
+><i> </i><br>
+<br>
+will add here and below.<br>
+<br>
+><i>> +Currently we support events in 4 classes. The scope of the events</i><br>
+><i>> +covers the PCIe core with which the PTT device belongs to.</i><br>
+><i> </i><br>
+><i> ... the PCIe core to which the PTT device belongs.</i><br>
+<br>
+will fix.<br>
+<br>
+><i>> +</i><br>
+><i>> +Each event is presented as a file under $(PTT root dir)/$(BDF)/tune, and</i><br>
+><i>> +mostly a simple open/read/write/close cycle will be used to tune</i><br>
+><i>> +the event.</i><br>
+><i>> +::</i><br>
+><i>> +    $ cd /sys/kernel/debug/hisi_ptt/$(BDF)/tune</i><br>
+><i>> +    $ ls</i><br>
+><i>> +    qos_tx_cpl    qos_tx_np    qos_tx_p</i><br>
+><i>> +    tx_path_rx_req_alloc_buf_level</i><br>
+><i>> +    tx_path_tx_req_alloc_buf_level</i><br>
+><i>> +    $ cat qos_tx_dp</i><br>
+><i>> +    1</i><br>
+><i>> +    $ echo 2 > qos_tx_dp</i><br>
+><i>> +    $ cat qos_tx_dp</i><br>
+><i>> +    2</i><br>
+><i>> +</i><br>
+><i>> +Current value(numerical value) of the event can be simply read</i><br>
+><i> </i><br>
+><i> Add space before "(".</i><br>
+><i> </i><br>
+><i>> +from the file, and the desired value written to the file to tune.</i><br>
+><i> </i><br>
+><i>> +Tuning multiple events at the same time is not permitted, which means</i><br>
+><i>> +you cannot read or write more than one tune file at one time.</i><br>
+><i> </i><br>
+><i> I think this is obvious from the model, so the sentence doesn't really</i><br>
+><i> add anything.  Each event is a separate file, and it's obvious that</i><br>
+><i> there's no way to write to multiple files simultaneously.</i><br>
+><i> </i><br>
+<br>
+from the usage we shown below this situation won't happen. I just worry<br>
+that users may have a program to open multiple files at the same time and<br>
+read/write simultaneously, so add this line here to mention the restriction.<br>
+<br>
+><i>> +1. Tx path QoS control</i><br>
+><i>> +------------------------</i><br>
+><i>> +</i><br>
+><i>> +Following files are provided to tune the QoS of the tx path of the PCIe core.</i><br>
+><i> </i><br>
+><i> "The following ..."</i><br>
+><i> will fix.</i><br>
+><i>> +- qos_tx_cpl: weight of tx completion TLPs</i><br>
+><i>> +- qos_tx_np: weight of tx non-posted TLPs</i><br>
+><i>> +- qos_tx_p: weight of tx posted TLPs</i><br>
+><i>> +</i><br>
+><i>> +The weight influences the proportion of certain packets on the PCIe link.</i><br>
+><i>> +For example, for the storage scenario, increase the proportion</i><br>
+><i>> +of the completion packets on the link to enhance the performance as</i><br>
+><i>> +more completions are consumed.</i><br>
+><i> </i><br>
+><i> I don't believe you can directly influence the *proportions* of packet</i><br>
+><i> types.  The number and types of TLPs are determined by device driver</i><br>
+><i> MMIO accesses and device DMAs.  Maybe you can influence the</i><br>
+><i> *priority*?  I assume that regardless of these settings, the device</i><br>
+><i> always respects the transaction ordering rules in PCIe r5.0, sec 2.4,</i><br>
+><i> right?</i><br>
+><i> </i><br>
+<br>
+yes you're right. the word I used here is misleading and 'priority' is<br>
+precise. what we achieved won't violate the PCIe spec. the ordering<br>
+rules are always kept. When the ordering is kept, the packets with<br>
+larger weight will have more priority to be posted.<br>
+<br>
+><i>> +The available tune data of these events is [0, 1, 2].</i><br>
+><i>> +Writing a negative value will return an error, and out of range</i><br>
+><i>> +values will be converted to 2. Note that the event value just</i><br>
+><i>> +indicates a probable level, but is not precise.</i><br>
+><i>> +</i><br>
+><i>> +2. Tx path buffer control</i><br>
+><i>> +-------------------------</i><br>
+><i>> +</i><br>
+><i>> +Following files are provided to tune the buffer of tx path of the PCIe core.</i><br>
+><i>> +</i><br>
+><i>> +- tx_path_rx_req_alloc_buf_level: watermark of RX requested</i><br>
+><i>> +- tx_path_tx_req_alloc_buf_level: watermark of TX requested</i><br>
+><i>> +</i><br>
+><i>> +These events influence the watermark of the buffer allocated for each</i><br>
+><i>> +type. RX means the inbound while Tx means outbound. For a busy</i><br>
+><i>> +direction, you should increase the related buffer watermark to enhance</i><br>
+><i>> +the performance.</i><br>
+><i> </i><br>
+><i> Based on what you have written here, I would just write 2 to both</i><br>
+><i> files to enhance the performance in both directions.  But obviously</i><br>
+><i> there must be some tradeoff here, e.g., increasing Rx performance</i><br>
+><i> comes at the cost of Tx performane.</i><br>
+><i> </i><br>
+<br>
+the Rx buffer and Tx buffer are separate, so they won't influence<br>
+each other.<br>
+<br>
+><i> Use "Rx" or "RX" (and "Tx" or "TX") consistently.  So far we have</i><br>
+><i> "tx", "TX", "Tx", as well as "RX" and "Tx" in the same sentence.</i><br>
+><i> </i><br>
+<br>
+will fix here and at other places in the doc.<br>
+<br>
+><i>> +The available tune data of above events is [0, 1, 2].</i><br>
+><i>> +Writing a negative value will return an error, and out of range</i><br>
+><i>> +values will be converted to 2. Note that the event value just</i><br>
+><i>> +indicates a probable level, but is not precise.</i><br>
+><i>> +</i><br>
+><i>> +Trace</i><br>
+><i>> +=====</i><br>
+><i>> +</i><br>
+><i>> +PTT trace is designed for dumping the TLP headers to the memory, which</i><br>
+><i>> +can be used to analyze the transactions and usage condition of the PCIe</i><br>
+><i>> +Link. You can chose to filter the traced headers by either requester ID,</i><br>
+><i> </i><br>
+><i> s/chose/choose/</i><br>
+><i> will fix.</i><br>
+><i>> +or those downstream of a set of root ports on the same core of the PTT</i><br>
+><i>> +device. It's also support to trace the headers of certain type and of</i><br>
+><i>> +certain direction.</i><br>
+><i> </i><br>
+><i> s/support/supported/</i><br>
+><i> </i><br>
+will fix.<br>
+><i>> +In order to start trace, you need to configure the parameters first.</i><br>
+><i>> +The parameters files is provided under $(PTT root dir)/$(BDF)/trace.</i><br>
+><i> </i><br>
+><i> s/files is/files are/</i><br>
+><i> </i><br>
+will fix.<br>
+><i>> +::</i><br>
+><i>> +    $ cd /sys/kernel/debug/hisi_ptt/$(BDF)/trace</i><br>
+><i>> +    $ ls</i><br>
+><i>> +    free_buffer     filter      buflet_nums     buflet_size</i><br>
+><i>> +    direction       type        data            trace_on</i><br>
+><i>> +    data_format</i><br>
+><i>> +</i><br>
+><i>> +1. filter</i><br>
+><i>> +---------</i><br>
+><i>> +</i><br>
+><i>> +You can configure the filter of TLP headers through the file. The filter</i><br>
+><i>> +is provided as BDF numbers of either root port or subordinates, which</i><br>
+><i>> +belong to the same PCIe core. You can get the filters available and</i><br>
+><i>> +currently configured by read the file, and write the desired BDF to the</i><br>
+><i>> +file to set the filters. There is no default filter, which means you</i><br>
+><i>> +must specifiy at least one filter before start tracing.</i><br>
+><i>> +Write invalid BDF(not in the available list) will return</i><br>
+><i>> +a failure.</i><br>
+><i> </i><br>
+><i> s/by read/by reading/</i><br>
+><i> s/specifiy/specify/</i><br>
+><i> s/before start/before starting/</i><br>
+><i> s/Write invalid/Writing an invalid/</i><br>
+><i> s/BDF(not/BDF (not/</i><br>
+><i> </i><br>
+><i> Reflow or separate paragraphs with blank lines.</i><br>
+><i> </i><br>
+will fix these and reflow here.<br>
+><i>> +::</i><br>
+><i>> +    $ echo 0000:80:04.0 > filter</i><br>
+><i>> +    $ cat filter</i><br>
+><i>> +    #### Root Ports ####</i><br>
+><i>> +    0000:80:00.0</i><br>
+><i>> +    [0000:80:04.0]</i><br>
+><i>> +    #### Functions ####</i><br>
+><i>> +    0000:81:00.0</i><br>
+><i>> +    0000:81:00.1</i><br>
+><i>> +    0000:82:00.0</i><br>
+><i>> +</i><br>
+><i>> +Note that multiple root ports can be specified at one time, but only</i><br>
+><i>> +one Endpoint function can be specified in one trace.</i><br>
+><i>> +Specifying both root port and function at the same time is not supported.</i><br>
+><i>> +</i><br>
+><i>> +If no filter is available, read the filter will get the hint.</i><br>
+><i> </i><br>
+><i> s/read the/reading the/</i><br>
+><i> </i><br>
+will fix.<br>
+><i>> +::</i><br>
+><i>> +    $ cat filter</i><br>
+><i>> +    #### No available filter ####</i><br>
+><i>> +</i><br>
+><i>> +The filter can be dynamically updated, which means you can always</i><br>
+><i>> +get correct filter information when hotplug events happens, or</i><br>
+><i>> +manually remove/rescan the devices.</i><br>
+><i> </i><br>
+><i> s/events happens/events happen/</i><br>
+><i> s/or manually remove/or when you manually remove/</i><br>
+><i> </i><br>
+will fix.<br>
+><i>> +2. type</i><br>
+><i>> +-------</i><br>
+><i>> +</i><br>
+><i>> +You can trace the TLP headers of certain types by configure the file.</i><br>
+><i>> +Read the file will get available types and current setting, and write</i><br>
+><i>> +the desired type to the file to configure. The default type is</i><br>
+><i>> +`posted_request` and write types not in the available list will return</i><br>
+><i>> +a failure.</i><br>
+><i> </i><br>
+><i> s/by configure/by configuring/</i><br>
+><i> s/Read the file/Reading the file/</i><br>
+><i> s/, and write the/. Write the/</i><br>
+><i> </i><br>
+will fix.<br>
+><i>> +::</i><br>
+><i>> +    $ echo completion > type</i><br>
+><i>> +    $ cat type</i><br>
+><i>> +    all  posted_request  non-posted_request  [completion]</i><br>
+><i>> +</i><br>
+><i>> +3. direction</i><br>
+><i>> +------------</i><br>
+><i>> +</i><br>
+><i>> +You can trace the TLP headers from certain direction, which is relative</i><br>
+><i>> +to the root port or the PCIe core. Read the file to get available</i><br>
+><i>> +directions and current configurition, and write the desired direction</i><br>
+><i>> +to configure. The default value is `rx` and any invalid direction will</i><br>
+><i>> +return a failure. Note `rxtx_no_dma_p2p` means the headers of both</i><br>
+><i>> +directions, but not include P2P DMA access.</i><br>
+><i>> +::</i><br>
+><i>> +    $ echo rxtx > direction</i><br>
+><i>> +    $ cat direction</i><br>
+><i>> +    rx  tx  [rxtx]  rxtx_no_dma_p2p</i><br>
+><i>> +</i><br>
+><i>> +4. buflet_size</i><br>
+><i>> +--------------</i><br>
+><i>> +</i><br>
+><i>> +The traced TLP headers will be written to the memory allocated</i><br>
+><i>> +by the driver. The hardware accept 4 DMA address with same size,</i><br>
+><i>> +and write the buflet sequentially like below. If DMA addr 3 is</i><br>
+><i>> +finished and the trace is still on, it will return to addr 0.</i><br>
+><i>> +Driver will allocated each DMA buffer (we call it buflet).</i><br>
+><i>> +The finished buflet will be replaced with a new one, so</i><br>
+><i>> +a long time trace can be achieved.</i><br>
+><i> </i><br>
+><i> s/hardware accept/hardware accepts/</i><br>
+><i> s/and write the/and writes the/</i><br>
+><i> s/will allocated/will allocate/</i><br>
+><i> </i><br>
+will fix.<br>
+><i>> +::</i><br>
+><i>> +    +->[DMA addr 0]->[DMA addr 1]->[DMA addr 2]->[DMA addr 3]-+</i><br>
+><i>> +    +---------------------------------------------------------+</i><br>
+><i>> +</i><br>
+><i>> +You should both configure the buflet_size and buflet_nums to</i><br>
+><i>> +configure the `trace buffer` to receive the TLP headers. The</i><br>
+><i>> +total trace buffer size is buflet_size * buflet_nums. Note</i><br>
+><i>> +that the trace buffer will not be allocated immediately after you</i><br>
+><i>> +configure the parameters, but will be allocated right before</i><br>
+><i>> +the trace starts.</i><br>
+><i>> +</i><br>
+><i>> +This file configures the buflet size. Read the file will get</i><br>
+><i>> +available buflet size and size set currently, write the desired</i><br>
+><i>> +size to the file to configure. The default size is 2 MiB and any</i><br>
+><i>> +invalid size written will return a failure.</i><br>
+><i> </i><br>
+><i> s/Read the file/Reading the file/</i><br>
+><i> s/currently, write the/currently; write the/</i><br>
+><i> </i><br>
+will fix.<br>
+><i>> +::</i><br>
+><i>> +    $ cat buflet_size</i><br>
+><i>> +    [2 MiB]     4 MiB</i><br>
+><i>> +    $ echo 4 > buflet_size</i><br>
+><i>> +    $ cat buflet_size</i><br>
+><i>> +    2 MiB     [4 MiB]</i><br>
+><i>> +</i><br>
+><i>> +5. buflet_nums</i><br>
+><i>> +--------------</i><br>
+><i>> +</i><br>
+><i>> +You can write the desired buflet count to the file to configure,</i><br>
+><i>> +and read the file to get current buflet count. The default</i><br>
+><i>> +value is 64. And any positive value is valid. Note that big value</i><br>
+><i>> +may lead to DMA memory allocation failure, and you will not be</i><br>
+><i>> +able to start tracing. If it happens, you should consider adjusting</i><br>
+><i>> +buflet_nums or buflet_size.</i><br>
+><i> </i><br>
+><i> s/And any positive/Any positive/</i><br>
+><i> </i><br>
+will fix.<br>
+><i>> +::</i><br>
+><i>> +    $ cat buflet_nums</i><br>
+><i>> +    64</i><br>
+><i>> +    $ echo 128 > buflet_nums</i><br>
+><i>> +    $ cat buflet_nums</i><br>
+><i>> +    128</i><br>
+><i>> +</i><br>
+><i>> +6. data</i><br>
+><i>> +-------</i><br>
+><i>> +</i><br>
+><i>> +The file to access the traced data. You can read the file to get the</i><br>
+><i>> +binary blob of traced TLP headers. The format of the headers is</i><br>
+><i>> +4 Dword length and is just as defined by the PCIe Spec r4.0,</i><br>
+><i>> +Sec 2.2.4.1, or 8 Dword length with additional 4 Dword extra</i><br>
+><i>> +information.</i><br>
+><i>> +</i><br>
+><i>> +echo "" > data will free all the trace buffers allocated as well as</i><br>
+><i>> +the traced datas.</i><br>
+><i>> +</i><br>
+><i>> +7. trace_on</i><br>
+><i>> +-----------</i><br>
+><i>> +</i><br>
+><i>> +Start or end the trace by simple writing to the file, and monitor the</i><br>
+><i>> +trace status by reading the file.</i><br>
+><i> </i><br>
+><i> s/by simple writing/by writing/</i><br>
+><i> </i><br>
+will fix.<br>
+><i>> +::</i><br>
+><i>> +    $ echo 1 > trace_on     # start trace</i><br>
+><i>> +    $ cat trace_on          # get the trace status</i><br>
+><i>> +    1</i><br>
+><i>> +    $ echo 0 > trace_on     # manually end trace</i><br>
+><i>> +</i><br>
+><i>> +The read value of the trace_on will be auto cleared if the buffer</i><br>
+><i>> +allocated is full. 1 indicates the trace is running and 0 for</i><br>
+><i>> +stopped. Write any non-zero value to the file can start trace.</i><br>
+><i> </i><br>
+><i> "Writing any non-zero value to the file starts tracing."</i><br>
+><i> </i><br>
+will fix.<br>
+><i>> +8. free_buffer</i><br>
+><i>> +--------------</i><br>
+><i>> +</i><br>
+><i>> +File to indicate the trace buffer status and to manually free the</i><br>
+><i>> +trace buffer. The read value of 1 indicates the trace buffer has</i><br>
+><i>> +been allocated and exists in the memory, while 0 indicates there</i><br>
+><i>> +is no buffer allocated. Write 1 to the file to free the trace</i><br>
+><i>> +buffer as well as the traced datas.</i><br>
+><i> </i><br>
+><i> s/datas/data/</i><br>
+><i> </i><br>
+will fix.<br>
+><i>> +::</i><br>
+><i>> +    $ cat free_buffer</i><br>
+><i>> +    1                       # indicate the buffer exists</i><br>
+><i>> +    $ echo 1 > free_buffer  # free the trace buffer</i><br>
+><i>> +    $ cat free_buffer</i><br>
+><i>> +    0</i><br>
+><i>> +</i><br>
+><i>> +9. data_format</i><br>
+><i>> +--------------</i><br>
+><i>> +</i><br>
+><i>> +File to indicate the format of the traced TLP headers. User can also</i><br>
+><i>> +specify the desired format of traced TLP headers. Available formats</i><br>
+><i>> +are 4DW, 8DW which indicates the length of each TLP headers traced.</i><br>
+><i>> +::</i><br>
+><i>> +    $ cat data_format</i><br>
+><i>> +    [4DW]    8DW</i><br>
+><i>> +    $ echo 8 > data_format</i><br>
+><i>> +    $ cat data_format</i><br>
+><i>> +    4DW     [8DW]</i><br>
+><i>> +</i><br>
+><i>> +The traced TLP header format is different from the PCIe standard.</i><br>
+><i> </i><br>
+><i> I'm confused.  Below you say the fields of the traced TLP header are</i><br>
+><i> defined by the PCIe spec.  But here you say the format is *different*.</i><br>
+><i> What exactly is different?</i><br>
+><i> </i><br>
+<br>
+For the Request Header Format for 64-bit addressing of Memory, defind in<br>
+PCIe spec 4.0, Figure 2-15, the 1st DW is like:<br>
+<br>
+Byte 0 > [Fmt] [Type] [T9] [Tc] [T8] [Attr] [LN] [TH] ... [Length]<br>
+<br>
+some are recorded in our traced header like below, which some are not.<br>
+that's what I mean the format of the header are different. But for a<br>
+certain field like 'Fmt', the meaning keeps same with what Spec defined.<br>
+that's what I mean the fields definition of our traced header keep same<br>
+with the Spec.<br>
+<br>
+Seem what I described in the doc is a little ambigious.<br>
+<br>
+Thanks for the review.<br>
+<br>
+Thanks,<br>
+Yicong<br>
+<br>
+><i>> +4DW format is like</i><br>
+><i>> +::</i><br>
+><i>> +    bits [31:30] [ 29:25 ][24][23][22][21][    20:11   ][    10:0    ]</i><br>
+><i>> +         |-----|---------|---|---|---|---|-------------|-------------|</i><br>
+><i>> +     DW0 [ Fmt ][  Type  ][T9][T8][TH][SO][   Length   ][    Time    ]</i><br>
+><i>> +     DW1 [                     Header DW1                            ]</i><br>
+><i>> +     DW2 [                     Header DW2                            ]</i><br>
+><i>> +     DW3 [                     Header DW3                            ]</i><br>
+><i>> +</i><br>
+><i>> +For 8DW format, the bit[31:11] of DW0 is always 0x1fffff, which can be</i><br>
+><i>> +used to distinguish the data format. 8DW format is like</i><br>
+><i>> +::</i><br>
+><i>> +    bits [                 31:11                 ][       10:0       ]</i><br>
+><i>> +         |---------------------------------------|-------------------|</i><br>
+><i>> +     DW0 [                0x1fffff               ][ Reserved (0x7ff) ]</i><br>
+><i>> +     DW1 [                       Prefix                              ]</i><br>
+><i>> +     DW2 [                     Header DW0                            ]</i><br>
+><i>> +     DW3 [                     Header DW1                            ]</i><br>
+><i>> +     DW4 [                     Header DW2                            ]</i><br>
+><i>> +     DW5 [                     Header DW3                            ]</i><br>
+><i>> +     DW6 [                   Reserved (0x0)                          ]</i><br>
+><i>> +     DW7 [                        Time                               ]</i><br>
+><i>> +</i><br>
+><i>> +All the fields of the traced TLP header is defined by the PCIe Specification.</i><br>
+><i>> +While 'Header DWx' means standard TLP header DWord x, and 'Time' is the</i><br>
+><i>> +timestamp of the traced header.</i><br>
+><i>> -- </i><br>
+><i>> 2.8.1</i><br>
+><i>></i><br>
+><i> </i><br>
+><i> .</i><br>
+><i> </i><br>
+<br>
+<br>
+

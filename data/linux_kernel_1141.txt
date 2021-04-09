@@ -1,0 +1,24 @@
+On Thu, Apr 08, 2021 at 03:44:35PM +0900, Chanwoo Choi wrote:<br>
+><i> Dear Greg,</i><br>
+><i> </i><br>
+><i> This is extcon-next pull request for v5.13. I add detailed description of</i><br>
+><i> this pull request on below. Please pull extcon with following updates.</i><br>
+><i> </i><br>
+><i> Best Regards,</i><br>
+><i> Chanwoo Choi</i><br>
+><i> </i><br>
+><i> </i><br>
+><i> The following changes since commit e49d033bddf5b565044e2abe4241353959bc9120:</i><br>
+><i> </i><br>
+><i>   Linux 5.12-rc6 (2021-04-04 14:15:36 -0700)</i><br>
+><i> </i><br>
+><i> are available in the Git repository at:</i><br>
+><i> </i><br>
+><i>   git://git.kernel.org/pub/scm/linux/kernel/git/chanwoo/extcon.git tags/extcon-next-for-5.13</i><br>
+<br>
+Pulled and pushed out, thanks.<br>
+<br>
+greg k-h<br>
+<br>
+<br>
+

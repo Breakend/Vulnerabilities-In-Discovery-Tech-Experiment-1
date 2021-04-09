@@ -1,0 +1,112 @@
+Hi,<br>
+<br>
+This patch partially overlaps the following fix that I previously sent to<br>
+Andrew:<br>
+<br>
+  <a  rel="nofollow" href="https://lkml.org/lkml/2021/4/8/114">https://lkml.org/lkml/2021/4/8/114</a><br>
+<br>
+Can you exclude two typo fixes of "retured -> returned" from yours ?<br>
+<br>
+Thanks,<br>
+Ryusuke Konishi<br>
+<br>
+On Thu, Apr 8, 2021 at 11:08 PM Lu Jialin <lujialin4@xxxxxxxxxx> wrote:<br>
+><i></i><br>
+><i> numer -> number in fs/nilfs2/cpfile.c and fs/nilfs2/segment.c</i><br>
+><i> retured -> returned and Decription -> Description in fs/nilfs2/ioctl.c</i><br>
+><i> isntance -> instance in fs/nilfs2/the_nilfs.c</i><br>
+><i> No functionality changed.</i><br>
+><i></i><br>
+><i> Signed-off-by: Lu Jialin <lujialin4@xxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  fs/nilfs2/cpfile.c    | 2 +-</i><br>
+><i>  fs/nilfs2/ioctl.c     | 6 +++---</i><br>
+><i>  fs/nilfs2/segment.c   | 4 ++--</i><br>
+><i>  fs/nilfs2/the_nilfs.c | 2 +-</i><br>
+><i>  4 files changed, 7 insertions(+), 7 deletions(-)</i><br>
+><i></i><br>
+><i> diff --git a/fs/nilfs2/cpfile.c b/fs/nilfs2/cpfile.c</i><br>
+><i> index 025fb082575a..ce144776b4ef 100644</i><br>
+><i> --- a/fs/nilfs2/cpfile.c</i><br>
+><i> +++ b/fs/nilfs2/cpfile.c</i><br>
+><i> @@ -293,7 +293,7 @@ void nilfs_cpfile_put_checkpoint(struct inode *cpfile, __u64 cno,</i><br>
+><i>   * nilfs_cpfile_delete_checkpoints - delete checkpoints</i><br>
+><i>   * @cpfile: inode of checkpoint file</i><br>
+><i>   * @start: start checkpoint number</i><br>
+><i> - * @end: end checkpoint numer</i><br>
+><i> + * @end: end checkpoint number</i><br>
+><i>   *</i><br>
+><i>   * Description: nilfs_cpfile_delete_checkpoints() deletes the checkpoints in</i><br>
+><i>   * the period from @start to @end, excluding @end itself. The checkpoints</i><br>
+><i> diff --git a/fs/nilfs2/ioctl.c b/fs/nilfs2/ioctl.c</i><br>
+><i> index b053b40315bf..cbb59a6c4b81 100644</i><br>
+><i> --- a/fs/nilfs2/ioctl.c</i><br>
+><i> +++ b/fs/nilfs2/ioctl.c</i><br>
+><i> @@ -979,7 +979,7 @@ static int nilfs_ioctl_clean_segments(struct inode *inode, struct file *filp,</i><br>
+><i>   * and metadata are written out to the device when it successfully</i><br>
+><i>   * returned.</i><br>
+><i>   *</i><br>
+><i> - * Return Value: On success, 0 is retured. On errors, one of the following</i><br>
+><i> + * Return Value: On success, 0 is returned. On errors, one of the following</i><br>
+><i>   * negative error code is returned.</i><br>
+><i>   *</i><br>
+><i>   * %-EROFS - Read only filesystem.</i><br>
+><i> @@ -1058,7 +1058,7 @@ static int nilfs_ioctl_resize(struct inode *inode, struct file *filp,</i><br>
+><i>   * @inode: inode object</i><br>
+><i>   * @argp: pointer on argument from userspace</i><br>
+><i>   *</i><br>
+><i> - * Decription: nilfs_ioctl_trim_fs is the FITRIM ioctl handle function. It</i><br>
+><i> + * Description: nilfs_ioctl_trim_fs is the FITRIM ioctl handle function. It</i><br>
+><i>   * checks the arguments from userspace and calls nilfs_sufile_trim_fs, which</i><br>
+><i>   * performs the actual trim operation.</i><br>
+><i>   *</i><br>
+><i> @@ -1100,7 +1100,7 @@ static int nilfs_ioctl_trim_fs(struct inode *inode, void __user *argp)</i><br>
+><i>   * @inode: inode object</i><br>
+><i>   * @argp: pointer on argument from userspace</i><br>
+><i>   *</i><br>
+><i> - * Decription: nilfs_ioctl_set_alloc_range() function defines lower limit</i><br>
+><i> + * Description: nilfs_ioctl_set_alloc_range() function defines lower limit</i><br>
+><i>   * of segments in bytes and upper limit of segments in bytes.</i><br>
+><i>   * The NILFS_IOCTL_SET_ALLOC_RANGE is used by nilfs_resize utility.</i><br>
+><i>   *</i><br>
+><i> diff --git a/fs/nilfs2/segment.c b/fs/nilfs2/segment.c</i><br>
+><i> index cd4da9535aed..686c8ee7b29c 100644</i><br>
+><i> --- a/fs/nilfs2/segment.c</i><br>
+><i> +++ b/fs/nilfs2/segment.c</i><br>
+><i> @@ -2214,7 +2214,7 @@ static void nilfs_segctor_wakeup(struct nilfs_sc_info *sci, int err)</i><br>
+><i>   * nilfs_construct_segment - construct a logical segment</i><br>
+><i>   * @sb: super block</i><br>
+><i>   *</i><br>
+><i> - * Return Value: On success, 0 is retured. On errors, one of the following</i><br>
+><i> + * Return Value: On success, 0 is returned. On errors, one of the following</i><br>
+><i>   * negative error code is returned.</i><br>
+><i>   *</i><br>
+><i>   * %-EROFS - Read only filesystem.</i><br>
+><i> @@ -2251,7 +2251,7 @@ int nilfs_construct_segment(struct super_block *sb)</i><br>
+><i>   * @start: start byte offset</i><br>
+><i>   * @end: end byte offset (inclusive)</i><br>
+><i>   *</i><br>
+><i> - * Return Value: On success, 0 is retured. On errors, one of the following</i><br>
+><i> + * Return Value: On success, 0 is returned. On errors, one of the following</i><br>
+><i>   * negative error code is returned.</i><br>
+><i>   *</i><br>
+><i>   * %-EROFS - Read only filesystem.</i><br>
+><i> diff --git a/fs/nilfs2/the_nilfs.c b/fs/nilfs2/the_nilfs.c</i><br>
+><i> index 221a1cc597f0..8b7b01a380ce 100644</i><br>
+><i> --- a/fs/nilfs2/the_nilfs.c</i><br>
+><i> +++ b/fs/nilfs2/the_nilfs.c</i><br>
+><i> @@ -195,7 +195,7 @@ static int nilfs_store_log_cursor(struct the_nilfs *nilfs,</i><br>
+><i>  /**</i><br>
+><i>   * load_nilfs - load and recover the nilfs</i><br>
+><i>   * @nilfs: the_nilfs structure to be released</i><br>
+><i> - * @sb: super block isntance used to recover past segment</i><br>
+><i> + * @sb: super block instance used to recover past segment</i><br>
+><i>   *</i><br>
+><i>   * load_nilfs() searches and load the latest super root,</i><br>
+><i>   * attaches the last segment, and does recovery if needed.</i><br>
+><i> --</i><br>
+><i> 2.17.1</i><br>
+><i></i><br>
+<br>
+<br>
+

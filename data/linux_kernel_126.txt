@@ -1,0 +1,28 @@
+Hi Bjorn,<br>
+<br>
+This series updates the qcom_defconfig by enabling the drivers required<br>
+for the SDX55 platform.<br>
+<br>
+Please consider merging!<br>
+<br>
+Thanks,<br>
+Mani<br>
+<br>
+Manivannan Sadhasivam (7):<br>
+  ARM: configs: qcom_defconfig: Enable APCS IPC mailbox driver<br>
+  ARM: configs: qcom_defconfig: Enable SDX55 A7 PLL and APCS clock<br>
+    driver<br>
+  ARM: configs: qcom_defconfig: Enable CPUFreq support<br>
+  ARM: configs: qcom_defconfig: Enable Q6V5_PAS remoteproc driver<br>
+  ARM: configs: qcom_defconfig: Enable SDX55 interconnect driver<br>
+  ARM: configs: qcom_defconfig: Enable GLINK SMEM driver<br>
+  ARM: configs: qcom_defconfig: Reduce CMA size to 64MB<br>
+<br>
+ arch/arm/configs/qcom_defconfig | 10 +++++++++-<br>
+ 1 file changed, 9 insertions(+), 1 deletion(-)<br>
+<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

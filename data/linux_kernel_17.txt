@@ -1,0 +1,97 @@
+Signed-off-by: Nicolin Chen <nicolinc@xxxxxxxxxx><br>
+---<br>
+ drivers/iommu/tegra-smmu.c | 39 ++++++++++++++++++++++----------------<br>
+ 1 file changed, 23 insertions(+), 16 deletions(-)<br>
+<br>
+diff --git a/drivers/iommu/tegra-smmu.c b/drivers/iommu/tegra-smmu.c<br>
+index 8104f001e679..eff10d1ec568 100644<br>
+--- a/drivers/iommu/tegra-smmu.c<br>
++++ b/drivers/iommu/tegra-smmu.c<br>
+@@ -15,6 +15,7 @@<br>
+ #include <linux/slab.h><br>
+ #include <linux/spinlock.h><br>
+ #include <linux/dma-mapping.h><br>
++#include <linux/dma-iommu.h><br>
+ <br>
+ #include <soc/tegra/ahb.h><br>
+ #include <soc/tegra/mc.h><br>
+@@ -297,35 +298,29 @@ static struct iommu_domain *tegra_smmu_domain_alloc(unsigned type)<br>
+ {<br>
+ 	struct tegra_smmu_as *as;<br>
+ <br>
+-	if (type != IOMMU_DOMAIN_UNMANAGED)<br>
++	if (type != IOMMU_DOMAIN_UNMANAGED && type != IOMMU_DOMAIN_DMA)<br>
+ 		return NULL;<br>
+ <br>
+ 	as = kzalloc(sizeof(*as), GFP_KERNEL);<br>
+ 	if (!as)<br>
+ 		return NULL;<br>
+ <br>
++	if (type == IOMMU_DOMAIN_DMA && iommu_get_dma_cookie(&as->domain))<br>
++		goto free_as;<br>
++<br>
+ 	as->attr = SMMU_PD_READABLE | SMMU_PD_WRITABLE | SMMU_PD_NONSECURE;<br>
+ <br>
+ 	as->pd = alloc_page(GFP_KERNEL | __GFP_DMA | __GFP_ZERO);<br>
+-	if (!as->pd) {<br>
+-		kfree(as);<br>
+-		return NULL;<br>
+-	}<br>
++	if (!as->pd)<br>
++		goto put_dma_cookie;<br>
+ <br>
+ 	as->count = kcalloc(SMMU_NUM_PDE, sizeof(u32), GFP_KERNEL);<br>
+-	if (!as->count) {<br>
+-		__free_page(as->pd);<br>
+-		kfree(as);<br>
+-		return NULL;<br>
+-	}<br>
++	if (!as->count)<br>
++		goto free_pd_range;<br>
+ <br>
+ 	as->pts = kcalloc(SMMU_NUM_PDE, sizeof(*as->pts), GFP_KERNEL);<br>
+-	if (!as->pts) {<br>
+-		kfree(as->count);<br>
+-		__free_page(as->pd);<br>
+-		kfree(as);<br>
+-		return NULL;<br>
+-	}<br>
++	if (!as->pts)<br>
++		goto free_pts;<br>
+ <br>
+ 	spin_lock_init(&as->lock);<br>
+ <br>
+@@ -335,6 +330,17 @@ static struct iommu_domain *tegra_smmu_domain_alloc(unsigned type)<br>
+ 	as->attached_devices_need_sync = true;<br>
+ <br>
+ 	return &as->domain;<br>
++<br>
++free_pts:<br>
++	kfree(as->pts);<br>
++free_pd_range:<br>
++	__free_page(as->pd);<br>
++put_dma_cookie:<br>
++	iommu_put_dma_cookie(&as->domain);<br>
++free_as:<br>
++	kfree(as);<br>
++<br>
++	return NULL;<br>
+ }<br>
+ <br>
+ static void tegra_smmu_domain_free(struct iommu_domain *domain)<br>
+@@ -346,6 +352,7 @@ static void tegra_smmu_domain_free(struct iommu_domain *domain)<br>
+ 	WARN_ON_ONCE(as->use_count);<br>
+ 	kfree(as->count);<br>
+ 	kfree(as->pts);<br>
++	iommu_put_dma_cookie(domain);<br>
+ 	kfree(as);<br>
+ }<br>
+ <br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+--OgqxwSJOaUobr8KG--<br>
+<br>
+<br>
+

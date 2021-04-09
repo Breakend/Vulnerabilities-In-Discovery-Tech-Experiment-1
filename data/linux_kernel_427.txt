@@ -1,0 +1,31 @@
+On Thu, Apr 08, 2021 at 03:04:20PM +0100, David Howells wrote:<br>
+><i> +static inline void set_page_private_2(struct page *page)</i><br>
+><i> +{</i><br>
+><i> +	get_page(page);</i><br>
+><i> +	SetPagePrivate2(page);</i><br>
+<br>
+PAGEFLAG(OwnerPriv1, owner_priv_1, PF_ANY)<br>
+<br>
+So we can set Private2 on any tail page ...<br>
+<br>
+><i> +void end_page_private_2(struct page *page)</i><br>
+><i> +{</i><br>
+><i> +	page = compound_head(page);</i><br>
+><i> +	VM_BUG_ON_PAGE(!PagePrivate2(page), page);</i><br>
+><i> +	clear_bit_unlock(PG_private_2, &page->flags);</i><br>
+><i> +	wake_up_page_bit(page, PG_private_2);</i><br>
+<br>
+... but when we try to end on a tail, we actually wake up the head ...<br>
+<br>
+><i> +void wait_on_page_private_2(struct page *page)</i><br>
+><i> +{</i><br>
+><i> +	while (PagePrivate2(page))</i><br>
+><i> +		wait_on_page_bit(page, PG_private_2);</i><br>
+<br>
+... although if we were waiting on a tail, the wake up won't find us ...<br>
+<br>
+if only we had a way to ensure this kind of bug can't happen *cough,<br>
+lend your support to the page folio patches*.<br>
+<br>
+<br>
+

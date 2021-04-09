@@ -1,0 +1,241 @@
+Make AFS use the new netfs_write_begin() helper to do the pre-reading<br>
+required before the write.  If successful, the helper returns with the<br>
+required page filled in and locked.  It may read more than just one page,<br>
+expanding the read to meet cache granularity requirements as necessary.<br>
+<br>
+Note: A more advanced version of this could be made that does<br>
+generic_perform_write() for a whole cache granule.  This would make it<br>
+easier to avoid doing the download/read for the data to be overwritten.<br>
+<br>
+Signed-off-by: David Howells <dhowells@xxxxxxxxxx><br>
+cc: linux-afs@xxxxxxxxxxxxxxxxxxx<br>
+cc: linux-cachefs@xxxxxxxxxx<br>
+cc: linux-fsdevel@xxxxxxxxxxxxxxx<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/160588546422.3465195.1546354372589291098.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/160588546422.3465195.1546354372589291098.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # rfc<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161539563244.286939.16537296241609909980.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161539563244.286939.16537296241609909980.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v4<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161653819291.2770958.406013201547420544.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161653819291.2770958.406013201547420544.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v5<br>
+---<br>
+<br>
+ fs/afs/file.c     |   19 +++++++++<br>
+ fs/afs/internal.h |    1 <br>
+ fs/afs/write.c    |  108 ++++++-----------------------------------------------<br>
+ 3 files changed, 31 insertions(+), 97 deletions(-)<br>
+<br>
+diff --git a/fs/afs/file.c b/fs/afs/file.c<br>
+index 10c6eaaac2cc..db035ae2a134 100644<br>
+--- a/fs/afs/file.c<br>
++++ b/fs/afs/file.c<br>
+@@ -333,6 +333,13 @@ static void afs_init_rreq(struct netfs_read_request *rreq, struct file *file)<br>
+ 	rreq->netfs_priv = key_get(afs_file_key(file));<br>
+ }<br>
+ <br>
++static bool afs_is_cache_enabled(struct inode *inode)<br>
++{<br>
++	struct fscache_cookie *cookie = afs_vnode_cache(AFS_FS_I(inode));<br>
++<br>
++	return fscache_cookie_enabled(cookie) && !hlist_empty(&cookie->backing_objects);<br>
++}<br>
++<br>
+ static int afs_begin_cache_operation(struct netfs_read_request *rreq)<br>
+ {<br>
+ 	struct afs_vnode *vnode = AFS_FS_I(rreq->inode);<br>
+@@ -340,14 +347,24 @@ static int afs_begin_cache_operation(struct netfs_read_request *rreq)<br>
+ 	return fscache_begin_read_operation(rreq, afs_vnode_cache(vnode));<br>
+ }<br>
+ <br>
++static int afs_check_write_begin(struct file *file, loff_t pos, unsigned len,<br>
++				 struct page *page, void **_fsdata)<br>
++{<br>
++	struct afs_vnode *vnode = AFS_FS_I(file_inode(file));<br>
++<br>
++	return test_bit(AFS_VNODE_DELETED, &vnode->flags) ? -ESTALE : 0;<br>
++}<br>
++<br>
+ static void afs_priv_cleanup(struct address_space *mapping, void *netfs_priv)<br>
+ {<br>
+ 	key_put(netfs_priv);<br>
+ }<br>
+ <br>
+-static const struct netfs_read_request_ops afs_req_ops = {<br>
++const struct netfs_read_request_ops afs_req_ops = {<br>
+ 	.init_rreq		= afs_init_rreq,<br>
++	.is_cache_enabled	= afs_is_cache_enabled,<br>
+ 	.begin_cache_operation	= afs_begin_cache_operation,<br>
++	.check_write_begin	= afs_check_write_begin,<br>
+ 	.issue_op		= afs_req_issue_op,<br>
+ 	.cleanup		= afs_priv_cleanup,<br>
+ };<br>
+diff --git a/fs/afs/internal.h b/fs/afs/internal.h<br>
+index f9a692fc08f4..52157a05796a 100644<br>
+--- a/fs/afs/internal.h<br>
++++ b/fs/afs/internal.h<br>
+@@ -1045,6 +1045,7 @@ extern void afs_dynroot_depopulate(struct super_block *);<br>
+ extern const struct address_space_operations afs_fs_aops;<br>
+ extern const struct inode_operations afs_file_inode_operations;<br>
+ extern const struct file_operations afs_file_operations;<br>
++extern const struct netfs_read_request_ops afs_req_ops;<br>
+ <br>
+ extern int afs_cache_wb_key(struct afs_vnode *, struct afs_file *);<br>
+ extern void afs_put_wb_key(struct afs_wb_key *);<br>
+diff --git a/fs/afs/write.c b/fs/afs/write.c<br>
+index bc84c771b0fd..dc66ff15dd16 100644<br>
+--- a/fs/afs/write.c<br>
++++ b/fs/afs/write.c<br>
+@@ -11,6 +11,8 @@<br>
+ #include <linux/pagemap.h><br>
+ #include <linux/writeback.h><br>
+ #include <linux/pagevec.h><br>
++#include <linux/netfs.h><br>
++#include <linux/fscache.h><br>
+ #include "internal.h"<br>
+ <br>
+ /*<br>
+@@ -22,68 +24,6 @@ int afs_set_page_dirty(struct page *page)<br>
+ 	return __set_page_dirty_nobuffers(page);<br>
+ }<br>
+ <br>
+-/*<br>
+- * Handle completion of a read operation to fill a page.<br>
+- */<br>
+-static void afs_fill_hole(struct afs_read *req)<br>
+-{<br>
+-	if (iov_iter_count(req->iter) > 0)<br>
+-		/* The read was short - clear the excess buffer. */<br>
+-		iov_iter_zero(iov_iter_count(req->iter), req->iter);<br>
+-}<br>
+-<br>
+-/*<br>
+- * partly or wholly fill a page that's under preparation for writing<br>
+- */<br>
+-static int afs_fill_page(struct file *file,<br>
+-			 loff_t pos, unsigned int len, struct page *page)<br>
+-{<br>
+-	struct afs_vnode *vnode = AFS_FS_I(file_inode(file));<br>
+-	struct afs_read *req;<br>
+-	size_t p;<br>
+-	void *data;<br>
+-	int ret;<br>
+-<br>
+-	_enter(",,%llu", (unsigned long long)pos);<br>
+-<br>
+-	if (pos >= vnode->vfs_inode.i_size) {<br>
+-		p = pos & ~PAGE_MASK;<br>
+-		ASSERTCMP(p + len, <=, PAGE_SIZE);<br>
+-		data = kmap(page);<br>
+-		memset(data + p, 0, len);<br>
+-		kunmap(page);<br>
+-		return 0;<br>
+-	}<br>
+-<br>
+-	req = kzalloc(sizeof(struct afs_read), GFP_KERNEL);<br>
+-	if (!req)<br>
+-		return -ENOMEM;<br>
+-<br>
+-	refcount_set(&req->usage, 1);<br>
+-	req->vnode	= vnode;<br>
+-	req->done	= afs_fill_hole;<br>
+-	req->key	= key_get(afs_file_key(file));<br>
+-	req->pos	= pos;<br>
+-	req->len	= len;<br>
+-	req->nr_pages	= 1;<br>
+-	req->iter	= &req->def_iter;<br>
+-	iov_iter_xarray(&req->def_iter, READ, &file->f_mapping->i_pages, pos, len);<br>
+-<br>
+-	ret = afs_fetch_data(vnode, req);<br>
+-	afs_put_read(req);<br>
+-	if (ret < 0) {<br>
+-		if (ret == -ENOENT) {<br>
+-			_debug("got NOENT from server"<br>
+-			       " - marking file deleted and stale");<br>
+-			set_bit(AFS_VNODE_DELETED, &vnode->flags);<br>
+-			ret = -ESTALE;<br>
+-		}<br>
+-	}<br>
+-<br>
+-	_leave(" = %d", ret);<br>
+-	return ret;<br>
+-}<br>
+-<br>
+ /*<br>
+  * prepare to perform part of a write to a page<br>
+  */<br>
+@@ -102,24 +42,14 @@ int afs_write_begin(struct file *file, struct address_space *mapping,<br>
+ 	_enter("{%llx:%llu},%llx,%x",<br>
+ 	       vnode->fid.vid, vnode->fid.vnode, pos, len);<br>
+ <br>
+-	page = grab_cache_page_write_begin(mapping, pos / PAGE_SIZE, flags);<br>
+-	if (!page)<br>
+-		return -ENOMEM;<br>
+-<br>
+-	if (!PageUptodate(page) && len != PAGE_SIZE) {<br>
+-		ret = afs_fill_page(file, pos & PAGE_MASK, PAGE_SIZE, page);<br>
+-		if (ret < 0) {<br>
+-			unlock_page(page);<br>
+-			put_page(page);<br>
+-			_leave(" = %d [prep]", ret);<br>
+-			return ret;<br>
+-		}<br>
+-		SetPageUptodate(page);<br>
+-	}<br>
+-<br>
+-#ifdef CONFIG_AFS_FSCACHE<br>
+-	wait_on_page_fscache(page);<br>
+-#endif<br>
++	/* Prefetch area to be written into the cache if we're caching this<br>
++	 * file.  We need to do this before we get a lock on the page in case<br>
++	 * there's more than one writer competing for the same cache block.<br>
++	 */<br>
++	ret = netfs_write_begin(file, mapping, pos, len, flags, &page, fsdata,<br>
++				&afs_req_ops, NULL);<br>
++	if (ret < 0)<br>
++		return ret;<br>
+ <br>
+ 	index = page->index;<br>
+ 	from = pos - index * PAGE_SIZE;<br>
+@@ -184,7 +114,6 @@ int afs_write_end(struct file *file, struct address_space *mapping,<br>
+ 	unsigned int f, from = pos & (thp_size(page) - 1);<br>
+ 	unsigned int t, to = from + copied;<br>
+ 	loff_t i_size, maybe_i_size;<br>
+-	int ret = 0;<br>
+ <br>
+ 	_enter("{%llx:%llu},{%lx}",<br>
+ 	       vnode->fid.vid, vnode->fid.vnode, page->index);<br>
+@@ -203,19 +132,7 @@ int afs_write_end(struct file *file, struct address_space *mapping,<br>
+ 		write_sequnlock(&vnode->cb_lock);<br>
+ 	}<br>
+ <br>
+-	if (!PageUptodate(page)) {<br>
+-		if (copied < len) {<br>
+-			/* Try and load any missing data from the server.  The<br>
+-			 * unmarshalling routine will take care of clearing any<br>
+-			 * bits that are beyond the EOF.<br>
+-			 */<br>
+-			ret = afs_fill_page(file, pos + copied,<br>
+-					    len - copied, page);<br>
+-			if (ret < 0)<br>
+-				goto out;<br>
+-		}<br>
+-		SetPageUptodate(page);<br>
+-	}<br>
++	ASSERT(PageUptodate(page));<br>
+ <br>
+ 	if (PagePrivate(page)) {<br>
+ 		priv = page_private(page);<br>
+@@ -236,12 +153,11 @@ int afs_write_end(struct file *file, struct address_space *mapping,<br>
+ <br>
+ 	if (set_page_dirty(page))<br>
+ 		_debug("dirtied %lx", page->index);<br>
+-	ret = copied;<br>
+ <br>
+ out:<br>
+ 	unlock_page(page);<br>
+ 	put_page(page);<br>
+-	return ret;<br>
++	return copied;<br>
+ }<br>
+ <br>
+ /*<br>
+<br>
+<br>
+<br>
+

@@ -1,0 +1,50 @@
+Quoting Petr Mladek (2021-04-07 08:03:47)<br>
+><i> On Tue 2021-03-30 20:05:12, Stephen Boyd wrote:</i><br>
+><i> > Let's make kernel stacktraces easier to identify by including the build</i><br>
+><i> > ID[1] of a module if the stacktrace is printing a symbol from a module.</i><br>
+><i> > This makes it simpler for developers to locate a kernel module's full</i><br>
+><i> > debuginfo for a particular stacktrace. Combined with</i><br>
+><i> > scripts/decode_stracktrace.sh, a developer can download the matching</i><br>
+><i> > debuginfo from a debuginfod[2] server and find the exact file and line</i><br>
+><i> > number for the functions plus offsets in a stacktrace that match the</i><br>
+><i> > module. This is especially useful for pstore crash debugging where the</i><br>
+><i> > kernel crashes are recorded in something like console-ramoops and the</i><br>
+><i> > recovery kernel/modules are different or the debuginfo doesn't exist on</i><br>
+><i> > the device due to space concerns (the debuginfo can be too large for</i><br>
+><i> > space limited devices).</i><br>
+><i> > </i><br>
+><i> > @@ -359,15 +369,17 @@ int lookup_symbol_attrs(unsigned long addr, unsigned long *size,</i><br>
+><i> >  </i><br>
+><i> >  /* Look up a kernel symbol and return it in a text buffer. */</i><br>
+><i> >  static int __sprint_symbol(char *buffer, unsigned long address,</i><br>
+><i> > -                        int symbol_offset, int add_offset)</i><br>
+><i> > +                        int symbol_offset, int add_offset, int add_buildid)</i><br>
+><i> >  {</i><br>
+><i> >       char *modname;</i><br>
+><i> > +     const unsigned char *buildid;</i><br>
+><i> >       const char *name;</i><br>
+><i> >       unsigned long offset, size;</i><br>
+><i> >       int len;</i><br>
+><i> >  </i><br>
+><i> >       address += symbol_offset;</i><br>
+><i> > -     name = kallsyms_lookup(address, &size, &offset, &modname, buffer);</i><br>
+><i> > +     name = kallsyms_lookup_buildid(address, &size, &offset, &modname, &buildid,</i><br>
+><i> > +                                    buffer);</i><br>
+><i> >       if (!name)</i><br>
+><i> >               return sprintf(buffer, "0x%lx", address - symbol_offset);</i><br>
+><i> >  </i><br>
+><i> > @@ -379,8 +391,12 @@ static int __sprint_symbol(char *buffer, unsigned long address,</i><br>
+><i> >       if (add_offset)</i><br>
+><i> >               len += sprintf(buffer + len, "+%#lx/%#lx", offset, size);</i><br>
+><i> </i><br>
+><i> Please add something like:</i><br>
+><i> </i><br>
+><i>         /* Keep BUILD_ID_SIZE_MAX in sync with the below used %20phN */</i><br>
+><i>         BUILD_BUG_ON(BUILD_ID_SIZE_MAX != 20)</i><br>
+><i> </i><br>
+<br>
+Done. Hopefully the "GNU" string check also fixes this module problem<br>
+you're seeing.<br>
+<br>
+<br>
+

@@ -1,0 +1,43 @@
+On Mon, Apr 05, 2021 at 08:10:46AM -0700, kan.liang@xxxxxxxxxxxxxxx wrote:<br>
+><i> +static inline bool intel_pmu_has_cap(struct perf_event *event, int idx)</i><br>
+><i> +{</i><br>
+><i> +	union perf_capabilities *intel_cap;</i><br>
+><i> +</i><br>
+><i> +	intel_cap = is_hybrid() ? &hybrid_pmu(event->pmu)->intel_cap :</i><br>
+><i> +				  &x86_pmu.intel_cap;</i><br>
+<br>
+This isn't:<br>
+<br>
+	intel_cap = &hybrid_pmu(event->pmu)->intel_cap;<br>
+<br>
+because..<br>
+<br>
+><i> +</i><br>
+><i> +	return test_bit(idx, (unsigned long *)&intel_cap->capabilities);</i><br>
+><i> +}</i><br>
+<br>
+<br>
+><i> @@ -3712,7 +3721,7 @@ static int intel_pmu_hw_config(struct perf_event *event)</i><br>
+><i>  	 * with a slots event as group leader. When the slots event</i><br>
+><i>  	 * is used in a metrics group, it too cannot support sampling.</i><br>
+><i>  	 */</i><br>
+><i> -	if (x86_pmu.intel_cap.perf_metrics && is_topdown_event(event)) {</i><br>
+><i> +	if (intel_pmu_has_cap(event, PERF_CAP_METRICS_IDX) && is_topdown_event(event)) {</i><br>
+><i>  		if (event->attr.config1 || event->attr.config2)</i><br>
+><i>  			return -EINVAL;</i><br>
+><i>  </i><br>
+<br>
+><i> @@ -4330,7 +4347,7 @@ static int intel_pmu_check_period(struct perf_event *event, u64 value)</i><br>
+><i>  </i><br>
+><i>  static int intel_pmu_aux_output_match(struct perf_event *event)</i><br>
+><i>  {</i><br>
+><i> -	if (!x86_pmu.intel_cap.pebs_output_pt_available)</i><br>
+><i> +	if (!intel_pmu_has_cap(event, PERF_CAP_PT_IDX))</i><br>
+><i>  		return 0;</i><br>
+><i>  </i><br>
+><i>  	return is_intel_pt_event(event);</i><br>
+<br>
+these sites can have !event->pmu ?<br>
+<br>
+<br>
+

@@ -1,0 +1,30 @@
+On Thu, Apr 08, 2021 at 10:01:23AM +0200, Jiri Kosina wrote:<br>
+><i> On Thu, 8 Apr 2021, Greg KH wrote:</i><br>
+><i> </i><br>
+><i> > Removing a module from a system has always been "let's try it and see!"</i><br>
+><i> > type of operation for a very long time.  </i><br>
+><i> </i><br>
+><i> Which part of it?</i><br>
+><i> </i><br>
+><i> If there is a driver/subsystem code that can't handle the reverse </i><br>
+><i> operation to modprobe, it clearly can't handle error handling during </i><br>
+><i> modprobe (which, one would hope, is supported), and should be fixed.</i><br>
+<br>
+Huh?  No, that's not the issue here, it's the issue of different<br>
+userspace code paths into the module at the same time that it is trying<br>
+to be unloaded.  That has nothing to do with loading the module the<br>
+first time as userspace is not touching those apis yet.<br>
+<br>
+><i> If there is a particular issue in kernel dynamic linker that causes crash </i><br>
+><i> on module removal, we'd better off fixing it. Is there one such that makes </i><br>
+><i> you claim module removal unsupported?</i><br>
+<br>
+The linker has nothing to do with this, it's userspace tasks touching<br>
+code paths.<br>
+<br>
+thanks,<br>
+<br>
+greg k-h<br>
+<br>
+<br>
+

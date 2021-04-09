@@ -1,0 +1,122 @@
+tree/branch: <a  rel="nofollow" href="https://git.kernel.org/pub/scm/linux/kernel/git/paulmck/linux-rcu.git">https://git.kernel.org/pub/scm/linux/kernel/git/paulmck/linux-rcu.git</a> dev.2021.04.06a<br>
+branch HEAD: 2d5149067a2aca5be4d24fc0f8368e48b47d222d  rcu: Restrict RCU_STRICT_GRACE_PERIOD to at most four CPUs<br>
+<br>
+possible Warning in current branch:<br>
+<br>
+include/linux/rcutiny.h:105:44: sparse: sparse: context imbalance in 'find_lock_task_mm' - wrong count at exit<br>
+include/linux/rcutiny.h:105:44: sparse: sparse: context imbalance in 'perf_lock_task_context' - different lock contexts for basic block<br>
+include/linux/rcutiny.h:105:44: sparse: sparse: context imbalance in 'send_sigqueue' - wrong count at exit<br>
+<br>
+Warning ids grouped by kconfigs:<br>
+<br>
+gcc_recent_errors<br>
+`-- x86_64-randconfig-s022-20210407<br>
+    |-- include-linux-rcutiny.h:sparse:sparse:context-imbalance-in-find_lock_task_mm-wrong-count-at-exit<br>
+    |-- include-linux-rcutiny.h:sparse:sparse:context-imbalance-in-perf_lock_task_context-different-lock-contexts-for-basic-block<br>
+    `-- include-linux-rcutiny.h:sparse:sparse:context-imbalance-in-send_sigqueue-wrong-count-at-exit<br>
+<br>
+elapsed time: 720m<br>
+<br>
+configs tested: 92<br>
+configs skipped: 3<br>
+<br>
+gcc tested configs:<br>
+arm                                 defconfig<br>
+arm64                            allyesconfig<br>
+arm64                               defconfig<br>
+arm                              allyesconfig<br>
+arm                              allmodconfig<br>
+riscv                            allmodconfig<br>
+riscv                            allyesconfig<br>
+m68k                         amcore_defconfig<br>
+powerpc                   currituck_defconfig<br>
+sh                            hp6xx_defconfig<br>
+arc                     nsimosci_hs_defconfig<br>
+arm                            zeus_defconfig<br>
+openrisc                  or1klitex_defconfig<br>
+arm                         at91_dt_defconfig<br>
+sh                   rts7751r2dplus_defconfig<br>
+sh                          kfr2r09_defconfig<br>
+parisc                              defconfig<br>
+arm                           omap1_defconfig<br>
+arm                        neponset_defconfig<br>
+openrisc                 simple_smp_defconfig<br>
+sh                         ecovec24_defconfig<br>
+m68k                            q40_defconfig<br>
+sparc                       sparc32_defconfig<br>
+mips                        nlm_xlr_defconfig<br>
+sh                          rsk7201_defconfig<br>
+powerpc                      tqm8xx_defconfig<br>
+powerpc                     tqm8541_defconfig<br>
+mips                            ar7_defconfig<br>
+powerpc                        fsp2_defconfig<br>
+um                               allyesconfig<br>
+ia64                             allmodconfig<br>
+ia64                                defconfig<br>
+ia64                             allyesconfig<br>
+m68k                             allmodconfig<br>
+m68k                                defconfig<br>
+m68k                             allyesconfig<br>
+nios2                               defconfig<br>
+arc                              allyesconfig<br>
+nds32                             allnoconfig<br>
+nds32                               defconfig<br>
+nios2                            allyesconfig<br>
+csky                                defconfig<br>
+alpha                               defconfig<br>
+alpha                            allyesconfig<br>
+xtensa                           allyesconfig<br>
+h8300                            allyesconfig<br>
+arc                                 defconfig<br>
+sh                               allmodconfig<br>
+s390                             allyesconfig<br>
+s390                             allmodconfig<br>
+parisc                           allyesconfig<br>
+s390                                defconfig<br>
+i386                             allyesconfig<br>
+sparc                            allyesconfig<br>
+sparc                               defconfig<br>
+i386                                defconfig<br>
+mips                             allyesconfig<br>
+mips                             allmodconfig<br>
+powerpc                          allyesconfig<br>
+powerpc                          allmodconfig<br>
+powerpc                           allnoconfig<br>
+i386                 randconfig-a006-20210407<br>
+i386                 randconfig-a003-20210407<br>
+i386                 randconfig-a001-20210407<br>
+i386                 randconfig-a002-20210407<br>
+i386                 randconfig-a005-20210407<br>
+x86_64               randconfig-a014-20210407<br>
+x86_64               randconfig-a015-20210407<br>
+x86_64               randconfig-a013-20210407<br>
+x86_64               randconfig-a011-20210407<br>
+x86_64               randconfig-a012-20210407<br>
+x86_64               randconfig-a016-20210407<br>
+i386                 randconfig-a014-20210407<br>
+i386                 randconfig-a011-20210407<br>
+i386                 randconfig-a016-20210407<br>
+i386                 randconfig-a012-20210407<br>
+i386                 randconfig-a015-20210407<br>
+i386                 randconfig-a013-20210407<br>
+riscv                    nommu_k210_defconfig<br>
+riscv                    nommu_virt_defconfig<br>
+riscv                             allnoconfig<br>
+riscv                               defconfig<br>
+riscv                          rv32_defconfig<br>
+um                               allmodconfig<br>
+um                                allnoconfig<br>
+um                                  defconfig<br>
+x86_64                           allyesconfig<br>
+x86_64                    rhel-8.3-kselftests<br>
+x86_64                              defconfig<br>
+x86_64                               rhel-8.3<br>
+x86_64                      rhel-8.3-kbuiltin<br>
+x86_64                                  kexec<br>
+<br>
+---<br>
+0-DAY CI Kernel Test Service, Intel Corporation<br>
+<a  rel="nofollow" href="https://lists.01.org/hyperkitty/list/kbuild-all@xxxxxxxxxxxx">https://lists.01.org/hyperkitty/list/kbuild-all@xxxxxxxxxxxx</a><br>
+<br>
+<br>
+

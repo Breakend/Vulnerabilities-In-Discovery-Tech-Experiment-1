@@ -1,0 +1,47 @@
+
++++ Stephen Boyd [30/03/21 20:05 -0700]:<br>
+[snipped]<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+diff --git a/lib/buildid.c b/lib/buildid.c<br>
+index 010ab0674cb9..b939bbc59233 100644<br>
+--- a/lib/buildid.c<br>
++++ b/lib/buildid.c<br>
+@@ -1,6 +1,7 @@<br>
+// SPDX-License-Identifier: GPL-2.0<br>
+<br>
+#include <linux/buildid.h><br>
++#include <linux/cache.h><br>
+#include <linux/elf.h><br>
+#include <linux/kernel.h><br>
+#include <linux/pagemap.h><br>
+@@ -171,3 +172,19 @@ int build_id_parse_buf(const void *buf, unsigned char *build_id, u32 buf_size)<br>
+{<br>
+	return parse_build_id_buf(build_id, NULL, buf, buf_size);<br>
+}<br>
++<br>
++unsigned char vmlinux_build_id[BUILD_ID_SIZE_MAX] __ro_after_init;<br>
++<br>
++/**<br>
++ * init_vmlinux_build_id - Get the running kernel's build ID<br>
++ *<br>
++ * Return: Running kernel's build ID<br>
++ */<br>
+</blockquote>
+<br>
+Hm, init_vmlinux_build_id() doesn't return anything, so this comment is<br>
+not accurate - maybe "Get the running kernel's build ID and store it in<br>
+vmlinux_build_id"?<br>
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
++void __init init_vmlinux_build_id(void)<br>
++{<br>
++	extern const void __start_notes __weak;<br>
++	extern const void __stop_notes __weak;<br>
++	unsigned int size = &__stop_notes - &__start_notes;<br>
++<br>
++	build_id_parse_buf(&__start_notes, vmlinux_build_id, size);<br>
++}<br>
+</blockquote>
+<br>
+<br>
+

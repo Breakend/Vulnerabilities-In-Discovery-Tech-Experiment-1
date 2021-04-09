@@ -1,0 +1,79 @@
+flush_dcache_page() is only a few lines, it is worth<br>
+inlining.<br>
+<br>
+ia64, csky, mips, openrisc and riscv have a similar<br>
+flush_dcache_page() and inline it.<br>
+<br>
+On pmac32_defconfig, we get a small size reduction.<br>
+On ppc64_defconfig, we get a very small size increase.<br>
+<br>
+In both case that's in the noise (less than 0.1%).<br>
+<br>
+text		data	bss	dec		hex	filename<br>
+18991155	5934744	1497624	26423523	19330e3	vmlinux64.before<br>
+18994829	5936732	1497624	26429185	1934701	vmlinux64.after<br>
+9150963		2467502	 184548	11803013	 b41985	vmlinux32.before<br>
+9149689		2467302	 184548	11801539	 b413c3	vmlinux32.after<br>
+<br>
+Signed-off-by: Christophe Leroy <christophe.leroy@xxxxxxxxxx><br>
+---<br>
+ arch/powerpc/include/asm/cacheflush.h | 14 +++++++++++++-<br>
+ arch/powerpc/mm/cacheflush.c          | 15 ---------------<br>
+ 2 files changed, 13 insertions(+), 16 deletions(-)<br>
+<br>
+diff --git a/arch/powerpc/include/asm/cacheflush.h b/arch/powerpc/include/asm/cacheflush.h<br>
+index 9110489ea411..7564dd4fd12b 100644<br>
+--- a/arch/powerpc/include/asm/cacheflush.h<br>
++++ b/arch/powerpc/include/asm/cacheflush.h<br>
+@@ -30,7 +30,19 @@ static inline void flush_cache_vmap(unsigned long start, unsigned long end)<br>
+ #endif /* CONFIG_PPC_BOOK3S_64 */<br>
+ <br>
+ #define ARCH_IMPLEMENTS_FLUSH_DCACHE_PAGE 1<br>
+-extern void flush_dcache_page(struct page *page);<br>
++/*<br>
++ * This is called when a page has been modified by the kernel.<br>
++ * It just marks the page as not i-cache clean.  We do the i-cache<br>
++ * flush later when the page is given to a user process, if necessary.<br>
++ */<br>
++static inline void flush_dcache_page(struct page *page)<br>
++{<br>
++	if (cpu_has_feature(CPU_FTR_COHERENT_ICACHE))<br>
++		return;<br>
++	/* avoid an atomic op if possible */<br>
++	if (test_bit(PG_dcache_clean, &page->flags))<br>
++		clear_bit(PG_dcache_clean, &page->flags);<br>
++}<br>
+ <br>
+ void flush_icache_range(unsigned long start, unsigned long stop);<br>
+ #define flush_icache_range flush_icache_range<br>
+diff --git a/arch/powerpc/mm/cacheflush.c b/arch/powerpc/mm/cacheflush.c<br>
+index abeef69ed4e4..d9eafa077c09 100644<br>
+--- a/arch/powerpc/mm/cacheflush.c<br>
++++ b/arch/powerpc/mm/cacheflush.c<br>
+@@ -121,21 +121,6 @@ static void flush_dcache_icache_phys(unsigned long physaddr)<br>
+ }<br>
+ #endif<br>
+ <br>
+-/*<br>
+- * This is called when a page has been modified by the kernel.<br>
+- * It just marks the page as not i-cache clean.  We do the i-cache<br>
+- * flush later when the page is given to a user process, if necessary.<br>
+- */<br>
+-void flush_dcache_page(struct page *page)<br>
+-{<br>
+-	if (cpu_has_feature(CPU_FTR_COHERENT_ICACHE))<br>
+-		return;<br>
+-	/* avoid an atomic op if possible */<br>
+-	if (test_bit(PG_dcache_clean, &page->flags))<br>
+-		clear_bit(PG_dcache_clean, &page->flags);<br>
+-}<br>
+-EXPORT_SYMBOL(flush_dcache_page);<br>
+-<br>
+ /**<br>
+  * __flush_dcache_icache(): Flush a particular page from the data cache to RAM.<br>
+  * Note: this is necessary because the instruction cache does *not*<br>
+-- <br>
+2.25.0<br>
+<br>
+<br>
+

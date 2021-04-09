@@ -1,0 +1,99 @@
+On Thu, Apr 8, 2021 at 10:17 AM <frowand.list@xxxxxxxxx> wrote:<br>
+><i></i><br>
+><i> From: Frank Rowand <frank.rowand@xxxxxxxx></i><br>
+><i></i><br>
+><i> The Devicetree standard specifies an 8 byte alignment of the FDT.</i><br>
+><i> Code in libfdt expects this alignment for an FDT image in memory.</i><br>
+><i> kmemdup() returns 4 byte alignment on openrisc.  Replace kmemdup()</i><br>
+><i> with kmalloc(), align pointer, memcpy() to get proper alignment.</i><br>
+><i></i><br>
+><i> The 4 byte alignment exposed a related bug which triggered a crash</i><br>
+><i> on openrisc with:</i><br>
+><i> commit 79edff12060f ("scripts/dtc: Update to upstream version v1.6.0-51-g183df9e9c2b9")</i><br>
+><i> as reported in:</i><br>
+><i> <a  rel="nofollow" href="https://lore.kernel.org/lkml/20210327224116.69309-1-linux@xxxxxxxxxxxx/">https://lore.kernel.org/lkml/20210327224116.69309-1-linux@xxxxxxxxxxxx/</a></i><br>
+><i></i><br>
+><i> Reported-by: Guenter Roeck <linux@xxxxxxxxxxxx></i><br>
+><i> Signed-off-by: Frank Rowand <frank.rowand@xxxxxxxx></i><br>
+><i> ---</i><br>
+><i></i><br>
+><i> changes since version 1:</i><br>
+><i>   - use pointer from kmalloc() for kfree() instead of using pointer that</i><br>
+><i>     has been modified for FDT alignment</i><br>
+><i></i><br>
+><i> changes since version 2:</i><br>
+><i>   - version 1 was a work in progress version, I failed to commit the following</i><br>
+><i>     final changes</i><br>
+><i>   - reorder first two arguments of of_overlay_apply()</i><br>
+><i></i><br>
+><i>  drivers/of/of_private.h |  2 ++</i><br>
+><i>  drivers/of/overlay.c    | 28 +++++++++++++++++-----------</i><br>
+><i>  drivers/of/unittest.c   | 12 +++++++++---</i><br>
+><i>  3 files changed, 28 insertions(+), 14 deletions(-)</i><br>
+><i></i><br>
+><i> diff --git a/drivers/of/of_private.h b/drivers/of/of_private.h</i><br>
+><i> index d9e6a324de0a..d717efbd637d 100644</i><br>
+><i> --- a/drivers/of/of_private.h</i><br>
+><i> +++ b/drivers/of/of_private.h</i><br>
+><i> @@ -8,6 +8,8 @@</i><br>
+><i>   * Copyright (C) 1996-2005 Paul Mackerras.</i><br>
+><i>   */</i><br>
+><i></i><br>
+><i> +#define FDT_ALIGN_SIZE 8</i><br>
+><i> +</i><br>
+><i>  /**</i><br>
+><i>   * struct alias_prop - Alias property in 'aliases' node</i><br>
+><i>   * @link:      List node to link the structure in aliases_lookup list</i><br>
+><i> diff --git a/drivers/of/overlay.c b/drivers/of/overlay.c</i><br>
+><i> index 50bbe0edf538..cf770452e1e5 100644</i><br>
+><i> --- a/drivers/of/overlay.c</i><br>
+><i> +++ b/drivers/of/overlay.c</i><br>
+><i> @@ -57,7 +57,7 @@ struct fragment {</i><br>
+><i>   * struct overlay_changeset</i><br>
+><i>   * @id:                        changeset identifier</i><br>
+><i>   * @ovcs_list:         list on which we are located</i><br>
+><i> - * @fdt:               FDT that was unflattened to create @overlay_tree</i><br>
+><i> + * @fdt:               base of memory allocated to hold aligned FDT that was unflattened to create @overlay_tree</i><br>
+><i>   * @overlay_tree:      expanded device tree that contains the fragment nodes</i><br>
+><i>   * @count:             count of fragment structures</i><br>
+><i>   * @fragments:         fragment nodes in the overlay expanded device tree</i><br>
+><i> @@ -719,8 +719,8 @@ static struct device_node *find_target(struct device_node *info_node)</i><br>
+><i>  /**</i><br>
+><i>   * init_overlay_changeset() - initialize overlay changeset from overlay tree</i><br>
+><i>   * @ovcs:      Overlay changeset to build</i><br>
+><i> - * @fdt:       the FDT that was unflattened to create @tree</i><br>
+><i> - * @tree:      Contains all the overlay fragments and overlay fixup nodes</i><br>
+><i> + * @fdt:       base of memory allocated to hold aligned FDT that was unflattened to create @tree</i><br>
+><i> + * @tree:      Contains the overlay fragments and overlay fixup nodes</i><br>
+><i>   *</i><br>
+><i>   * Initialize @ovcs.  Populate @ovcs->fragments with node information from</i><br>
+><i>   * the top level of @tree.  The relevant top level nodes are the fragment</i><br>
+><i> @@ -873,7 +873,8 @@ static void free_overlay_changeset(struct overlay_changeset *ovcs)</i><br>
+><i>   * internal documentation</i><br>
+><i>   *</i><br>
+><i>   * of_overlay_apply() - Create and apply an overlay changeset</i><br>
+><i> - * @fdt:       the FDT that was unflattened to create @tree</i><br>
+><i> + * @fdt:       base of memory allocated to hold *@fdt_align</i><br>
+><i> + * @fdt_align: the FDT that was unflattened to create @tree, aligned</i><br>
+><i>   * @tree:      Expanded overlay device tree</i><br>
+><i>   * @ovcs_id:   Pointer to overlay changeset id</i><br>
+><i>   *</i><br>
+><i> @@ -912,8 +913,8 @@ static void free_overlay_changeset(struct overlay_changeset *ovcs)</i><br>
+><i>   * id is returned to *ovcs_id.</i><br>
+><i>   */</i><br>
+><i></i><br>
+><i> -static int of_overlay_apply(const void *fdt, struct device_node *tree,</i><br>
+><i> -               int *ovcs_id)</i><br>
+><i> +static int of_overlay_apply(const void *fdt, const void *fdt_align,</i><br>
+><i> +               struct device_node *tree, int *ovcs_id)</i><br>
+<br>
+I think it's better if you move the kfree's out of this function. It<br>
+would be a broken design if this function was public because you'd<br>
+have no idea if 'fdt' could be freed or not. No reason to have that<br>
+bad design just because it's static. If a function returns an error,<br>
+then it should undo everything it did, but nothing more.<br>
+<br>
+Rob<br>
+<br>
+<br>
+

@@ -1,0 +1,160 @@
+When a PCI P2PDMA page is seen, set the IOVA length of the segment<br>
+to zero so that it is not mapped into the IOVA. Then, in finalise_sg(),<br>
+apply the appropriate bus address to the segment. The IOVA is not<br>
+created if the scatterlist only consists of P2PDMA pages.<br>
+<br>
+Similar to dma-direct, the sg_mark_pci_p2pdma() flag is used to<br>
+indicate bus address segments. On unmap, P2PDMA segments are skipped<br>
+over when determining the start and end IOVA addresses.<br>
+<br>
+With this change, the flags variable in the dma_map_ops is<br>
+set to DMA_F_PCI_P2PDMA_SUPPORTED to indicate support for<br>
+P2PDMA pages.<br>
+<br>
+Signed-off-by: Logan Gunthorpe <logang@xxxxxxxxxxxx><br>
+---<br>
+ drivers/iommu/dma-iommu.c | 66 ++++++++++++++++++++++++++++++++++-----<br>
+ 1 file changed, 58 insertions(+), 8 deletions(-)<br>
+<br>
+diff --git a/drivers/iommu/dma-iommu.c b/drivers/iommu/dma-iommu.c<br>
+index af765c813cc8..ef49635f9819 100644<br>
+--- a/drivers/iommu/dma-iommu.c<br>
++++ b/drivers/iommu/dma-iommu.c<br>
+@@ -20,6 +20,7 @@<br>
+ #include <linux/mm.h><br>
+ #include <linux/mutex.h><br>
+ #include <linux/pci.h><br>
++#include <linux/pci-p2pdma.h><br>
+ #include <linux/swiotlb.h><br>
+ #include <linux/scatterlist.h><br>
+ #include <linux/vmalloc.h><br>
+@@ -864,6 +865,16 @@ static int __finalise_sg(struct device *dev, struct scatterlist *sg, int nents,<br>
+ 		sg_dma_address(s) = DMA_MAPPING_ERROR;<br>
+ 		sg_dma_len(s) = 0;<br>
+ <br>
++		if (is_pci_p2pdma_page(sg_page(s)) && !s_iova_len) {<br>
++			if (i > 0)<br>
++				cur = sg_next(cur);<br>
++<br>
++			pci_p2pdma_map_bus_segment(s, cur);<br>
++			count++;<br>
++			cur_len = 0;<br>
++			continue;<br>
++		}<br>
++<br>
+ 		/*<br>
+ 		 * Now fill in the real DMA data. If...<br>
+ 		 * - there is a valid output segment to append to<br>
+@@ -961,10 +972,12 @@ static int iommu_dma_map_sg(struct device *dev, struct scatterlist *sg,<br>
+ 	struct iova_domain *iovad = &cookie->iovad;<br>
+ 	struct scatterlist *s, *prev = NULL;<br>
+ 	int prot = dma_info_to_prot(dir, dev_is_dma_coherent(dev), attrs);<br>
++	struct dev_pagemap *pgmap = NULL;<br>
++	enum pci_p2pdma_map_type map_type;<br>
+ 	dma_addr_t iova;<br>
+ 	size_t iova_len = 0;<br>
+ 	unsigned long mask = dma_get_seg_boundary(dev);<br>
+-	int i;<br>
++	int i, ret = 0;<br>
+ <br>
+ 	if (static_branch_unlikely(&iommu_deferred_attach_enabled) &&<br>
+ 	    iommu_deferred_attach(dev, domain))<br>
+@@ -993,6 +1006,31 @@ static int iommu_dma_map_sg(struct device *dev, struct scatterlist *sg,<br>
+ 		s_length = iova_align(iovad, s_length + s_iova_off);<br>
+ 		s->length = s_length;<br>
+ <br>
++		if (is_pci_p2pdma_page(sg_page(s))) {<br>
++			if (sg_page(s)->pgmap != pgmap) {<br>
++				pgmap = sg_page(s)->pgmap;<br>
++				map_type = pci_p2pdma_map_type(pgmap, dev,<br>
++							       attrs);<br>
++			}<br>
++<br>
++			switch (map_type) {<br>
++			case PCI_P2PDMA_MAP_BUS_ADDR:<br>
++				/*<br>
++				 * A zero length will be ignored by<br>
++				 * iommu_map_sg() and then can be detected<br>
++				 * in __finalise_sg() to actually map the<br>
++				 * bus address.<br>
++				 */<br>
++				s->length = 0;<br>
++				continue;<br>
++			case PCI_P2PDMA_MAP_THRU_HOST_BRIDGE:<br>
++				break;<br>
++			default:<br>
++				ret = -EREMOTEIO;<br>
++				goto out_restore_sg;<br>
++			}<br>
++		}<br>
++<br>
+ 		/*<br>
+ 		 * Due to the alignment of our single IOVA allocation, we can<br>
+ 		 * depend on these assumptions about the segment boundary mask:<br>
+@@ -1015,6 +1053,9 @@ static int iommu_dma_map_sg(struct device *dev, struct scatterlist *sg,<br>
+ 		prev = s;<br>
+ 	}<br>
+ <br>
++	if (!iova_len)<br>
++		return __finalise_sg(dev, sg, nents, 0);<br>
++<br>
+ 	iova = iommu_dma_alloc_iova(domain, iova_len, dma_get_mask(dev), dev);<br>
+ 	if (!iova)<br>
+ 		goto out_restore_sg;<br>
+@@ -1032,13 +1073,13 @@ static int iommu_dma_map_sg(struct device *dev, struct scatterlist *sg,<br>
+ 	iommu_dma_free_iova(cookie, iova, iova_len, NULL);<br>
+ out_restore_sg:<br>
+ 	__invalidate_sg(sg, nents);<br>
+-	return 0;<br>
++	return ret;<br>
+ }<br>
+ <br>
+ static void iommu_dma_unmap_sg(struct device *dev, struct scatterlist *sg,<br>
+ 		int nents, enum dma_data_direction dir, unsigned long attrs)<br>
+ {<br>
+-	dma_addr_t start, end;<br>
++	dma_addr_t end, start = DMA_MAPPING_ERROR;<br>
+ 	struct scatterlist *tmp;<br>
+ 	int i;<br>
+ <br>
+@@ -1054,14 +1095,22 @@ static void iommu_dma_unmap_sg(struct device *dev, struct scatterlist *sg,<br>
+ 	 * The scatterlist segments are mapped into a single<br>
+ 	 * contiguous IOVA allocation, so this is incredibly easy.<br>
+ 	 */<br>
+-	start = sg_dma_address(sg);<br>
+-	for_each_sg(sg_next(sg), tmp, nents - 1, i) {<br>
++	for_each_sg(sg, tmp, nents, i) {<br>
++		if (sg_is_pci_p2pdma(tmp)) {<br>
++			sg_unmark_pci_p2pdma(tmp);<br>
++			continue;<br>
++		}<br>
+ 		if (sg_dma_len(tmp) == 0)<br>
+ 			break;<br>
+-		sg = tmp;<br>
++<br>
++		if (start == DMA_MAPPING_ERROR)<br>
++			start = sg_dma_address(tmp);<br>
++<br>
++		end = sg_dma_address(tmp) + sg_dma_len(tmp);<br>
+ 	}<br>
+-	end = sg_dma_address(sg) + sg_dma_len(sg);<br>
+-	__iommu_dma_unmap(dev, start, end - start);<br>
++<br>
++	if (start != DMA_MAPPING_ERROR)<br>
++		__iommu_dma_unmap(dev, start, end - start);<br>
+ }<br>
+ <br>
+ static dma_addr_t iommu_dma_map_resource(struct device *dev, phys_addr_t phys,<br>
+@@ -1254,6 +1303,7 @@ static unsigned long iommu_dma_get_merge_boundary(struct device *dev)<br>
+ }<br>
+ <br>
+ static const struct dma_map_ops iommu_dma_ops = {<br>
++	.flags			= DMA_F_PCI_P2PDMA_SUPPORTED,<br>
+ 	.alloc			= iommu_dma_alloc,<br>
+ 	.free			= iommu_dma_free,<br>
+ 	.alloc_pages		= dma_common_alloc_pages,<br>
+-- <br>
+2.20.1<br>
+<br>
+<br>
+

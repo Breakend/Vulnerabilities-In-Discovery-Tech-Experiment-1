@@ -1,0 +1,29 @@
+On Wed, Apr 07, 2021 at 08:00:38PM +0000, Min Li wrote:<br>
+><i> > </i><br>
+><i> > Do you really meen "+" here?  (sorry, have to ask.)</i><br>
+><i> > </i><br>
+><i> </i><br>
+><i> I don't know. All of our Linux kernel code has GPL-2.0+ and I just blindly inherit it.</i><br>
+<br>
+You should ask your managers :)<br>
+<br>
+><i> </i><br>
+><i> > > +#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt</i><br>
+><i> > </i><br>
+><i> > You should not need this as it's a driver, so you should only use the</i><br>
+><i> > dev_dbg() family of print message functions, no need for pr_*() calls.</i><br>
+><i> > </i><br>
+><i> I have one call to pr_err in rsmu_init</i><br>
+><i> </i><br>
+><i> pr_err("Unabled to register %s platform driver", DRIVER_NAME); </i><br>
+><i> </i><br>
+<br>
+My recommendation in another email shows that the line above is not<br>
+needed...<br>
+<br>
+thanks,<br>
+<br>
+greg k-h<br>
+<br>
+<br>
+

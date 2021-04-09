@@ -1,0 +1,87 @@
+Add support for T99W175 modems, this modem series is based on SDX55<br>
+qcom chip. The modem is mainly based on MBIM protocol for both the<br>
+data and control path.<br>
+<br>
+This patch adds support for below modems:<br>
+<br>
+ - T99W175(based on sdx55), Both for eSIM and Non-eSIM<br>
+ - DW5930e(based on sdx55), With eSIM, It's also T99W175<br>
+ - DW5930e(based on sdx55), Non-eSIM, It's also T99W175<br>
+<br>
+This patch was tested with Ubuntu 20.04 X86_64 PC as host<br>
+<br>
+Signed-off-by: Jarvis Jiang <jarvis.w.jiang@xxxxxxxxx><br>
+---<br>
+ drivers/bus/mhi/pci_generic.c | 47 +++++++++++++++++++++++++++++++++++<br>
+ 1 file changed, 47 insertions(+)<br>
+<br>
+diff --git a/drivers/bus/mhi/pci_generic.c b/drivers/bus/mhi/pci_generic.c<br>
+index 544853c67e02..c66fb73e47ad 100644<br>
+--- a/drivers/bus/mhi/pci_generic.c<br>
++++ b/drivers/bus/mhi/pci_generic.c<br>
+@@ -269,6 +269,44 @@ static const struct mhi_pci_dev_info mhi_quectel_em1xx_info = {<br>
+ 	.dma_data_width = 32<br>
+ };<br>
+ <br>
++static const struct mhi_channel_config mhi_foxconn_sdx55_channels[] = {<br>
++	MHI_CHANNEL_CONFIG_UL(0, "LOOPBACK", 32, 0),<br>
++	MHI_CHANNEL_CONFIG_DL(1, "LOOPBACK", 32, 0),<br>
++	MHI_CHANNEL_CONFIG_UL(4, "DIAG", 32, 1),<br>
++	MHI_CHANNEL_CONFIG_DL(5, "DIAG", 32, 1),<br>
++	MHI_CHANNEL_CONFIG_UL(12, "MBIM", 32, 0),<br>
++	MHI_CHANNEL_CONFIG_DL(13, "MBIM", 32, 0),<br>
++	MHI_CHANNEL_CONFIG_UL(32, "AT", 32, 0),<br>
++	MHI_CHANNEL_CONFIG_DL(33, "AT", 32, 0),<br>
++	MHI_CHANNEL_CONFIG_HW_UL(100, "IP_HW0_MBIM", 128, 2),<br>
++	MHI_CHANNEL_CONFIG_HW_DL(101, "IP_HW0_MBIM", 128, 3),<br>
++};<br>
++<br>
++static struct mhi_event_config mhi_foxconn_sdx55_events[] = {<br>
++	MHI_EVENT_CONFIG_CTRL(0, 128),<br>
++	MHI_EVENT_CONFIG_DATA(1, 128),<br>
++	MHI_EVENT_CONFIG_HW_DATA(2, 1024, 100),<br>
++	MHI_EVENT_CONFIG_HW_DATA(3, 1024, 101)<br>
++};<br>
++<br>
++static struct mhi_controller_config modem_foxconn_sdx55_config = {<br>
++	.max_channels = 128,<br>
++	.timeout_ms = 20000,<br>
++	.num_channels = ARRAY_SIZE(mhi_foxconn_sdx55_channels),<br>
++	.ch_cfg = mhi_foxconn_sdx55_channels,<br>
++	.num_events = ARRAY_SIZE(mhi_foxconn_sdx55_events),<br>
++	.event_cfg = mhi_foxconn_sdx55_events,<br>
++};<br>
++<br>
++static const struct mhi_pci_dev_info mhi_foxconn_sdx55_info = {<br>
++	.name = "foxconn-sdx55",<br>
++	.fw = "qcom/sdx55m/sbl1.mbn",<br>
++	.edl = "qcom/sdx55m/edl.mbn",<br>
++	.config = &modem_foxconn_sdx55_config,<br>
++	.bar_num = MHI_PCI_DEFAULT_BAR_NUM,<br>
++	.dma_data_width = 32<br>
++};<br>
++<br>
+ static const struct pci_device_id mhi_pci_id_table[] = {<br>
+ 	{ PCI_DEVICE(PCI_VENDOR_ID_QCOM, 0x0306),<br>
+ 		.driver_data = (kernel_ulong_t) &mhi_qcom_sdx55_info },<br>
+@@ -280,6 +318,15 @@ static const struct pci_device_id mhi_pci_id_table[] = {<br>
+ 		.driver_data = (kernel_ulong_t) &mhi_quectel_em1xx_info },<br>
+ 	{ PCI_DEVICE(PCI_VENDOR_ID_QCOM, 0x0308),<br>
+ 		.driver_data = (kernel_ulong_t) &mhi_qcom_sdx65_info },<br>
++	/* T99W175 (sdx55), Both for eSIM and Non-eSIM */<br>
++	{ PCI_DEVICE(PCI_VENDOR_ID_FOXCONN, 0xe0ab),<br>
++		.driver_data = (kernel_ulong_t) &mhi_foxconn_sdx55_info },<br>
++	/* DW5930e (sdx55), With eSIM, It's also T99W175 */<br>
++	{ PCI_DEVICE(PCI_VENDOR_ID_FOXCONN, 0xe0b0),<br>
++		.driver_data = (kernel_ulong_t) &mhi_foxconn_sdx55_info },<br>
++	/* DW5930e (sdx55), Non-eSIM, It's also T99W175 */<br>
++	{ PCI_DEVICE(PCI_VENDOR_ID_FOXCONN, 0xe0b1),<br>
++		.driver_data = (kernel_ulong_t) &mhi_foxconn_sdx55_info },<br>
+ 	{  }<br>
+ };<br>
+ MODULE_DEVICE_TABLE(pci, mhi_pci_id_table);<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

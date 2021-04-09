@@ -1,0 +1,54 @@
+
+On 2021-04-07 19:55, Eric Dumazet wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+On 4/6/21 4:49 PM, Gatis Peisenieks wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+Tx queue cleanup happens in interrupt handler on same core as rx queue<br>
+processing. Both can take considerable amount of processing in high<br>
+packet-per-second scenarios.<br>
+<br>
+Sending big amounts of packets can stall the rx processing which is 
+unfair
+<br>
+and also can lead to out-of-memory condition since __dev_kfree_skb_irq<br>
+queues the skbs for later kfree in softirq which is not allowed to 
+happen
+<br>
+with heavy load in interrupt handler.<br>
+<br>
+</blockquote>
+<br>
+[ ... ]<br>
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+diff --git a/net/core/dev.c b/net/core/dev.c<br>
+index 0f72ff5d34ba..489ac60b530c 100644<br>
+--- a/net/core/dev.c<br>
++++ b/net/core/dev.c<br>
+@@ -6789,6 +6789,7 @@ int dev_set_threaded(struct net_device *dev, 
+bool threaded)
+<br>
+<br>
+     return err;<br>
+ }<br>
++EXPORT_SYMBOL(dev_set_threaded);<br>
+<br>
+ void netif_napi_add(struct net_device *dev, struct napi_struct *napi,<br>
+             int (*poll)(struct napi_struct *, int), int weight)<br>
+</blockquote>
+<br>
+This has already been done in net-next<br>
+<br>
+Please base your patch on top of net-next, this can not be backported 
+to old
+<br>
+versions anyway, without some amount of pain.<br>
+</blockquote>
+<br>
+Thank you Eric, for heads up, the v5 patch sent for net-next in response 
+to
+<br>
+David Miller comment already does that.<br>
+<br>
+<br>
+

@@ -1,0 +1,62 @@
+On Thu, Apr 08, 2021 at 09:15:06AM -0400, Chris von Recklinghausen wrote:<br>
+><i> Suspend fails on a system in fips mode because md5 is used for the e820</i><br>
+><i> integrity check and is not available. Use crc32 instead.</i><br>
+><i> </i><br>
+><i> This patch changes the integrity check algorithm from md5 to</i><br>
+><i> crc32. This integrity check is used only to verify accidental</i><br>
+><i> corruption of the hybernation data and is not intended as a</i><br>
+><i> cryptographic integrity check.</i><br>
+><i> Md5 is overkill in this case and also disabled in FIPS mode because it</i><br>
+><i> is known to be broken for cryptographic purposes.</i><br>
+><i> </i><br>
+><i> Fixes: 62a03defeabd ("PM / hibernate: Verify the consistent of e820 memory map</i><br>
+><i>        by md5 digest")</i><br>
+><i> </i><br>
+><i> Tested-by: Dexuan Cui <decui@xxxxxxxxxxxxx></i><br>
+><i> Reviewed-by: Dexuan Cui <decui@xxxxxxxxxxxxx></i><br>
+><i> Signed-off-by: Chris von Recklinghausen <crecklin@xxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i> v1 -> v2</i><br>
+><i>    bump up RESTORE_MAGIC</i><br>
+><i> v2 -> v3</i><br>
+><i>    move embelishment from cover letter to commit comments (no code change)</i><br>
+><i> v3 -> v4</i><br>
+><i>    add note to comments that md5 isn't used for encryption here.</i><br>
+><i> v4 -> v5</i><br>
+><i>    reword comment per Simo's suggestion</i><br>
+><i> </i><br>
+><i>  arch/x86/power/hibernate.c | 35 +++++++++++++++++++----------------</i><br>
+><i>  1 file changed, 19 insertions(+), 16 deletions(-)</i><br>
+><i> </i><br>
+><i> diff --git a/arch/x86/power/hibernate.c b/arch/x86/power/hibernate.c</i><br>
+><i> index cd3914fc9f3d..b56172553275 100644</i><br>
+><i> --- a/arch/x86/power/hibernate.c</i><br>
+><i> +++ b/arch/x86/power/hibernate.c</i><br>
+><i> @@ -55,31 +55,31 @@ int pfn_is_nosave(unsigned long pfn)</i><br>
+><i>  }</i><br>
+><i>  </i><br>
+><i>  </i><br>
+><i> -#define MD5_DIGEST_SIZE 16</i><br>
+><i> +#define CRC32_DIGEST_SIZE 16</i><br>
+><i>  </i><br>
+><i>  struct restore_data_record {</i><br>
+><i>  	unsigned long jump_address;</i><br>
+><i>  	unsigned long jump_address_phys;</i><br>
+><i>  	unsigned long cr3;</i><br>
+><i>  	unsigned long magic;</i><br>
+><i> -	u8 e820_digest[MD5_DIGEST_SIZE];</i><br>
+><i> +	u8 e820_digest[CRC32_DIGEST_SIZE];</i><br>
+><i>  };</i><br>
+><i>  </i><br>
+><i> -#if IS_BUILTIN(CONFIG_CRYPTO_MD5)</i><br>
+><i> +#if IS_BUILTIN(CONFIG_CRYPTO_CRC32)</i><br>
+<br>
+Should CONFIG_CRYPTO_CRC32 be getting selected from somewhere?<br>
+<br>
+If that is too hard because it would pull in too much of the crypto API, maybe<br>
+using the library interface to CRC-32 (lib/crc32.c) would be a better fit?<br>
+<br>
+- Eric<br>
+<br>
+<br>
+

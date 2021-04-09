@@ -1,0 +1,109 @@
+The following commit has been merged into the x86/core branch of tip:<br>
+<br>
+Commit-ID:     53375a5a218e7ea0ac18087946b5391f749b764f<br>
+Gitweb:        <a  rel="nofollow" href="https://git.kernel.org/tip/53375a5a218e7ea0ac18087946b5391f749b764f">https://git.kernel.org/tip/53375a5a218e7ea0ac18087946b5391f749b764f</a><br>
+Author:        Peter Zijlstra <peterz@xxxxxxxxxxxxx><br>
+AuthorDate:    Mon, 15 Mar 2021 17:12:53 +01:00<br>
+Committer:     Borislav Petkov <bp@xxxxxxx><br>
+CommitterDate: Thu, 08 Apr 2021 14:22:10 +02:00<br>
+<br>
+x86/cpu: Resort and comment Intel models<br>
+<br>
+The INTEL_FAM6 list has become a mess again. Try and bring some sanity<br>
+back into it.<br>
+<br>
+Where previously we had one microarch per year and a number of SKUs<br>
+within that, this no longer seems to be the case. We now get different<br>
+uarch names that share a 'core' design.<br>
+<br>
+Add the core name starting at skylake and reorder to keep the cores<br>
+in chronological order. Furthermore, Intel marketed the names {Amber,<br>
+Coffee, Whiskey} Lake, but those are in fact steppings of Kaby Lake, add<br>
+comments for them.<br>
+<br>
+Signed-off-by: Peter Zijlstra (Intel) <peterz@xxxxxxxxxxxxx><br>
+Signed-off-by: Borislav Petkov <bp@xxxxxxx><br>
+Link: <a  rel="nofollow" href="https://lkml.kernel.org/r/YE+HhS8i0gshHD3W@xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">https://lkml.kernel.org/r/YE+HhS8i0gshHD3W@xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx</a><br>
+---<br>
+ arch/x86/include/asm/intel-family.h | 50 +++++++++++++++-------------<br>
+ 1 file changed, 28 insertions(+), 22 deletions(-)<br>
+<br>
+diff --git a/arch/x86/include/asm/intel-family.h b/arch/x86/include/asm/intel-family.h<br>
+index 9abe842..b15262f 100644<br>
+--- a/arch/x86/include/asm/intel-family.h<br>
++++ b/arch/x86/include/asm/intel-family.h<br>
+@@ -32,7 +32,9 @@<br>
+  *		_EP	- 2 socket server parts<br>
+  *		_EX	- 4+ socket server parts<br>
+  *<br>
+- * The #define line may optionally include a comment including platform names.<br>
++ * The #define line may optionally include a comment including platform or core<br>
++ * names. An exception is made for kabylake where steppings seem to have gotten<br>
++ * their own names :-(<br>
+  */<br>
+ <br>
+ /* Wildcard match for FAM6 so X86_MATCH_INTEL_FAM6_MODEL(ANY) works */<br>
+@@ -69,35 +71,39 @@<br>
+ #define INTEL_FAM6_BROADWELL_X		0x4F<br>
+ #define INTEL_FAM6_BROADWELL_D		0x56<br>
+ <br>
+-#define INTEL_FAM6_SKYLAKE_L		0x4E<br>
+-#define INTEL_FAM6_SKYLAKE		0x5E<br>
+-#define INTEL_FAM6_SKYLAKE_X		0x55<br>
+-#define INTEL_FAM6_KABYLAKE_L		0x8E<br>
+-#define INTEL_FAM6_KABYLAKE		0x9E<br>
++#define INTEL_FAM6_SKYLAKE_L		0x4E	/* Sky Lake             */<br>
++#define INTEL_FAM6_SKYLAKE		0x5E	/* Sky Lake             */<br>
++#define INTEL_FAM6_SKYLAKE_X		0x55	/* Sky Lake             */<br>
+ <br>
+-#define INTEL_FAM6_CANNONLAKE_L		0x66<br>
++#define INTEL_FAM6_KABYLAKE_L		0x8E	/* Sky Lake             */<br>
++/*                 AMBERLAKE_L		0x8E	   Sky Lake -- s: 9     */<br>
++/*                 COFFEELAKE_L		0x8E	   Sky Lake -- s: 10    */<br>
++/*                 WHISKEYLAKE_L	0x8E       Sky Lake -- s: 11,12 */<br>
+ <br>
+-#define INTEL_FAM6_ICELAKE_X		0x6A<br>
+-#define INTEL_FAM6_ICELAKE_D		0x6C<br>
+-#define INTEL_FAM6_ICELAKE		0x7D<br>
+-#define INTEL_FAM6_ICELAKE_L		0x7E<br>
+-#define INTEL_FAM6_ICELAKE_NNPI		0x9D<br>
++#define INTEL_FAM6_KABYLAKE		0x9E	/* Sky Lake             */<br>
++/*                 COFFEELAKE		0x9E	   Sky Lake -- s: 10-13 */<br>
+ <br>
+-#define INTEL_FAM6_TIGERLAKE_L		0x8C<br>
+-#define INTEL_FAM6_TIGERLAKE		0x8D<br>
++#define INTEL_FAM6_COMETLAKE		0xA5	/* Sky Lake             */<br>
++#define INTEL_FAM6_COMETLAKE_L		0xA6	/* Sky Lake             */<br>
+ <br>
+-#define INTEL_FAM6_COMETLAKE		0xA5<br>
+-#define INTEL_FAM6_COMETLAKE_L		0xA6<br>
++#define INTEL_FAM6_CANNONLAKE_L		0x66	/* Palm Cove */<br>
+ <br>
+-#define INTEL_FAM6_ROCKETLAKE		0xA7<br>
++#define INTEL_FAM6_ICELAKE_X		0x6A	/* Sunny Cove */<br>
++#define INTEL_FAM6_ICELAKE_D		0x6C	/* Sunny Cove */<br>
++#define INTEL_FAM6_ICELAKE		0x7D	/* Sunny Cove */<br>
++#define INTEL_FAM6_ICELAKE_L		0x7E	/* Sunny Cove */<br>
++#define INTEL_FAM6_ICELAKE_NNPI		0x9D	/* Sunny Cove */<br>
+ <br>
+-#define INTEL_FAM6_SAPPHIRERAPIDS_X	0x8F<br>
++#define INTEL_FAM6_LAKEFIELD		0x8A	/* Sunny Cove / Tremont */<br>
+ <br>
+-/* Hybrid Core/Atom Processors */<br>
++#define INTEL_FAM6_ROCKETLAKE		0xA7	/* Cypress Cove */<br>
+ <br>
+-#define	INTEL_FAM6_LAKEFIELD		0x8A<br>
+-#define INTEL_FAM6_ALDERLAKE		0x97<br>
+-#define INTEL_FAM6_ALDERLAKE_L		0x9A<br>
++#define INTEL_FAM6_TIGERLAKE_L		0x8C	/* Willow Cove */<br>
++#define INTEL_FAM6_TIGERLAKE		0x8D	/* Willow Cove */<br>
++#define INTEL_FAM6_SAPPHIRERAPIDS_X	0x8F	/* Willow Cove */<br>
++<br>
++#define INTEL_FAM6_ALDERLAKE		0x97	/* Golden Cove / Gracemont */<br>
++#define INTEL_FAM6_ALDERLAKE_L		0x9A	/* Golden Cove / Gracemont */<br>
+ <br>
+ /* "Small Core" Processors (Atom) */<br>
+ <br>
+<br>
+<br>
+

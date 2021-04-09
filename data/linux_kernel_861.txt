@@ -1,0 +1,91 @@
+Return error number if encounter errors during suspend and resume.<br>
+<br>
+Signed-off-by: Chunfeng Yun <chunfeng.yun@xxxxxxxxxxxx><br>
+---<br>
+ drivers/usb/host/xhci-mtk.c | 37 +++++++++++++++++++++++++++----------<br>
+ 1 file changed, 27 insertions(+), 10 deletions(-)<br>
+<br>
+diff --git a/drivers/usb/host/xhci-mtk.c b/drivers/usb/host/xhci-mtk.c<br>
+index c1bc40289833..a74764ab914a 100644<br>
+--- a/drivers/usb/host/xhci-mtk.c<br>
++++ b/drivers/usb/host/xhci-mtk.c<br>
+@@ -630,18 +630,12 @@ static int xhci_mtk_remove(struct platform_device *dev)<br>
+ 	return 0;<br>
+ }<br>
+ <br>
+-/*<br>
+- * if ip sleep fails, and all clocks are disabled, access register will hang<br>
+- * AHB bus, so stop polling roothubs to avoid regs access on bus suspend.<br>
+- * and no need to check whether ip sleep failed or not; this will cause SPM<br>
+- * to wake up system immediately after system suspend complete if ip sleep<br>
+- * fails, it is what we wanted.<br>
+- */<br>
+ static int __maybe_unused xhci_mtk_suspend(struct device *dev)<br>
+ {<br>
+ 	struct xhci_hcd_mtk *mtk = dev_get_drvdata(dev);<br>
+ 	struct usb_hcd *hcd = mtk->hcd;<br>
+ 	struct xhci_hcd *xhci = hcd_to_xhci(hcd);<br>
++	int ret;<br>
+ <br>
+ 	xhci_dbg(xhci, "%s: stop port polling\n", __func__);<br>
+ 	clear_bit(HCD_FLAG_POLL_RH, &hcd->flags);<br>
+@@ -649,10 +643,21 @@ static int __maybe_unused xhci_mtk_suspend(struct device *dev)<br>
+ 	clear_bit(HCD_FLAG_POLL_RH, &xhci->shared_hcd->flags);<br>
+ 	del_timer_sync(&xhci->shared_hcd->rh_timer);<br>
+ <br>
+-	xhci_mtk_host_disable(mtk);<br>
++	ret = xhci_mtk_host_disable(mtk);<br>
++	if (ret)<br>
++		goto restart_poll_rh;<br>
++<br>
+ 	xhci_mtk_clks_disable(mtk);<br>
+ 	usb_wakeup_set(mtk, true);<br>
+ 	return 0;<br>
++<br>
++restart_poll_rh:<br>
++	xhci_dbg(xhci, "%s: restart port polling\n", __func__);<br>
++	set_bit(HCD_FLAG_POLL_RH, &xhci->shared_hcd->flags);<br>
++	usb_hcd_poll_rh_status(xhci->shared_hcd);<br>
++	set_bit(HCD_FLAG_POLL_RH, &hcd->flags);<br>
++	usb_hcd_poll_rh_status(hcd);<br>
++	return ret;<br>
+ }<br>
+ <br>
+ static int __maybe_unused xhci_mtk_resume(struct device *dev)<br>
+@@ -660,10 +665,16 @@ static int __maybe_unused xhci_mtk_resume(struct device *dev)<br>
+ 	struct xhci_hcd_mtk *mtk = dev_get_drvdata(dev);<br>
+ 	struct usb_hcd *hcd = mtk->hcd;<br>
+ 	struct xhci_hcd *xhci = hcd_to_xhci(hcd);<br>
++	int ret;<br>
+ <br>
+ 	usb_wakeup_set(mtk, false);<br>
+-	xhci_mtk_clks_enable(mtk);<br>
+-	xhci_mtk_host_enable(mtk);<br>
++	ret = xhci_mtk_clks_enable(mtk);<br>
++	if (ret)<br>
++		goto enable_wakeup;<br>
++<br>
++	ret = xhci_mtk_host_enable(mtk);<br>
++	if (ret)<br>
++		goto disable_clks;<br>
+ <br>
+ 	xhci_dbg(xhci, "%s: restart port polling\n", __func__);<br>
+ 	set_bit(HCD_FLAG_POLL_RH, &xhci->shared_hcd->flags);<br>
+@@ -671,6 +682,12 @@ static int __maybe_unused xhci_mtk_resume(struct device *dev)<br>
+ 	set_bit(HCD_FLAG_POLL_RH, &hcd->flags);<br>
+ 	usb_hcd_poll_rh_status(hcd);<br>
+ 	return 0;<br>
++<br>
++disable_clks:<br>
++	xhci_mtk_clks_disable(mtk);<br>
++enable_wakeup:<br>
++	usb_wakeup_set(mtk, true);<br>
++	return ret;<br>
+ }<br>
+ <br>
+ static const struct dev_pm_ops xhci_mtk_pm_ops = {<br>
+-- <br>
+2.18.0<br>
+<br>
+<br>
+

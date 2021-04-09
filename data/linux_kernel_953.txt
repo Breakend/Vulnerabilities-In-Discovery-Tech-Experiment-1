@@ -1,0 +1,58 @@
+On Thu, Apr 08, 2021 at 10:36:46AM +0200, Oliver Neukum wrote:<br>
+><i> Am Mittwoch, den 07.04.2021, 12:28 +0200 schrieb Johan Hovold:</i><br>
+><i> > TIOCSSERIAL is a horrid, underspecified, legacy interface which for most</i><br>
+><i> > serial devices is only useful for setting the close_delay and</i><br>
+><i> > closing_wait parameters.</i><br>
+><i> > </i><br>
+><i> > The xmit_fifo_size parameter could be used to set the hardware transmit</i><br>
+><i> > fifo size of a legacy UART when it could not be detected, but the</i><br>
+><i> > interface is limited to eight bits and should be left unset when it is</i><br>
+><i> > not used.</i><br>
+><i> </i><br>
+><i> OK.</i><br>
+><i> </i><br>
+><i> > Similarly, baud_base could be used to set the uart base clock when it</i><br>
+><i> > could not be detected, but might as well be left unset when it is not</i><br>
+><i> > known.</i><br>
+><i> </i><br>
+><i> Well, the devices report it. It is part of the standard.</i><br>
+<br>
+No, the standard doesn't include anything about a baud-base clock<br>
+AFAICT.<br>
+<br>
+><i> > Fix the cdc-acm TIOCGSERIAL implementation by dropping its custom</i><br>
+><i> > interpretation of the unused xmit_fifo_size and baud_base fields, which</i><br>
+><i> > overflowed the former with the URB buffer size and set the latter to the</i><br>
+><i> > current line speed. Also return the port line number, which is the only</i><br>
+><i> > other value used besides the close parameters.</i><br>
+><i> > </i><br>
+><i> > Fixes: 18c75720e667 ("USB: allow users to run setserial with cdc-acm")</i><br>
+><i> > Signed-off-by: Johan Hovold <johan@xxxxxxxxxx></i><br>
+><i> > ---</i><br>
+><i> >  drivers/usb/class/cdc-acm.c | 3 +--</i><br>
+><i> >  1 file changed, 1 insertion(+), 2 deletions(-)</i><br>
+><i> > </i><br>
+><i> > diff --git a/drivers/usb/class/cdc-acm.c b/drivers/usb/class/cdc-acm.c</i><br>
+><i> > index 43e31dad4831..b74713518b3a 100644</i><br>
+><i> > --- a/drivers/usb/class/cdc-acm.c</i><br>
+><i> > +++ b/drivers/usb/class/cdc-acm.c</i><br>
+><i> > @@ -929,8 +929,7 @@ static int get_serial_info(struct tty_struct *tty, struct serial_struct *ss)</i><br>
+><i> >  {</i><br>
+><i> >  	struct acm *acm = tty->driver_data;</i><br>
+><i> >  </i><br>
+><i> > -	ss->xmit_fifo_size = acm->writesize;</i><br>
+><i> > -	ss->baud_base = le32_to_cpu(acm->line.dwDTERate);</i><br>
+><i> </i><br>
+><i> If we do this, we have a value that can be set, but is not reported.</i><br>
+><i> That looks a bit strange to me.</i><br>
+<br>
+Again, no, the baud_base cannot be set and it is unknown and unused.<br>
+<br>
+The only reason to report back baud_base is to support the deprecated<br>
+ASYNC_SPD_CUST interface used to set a custom divisor. cdc-acm has never<br>
+supported that for obvious reasons.<br>
+<br>
+Johan<br>
+<br>
+<br>
+

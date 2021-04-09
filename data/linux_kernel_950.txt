@@ -1,0 +1,21 @@
+Am Donnerstag, den 08.04.2021, 11:48 +0200 schrieb Johan Hovold:<br>
+><i> On Thu, Apr 08, 2021 at 10:36:46AM +0200, Oliver Neukum wrote:</i><br>
+><i> > Am Mittwoch, den 07.04.2021, 12:28 +0200 schrieb Johan Hovold:</i><br>
+<br>
+><i> > Well, the devices report it. It is part of the standard.</i><br>
+><i> </i><br>
+><i> No, the standard doesn't include anything about a baud-base clock</i><br>
+><i> AFAICT.</i><br>
+<br>
+Unfortunately it does.<br>
+dwDTERate - chapter 6.3.11 - table 17<br>
+<br>
+If we does this wrongly, we should certainly fix it, but just removing<br>
+the reporting doesn't look right to me.<br>
+<br>
+	Regards<br>
+		Oliver<br>
+<br>
+<br>
+<br>
+

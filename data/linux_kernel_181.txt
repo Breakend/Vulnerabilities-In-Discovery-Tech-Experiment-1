@@ -1,0 +1,19 @@
+On Thu, Apr 08, 2021 at 03:40:56PM +0200, Peter Zijlstra wrote:<br>
+><i> On Mon, Apr 05, 2021 at 08:10:46AM -0700, kan.liang@xxxxxxxxxxxxxxx wrote:</i><br>
+><i> > +static inline bool intel_pmu_has_cap(struct perf_event *event, int idx)</i><br>
+><i> > +{</i><br>
+><i> > +	union perf_capabilities *intel_cap;</i><br>
+><i> > +</i><br>
+><i> > +	intel_cap = is_hybrid() ? &hybrid_pmu(event->pmu)->intel_cap :</i><br>
+><i> > +				  &x86_pmu.intel_cap;</i><br>
+><i> </i><br>
+><i> This isn't:</i><br>
+><i> </i><br>
+><i> 	intel_cap = &hybrid_pmu(event->pmu)->intel_cap;</i><br>
+<br>
+Ah no, its because you want a pointer and GCC is being silly about that.<br>
+<br>
+I have something for that, hold on ;-)<br>
+<br>
+<br>
+

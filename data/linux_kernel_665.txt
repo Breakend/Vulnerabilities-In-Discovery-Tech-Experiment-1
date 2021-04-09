@@ -1,0 +1,27 @@
+Fix to return a negative error code from the error handling<br>
+case instead of 0, as done elsewhere in this function.<br>
+<br>
+Fixes: 1ac5a4047975 ("RDMA/bnxt_re: Add bnxt_re RoCE driver")<br>
+Reported-by: Hulk Robot <hulkci@xxxxxxxxxx><br>
+Signed-off-by: Wang Wensheng <wangwensheng4@xxxxxxxxxx><br>
+---<br>
+ drivers/infiniband/hw/bnxt_re/qplib_fp.c | 1 +<br>
+ 1 file changed, 1 insertion(+)<br>
+<br>
+diff --git a/drivers/infiniband/hw/bnxt_re/qplib_fp.c b/drivers/infiniband/hw/bnxt_re/qplib_fp.c<br>
+index 995d463..d4d4959 100644<br>
+--- a/drivers/infiniband/hw/bnxt_re/qplib_fp.c<br>
++++ b/drivers/infiniband/hw/bnxt_re/qplib_fp.c<br>
+@@ -2784,6 +2784,7 @@ static int bnxt_qplib_cq_process_terminal(struct bnxt_qplib_cq *cq,<br>
+ 		dev_err(&cq->hwq.pdev->dev,<br>
+ 			"FP: CQ Processed terminal reported rq_cons_idx 0x%x exceeds max 0x%x\n",<br>
+ 			cqe_cons, rq->max_wqe);<br>
++		rc = -EINVAL;<br>
+ 		goto done;<br>
+ 	}<br>
+ <br>
+-- <br>
+2.9.4<br>
+<br>
+<br>
+

@@ -1,0 +1,24 @@
+On Fri, Apr 02, 2021 at 10:07:36PM +0530, Syed Nayyar Waris wrote:<br>
+><i> This patch reimplements the xgpio_set_multiple() function in</i><br>
+><i> drivers/gpio/gpio-xilinx.c to use the new generic functions:</i><br>
+><i> bitmap_get_value() and bitmap_set_value(). The code is now simpler</i><br>
+><i> to read and understand. Moreover, instead of looping for each bit</i><br>
+><i> in xgpio_set_multiple() function, now we can check each channel at</i><br>
+><i> a time and save cycles.</i><br>
+<br>
+As promised, I have looked at this with a fresh eye and NAK from me. Sorry.<br>
+This is less than a half baked solution. I spent couple of evenings, so<br>
+I'll come up with full conversion of this driver to the bitmap API.<br>
+And yes, as I have told you like half a year before, bitmap_get_value32() and<br>
+bitmap_set_value32() is much more useful (and I actually implemented them<br>
+locally for the sake of conversion).<br>
+<br>
+So, summarize this I do not think we have real users of the proposed API.<br>
+<br>
+-- <br>
+With Best Regards,<br>
+Andy Shevchenko<br>
+<br>
+<br>
+<br>
+

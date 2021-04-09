@@ -1,0 +1,33 @@
+__apply_alternatives makes indirect calls to functions whose address<br>
+is taken in assembly code using the alternative_cb macro. With<br>
+non-canonical CFI, the compiler won't replace these function<br>
+references with the jump table addresses, which trips CFI. Disable CFI<br>
+checking in the function to work around the issue.<br>
+<br>
+Signed-off-by: Sami Tolvanen <samitolvanen@xxxxxxxxxx><br>
+Reviewed-by: Kees Cook <keescook@xxxxxxxxxxxx><br>
+Tested-by: Nathan Chancellor <nathan@xxxxxxxxxx><br>
+---<br>
+ arch/arm64/kernel/alternative.c | 4 ++--<br>
+ 1 file changed, 2 insertions(+), 2 deletions(-)<br>
+<br>
+diff --git a/arch/arm64/kernel/alternative.c b/arch/arm64/kernel/alternative.c<br>
+index 1184c44ea2c7..abc84636af07 100644<br>
+--- a/arch/arm64/kernel/alternative.c<br>
++++ b/arch/arm64/kernel/alternative.c<br>
+@@ -133,8 +133,8 @@ static void clean_dcache_range_nopatch(u64 start, u64 end)<br>
+ 	} while (cur += d_size, cur < end);<br>
+ }<br>
+ <br>
+-static void __apply_alternatives(void *alt_region,  bool is_module,<br>
+-				 unsigned long *feature_mask)<br>
++static void __nocfi __apply_alternatives(void *alt_region,  bool is_module,<br>
++					 unsigned long *feature_mask)<br>
+ {<br>
+ 	struct alt_instr *alt;<br>
+ 	struct alt_region *region = alt_region;<br>
+-- <br>
+2.31.1.295.g9ea45b61b8-goog<br>
+<br>
+<br>
+

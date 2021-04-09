@@ -1,0 +1,48 @@
+Add remoteproc support for Hexagon modem found on the Qualcomm SDX55<br>
+platform.<br>
+<br>
+Signed-off-by: Manivannan Sadhasivam <manivannan.sadhasivam@xxxxxxxxxx><br>
+---<br>
+ drivers/remoteproc/qcom_q6v5_pas.c | 17 +++++++++++++++++<br>
+ 1 file changed, 17 insertions(+)<br>
+<br>
+diff --git a/drivers/remoteproc/qcom_q6v5_pas.c b/drivers/remoteproc/qcom_q6v5_pas.c<br>
+index e635454d6170..292141877260 100644<br>
+--- a/drivers/remoteproc/qcom_q6v5_pas.c<br>
++++ b/drivers/remoteproc/qcom_q6v5_pas.c<br>
+@@ -785,6 +785,22 @@ static const struct adsp_data wcss_resource_init = {<br>
+ 	.ssctl_id = 0x12,<br>
+ };<br>
+ <br>
++static const struct adsp_data sdx55_mpss_resource = {<br>
++	.crash_reason_smem = 421,<br>
++	.firmware_name = "modem.mdt",<br>
++	.pas_id = 4,<br>
++	.has_aggre2_clk = false,<br>
++	.auto_boot = true,<br>
++	.proxy_pd_names = (char*[]){<br>
++		"cx",<br>
++		"mss",<br>
++		NULL<br>
++	},<br>
++	.ssr_name = "mpss",<br>
++	.sysmon_name = "modem",<br>
++	.ssctl_id = 0x22,<br>
++};<br>
++<br>
+ static const struct of_device_id adsp_of_match[] = {<br>
+ 	{ .compatible = "qcom,msm8974-adsp-pil", .data = &adsp_resource_init},<br>
+ 	{ .compatible = "qcom,msm8996-adsp-pil", .data = &adsp_resource_init},<br>
+@@ -797,6 +813,7 @@ static const struct of_device_id adsp_of_match[] = {<br>
+ 	{ .compatible = "qcom,sc7180-mpss-pas", .data = &mpss_resource_init},<br>
+ 	{ .compatible = "qcom,sdm845-adsp-pas", .data = &adsp_resource_init},<br>
+ 	{ .compatible = "qcom,sdm845-cdsp-pas", .data = &cdsp_resource_init},<br>
++	{ .compatible = "qcom,sdx55-mpss-pas", .data = &sdx55_mpss_resource},<br>
+ 	{ .compatible = "qcom,sm8150-adsp-pas", .data = &sm8150_adsp_resource},<br>
+ 	{ .compatible = "qcom,sm8150-cdsp-pas", .data = &sm8150_cdsp_resource},<br>
+ 	{ .compatible = "qcom,sm8150-mpss-pas", .data = &mpss_resource_init},<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

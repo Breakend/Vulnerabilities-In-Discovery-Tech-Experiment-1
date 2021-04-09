@@ -1,0 +1,230 @@
+On 4/8/21 2:36 AM, Hans de Goede wrote:<br>
+><i> Hi,</i><br>
+><i> </i><br>
+><i> On 4/7/21 9:43 PM, Thomas Weißschuh wrote:</i><br>
+><i>> Hi Hans,</i><br>
+><i>></i><br>
+><i>> On Mi, 2021-04-07T17:54+0200, Hans de Goede wrote:</i><br>
+><i>>> Thank you for your new driver and thank you for the quick respin</i><br>
+><i>>> addressing Barnabás' request to make it a WMI driver.</i><br>
+><i>>></i><br>
+><i>>> The code looks good, so merging this should be a no-brainer,</i><br>
+><i>>> yet I'm not sure if I should merge this driver as-is, let me</i><br>
+><i>>> explain.</i><br>
+><i>></i><br>
+><i>> thanks for the encouraging words.</i><br>
+><i>></i><br>
+><i>>> The problem is that I assume that this is based on reverse-engineering?</i><br>
+><i>></i><br>
+><i>> Yes, it is completely reverse-engineered.</i><br>
+><i>> Essentially I stumbled upon Matthews comment at</i><br>
+><i>> <a  rel="nofollow" href="https://bugzilla.kernel.org/show_bug.cgi?id=204807#c37">https://bugzilla.kernel.org/show_bug.cgi?id=204807#c37</a> and went from there.</i><br>
+><i>></i><br>
+><i>>> We have some mixes experiences with reverse-engineered WMI drivers,</i><br>
+><i>>> sometimes a feature is not supported yet the wmi_evaluate_method()</i><br>
+><i>>> call happily succeeds. One example of this causing trouble is:</i><br>
+><i>>></i><br>
+><i>>> <a  rel="nofollow" href="https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=1797d588af15174d4a4e7159dac8c800538e4f8c">https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=1797d588af15174d4a4e7159dac8c800538e4f8c</a></i><br>
+><i>></i><br>
+><i>> There actually are reports of recent, similar mainboards with recent firmware and</i><br>
+><i>> similar sensor chips that do not support the temperature query.</i><br>
+><i>> (<a  rel="nofollow" href="https://github.com/t-8ch/linux-gigabyte-wmi-driver/issues/3">https://github.com/t-8ch/linux-gigabyte-wmi-driver/issues/3</a> and</i><br>
+><i>> <a  rel="nofollow" href="https://github.com/t-8ch/linux-gigabyte-wmi-driver/issues/2">https://github.com/t-8ch/linux-gigabyte-wmi-driver/issues/2</a>)</i><br>
+><i>></i><br>
+><i>> Unfortunately for unknown WMI queries the firmware does not return any value.</i><br>
+><i>> This ends up as an ACPI integer with value 0 on the driver side.</i><br>
+><i>> (Which I could not yet find documentation for if that is expected)</i><br>
+><i>> In the current version of the driver EIO is returned for 0 values which</i><br>
+><i>> get translated to N/A by lm-sensors.</i><br>
+><i>></i><br>
+><i>>> At a minimum I think your driver should check in its</i><br>
+><i>>> probe function that</i><br>
+><i>>></i><br>
+><i>>> gigabyte_wmi_query_integer(GIGABYTE_WMI_TEMPERATURE_QUERY, ...)</i><br>
+><i>>></i><br>
+><i>>> actually succeeds on the machine the driver is running on chances</i><br>
+><i>>> are that Gigabyte has been using the DEADBEEF-2001-0000-00A0-C90629100000</i><br>
+><i>>> GUID for ages, where as the 0x125 value for GIGABYTE_WMI_TEMPERATURE_QUERY</i><br>
+><i>>> suggests that this is a pretty new API.</i><br>
+><i>></i><br>
+><i>> Would it be enough to probe all six sensors and check if all return 0?</i><br>
+><i> </i><br>
+><i> I think that failing the probe with -ENODEV, with a dev_info() explaining why when</i><br>
+><i> all six sensors return 0 would be good yes, that should also fix those 2</i><br>
+><i> issues on <a  rel="nofollow" href="https://github.com/t-8ch/linux-gigabyte-wmi-driver/">https://github.com/t-8ch/linux-gigabyte-wmi-driver/</a>.</i><br>
+><i> </i><br>
+><i>>> It would be good if you can see if you can find some DSDT-s for older</i><br>
+><i>>> gigabyte motherboards attached to various distro's bug-tracking systems</i><br>
+><i>>> or forum posts and see how those respond to an unknown gigabyte_wmi_commandtype.</i><br>
+><i>></i><br>
+><i>> Will do.</i><br>
+><i> </i><br>
+><i> Since you alreayd have bugreports of boards where this does not work,</i><br>
+><i> please don't spend too much time on this. I guess those older DSDT-s will</i><br>
+><i> also just return an integer with value 0.</i><br>
+><i> </i><br>
+><i>>> Another open question to make sure this driver is suitable</i><br>
+><i>>> as a generic driver (and does not misbehave) is how to figure out</i><br>
+><i>>> how many temperature sensors there actually are.</i><br>
+><i>></i><br>
+><i>> So far I could not find out how to query this from the firmware.</i><br>
+><i>> The IT8688 chip can report the state of each sensor but that is not exposed by</i><br>
+><i>> the firmware.</i><br>
+><i>> But even the state information from the IT8688 is not accurate as is.</i><br>
+><i>> One of the sensors that is reported as being active (directly via it87) on my</i><br>
+><i>> machine always reports -55°C (yes, negative).</i><br>
+><i> </i><br>
+><i> Ok.</i><br>
+><i> </i><br>
+><i>>> Perhaps the WMI interface returns an error when you query an out-of-range</i><br>
+><i>>> temperature channel?</i><br>
+><i>></i><br>
+><i>> Also "0" as mentioned above.</i><br>
+><i> </i><br>
+><i> Hmm, so maybe this can be used to limit the amount of reported temperature</i><br>
+><i> sensors, IOW if sensors 5 and 6 report 0, only register 4 sensors ?</i><br>
+><i> </i><br>
+><i>></i><br>
+><i>>> One option here might be to add a DMI matching table and only load on</i><br>
+><i>>> systems on that table for now. That table could then perhaps also provide</i><br>
+><i>>> labels for each of the temperature channels, which is something which</i><br>
+><i>>> would be nice to have regardless of my worries about how well this driver</i><br>
+><i>>> will work on motherboards on which it has not been tested.</i><br>
+><i>></i><br>
+><i>> I am collecting reports for working motherboards at</i><br>
+><i>> <a  rel="nofollow" href="https://github.com/t-8ch/linux-gigabyte-wmi-driver/issues/1">https://github.com/t-8ch/linux-gigabyte-wmi-driver/issues/1</a> .</i><br>
+><i> </i><br>
+><i> Good, you should probably ask reporters there to provide the output of:</i><br>
+><i> </i><br>
+><i> grep . /sys/class/dmi/id/* 2> /dev/null</i><br>
+><i> </i><br>
+><i> Ran as a normal user (so that the serial-numbers will be skipped) so that</i><br>
+><i> you will have DMI strings to match on if you decide to go that route.</i><br>
+><i> </i><br>
+><i>></i><br>
+><i>>> You could combine this DMI matching table with a "force" module option to</i><br>
+><i>>> continue with probing on boards which are not on the table to allow users</i><br>
+><i>>> to test and report their results to you.</i><br>
+><i>>></i><br>
+><i>>> And hopefully after a while, when we're confident that the code works</i><br>
+><i>>> well on most gigabyte boards we can drop the DMI table, or at least</i><br>
+><i>>> only use it for the channel labels.</i><br>
+><i>></i><br>
+><i>> That sounds good.</i><br>
+><i>></i><br>
+><i>>> Please don't take this the wrong way; I think it is great that you are</i><br>
+><i>>> working on this. And the quick turnaround of the v2 of this drivers makes</i><br>
+><i>>> me pretty certain that we can figure something out and get this merged.</i><br>
+><i>></i><br>
+><i>> Thank you for the feedback!</i><br>
+><i>></i><br>
+><i>>> Have you tried contacting Gigabyte about this? I don't think the WMI</i><br>
+><i>>> interface is something which they need to keep secret for competitive</i><br>
+><i>>> reasons, so maybe they can help? Note if they want you to sign a NDA</i><br>
+><i>>> of sorts to view docs, then make sure that it contains some language</i><br>
+><i>>> about them allowing you to release an opensource driver for their</i><br>
+><i>>> hardware based on the "protected" information.</i><br>
+><i>></i><br>
+><i>> I have not contacted them yet, will do.</i><br>
+><i>></i><br>
+><i>> As mentioned in the initial patch submission there would be different ways to</i><br>
+><i>> access this information firmware:</i><br>
+><i>></i><br>
+><i>> * Directly call the underlying ACPI methods (these are present in all so far</i><br>
+><i>>   observed firmwares, even if not exposed via WMI).</i><br>
+><i>> * Directly access the ACPI IndexField representing the it87 chip.</i><br>
+><i>> * Directly access the it87 registers while holding the relevant locks via ACPI.</i><br>
+><i>></i><br>
+><i>> I assume all of those mechanisms have no place in a proper kernel driver but</i><br>
+><i>> would like to get your opinion on it.</i><br>
+><i> </i><br>
+><i> Actually the "Directly access the it87 registers" option is potentially interesting</i><br>
+><i> since it will allow using the it87 driver which gives a lot more features.</i><br>
+><i> </i><br>
+><i> I actually wrote a rough outline of how something like this could work here:</i><br>
+><i> </i><br>
+><i> <a  rel="nofollow" href="https://bugzilla.kernel.org/show_bug.cgi?id=204807#c47">https://bugzilla.kernel.org/show_bug.cgi?id=204807#c47</a></i><br>
+><i> </i><br>
+><i> Note I'm not sure if that is the right approach, but it definitely is an</i><br>
+><i> option. It seems that this one might also solve the X470-AORUS-ULTRA-GAMING</i><br>
+><i> case (<a  rel="nofollow" href="https://github.com/t-8ch/linux-gigabyte-wmi-driver/issues/2">https://github.com/t-8ch/linux-gigabyte-wmi-driver/issues/2</a>)</i><br>
+><i> </i><br>
+><i> Hopefully the direct-register ACPI/WMI access methods will also allow</i><br>
+><i> reading the super-io vendor and product ids so that we can be reasonably</i><br>
+><i> sure that we are not loading the wrong driver on a board.</i><br>
+><i> </i><br>
+><i> OTOH the WMI-temp method approach may also work on boards where the sensors</i><br>
+><i> (or some of the sensors) are not supported.</i><br>
+><i> </i><br>
+><i> I'm afraid there is no obviously correct answer here. If you feel like it</i><br>
+><i> experimenting with the "Directly access the it87 registers" option would certainly</i><br>
+><i> be interesting IMHO.</i><br>
+><i> </i><br>
+><i> It might be good to get hwmon subsystems maintainer's opinion on this</i><br>
+><i> before sinking a lot of time into this though (added to the Cc).</i><br>
+><i> </i><br>
+><i> Jean, Guenter,</i><br>
+><i> </i><br>
+><i> Thomas has been working on a WMI driver to expose various motherboard</i><br>
+><i> temperatures on a gigabyte board where the IO-addresses for the it87 chip</i><br>
+><i> are reserved by ACPI. We are discussing how best to deal with this, there</i><br>
+><i> are some ACPI methods to directly access the super-IO registers (with locking</i><br>
+><i> to protect against other ACPI accesses). This reminded me of an idea I had</i><br>
+><i> a while ago to solve a similar issue with an other superIO chip, abstract</i><br>
+><i> the superIO register access-es using some reg_ops struct and allow an ACPI/WMI</i><br>
+><i> driver to provide alternative reg_ops:</i><br>
+><i> <a  rel="nofollow" href="https://bugzilla.kernel.org/show_bug.cgi?id=204807#c47">https://bugzilla.kernel.org/show_bug.cgi?id=204807#c47</a></i><br>
+><i> </i><br>
+><i> Do you think this is a good idea (or a bad one)? And would something like that</i><br>
+><i> be acceptable to you ?</i><br>
+><i> </i><br>
+<br>
+The upstream it87 driver is severely out of date. I had an out-of-tree driver<br>
+with various improvements which I didn't upstream, first because no one was willing<br>
+to review changes and then because it had deviated too much. I pulled it from<br>
+public view because I got pounded for not upstreaming it, because people started<br>
+demanding support (not asking, demanding) for it, and because Gigabyte stopped<br>
+providing datasheets for the more recent ITE chips and it became effectively<br>
+unmaintainable.<br>
+<br>
+Some ITE chips have issues which can cause system hangs if accessed directly.<br>
+I put some work to remedy that into the non-upstream driver, but that was all<br>
+just guesswork. Gigabyte knows about the problem (or so I was told from someone<br>
+who has an NDA with them), but I didn't get them or ITE to even acknowledge it<br>
+to me. I even had a support case open with Gigabyte for a while, but all I could<br>
+get out of them is that they don't support Linux and what I would have to reproduce<br>
+the problem with Windows for them to provide assistance (even though, again,<br>
+they knew about it).<br>
+<br>
+As for using ACPI locks or WMI to ensure that ACPI leaves the chip alone while<br>
+the driver accesses chips directly: That is an option, but it has (at least)<br>
+two problems.<br>
+<br>
+First, ACPI access methods are not well documented or standardized. I had tried<br>
+to find useful means to do that some time ago, but I gave up because each board<br>
+(even from the same vendor) handles locking and accesses differently. We would<br>
+end up with lots of board specific code. Coincidentally, that was for ASUS boards<br>
+and the nct6775 driver.<br>
+<br>
+Second, access through ACPI is only one of the issues. Turns out there are two<br>
+ITE chips on many of the Gigabyte boards nowadays, and the two chips talk to each<br>
+other using I2C. My out-of-tree driver tried to remedy that by blocking those<br>
+accesses while the driver used the chip, but, again, without Gigabyte / ITE<br>
+support this was never a perfect solution, and there was always the risk that<br>
+the board ended up hanging because that access was blocked for too long.<br>
+Recent ITE chips solve that problem by providing memory mapped access to the<br>
+chip registers, but that is only useful if one has a datasheet.<br>
+<br>
+Overall, I don't think it makes much sense trying to make significant changes<br>
+to the it87 driver without pulling in all the changes I had made, and without<br>
+finding a better fix for the cross-chip access problems. I for sure won't have<br>
+time for that (and getting hwmon patches reviewed is still very much an issue).<br>
+<br>
+Having said that, I am of course open to adding WMI/ACPI drivers for the various<br>
+boards. Good luck getting support from Gigabyte, though. Or from ASUS, for that<br>
+matter.<br>
+<br>
+Guenter<br>
+<br>
+<br>
+

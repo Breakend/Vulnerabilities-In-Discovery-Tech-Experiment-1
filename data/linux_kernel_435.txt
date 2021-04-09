@@ -1,0 +1,51 @@
+Add missing MODULE_DEVICE_TABLE entries to support module autoloading,<br>
+as these drivers can be compiled as external modules.<br>
+<br>
+Signed-off-by: Chen Hui <clare.chenhui@xxxxxxxxxx><br>
+---<br>
+ drivers/clk/qcom/a53-pll.c      | 1 +<br>
+ drivers/clk/qcom/a7-pll.c       | 1 +<br>
+ drivers/clk/qcom/apss-ipq-pll.c | 1 +<br>
+ 3 files changed, 3 insertions(+)<br>
+<br>
+diff --git a/drivers/clk/qcom/a53-pll.c b/drivers/clk/qcom/a53-pll.c<br>
+index 45cfc57bff92..af6ac17c7dae 100644<br>
+--- a/drivers/clk/qcom/a53-pll.c<br>
++++ b/drivers/clk/qcom/a53-pll.c<br>
+@@ -93,6 +93,7 @@ static const struct of_device_id qcom_a53pll_match_table[] = {<br>
+ 	{ .compatible = "qcom,msm8916-a53pll" },<br>
+ 	{ }<br>
+ };<br>
++MODULE_DEVICE_TABLE(of, qcom_a53pll_match_table);<br>
+ <br>
+ static struct platform_driver qcom_a53pll_driver = {<br>
+ 	.probe = qcom_a53pll_probe,<br>
+diff --git a/drivers/clk/qcom/a7-pll.c b/drivers/clk/qcom/a7-pll.c<br>
+index e171d3caf2cf..c4a53e5db229 100644<br>
+--- a/drivers/clk/qcom/a7-pll.c<br>
++++ b/drivers/clk/qcom/a7-pll.c<br>
+@@ -86,6 +86,7 @@ static const struct of_device_id qcom_a7pll_match_table[] = {<br>
+ 	{ .compatible = "qcom,sdx55-a7pll" },<br>
+ 	{ }<br>
+ };<br>
++MODULE_DEVICE_TABLE(of, qcom_a7pll_match_table);<br>
+ <br>
+ static struct platform_driver qcom_a7pll_driver = {<br>
+ 	.probe = qcom_a7pll_probe,<br>
+diff --git a/drivers/clk/qcom/apss-ipq-pll.c b/drivers/clk/qcom/apss-ipq-pll.c<br>
+index 30be87fb222a..bef7899ad0d6 100644<br>
+--- a/drivers/clk/qcom/apss-ipq-pll.c<br>
++++ b/drivers/clk/qcom/apss-ipq-pll.c<br>
+@@ -81,6 +81,7 @@ static const struct of_device_id apss_ipq_pll_match_table[] = {<br>
+ 	{ .compatible = "qcom,ipq6018-a53pll" },<br>
+ 	{ }<br>
+ };<br>
++MODULE_DEVICE_TABLE(of, apss_ipq_pll_match_table);<br>
+ <br>
+ static struct platform_driver apss_ipq_pll_driver = {<br>
+ 	.probe = apss_ipq_pll_probe,<br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+

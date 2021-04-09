@@ -1,0 +1,443 @@
+On Thursday, April 8, 2021 10:53:01 AM CEST Julia Lawall wrote:<br>
+><i> On Thu, 8 Apr 2021, Fabio M. De Francesco wrote:</i><br>
+><i> > Remove camelcase in a symbol that is used by several files.</i><br>
+><i> </i><br>
+><i> In addition to Greg's suggestion about dropping the b, there are some</i><br>
+><i> more things you can do to improve the usage of this field.</i><br>
+><i> </i><br>
+><i> First, I noticed that the type is u8.  It can be changed to bool.</i><br>
+><i> </i><br>
+><i> Second, the == true doesn't seem necessary in the following:</i><br>
+><i> </i><br>
+><i> if (adapter_to_pwrctl(padapter)->bFwCurrentInPSMode == true) {</i><br>
+><i> </i><br>
+><i> Of course before doing any of these, it would be good to check all of the</i><br>
+><i> uses and be sure that the only possible values in this field are true</i><br>
+><i> and false.</i><br>
+><i> </i><br>
+><i> julia</i><br>
+><i> </i><br>
+<br>
+I too had noticed the above-mentioned issues. However I thought I couldn't <br>
+fix them as they are logically unrelated to removing the camelcase. Am I <br>
+wrong on this subject?<br>
+<br>
+Thanks a lot,<br>
+<br>
+Fabio<br>
+<br>
+><i> > Signed-off-by: Fabio M. De Francesco <fmdefrancesco@xxxxxxxxx></i><br>
+><i> > ---</i><br>
+><i> > </i><br>
+><i> >  drivers/staging/rtl8723bs/core/rtw_cmd.c       |  2 +-</i><br>
+><i> >  drivers/staging/rtl8723bs/core/rtw_mlme.c      |  2 +-</i><br>
+><i> >  drivers/staging/rtl8723bs/core/rtw_pwrctrl.c   | 18 +++++++++---------</i><br>
+><i> >  drivers/staging/rtl8723bs/hal/hal_intf.c       |  2 +-</i><br>
+><i> >  drivers/staging/rtl8723bs/hal/rtl8723b_dm.c    |  6 +++---</i><br>
+><i> >  .../staging/rtl8723bs/hal/rtl8723b_hal_init.c  |  2 +-</i><br>
+><i> >  drivers/staging/rtl8723bs/hal/sdio_ops.c       | 14 +++++++-------</i><br>
+><i> >  .../staging/rtl8723bs/include/rtw_pwrctrl.h    |  2 +-</i><br>
+><i> >  8 files changed, 24 insertions(+), 24 deletions(-)</i><br>
+><i> > </i><br>
+><i> > diff --git a/drivers/staging/rtl8723bs/core/rtw_cmd.c</i><br>
+><i> > b/drivers/staging/rtl8723bs/core/rtw_cmd.c index</i><br>
+><i> > baf8b1e0f43c..a08f22b53592 100644</i><br>
+><i> > --- a/drivers/staging/rtl8723bs/core/rtw_cmd.c</i><br>
+><i> > +++ b/drivers/staging/rtl8723bs/core/rtw_cmd.c</i><br>
+><i> > @@ -1510,7 +1510,7 @@ static void rtw_lps_change_dtim_hdl(struct</i><br>
+><i> > adapter *padapter, u8 dtim)> </i><br>
+><i> >  	if (pwrpriv->dtim != dtim)</i><br>
+><i> >  	</i><br>
+><i> >  		pwrpriv->dtim = dtim;</i><br>
+><i> > </i><br>
+><i> > -	if ((pwrpriv->bFwCurrentInPSMode == true) && (pwrpriv->pwr_mode </i><br>
+><i></i><br>
+><i> > PS_MODE_ACTIVE)) { +	if ((pwrpriv->b_fw_current_in_ps_mode == true) &&</i><br>
+><i> > (pwrpriv->pwr_mode > PS_MODE_ACTIVE)) {> </i><br>
+><i> >  		u8 ps_mode = pwrpriv->pwr_mode;</i><br>
+><i> >  		</i><br>
+><i> >  		rtw_hal_set_hwreg(padapter, HW_VAR_H2C_FW_PWRMODE, </i><br>
+(u8<br>
+><i> >  		*)(&ps_mode));</i><br>
+><i> > </i><br>
+><i> > diff --git a/drivers/staging/rtl8723bs/core/rtw_mlme.c</i><br>
+><i> > b/drivers/staging/rtl8723bs/core/rtw_mlme.c index</i><br>
+><i> > a7e40aaae2d9..51cea6cf46e7 100644</i><br>
+><i> > --- a/drivers/staging/rtl8723bs/core/rtw_mlme.c</i><br>
+><i> > +++ b/drivers/staging/rtl8723bs/core/rtw_mlme.c</i><br>
+><i> > @@ -1684,7 +1684,7 @@ void rtw_dynamic_check_timer_handler(struct</i><br>
+><i> > adapter *adapter)> </i><br>
+><i> >  	if (adapter->net_closed)</i><br>
+><i> >  	</i><br>
+><i> >  		return;</i><br>
+><i> > </i><br>
+><i> > -	if ((adapter_to_pwrctl(adapter)->bFwCurrentInPSMode)</i><br>
+><i> > +	if ((adapter_to_pwrctl(adapter)->b_fw_current_in_ps_mode)</i><br>
+><i> > </i><br>
+><i> >  		&& !(hal_btcoex_IsBtControlLps(adapter))</i><br>
+><i> >  		) {</i><br>
+><i> >  		u8 bEnterPS;</i><br>
+><i> > </i><br>
+><i> > diff --git a/drivers/staging/rtl8723bs/core/rtw_pwrctrl.c</i><br>
+><i> > b/drivers/staging/rtl8723bs/core/rtw_pwrctrl.c index</i><br>
+><i> > f7465cf90c46..21e7a847866f 100644</i><br>
+><i> > --- a/drivers/staging/rtl8723bs/core/rtw_pwrctrl.c</i><br>
+><i> > +++ b/drivers/staging/rtl8723bs/core/rtw_pwrctrl.c</i><br>
+><i> > @@ -365,7 +365,7 @@ void rtw_set_ps_mode(struct adapter *padapter, u8</i><br>
+><i> > ps_mode, u8 smart_ps, u8 bcn_a> </i><br>
+><i> >  			rtw_set_rpwm(padapter, PS_STATE_S4);</i><br>
+><i> >  			</i><br>
+><i> >  			rtw_hal_set_hwreg(padapter, </i><br>
+HW_VAR_H2C_FW_PWRMODE, (u8<br>
+><i> >  			*)(&ps_mode));</i><br>
+><i> > </i><br>
+><i> > -			pwrpriv->bFwCurrentInPSMode = false;</i><br>
+><i> > +			pwrpriv->b_fw_current_in_ps_mode = false;</i><br>
+><i> > </i><br>
+><i> >  			hal_btcoex_LpsNotify(padapter, ps_mode);</i><br>
+><i> >  		</i><br>
+><i> >  		}</i><br>
+><i> > </i><br>
+><i> > @@ -377,7 +377,7 @@ void rtw_set_ps_mode(struct adapter *padapter, u8</i><br>
+><i> > ps_mode, u8 smart_ps, u8 bcn_a> </i><br>
+><i> >  			hal_btcoex_LpsNotify(padapter, ps_mode);</i><br>
+><i> > </i><br>
+><i> > -			pwrpriv->bFwCurrentInPSMode = true;</i><br>
+><i> > +			pwrpriv->b_fw_current_in_ps_mode = true;</i><br>
+><i> > </i><br>
+><i> >  			pwrpriv->pwr_mode = ps_mode;</i><br>
+><i> >  			pwrpriv->smart_ps = smart_ps;</i><br>
+><i> >  			pwrpriv->bcn_ant_mode = bcn_ant_mode;</i><br>
+><i> > </i><br>
+><i> > @@ -734,7 +734,7 @@ s32 rtw_register_task_alive(struct adapter</i><br>
+><i> > *padapter, u32 task)> </i><br>
+><i> >  	register_task_alive(pwrctrl, task);</i><br>
+><i> > </i><br>
+><i> > -	if (pwrctrl->bFwCurrentInPSMode) {</i><br>
+><i> > +	if (pwrctrl->b_fw_current_in_ps_mode) {</i><br>
+><i> > </i><br>
+><i> >  		if (pwrctrl->cpwm < pslv) {</i><br>
+><i> >  		</i><br>
+><i> >  			if (pwrctrl->cpwm < PS_STATE_S2)</i><br>
+><i> >  			</i><br>
+><i> >  				res = _FAIL;</i><br>
+><i> > </i><br>
+><i> > @@ -782,7 +782,7 @@ void rtw_unregister_task_alive(struct adapter</i><br>
+><i> > *padapter, u32 task)> </i><br>
+><i> >  	unregister_task_alive(pwrctrl, task);</i><br>
+><i> > </i><br>
+><i> > -	if ((pwrctrl->pwr_mode != PS_MODE_ACTIVE) &&</i><br>
+><i> > pwrctrl->bFwCurrentInPSMode) { +	if ((pwrctrl->pwr_mode !=</i><br>
+><i> > PS_MODE_ACTIVE) && pwrctrl->b_fw_current_in_ps_mode) {> </i><br>
+><i> >  		if (pwrctrl->cpwm > pslv)</i><br>
+><i> >  		</i><br>
+><i> >  			if ((pslv >= PS_STATE_S2) || (pwrctrl-</i><br>
+><i>alives == 0))</i><br>
+><i> >  			</i><br>
+><i> >  				rtw_set_rpwm(padapter, pslv);</i><br>
+><i> > </i><br>
+><i> > @@ -819,7 +819,7 @@ s32 rtw_register_tx_alive(struct adapter *padapter)</i><br>
+><i> > </i><br>
+><i> >  	register_task_alive(pwrctrl, XMIT_ALIVE);</i><br>
+><i> > </i><br>
+><i> > -	if (pwrctrl->bFwCurrentInPSMode) {</i><br>
+><i> > +	if (pwrctrl->b_fw_current_in_ps_mode) {</i><br>
+><i> > </i><br>
+><i> >  		if (pwrctrl->cpwm < pslv) {</i><br>
+><i> >  		</i><br>
+><i> >  			if (pwrctrl->cpwm < PS_STATE_S2)</i><br>
+><i> >  			</i><br>
+><i> >  				res = _FAIL;</i><br>
+><i> > </i><br>
+><i> > @@ -864,7 +864,7 @@ s32 rtw_register_cmd_alive(struct adapter</i><br>
+><i> > *padapter)</i><br>
+><i> > </i><br>
+><i> >  	register_task_alive(pwrctrl, CMD_ALIVE);</i><br>
+><i> > </i><br>
+><i> > -	if (pwrctrl->bFwCurrentInPSMode) {</i><br>
+><i> > +	if (pwrctrl->b_fw_current_in_ps_mode) {</i><br>
+><i> > </i><br>
+><i> >  		if (pwrctrl->cpwm < pslv) {</i><br>
+><i> >  		</i><br>
+><i> >  			if (pwrctrl->cpwm < PS_STATE_S2)</i><br>
+><i> >  			</i><br>
+><i> >  				res = _FAIL;</i><br>
+><i> > </i><br>
+><i> > @@ -909,7 +909,7 @@ void rtw_unregister_tx_alive(struct adapter</i><br>
+><i> > *padapter)> </i><br>
+><i> >  	unregister_task_alive(pwrctrl, XMIT_ALIVE);</i><br>
+><i> > </i><br>
+><i> > -	if ((pwrctrl->pwr_mode != PS_MODE_ACTIVE) &&</i><br>
+><i> > pwrctrl->bFwCurrentInPSMode) { +	if ((pwrctrl->pwr_mode !=</i><br>
+><i> > PS_MODE_ACTIVE) && pwrctrl->b_fw_current_in_ps_mode) {> </i><br>
+><i> >  		if (pwrctrl->cpwm > pslv)</i><br>
+><i> >  		</i><br>
+><i> >  			if ((pslv >= PS_STATE_S2) || (pwrctrl-</i><br>
+><i>alives == 0))</i><br>
+><i> >  			</i><br>
+><i> >  				rtw_set_rpwm(padapter, pslv);</i><br>
+><i> > </i><br>
+><i> > @@ -945,7 +945,7 @@ void rtw_unregister_cmd_alive(struct adapter</i><br>
+><i> > *padapter)> </i><br>
+><i> >  	unregister_task_alive(pwrctrl, CMD_ALIVE);</i><br>
+><i> > </i><br>
+><i> > -	if ((pwrctrl->pwr_mode != PS_MODE_ACTIVE) &&</i><br>
+><i> > pwrctrl->bFwCurrentInPSMode) { +	if ((pwrctrl->pwr_mode !=</i><br>
+><i> > PS_MODE_ACTIVE) && pwrctrl->b_fw_current_in_ps_mode) {> </i><br>
+><i> >  		if (pwrctrl->cpwm > pslv) {</i><br>
+><i> >  		</i><br>
+><i> >  			if ((pslv >= PS_STATE_S2) || (pwrctrl-</i><br>
+><i>alives == 0))</i><br>
+><i> >  			</i><br>
+><i> >  				rtw_set_rpwm(padapter, pslv);</i><br>
+><i> > </i><br>
+><i> > @@ -978,7 +978,7 @@ void rtw_init_pwrctrl_priv(struct adapter</i><br>
+><i> > *padapter)</i><br>
+><i> > </i><br>
+><i> >  	pwrctrlpriv->power_mgnt = padapter->registrypriv.power_mgnt;/* </i><br>
+><i> >  	PS_MODE_MIN; */ pwrctrlpriv->bLeisurePs = pwrctrlpriv-</i><br>
+><i>power_mgnt !=</i><br>
+><i> >  	PS_MODE_ACTIVE;> </i><br>
+><i> > -	pwrctrlpriv->bFwCurrentInPSMode = false;</i><br>
+><i> > +	pwrctrlpriv->b_fw_current_in_ps_mode = false;</i><br>
+><i> > </i><br>
+><i> >  	pwrctrlpriv->rpwm = 0;</i><br>
+><i> >  	pwrctrlpriv->cpwm = PS_STATE_S4;</i><br>
+><i> > </i><br>
+><i> > diff --git a/drivers/staging/rtl8723bs/hal/hal_intf.c</i><br>
+><i> > b/drivers/staging/rtl8723bs/hal/hal_intf.c index</i><br>
+><i> > bc9ae2088754..a73c2f76628d 100644</i><br>
+><i> > --- a/drivers/staging/rtl8723bs/hal/hal_intf.c</i><br>
+><i> > +++ b/drivers/staging/rtl8723bs/hal/hal_intf.c</i><br>
+><i> > @@ -348,7 +348,7 @@ void rtw_hal_dm_watchdog(struct adapter *padapter)</i><br>
+><i> > </i><br>
+><i> >  void rtw_hal_dm_watchdog_in_lps(struct adapter *padapter)</i><br>
+><i> >  {</i><br>
+><i> > </i><br>
+><i> > -	if (adapter_to_pwrctl(padapter)->bFwCurrentInPSMode == true) {</i><br>
+><i> > +	if (adapter_to_pwrctl(padapter)->b_fw_current_in_ps_mode == </i><br>
+true) {<br>
+><i> > </i><br>
+><i> >  		if (padapter->HalFunc.hal_dm_watchdog_in_lps)</i><br>
+><i> >  		</i><br>
+><i> >  			padapter-</i><br>
+><i>HalFunc.hal_dm_watchdog_in_lps(padapter); /* this</i><br>
+><i> >  			function caller is in interrupt context </i><br>
+*/>  	<br>
+><i> >  	}</i><br>
+><i> > </i><br>
+><i> > diff --git a/drivers/staging/rtl8723bs/hal/rtl8723b_dm.c</i><br>
+><i> > b/drivers/staging/rtl8723bs/hal/rtl8723b_dm.c index</i><br>
+><i> > c2e9e4a0be22..265db187b8d5 100644</i><br>
+><i> > --- a/drivers/staging/rtl8723bs/hal/rtl8723b_dm.c</i><br>
+><i> > +++ b/drivers/staging/rtl8723bs/hal/rtl8723b_dm.c</i><br>
+><i> > @@ -141,7 +141,7 @@ void rtl8723b_InitHalDm(struct adapter *Adapter)</i><br>
+><i> > </i><br>
+><i> >  void rtl8723b_HalDmWatchDog(struct adapter *Adapter)</i><br>
+><i> >  {</i><br>
+><i> > </i><br>
+><i> > -	bool bFwCurrentInPSMode = false;</i><br>
+><i> > +	bool b_fw_current_in_ps_mode = false;</i><br>
+><i> > </i><br>
+><i> >  	bool bFwPSAwake = true;</i><br>
+><i> >  	u8 hw_init_completed = false;</i><br>
+><i> >  	struct hal_com_data *pHalData = GET_HAL_DATA(Adapter);</i><br>
+><i> > </i><br>
+><i> > @@ -151,12 +151,12 @@ void rtl8723b_HalDmWatchDog(struct adapter</i><br>
+><i> > *Adapter)> </i><br>
+><i> >  	if (hw_init_completed == false)</i><br>
+><i> >  	</i><br>
+><i> >  		goto skip_dm;</i><br>
+><i> > </i><br>
+><i> > -	bFwCurrentInPSMode = adapter_to_pwrctl(Adapter)-</i><br>
+><i>bFwCurrentInPSMode;</i><br>
+><i> > +	b_fw_current_in_ps_mode =</i><br>
+><i> > adapter_to_pwrctl(Adapter)->b_fw_current_in_ps_mode;> </i><br>
+><i> >  	rtw_hal_get_hwreg(Adapter, HW_VAR_FWLPS_RF_ON, (u8 *)</i><br>
+(&bFwPSAwake));<br>
+><i> >  	</i><br>
+><i> >  	if (</i><br>
+><i> >  	</i><br>
+><i> >  		(hw_init_completed == true) &&</i><br>
+><i> > </i><br>
+><i> > -		((!bFwCurrentInPSMode) && bFwPSAwake)</i><br>
+><i> > +		((!b_fw_current_in_ps_mode) && bFwPSAwake)</i><br>
+><i> > </i><br>
+><i> >  	) {</i><br>
+><i> >  	</i><br>
+><i> >  		/*  */</i><br>
+><i> >  		/*  Calculate Tx/Rx statistics. */</i><br>
+><i> > </i><br>
+><i> > diff --git a/drivers/staging/rtl8723bs/hal/rtl8723b_hal_init.c</i><br>
+><i> > b/drivers/staging/rtl8723bs/hal/rtl8723b_hal_init.c index</i><br>
+><i> > e31ad3feed62..7ebc438870fd 100644</i><br>
+><i> > --- a/drivers/staging/rtl8723bs/hal/rtl8723b_hal_init.c</i><br>
+><i> > +++ b/drivers/staging/rtl8723bs/hal/rtl8723b_hal_init.c</i><br>
+><i> > @@ -430,7 +430,7 @@ void rtl8723b_InitializeFirmwareVars(struct adapter</i><br>
+><i> > *padapter)> </i><br>
+><i> >  	struct hal_com_data *pHalData = GET_HAL_DATA(padapter);</i><br>
+><i> >  	</i><br>
+><i> >  	/*  Init Fw LPS related. */</i><br>
+><i> > </i><br>
+><i> > -	adapter_to_pwrctl(padapter)->bFwCurrentInPSMode = false;</i><br>
+><i> > +	adapter_to_pwrctl(padapter)->b_fw_current_in_ps_mode = false;</i><br>
+><i> > </i><br>
+><i> >  	/* Init H2C cmd. */</i><br>
+><i> >  	rtw_write8(padapter, REG_HMETFR, 0x0f);</i><br>
+><i> > </i><br>
+><i> > diff --git a/drivers/staging/rtl8723bs/hal/sdio_ops.c</i><br>
+><i> > b/drivers/staging/rtl8723bs/hal/sdio_ops.c index</i><br>
+><i> > af7f846f90fe..c78a6724fc1c 100644</i><br>
+><i> > --- a/drivers/staging/rtl8723bs/hal/sdio_ops.c</i><br>
+><i> > +++ b/drivers/staging/rtl8723bs/hal/sdio_ops.c</i><br>
+><i> > @@ -173,7 +173,7 @@ static u32 sdio_read32(struct intf_hdl *intfhdl,</i><br>
+><i> > u32 addr)> </i><br>
+><i> >  	if (</i><br>
+><i> >  	</i><br>
+><i> >  		((device_id == WLAN_IOREG_DEVICE_ID) && (offset < </i><br>
+0x100)) ||<br>
+><i> >  		(!mac_pwr_ctrl_on) ||</i><br>
+><i> > </i><br>
+><i> > -		(adapter_to_pwrctl(adapter)->bFwCurrentInPSMode)</i><br>
+><i> > +		(adapter_to_pwrctl(adapter)-</i><br>
+><i>b_fw_current_in_ps_mode)</i><br>
+><i> > </i><br>
+><i> >  	) {</i><br>
+><i> >  	</i><br>
+><i> >  		err = sd_cmd52_read(intfhdl, ftaddr, 4, (u8 </i><br>
+*)&le_tmp);<br>
+><i> >  </i><br>
+><i> >  #ifdef SDIO_DEBUG_IO</i><br>
+><i> > </i><br>
+><i> > @@ -230,7 +230,7 @@ static s32 sdio_readN(struct intf_hdl *intfhdl, u32</i><br>
+><i> > addr, u32 cnt, u8 *buf)> </i><br>
+><i> >  	if (</i><br>
+><i> >  	</i><br>
+><i> >  		((device_id == WLAN_IOREG_DEVICE_ID) && (offset < </i><br>
+0x100)) ||<br>
+><i> >  		(!mac_pwr_ctrl_on) ||</i><br>
+><i> > </i><br>
+><i> > -		(adapter_to_pwrctl(adapter)->bFwCurrentInPSMode)</i><br>
+><i> > +		(adapter_to_pwrctl(adapter)-</i><br>
+><i>b_fw_current_in_ps_mode)</i><br>
+><i> > </i><br>
+><i> >  	)</i><br>
+><i> >  	</i><br>
+><i> >  		return sd_cmd52_read(intfhdl, ftaddr, cnt, buf);</i><br>
+><i> > </i><br>
+><i> > @@ -297,7 +297,7 @@ static s32 sdio_write32(struct intf_hdl *intfhdl,</i><br>
+><i> > u32 addr, u32 val)> </i><br>
+><i> >  	if (</i><br>
+><i> >  	</i><br>
+><i> >  		((device_id == WLAN_IOREG_DEVICE_ID) && (offset < </i><br>
+0x100)) ||<br>
+><i> >  		(!mac_pwr_ctrl_on) ||</i><br>
+><i> > </i><br>
+><i> > -		(adapter_to_pwrctl(adapter)->bFwCurrentInPSMode)</i><br>
+><i> > +		(adapter_to_pwrctl(adapter)-</i><br>
+><i>b_fw_current_in_ps_mode)</i><br>
+><i> > </i><br>
+><i> >  	) {</i><br>
+><i> >  	</i><br>
+><i> >  		le_tmp = cpu_to_le32(val);</i><br>
+><i> > </i><br>
+><i> > @@ -334,7 +334,7 @@ static s32 sdio_writeN(struct intf_hdl *intfhdl,</i><br>
+><i> > u32 addr, u32 cnt, u8 *buf)> </i><br>
+><i> >  	if (</i><br>
+><i> >  	</i><br>
+><i> >  		((device_id == WLAN_IOREG_DEVICE_ID) && (offset < </i><br>
+0x100)) ||<br>
+><i> >  		(!mac_pwr_ctrl_on) ||</i><br>
+><i> > </i><br>
+><i> > -		(adapter_to_pwrctl(adapter)->bFwCurrentInPSMode)</i><br>
+><i> > +		(adapter_to_pwrctl(adapter)-</i><br>
+><i>b_fw_current_in_ps_mode)</i><br>
+><i> > </i><br>
+><i> >  	)</i><br>
+><i> >  	</i><br>
+><i> >  		return sd_cmd52_write(intfhdl, ftaddr, cnt, buf);</i><br>
+><i> > </i><br>
+><i> > @@ -565,7 +565,7 @@ s32 sdio_local_read(</i><br>
+><i> > </i><br>
+><i> >  	rtw_hal_get_hwreg(adapter, HW_VAR_APFM_ON_MAC, </i><br>
+&mac_pwr_ctrl_on);<br>
+><i> >  	if (</i><br>
+><i> >  	</i><br>
+><i> >  		(!mac_pwr_ctrl_on) ||</i><br>
+><i> > </i><br>
+><i> > -		(adapter_to_pwrctl(adapter)->bFwCurrentInPSMode)</i><br>
+><i> > +		(adapter_to_pwrctl(adapter)-</i><br>
+><i>b_fw_current_in_ps_mode)</i><br>
+><i> > </i><br>
+><i> >  	)</i><br>
+><i> >  	</i><br>
+><i> >  		return sd_cmd52_read(intfhdl, addr, cnt, buf);</i><br>
+><i> > </i><br>
+><i> > @@ -611,7 +611,7 @@ s32 sdio_local_write(</i><br>
+><i> > </i><br>
+><i> >  	rtw_hal_get_hwreg(adapter, HW_VAR_APFM_ON_MAC, </i><br>
+&mac_pwr_ctrl_on);<br>
+><i> >  	if (</i><br>
+><i> >  	</i><br>
+><i> >  		(!mac_pwr_ctrl_on) ||</i><br>
+><i> > </i><br>
+><i> > -		(adapter_to_pwrctl(adapter)->bFwCurrentInPSMode)</i><br>
+><i> > +		(adapter_to_pwrctl(adapter)-</i><br>
+><i>b_fw_current_in_ps_mode)</i><br>
+><i> > </i><br>
+><i> >  	)</i><br>
+><i> >  	</i><br>
+><i> >  		return sd_cmd52_write(intfhdl, addr, cnt, buf);</i><br>
+><i> > </i><br>
+><i> > @@ -660,7 +660,7 @@ static u32 sdio_local_cmd53_read4byte(struct</i><br>
+><i> > adapter *adapter, u32 addr)> </i><br>
+><i> >  	hal_sdio_get_cmd_addr_8723b(adapter, SDIO_LOCAL_DEVICE_ID, </i><br>
+addr,<br>
+><i> >  	&addr);</i><br>
+><i> >  	rtw_hal_get_hwreg(adapter, HW_VAR_APFM_ON_MAC, </i><br>
+&mac_pwr_ctrl_on);<br>
+><i> > </i><br>
+><i> > -	if (!mac_pwr_ctrl_on ||</i><br>
+><i> > adapter_to_pwrctl(adapter)->bFwCurrentInPSMode) { +	if</i><br>
+><i> > (!mac_pwr_ctrl_on ||</i><br>
+><i> > adapter_to_pwrctl(adapter)->b_fw_current_in_ps_mode) {> </i><br>
+><i> >  		sd_cmd52_read(intfhdl, addr, 4, (u8 *)&le_tmp);</i><br>
+><i> >  		val = le32_to_cpu(le_tmp);</i><br>
+><i> >  	</i><br>
+><i> >  	} else {</i><br>
+><i> > </i><br>
+><i> > diff --git a/drivers/staging/rtl8723bs/include/rtw_pwrctrl.h</i><br>
+><i> > b/drivers/staging/rtl8723bs/include/rtw_pwrctrl.h index</i><br>
+><i> > 2e739a17dd95..fcb06a95fdf6 100644</i><br>
+><i> > --- a/drivers/staging/rtl8723bs/include/rtw_pwrctrl.h</i><br>
+><i> > +++ b/drivers/staging/rtl8723bs/include/rtw_pwrctrl.h</i><br>
+><i> > @@ -203,7 +203,7 @@ struct pwrctrl_priv {</i><br>
+><i> > </i><br>
+><i> >  	u8 LpsIdleCount;</i><br>
+><i> >  	u8 power_mgnt;</i><br>
+><i> >  	u8 org_power_mgnt;</i><br>
+><i> > </i><br>
+><i> > -	u8 bFwCurrentInPSMode;</i><br>
+><i> > +	u8 b_fw_current_in_ps_mode;</i><br>
+><i> > </i><br>
+><i> >  	unsigned long	DelayLPSLastTimeStamp;</i><br>
+><i> >  	s32		pnp_current_pwr_state;</i><br>
+><i> >  	u8 pnp_bstop_trx;</i><br>
+><i> > </i><br>
+><i> > --</i><br>
+><i> > 2.30.2</i><br>
+><i> > </i><br>
+><i> > --</i><br>
+><i> > You received this message because you are subscribed to the Google</i><br>
+><i> > Groups "outreachy-kernel" group. To unsubscribe from this group and</i><br>
+><i> > stop receiving emails from it, send an email to</i><br>
+><i> > outreachy-kernel+unsubscribe@xxxxxxxxxxxxxxxx. To view this discussion</i><br>
+><i> > on the web visit</i><br>
+><i> > <a  rel="nofollow" href="https://groups.google.com/d/msgid/outreachy-kernel/20210408080714.2948">https://groups.google.com/d/msgid/outreachy-kernel/20210408080714.2948</a></i><br>
+><i> > 1-1-fmdefrancesco%40gmail.com.</i><br>
+<br>
+<br>
+<br>
+<br>
+<br>
+

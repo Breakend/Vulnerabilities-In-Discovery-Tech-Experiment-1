@@ -1,0 +1,75 @@
+In order to call upstream_bridge_distance_warn() from a dma_map function,<br>
+it must not sleep. The only reason it does sleep is to allocate the seqbuf<br>
+to print which devices are within the ACS path.<br>
+<br>
+Switch the kmalloc call to use a passed in gfp_mask and don't print that<br>
+message if the buffer fails to be allocated.<br>
+<br>
+Signed-off-by: Logan Gunthorpe <logang@xxxxxxxxxxxx><br>
+Acked-by: Bjorn Helgaas <bhelgaas@xxxxxxxxxx><br>
+---<br>
+ drivers/pci/p2pdma.c | 21 +++++++++++----------<br>
+ 1 file changed, 11 insertions(+), 10 deletions(-)<br>
+<br>
+diff --git a/drivers/pci/p2pdma.c b/drivers/pci/p2pdma.c<br>
+index 196382630363..bd89437faf06 100644<br>
+--- a/drivers/pci/p2pdma.c<br>
++++ b/drivers/pci/p2pdma.c<br>
+@@ -267,7 +267,7 @@ static int pci_bridge_has_acs_redir(struct pci_dev *pdev)<br>
+ <br>
+ static void seq_buf_print_bus_devfn(struct seq_buf *buf, struct pci_dev *pdev)<br>
+ {<br>
+-	if (!buf)<br>
++	if (!buf || !buf->buffer)<br>
+ 		return;<br>
+ <br>
+ 	seq_buf_printf(buf, "%s;", pci_name(pdev));<br>
+@@ -495,25 +495,26 @@ upstream_bridge_distance(struct pci_dev *provider, struct pci_dev *client,<br>
+ <br>
+ static enum pci_p2pdma_map_type<br>
+ upstream_bridge_distance_warn(struct pci_dev *provider, struct pci_dev *client,<br>
+-			      int *dist)<br>
++			      int *dist, gfp_t gfp_mask)<br>
+ {<br>
+ 	struct seq_buf acs_list;<br>
+ 	bool acs_redirects;<br>
+ 	int ret;<br>
+ <br>
+-	seq_buf_init(&acs_list, kmalloc(PAGE_SIZE, GFP_KERNEL), PAGE_SIZE);<br>
+-	if (!acs_list.buffer)<br>
+-		return -ENOMEM;<br>
++	seq_buf_init(&acs_list, kmalloc(PAGE_SIZE, gfp_mask), PAGE_SIZE);<br>
+ <br>
+ 	ret = upstream_bridge_distance(provider, client, dist, &acs_redirects,<br>
+ 				       &acs_list);<br>
+ 	if (acs_redirects) {<br>
+ 		pci_warn(client, "ACS redirect is set between the client and provider (%s)\n",<br>
+ 			 pci_name(provider));<br>
+-		/* Drop final semicolon */<br>
+-		acs_list.buffer[acs_list.len-1] = 0;<br>
+-		pci_warn(client, "to disable ACS redirect for this path, add the kernel parameter: pci=disable_acs_redir=%s\n",<br>
+-			 acs_list.buffer);<br>
++<br>
++		if (acs_list.buffer) {<br>
++			/* Drop final semicolon */<br>
++			acs_list.buffer[acs_list.len - 1] = 0;<br>
++			pci_warn(client, "to disable ACS redirect for this path, add the kernel parameter: pci=disable_acs_redir=%s\n",<br>
++				 acs_list.buffer);<br>
++		}<br>
+ 	}<br>
+ <br>
+ 	if (ret == PCI_P2PDMA_MAP_NOT_SUPPORTED) {<br>
+@@ -566,7 +567,7 @@ int pci_p2pdma_distance_many(struct pci_dev *provider, struct device **clients,<br>
+ <br>
+ 		if (verbose)<br>
+ 			ret = upstream_bridge_distance_warn(provider,<br>
+-					pci_client, &distance);<br>
++					pci_client, &distance, GFP_KERNEL);<br>
+ 		else<br>
+ 			ret = upstream_bridge_distance(provider, pci_client,<br>
+ 						       &distance, NULL, NULL);<br>
+-- <br>
+2.20.1<br>
+<br>
+<br>
+

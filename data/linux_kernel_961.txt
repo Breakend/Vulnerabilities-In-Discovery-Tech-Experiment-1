@@ -1,0 +1,39 @@
+On Thu, Apr 08, 2021 at 11:52:40AM +0300, Jarkko Sakkinen wrote:<br>
+><i> I think these attributes are quite useful information to have available so</i><br>
+><i> I'd go actually doing sysfs attributes and create</i><br>
+><i> Documentation/ABI/stable/sysfs-driver-sgx to document them.</i><br>
+<br>
+  testing/<br>
+        This directory documents interfaces that are felt to be stable,<br>
+        as the main development of this interface has been completed.<br>
+<br>
+This sounds better for a start. From Documentation/ABI/README.<br>
+<br>
+><i> Given that they would go then to the sysfs directory of the driver, then</i><br>
+><i> probably the legit names for the attributes ought to be:</i><br>
+><i> </i><br>
+><i> - nr_all_epc_pages</i><br>
+><i> - nr_free_epc_pages</i><br>
+><i> </i><br>
+><i> What do you think?</i><br>
+<br>
+Sounds ok to me.<br>
+<br>
+><i> PS. One useful case that I forgot to mention is that I use these to give</i><br>
+><i> idea what I gave EPC size in the BIOS. Now my EPC is set to 32 MB, and</i><br>
+><i> these report 20 MB of EPC pages. It's because other metadata (e.g. EPCM</i><br>
+><i> containing page attributes) is also stored in this area.</i><br>
+<br>
+Just remember to put yourself in the user's shoes and think whether they<br>
+make sense to her/him.<br>
+<br>
+Thx.<br>
+<br>
+-- <br>
+Regards/Gruss,<br>
+    Boris.<br>
+<br>
+<a  rel="nofollow" href="https://people.kernel.org/tglx/notes-about-netiquette">https://people.kernel.org/tglx/notes-about-netiquette</a><br>
+<br>
+<br>
+

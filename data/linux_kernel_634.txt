@@ -1,0 +1,247 @@
+Siddharth Chandrasekaran <sidcha@xxxxxxxxx> writes:<br>
+<br>
+><i> Hyper-V supports the use of XMM registers to perform fast hypercalls.</i><br>
+><i> This allows guests to take advantage of the improved performance of the</i><br>
+><i> fast hypercall interface even though a hypercall may require more than</i><br>
+><i> (the current maximum of) two input registers.</i><br>
+><i></i><br>
+><i> The XMM fast hypercall interface uses six additional XMM registers (XMM0</i><br>
+><i> to XMM5) to allow the guest to pass an input parameter block of up to</i><br>
+><i> 112 bytes. Hyper-V can also return data back to the guest in the</i><br>
+><i> remaining XMM registers that are not used by the current hypercall.</i><br>
+><i></i><br>
+><i> Add framework to read/write to XMM registers in kvm_hv_hypercall() and</i><br>
+><i> use the additional hypercall inputs from XMM registers in</i><br>
+><i> kvm_hv_flush_tlb() when possible.</i><br>
+><i></i><br>
+><i> Cc: Alexander Graf <graf@xxxxxxxxxx></i><br>
+><i> Co-developed-by: Evgeny Iakovlev <eyakovl@xxxxxxxxx></i><br>
+><i> Signed-off-by: Evgeny Iakovlev <eyakovl@xxxxxxxxx></i><br>
+><i> Signed-off-by: Siddharth Chandrasekaran <sidcha@xxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  arch/x86/kvm/hyperv.c | 109 ++++++++++++++++++++++++++++++++++--------</i><br>
+><i>  1 file changed, 90 insertions(+), 19 deletions(-)</i><br>
+><i></i><br>
+><i> diff --git a/arch/x86/kvm/hyperv.c b/arch/x86/kvm/hyperv.c</i><br>
+><i> index 8f6babd1ea0d..bf2f86f263f1 100644</i><br>
+><i> --- a/arch/x86/kvm/hyperv.c</i><br>
+><i> +++ b/arch/x86/kvm/hyperv.c</i><br>
+><i> @@ -36,6 +36,7 @@</i><br>
+><i>  </i><br>
+><i>  #include "trace.h"</i><br>
+><i>  #include "irq.h"</i><br>
+><i> +#include "fpu.h"</i><br>
+><i>  </i><br>
+><i>  /* "Hv#1" signature */</i><br>
+><i>  #define HYPERV_CPUID_SIGNATURE_EAX 0x31237648</i><br>
+><i> @@ -1623,6 +1624,8 @@ static __always_inline unsigned long *sparse_set_to_vcpu_mask(</i><br>
+><i>  	return vcpu_bitmap;</i><br>
+><i>  }</i><br>
+><i>  </i><br>
+><i> +#define KVM_HV_HYPERCALL_MAX_XMM_REGISTERS  6</i><br>
+><i> +</i><br>
+><i>  struct kvm_hv_hcall {</i><br>
+><i>  	u64 param;</i><br>
+><i>  	u64 ingpa;</i><br>
+><i> @@ -1632,10 +1635,14 @@ struct kvm_hv_hcall {</i><br>
+><i>  	u16 rep_idx;</i><br>
+><i>  	bool fast;</i><br>
+><i>  	bool rep;</i><br>
+><i> +	sse128_t xmm[KVM_HV_HYPERCALL_MAX_XMM_REGISTERS];</i><br>
+><i> +	bool xmm_dirty;</i><br>
+><i>  };</i><br>
+><i>  </i><br>
+><i>  static u64 kvm_hv_flush_tlb(struct kvm_vcpu *vcpu, struct kvm_hv_hcall *hc, bool ex)</i><br>
+><i>  {</i><br>
+><i> +	int i, j;</i><br>
+><i> +	gpa_t gpa;</i><br>
+><i>  	struct kvm *kvm = vcpu->kvm;</i><br>
+><i>  	struct kvm_vcpu_hv *hv_vcpu = to_hv_vcpu(vcpu);</i><br>
+><i>  	struct hv_tlb_flush_ex flush_ex;</i><br>
+><i> @@ -1649,8 +1656,15 @@ static u64 kvm_hv_flush_tlb(struct kvm_vcpu *vcpu, struct kvm_hv_hcall *hc, bool</i><br>
+><i>  	bool all_cpus;</i><br>
+><i>  </i><br>
+><i>  	if (!ex) {</i><br>
+><i> -		if (unlikely(kvm_read_guest(kvm, hc->ingpa, &flush, sizeof(flush))))</i><br>
+><i> -			return HV_STATUS_INVALID_HYPERCALL_INPUT;</i><br>
+><i> +		if (hc->fast) {</i><br>
+><i> +			flush.address_space = hc->ingpa;</i><br>
+><i> +			flush.flags = hc->outgpa;</i><br>
+><i> +			flush.processor_mask = sse128_lo(hc->xmm[0]);</i><br>
+><i> +		} else {</i><br>
+><i> +			if (unlikely(kvm_read_guest(kvm, hc->ingpa,</i><br>
+><i> +						    &flush, sizeof(flush))))</i><br>
+><i> +				return HV_STATUS_INVALID_HYPERCALL_INPUT;</i><br>
+><i> +		}</i><br>
+><i>  </i><br>
+><i>  		trace_kvm_hv_flush_tlb(flush.processor_mask,</i><br>
+><i>  				       flush.address_space, flush.flags);</i><br>
+><i> @@ -1668,9 +1682,16 @@ static u64 kvm_hv_flush_tlb(struct kvm_vcpu *vcpu, struct kvm_hv_hcall *hc, bool</i><br>
+><i>  		all_cpus = (flush.flags & HV_FLUSH_ALL_PROCESSORS) ||</i><br>
+><i>  			flush.processor_mask == 0;</i><br>
+><i>  	} else {</i><br>
+><i> -		if (unlikely(kvm_read_guest(kvm, hc->ingpa, &flush_ex,</i><br>
+><i> -					    sizeof(flush_ex))))</i><br>
+><i> -			return HV_STATUS_INVALID_HYPERCALL_INPUT;</i><br>
+><i> +		if (hc->fast) {</i><br>
+><i> +			flush_ex.address_space = hc->ingpa;</i><br>
+><i> +			flush_ex.flags = hc->outgpa;</i><br>
+><i> +			memcpy(&flush_ex.hv_vp_set,</i><br>
+><i> +			       &hc->xmm[0], sizeof(hc->xmm[0]));</i><br>
+><i> +		} else {</i><br>
+><i> +			if (unlikely(kvm_read_guest(kvm, hc->ingpa, &flush_ex,</i><br>
+><i> +						    sizeof(flush_ex))))</i><br>
+><i> +				return HV_STATUS_INVALID_HYPERCALL_INPUT;</i><br>
+><i> +		}</i><br>
+><i>  </i><br>
+><i>  		trace_kvm_hv_flush_tlb_ex(flush_ex.hv_vp_set.valid_bank_mask,</i><br>
+><i>  					  flush_ex.hv_vp_set.format,</i><br>
+><i> @@ -1681,20 +1702,29 @@ static u64 kvm_hv_flush_tlb(struct kvm_vcpu *vcpu, struct kvm_hv_hcall *hc, bool</i><br>
+><i>  		all_cpus = flush_ex.hv_vp_set.format !=</i><br>
+><i>  			HV_GENERIC_SET_SPARSE_4K;</i><br>
+><i>  </i><br>
+><i> -		sparse_banks_len =</i><br>
+><i> -			bitmap_weight((unsigned long *)&valid_bank_mask, 64) *</i><br>
+><i> -			sizeof(sparse_banks[0]);</i><br>
+><i> +		sparse_banks_len = bitmap_weight((unsigned long *)&valid_bank_mask, 64);</i><br>
+><i>  </i><br>
+><i>  		if (!sparse_banks_len && !all_cpus)</i><br>
+><i>  			goto ret_success;</i><br>
+><i>  </i><br>
+><i> -		if (!all_cpus &&</i><br>
+><i> -		    kvm_read_guest(kvm,</i><br>
+><i> -				   hc->ingpa + offsetof(struct hv_tlb_flush_ex,</i><br>
+><i> -							hv_vp_set.bank_contents),</i><br>
+><i> -				   sparse_banks,</i><br>
+><i> -				   sparse_banks_len))</i><br>
+><i> -			return HV_STATUS_INVALID_HYPERCALL_INPUT;</i><br>
+><i> +		if (!all_cpus) {</i><br>
+><i> +			if (hc->fast) {</i><br>
+><i> +				if (sparse_banks_len > KVM_HV_HYPERCALL_MAX_XMM_REGISTERS - 1)</i><br>
+><i> +					return HV_STATUS_INVALID_HYPERCALL_INPUT;</i><br>
+><i> +				for (i = 0, j = 1; i < sparse_banks_len; i += 2, j++) {</i><br>
+><i> +					sparse_banks[i + 0] = sse128_lo(hc->xmm[j]);</i><br>
+><i> +					sparse_banks[i + 1] = sse128_hi(hc->xmm[j]);</i><br>
+><i> +				}</i><br>
+><i> +			} else {</i><br>
+><i> +				gpa = hc->ingpa;</i><br>
+><i> +				gpa += offsetof(struct hv_tlb_flush_ex,</i><br>
+><i> +						hv_vp_set.bank_contents);</i><br>
+><i> +				if (unlikely(kvm_read_guest(kvm, gpa, sparse_banks,</i><br>
+><i> +							    sparse_banks_len *</i><br>
+><i> +							    sizeof(sparse_banks[0]))))</i><br>
+><i> +					return HV_STATUS_INVALID_HYPERCALL_INPUT;</i><br>
+><i> +			}</i><br>
+><i> +		}</i><br>
+><i>  	}</i><br>
+><i>  </i><br>
+><i>  	cpumask_clear(&hv_vcpu->tlb_flush);</i><br>
+><i> @@ -1890,6 +1920,41 @@ static u16 kvm_hvcall_signal_event(struct kvm_vcpu *vcpu, struct kvm_hv_hcall *h</i><br>
+><i>  	return HV_STATUS_SUCCESS;</i><br>
+><i>  }</i><br>
+><i>  </i><br>
+><i> +static bool is_xmm_fast_hypercall(struct kvm_hv_hcall *hc)</i><br>
+><i> +{</i><br>
+><i> +	switch (hc->code) {</i><br>
+><i> +	case HVCALL_FLUSH_VIRTUAL_ADDRESS_LIST:</i><br>
+><i> +	case HVCALL_FLUSH_VIRTUAL_ADDRESS_SPACE:</i><br>
+><i> +	case HVCALL_FLUSH_VIRTUAL_ADDRESS_LIST_EX:</i><br>
+><i> +	case HVCALL_FLUSH_VIRTUAL_ADDRESS_SPACE_EX:</i><br>
+><i> +		return true;</i><br>
+><i> +	}</i><br>
+><i> +</i><br>
+><i> +	return false;</i><br>
+><i> +}</i><br>
+><i> +</i><br>
+><i> +static inline void kvm_hv_hypercall_read_xmm(struct kvm_hv_hcall *hc)</i><br>
+><i> +{</i><br>
+><i> +	int reg;</i><br>
+><i> +</i><br>
+><i> +	kvm_fpu_get();</i><br>
+><i> +	for (reg = 0; reg < KVM_HV_HYPERCALL_MAX_XMM_REGISTERS; reg++)</i><br>
+><i> +		_kvm_read_sse_reg(reg, &hc->xmm[reg]);</i><br>
+><i> +	kvm_fpu_put();</i><br>
+><i> +	hc->xmm_dirty = false;</i><br>
+><i> +}</i><br>
+><i> +</i><br>
+><i> +static inline void kvm_hv_hypercall_write_xmm(struct kvm_hv_hcall *hc)</i><br>
+><i> +{</i><br>
+><i> +	int reg;</i><br>
+><i> +</i><br>
+><i> +	kvm_fpu_get();</i><br>
+><i> +	for (reg = 0; reg < KVM_HV_HYPERCALL_MAX_XMM_REGISTERS; reg++)</i><br>
+><i> +		_kvm_write_sse_reg(reg, &hc->xmm[reg]);</i><br>
+><i> +	kvm_fpu_put();</i><br>
+><i> +	hc->xmm_dirty = false;</i><br>
+><i> +}</i><br>
+><i> +</i><br>
+><i>  int kvm_hv_hypercall(struct kvm_vcpu *vcpu)</i><br>
+><i>  {</i><br>
+><i>  	struct kvm_hv_hcall hc;</i><br>
+><i> @@ -1926,6 +1991,9 @@ int kvm_hv_hypercall(struct kvm_vcpu *vcpu)</i><br>
+><i>  	hc.rep_idx = (hc.param >> HV_HYPERCALL_REP_START_OFFSET) & 0xfff;</i><br>
+><i>  	hc.rep = !!(hc.rep_cnt || hc.rep_idx);</i><br>
+><i>  </i><br>
+><i> +	if (is_xmm_fast_hypercall(&hc))</i><br>
+><i> +		kvm_hv_hypercall_read_xmm(&hc);</i><br>
+<br>
+is_xmm_fast_hypercall() check should probably be complemented with " &&<br>
+hc.fast" as there's no point in reading this regs when the hypercall is<br>
+not 'fast'.<br>
+<br>
+Also, we can probably defer kvm_hv_hypercall_read_xmm() until we know<br>
+how many regs we actually need to not read them all (we will always<br>
+need xmm[0] I guess so we can as well read it here).<br>
+<br>
+><i> +</i><br>
+><i>  	trace_kvm_hv_hypercall(hc.code, hc.fast, hc.rep_cnt, hc.rep_idx,</i><br>
+><i>  			       hc.ingpa, hc.outgpa);</i><br>
+><i>  </i><br>
+><i> @@ -1961,28 +2029,28 @@ int kvm_hv_hypercall(struct kvm_vcpu *vcpu)</i><br>
+><i>  				kvm_hv_hypercall_complete_userspace;</i><br>
+><i>  		return 0;</i><br>
+><i>  	case HVCALL_FLUSH_VIRTUAL_ADDRESS_LIST:</i><br>
+><i> -		if (unlikely(hc.fast || !hc.rep_cnt || hc.rep_idx)) {</i><br>
+><i> +		if (unlikely(!hc.rep_cnt || hc.rep_idx)) {</i><br>
+><i>  			ret = HV_STATUS_INVALID_HYPERCALL_INPUT;</i><br>
+><i>  			break;</i><br>
+><i>  		}</i><br>
+><i>  		ret = kvm_hv_flush_tlb(vcpu, &hc, false);</i><br>
+><i>  		break;</i><br>
+><i>  	case HVCALL_FLUSH_VIRTUAL_ADDRESS_SPACE:</i><br>
+><i> -		if (unlikely(hc.fast || hc.rep)) {</i><br>
+><i> +		if (unlikely(hc.rep)) {</i><br>
+><i>  			ret = HV_STATUS_INVALID_HYPERCALL_INPUT;</i><br>
+><i>  			break;</i><br>
+><i>  		}</i><br>
+><i>  		ret = kvm_hv_flush_tlb(vcpu, &hc, false);</i><br>
+><i>  		break;</i><br>
+><i>  	case HVCALL_FLUSH_VIRTUAL_ADDRESS_LIST_EX:</i><br>
+><i> -		if (unlikely(hc.fast || !hc.rep_cnt || hc.rep_idx)) {</i><br>
+><i> +		if (unlikely(!hc.rep_cnt || hc.rep_idx)) {</i><br>
+><i>  			ret = HV_STATUS_INVALID_HYPERCALL_INPUT;</i><br>
+><i>  			break;</i><br>
+><i>  		}</i><br>
+><i>  		ret = kvm_hv_flush_tlb(vcpu, &hc, true);</i><br>
+><i>  		break;</i><br>
+><i>  	case HVCALL_FLUSH_VIRTUAL_ADDRESS_SPACE_EX:</i><br>
+><i> -		if (unlikely(hc.fast || hc.rep)) {</i><br>
+><i> +		if (unlikely(hc.rep)) {</i><br>
+><i>  			ret = HV_STATUS_INVALID_HYPERCALL_INPUT;</i><br>
+><i>  			break;</i><br>
+><i>  		}</i><br>
+><i> @@ -2035,6 +2103,9 @@ int kvm_hv_hypercall(struct kvm_vcpu *vcpu)</i><br>
+><i>  		break;</i><br>
+><i>  	}</i><br>
+><i>  </i><br>
+><i> +	if (hc.xmm_dirty)</i><br>
+><i> +		kvm_hv_hypercall_write_xmm(&hc);</i><br>
+><i> +</i><br>
+><i>  	return kvm_hv_hypercall_complete(vcpu, ret);</i><br>
+><i>  }</i><br>
+<br>
+-- <br>
+Vitaly<br>
+<br>
+<br>
+

@@ -1,0 +1,296 @@
+Provides the "mode" config to the hardware latency detector. hwlatd has<br>
+two different operation modes. The default mode is the "round-robin" one,<br>
+in which a single hwlatd thread runs, migrating among the allowed CPUs in a<br>
+"round-robin" fashion. This is the current behavior.<br>
+<br>
+The "none" sets the allowed cpumask for a single hwlatd thread at the<br>
+startup, but skips the round-robin, letting the scheduler handle the<br>
+migration.<br>
+<br>
+In preparation to the per-cpu mode.<br>
+<br>
+Cc: Jonathan Corbet <corbet@xxxxxxx><br>
+Cc: Steven Rostedt <rostedt@xxxxxxxxxxx><br>
+Cc: Ingo Molnar <mingo@xxxxxxxxxx><br>
+Cc: Peter Zijlstra <peterz@xxxxxxxxxxxxx><br>
+Cc: Thomas Gleixner <tglx@xxxxxxxxxxxxx><br>
+Cc: Alexandre Chartre <alexandre.chartre@xxxxxxxxxx><br>
+Cc: Clark Willaims <williams@xxxxxxxxxx><br>
+Cc: John Kacur <jkacur@xxxxxxxxxx><br>
+Cc: Juri Lelli <juri.lelli@xxxxxxxxxx><br>
+Cc: linux-doc@xxxxxxxxxxxxxxx<br>
+Cc: linux-kernel@xxxxxxxxxxxxxxx<br>
+Signed-off-by: Daniel Bristot de Oliveira <bristot@xxxxxxxxxx><br>
+<br>
+---<br>
+ Documentation/trace/hwlat_detector.rst |  21 +++-<br>
+ kernel/trace/trace_hwlat.c             | 157 +++++++++++++++++++++++--<br>
+ 2 files changed, 162 insertions(+), 16 deletions(-)<br>
+<br>
+diff --git a/Documentation/trace/hwlat_detector.rst b/Documentation/trace/hwlat_detector.rst<br>
+index 86f973a7763c..f63fdd867598 100644<br>
+--- a/Documentation/trace/hwlat_detector.rst<br>
++++ b/Documentation/trace/hwlat_detector.rst<br>
+@@ -76,10 +76,19 @@ in /sys/kernel/tracing:<br>
+  - hwlat_detector/width - specified amount of time to spin within window (usecs)<br>
+  - hwlat_detector/window        - amount of time between (width) runs (usecs)<br>
+  - hwlat_detector/cpus  - the CPUs to move the hwlat thread across<br>
++ - hwlat_detector/mode	- the thread mode<br>
++<br>
++By default, the hwlat detector's kernel thread will migrate across each CPU<br>
++specified in cpumask at the beginning of a new window, in a round-robin<br>
++fashion. This behavior can be changed by changing the thread mode,<br>
++the available options are:<br>
++<br>
++ - none:        do not force migration<br>
++ - round-robin: migrate across each CPU specified in cpus between each window<br>
++<br>
++By default, hwlat detector will also obey the tracing_cpumask, so the thread<br>
++will be placed only in the set of cpus that is both on the hwlat detector's<br>
++cpus and in the global tracing_cpumask file. The user can overwrite the<br>
++cpumask by setting it manually. Changing the hwlatd affinity externally,<br>
++e.g., via taskset tool, will disable the round-robin migration.<br>
+ <br>
+-The hwlat detector's kernel thread will migrate across each CPU specified in<br>
+-cpus list between each window. The hwlat detector will also obey the<br>
+-tracing_cpumask, so the thread will migrate on the set of cpus that is<br>
+-both on its cpus list and in the global tracing_cpumask file.<br>
+-To limit the migration, either modify cpumask, or modify the hwlat kernel<br>
+-thread (named [hwlatd]) CPU affinity directly, and the migration will stop.<br>
+diff --git a/kernel/trace/trace_hwlat.c b/kernel/trace/trace_hwlat.c<br>
+index deecb93f97f2..3818200c9e24 100644<br>
+--- a/kernel/trace/trace_hwlat.c<br>
++++ b/kernel/trace/trace_hwlat.c<br>
+@@ -60,6 +60,15 @@ static struct task_struct *hwlat_kthread;<br>
+ static struct dentry *hwlat_sample_width;	/* sample width us */<br>
+ static struct dentry *hwlat_sample_window;	/* sample window us */<br>
+ static struct dentry *hwlat_cpumask_dentry;	/* hwlat cpus allowed */<br>
++static struct dentry *hwlat_thread_mode;	/* hwlat thread mode */<br>
++<br>
++enum {<br>
++	MODE_NONE = 0,<br>
++	MODE_ROUND_ROBIN,<br>
++	MODE_MAX<br>
++};<br>
++<br>
++static char *thread_mode_str[] = { "none", "round-robin" };<br>
+ <br>
+ /* Save the previous tracing_thresh value */<br>
+ static unsigned long save_tracing_thresh;<br>
+@@ -97,11 +106,16 @@ static struct hwlat_data {<br>
+ 	u64	sample_window;		/* total sampling window (on+off) */<br>
+ 	u64	sample_width;		/* active sampling portion of window */<br>
+ <br>
++	int	thread_mode;			/* thread mode */<br>
++<br>
+ } hwlat_data = {<br>
+ 	.sample_window		= DEFAULT_SAMPLE_WINDOW,<br>
+ 	.sample_width		= DEFAULT_SAMPLE_WIDTH,<br>
++	.thread_mode		= MODE_ROUND_ROBIN<br>
+ };<br>
+ <br>
++static bool hwlat_busy;<br>
++<br>
+ static void trace_hwlat_sample(struct hwlat_sample *sample)<br>
+ {<br>
+ 	struct trace_array *tr = hwlat_trace;<br>
+@@ -337,7 +351,8 @@ static int kthread_fn(void *data)<br>
+ <br>
+ 	while (!kthread_should_stop()) {<br>
+ <br>
+-		move_to_next_cpu();<br>
++		if (hwlat_data.thread_mode == MODE_ROUND_ROBIN)<br>
++			move_to_next_cpu();<br>
+ <br>
+ 		local_irq_disable();<br>
+ 		get_sample();<br>
+@@ -375,6 +390,14 @@ static int start_kthread(struct trace_array *tr)<br>
+ 	if (hwlat_kthread)<br>
+ 		return 0;<br>
+ <br>
++<br>
++	kthread = kthread_create(kthread_fn, NULL, "hwlatd");<br>
++	if (IS_ERR(kthread)) {<br>
++		pr_err(BANNER "could not start sampling thread\n");<br>
++		return -ENOMEM;<br>
++	}<br>
++<br>
++<br>
+ 	/* Just pick the first CPU on first iteration */<br>
+ 	get_online_cpus();<br>
+ 	/*<br>
+@@ -386,16 +409,14 @@ static int start_kthread(struct trace_array *tr)<br>
+ 	 */<br>
+ 	cpumask_and(current_mask, cpu_online_mask, current_mask);<br>
+ 	put_online_cpus();<br>
+-	next_cpu = cpumask_first(current_mask);<br>
+ <br>
+-	kthread = kthread_create(kthread_fn, NULL, "hwlatd");<br>
+-	if (IS_ERR(kthread)) {<br>
+-		pr_err(BANNER "could not start sampling thread\n");<br>
+-		return -ENOMEM;<br>
++	if (hwlat_data.thread_mode == MODE_ROUND_ROBIN) {<br>
++		next_cpu = cpumask_first(current_mask);<br>
++		cpumask_clear(current_mask);<br>
++		cpumask_set_cpu(next_cpu, current_mask);<br>
++<br>
+ 	}<br>
+ <br>
+-	cpumask_clear(current_mask);<br>
+-	cpumask_set_cpu(next_cpu, current_mask);<br>
+ 	sched_setaffinity(kthread->pid, current_mask);<br>
+ <br>
+ 	hwlat_kthread = kthread;<br>
+@@ -615,6 +636,109 @@ hwlat_window_write(struct file *filp, const char __user *ubuf,<br>
+ 	return cnt;<br>
+ }<br>
+ <br>
++static void *s_mode_start(struct seq_file *s, loff_t *pos)<br>
++{<br>
++	int mode = *pos;<br>
++<br>
++	if (mode >= MODE_MAX)<br>
++		return NULL;<br>
++<br>
++	return pos;<br>
++}<br>
++<br>
++static void *s_mode_next(struct seq_file *s, void *v, loff_t *pos)<br>
++{<br>
++	int mode = ++(*pos);<br>
++<br>
++	if (mode >= MODE_MAX)<br>
++		return NULL;<br>
++<br>
++	return pos;<br>
++}<br>
++<br>
++static int s_mode_show(struct seq_file *s, void *v)<br>
++{<br>
++	loff_t *pos = v;<br>
++	int mode = *pos;<br>
++<br>
++	if (mode == hwlat_data.thread_mode)<br>
++		seq_printf(s, "[%s]", thread_mode_str[mode]);<br>
++	else<br>
++		seq_printf(s, "%s", thread_mode_str[mode]);<br>
++<br>
++	if (mode != MODE_MAX)<br>
++		seq_puts(s, " ");<br>
++<br>
++	return 0;<br>
++}<br>
++<br>
++static void s_mode_stop(struct seq_file *s, void *v)<br>
++{<br>
++	seq_puts(s, "\n");<br>
++}<br>
++<br>
++static const struct seq_operations thread_mode_seq_ops = {<br>
++	.start		= s_mode_start,<br>
++	.next		= s_mode_next,<br>
++	.show		= s_mode_show,<br>
++	.stop		= s_mode_stop<br>
++};<br>
++<br>
++static int hwlat_mode_open(struct inode *inode, struct file *file)<br>
++{<br>
++	return seq_open(file, &thread_mode_seq_ops);<br>
++};<br>
++<br>
++/**<br>
++ * hwlat_mode_write - Write function for "mode" entry<br>
++ * @filp: The active open file structure<br>
++ * @ubuf: The user buffer that contains the value to write<br>
++ * @cnt: The maximum number of bytes to write to "file"<br>
++ * @ppos: The current position in @file<br>
++ *<br>
++ * This function provides a write implementation for the "mode" interface<br>
++ * to the hardware latency detector. hwlatd has different operation modes.<br>
++ * The "none" sets the allowed cpumask for a single hwlatd thread at the<br>
++ * startup and lets the scheduler handle the migration. The default mode is<br>
++ * the "round-robin" one, in which a single hwlatd thread runs, migrating<br>
++ * among the allowed CPUs in a round-robin fashion.<br>
++ */<br>
++static ssize_t hwlat_mode_write(struct file *filp, const char __user *ubuf,<br>
++				 size_t cnt, loff_t *ppos)<br>
++{<br>
++	const char *mode;<br>
++	char buf[64];<br>
++	int ret;<br>
++	int i;<br>
++<br>
++	if (hwlat_busy)<br>
++		return -EBUSY;<br>
++<br>
++	if (cnt >= sizeof(buf))<br>
++		return -EINVAL;<br>
++<br>
++	if (copy_from_user(buf, ubuf, cnt))<br>
++		return -EFAULT;<br>
++<br>
++	buf[cnt] = 0;<br>
++<br>
++	mode = strstrip(buf);<br>
++<br>
++	ret = -EINVAL;<br>
++<br>
++	for (i = 0; i < MODE_MAX; i++) {<br>
++		if (strcmp(mode, thread_mode_str[i]) == 0) {<br>
++			hwlat_data.thread_mode = i;<br>
++			ret = cnt;<br>
++		}<br>
++	}<br>
++<br>
++	*ppos += cnt;<br>
++<br>
++	return cnt;<br>
++}<br>
++<br>
++<br>
+ static const struct file_operations width_fops = {<br>
+ 	.open		= tracing_open_generic,<br>
+ 	.read		= hwlat_read,<br>
+@@ -634,6 +758,14 @@ static const struct file_operations cpus_fops = {<br>
+ 	.llseek		= generic_file_llseek,<br>
+ };<br>
+ <br>
++static const struct file_operations thread_mode_fops = {<br>
++	.open		= hwlat_mode_open,<br>
++	.read		= seq_read,<br>
++	.llseek		= seq_lseek,<br>
++	.release	= seq_release,<br>
++	.write		= hwlat_mode_write<br>
++<br>
++};<br>
+ <br>
+ /**<br>
+  * init_tracefs - A function to initialize the tracefs interface files<br>
+@@ -677,6 +809,13 @@ static int init_tracefs(void)<br>
+ 	if (!hwlat_cpumask_dentry)<br>
+ 		goto err;<br>
+ <br>
++	hwlat_thread_mode = trace_create_file("mode", 0644,<br>
++					      top_dir,<br>
++					      NULL,<br>
++					      &thread_mode_fops);<br>
++	if (!hwlat_thread_mode)<br>
++		goto err;<br>
++<br>
+ 	return 0;<br>
+ <br>
+  err:<br>
+@@ -698,8 +837,6 @@ static void hwlat_tracer_stop(struct trace_array *tr)<br>
+ 	stop_kthread();<br>
+ }<br>
+ <br>
+-static bool hwlat_busy;<br>
+-<br>
+ static int hwlat_tracer_init(struct trace_array *tr)<br>
+ {<br>
+ 	/* Only allow one instance to enable this */<br>
+-- <br>
+2.30.2<br>
+<br>
+<br>
+

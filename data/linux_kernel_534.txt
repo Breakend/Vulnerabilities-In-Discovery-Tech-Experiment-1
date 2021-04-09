@@ -1,0 +1,25 @@
+On 2021/04/08 21:51, Greg Kroah-Hartman wrote:<br>
+><i> Remove users of tty_warn() and replace them with calls to dev_warn()</i><br>
+><i> which provides more information about the tty that has the error and</i><br>
+><i> uses the standard formatting logic.</i><br>
+<br>
+Ouch. This series would be good for clean up, but this series might be<br>
+bad for handling lockdep warning syzbot is reporting.<br>
+<br>
+Since tty_warn() is using plain printk(), we can avoid lockdep warning by<br>
+using printk_deferred(). If we use dev_warn() instead, we need to modify<br>
+__dev_printk() to use printk_deferred(), which means that all dev_*() users<br>
+are affected by this change.<br>
+<br>
+Also, we need to modify dev_printk_emit()/dev_vprintk_emit() callers to embed<br>
+loglevel into the format string so that we pass LOGLEVEL_SCHED to vprintk_emit() ...<br>
+maybe just change from "if (!in_sched)" to "if (!in_sched && !dev_info)" instead ?<br>
+<br>
+<br>
+Also, dev_vprintk_emit() need to start calling defer_console_output()<br>
+after returning from vprintk_emit() in order to behave like printk_deferred().<br>
+<br>
+I'm not sure whether this change is safe.<br>
+<br>
+<br>
+

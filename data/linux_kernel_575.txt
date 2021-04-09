@@ -1,0 +1,75 @@
+<br>
+<br>
+On 2021/4/7 10:04, Leizhen (ThunderTown) wrote:<br>
+><i> </i><br>
+><i> </i><br>
+><i> On 2021/4/2 4:20, Rob Herring wrote:</i><br>
+><i>> On Wed, Mar 31, 2021 at 05:16:16PM +0800, Zhen Lei wrote:</i><br>
+><i>>> Currently, if there are more than two ports, or if there is only one port</i><br>
+><i>>> but other properties(such as "#address-cells") is required, these ports</i><br>
+><i>>> are placed under the "ports" node. So add the schema of property "ports".</i><br>
+><i>></i><br>
+><i>> A given binding should just use 'ports' or 'port' depending on it's </i><br>
+><i>> need. Supporting both forms is needless complexity.</i><br>
+<br>
+Hi Rob:<br>
+I don't think of a good way to avoid "port" and "ports" to be used at the same time.<br>
+Should I disable the use of "port"? Convert the two usages of "port" into "ports".<br>
+But usually no one will use both of them in one dts file. And even if it's used at<br>
+the same time, it's not a big mistake. So I decided not to test it.<br>
+<br>
+><i> </i><br>
+><i> Right, I'll adjust this patch again.</i><br>
+><i> </i><br>
+><i>></i><br>
+><i>>> Otherwise, warnings similar to the following will be reported:</i><br>
+><i>>> arch/arm64/boot/dts/renesas/r8a774a1-beacon-rzg2m-kit.dt.yaml: \</i><br>
+><i>>> sound@ec500000: 'ports' does not match any of the regexes: \</i><br>
+><i>>> '^rcar_sound,ctu$', '^rcar_sound,dai$', '^rcar_sound,dvc$', ...</i><br>
+><i>>></i><br>
+><i>>> Signed-off-by: Zhen Lei <thunder.leizhen@xxxxxxxxxx></i><br>
+><i>>> ---</i><br>
+><i>>>  Documentation/devicetree/bindings/sound/renesas,rsnd.yaml | 5 +++++</i><br>
+><i>>>  1 file changed, 5 insertions(+)</i><br>
+><i>>></i><br>
+><i>>> diff --git a/Documentation/devicetree/bindings/sound/renesas,rsnd.yaml b/Documentation/devicetree/bindings/sound/renesas,rsnd.yaml</i><br>
+><i>>> index 384191ee497f534..a42992fa687d3f3 100644</i><br>
+><i>>> --- a/Documentation/devicetree/bindings/sound/renesas,rsnd.yaml</i><br>
+><i>>> +++ b/Documentation/devicetree/bindings/sound/renesas,rsnd.yaml</i><br>
+><i>>> @@ -115,6 +115,11 @@ properties:</i><br>
+><i>>>      $ref: audio-graph-port.yaml#</i><br>
+><i>>>      unevaluatedProperties: false</i><br>
+><i>>>  </i><br>
+><i>>> +  ports:</i><br>
+><i>></i><br>
+><i>>        $ref: /schemas/graph.yaml#/properties/ports</i><br>
+><i> </i><br>
+><i> OK, thanks</i><br>
+><i> </i><br>
+><i>></i><br>
+><i>>> +    patternProperties:</i><br>
+><i>>> +      '^port@[0-9]':</i><br>
+><i>>> +        $ref: "#/properties/port"</i><br>
+><i>></i><br>
+><i>> Then this should be: $ref: audio-graph-port.yaml#</i><br>
+><i> </i><br>
+><i> OK, thanks</i><br>
+><i> </i><br>
+><i>></i><br>
+><i>> Also, what each port is should be defined, but that's a separate </i><br>
+><i>> problem.</i><br>
+><i>></i><br>
+><i>>> +</i><br>
+><i>>>  # use patternProperties to avoid naming "xxx,yyy" issue</i><br>
+><i>>>  patternProperties:</i><br>
+><i>>>    "^rcar_sound,dvc$":</i><br>
+><i>>> -- </i><br>
+><i>>> 1.8.3</i><br>
+><i>>></i><br>
+><i>>></i><br>
+><i>></i><br>
+><i>> .</i><br>
+><i>></i><br>
+<br>
+<br>
+

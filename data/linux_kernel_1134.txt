@@ -1,0 +1,36 @@
+There is a rumtime PM imbalance between the error handling path<br>
+after devm_snd_soc_register_component() and all other error<br>
+handling paths. Add a PM runtime increment to balance refcount.<br>
+<br>
+Signed-off-by: Dinghao Liu <dinghao.liu@xxxxxxxxxx><br>
+---<br>
+<br>
+Changelog:<br>
+<br>
+v2: - Add a PM runtime increment to fix it instead of moving<br>
+      the PM related operations after the registration.<br>
+---<br>
+ sound/soc/codecs/tas2552.c | 4 +++-<br>
+ 1 file changed, 3 insertions(+), 1 deletion(-)<br>
+<br>
+diff --git a/sound/soc/codecs/tas2552.c b/sound/soc/codecs/tas2552.c<br>
+index bd00c35116cd..700baa6314aa 100644<br>
+--- a/sound/soc/codecs/tas2552.c<br>
++++ b/sound/soc/codecs/tas2552.c<br>
+@@ -730,8 +730,10 @@ static int tas2552_probe(struct i2c_client *client,<br>
+ 	ret = devm_snd_soc_register_component(&client->dev,<br>
+ 				      &soc_component_dev_tas2552,<br>
+ 				      tas2552_dai, ARRAY_SIZE(tas2552_dai));<br>
+-	if (ret < 0)<br>
++	if (ret < 0) {<br>
+ 		dev_err(&client->dev, "Failed to register component: %d\n", ret);<br>
++		pm_runtime_get_noresume(&client->dev);<br>
++	}<br>
+ <br>
+ 	return ret;<br>
+ }<br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+

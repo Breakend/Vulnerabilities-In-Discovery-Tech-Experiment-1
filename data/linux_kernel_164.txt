@@ -1,0 +1,16 @@
+On Mon, Apr 05, 2021 at 03:43:12PM -0500, madvenka@xxxxxxxxxxxxxxxxxxx wrote:<br>
+><i> From: "Madhavan T. Venkataraman" <madvenka@xxxxxxxxxxxxxxxxxxx></i><br>
+><i> </i><br>
+><i> When CONFIG_DYNAMIC_FTRACE_WITH_REGS is enabled and tracing is activated</i><br>
+><i> for a function, the ftrace infrastructure is called for the function at</i><br>
+><i> the very beginning. Ftrace creates two frames:</i><br>
+<br>
+This looks good to me however I'd really like someone who has a firmer<br>
+understanding of what ftrace is doing to double check as it is entirely<br>
+likely that I am missing cases here, it seems likely that if I am<br>
+missing stuff it's extra stuff that needs to be added and we're not<br>
+actually making use of the reliability information yet.<br>
+<p><strong>Attachment:
+<a href="01064/signature.asc" ><tt>signature.asc</tt></a></strong><br>
+<em>Description:</em> PGP signature</p>
+

@@ -1,0 +1,50 @@
+On Thu, Apr 08, 2021 at 08:29:00AM -0600, Edmundo Carmona Antoranz wrote:<br>
+><i> On Thu, Apr 8, 2021 at 6:10 AM Sergei Krainov</i><br>
+><i> <sergei.krainov.lkd@xxxxxxxxx> wrote:</i><br>
+><i> > No side effects can be seen locally or in r8712_find_network()</i><br>
+><i> </i><br>
+><i> I am sorry to jump in. Sergei, what Greg is asking is basically why</i><br>
+><i> you want to delete the r8712_find_network call in the first place.</i><br>
+><i> Deleting an unused variable is fine, but the problem here is that you</i><br>
+><i> are _also_ deleting a call to a function that _probably_ does some</i><br>
+><i> things that, even if you want to get rid of the variable, you would</i><br>
+><i> probably like to keep on doing (and so the call would remain). Is that</i><br>
+><i> call really not doing anything relevant? That's what you will have to</i><br>
+><i> explain in the patch in order for it to make sense.</i><br>
+><i> </i><br>
+><i> As a side note on top of the question about the call, it's not like</i><br>
+><i> the variable is not being used. It's used right after the call to</i><br>
+><i> r8712_find_network to check the result of the call... so is the real</i><br>
+><i> purpose of the patch to remove the call in the first place and then</i><br>
+><i> having the variable removed because there is no point in having it if</i><br>
+><i> the call goes away?</i><br>
+><i> </i><br>
+><i> I hope that helps.</i><br>
+Thank you for clarification, guess I really misunderstood the question<br>
+and didn't explain properly why I'm doing it.<br>
+<br>
+In this block of code call to r8712_find_network() exist only for one<br>
+purpose, to return value to the pcur_wlan. And after that we're not<br>
+using pcur_wlan.<br>
+<br>
+So in my opinion it looks like a very subtle bug where we have unused<br>
+variable, which is allocated by r8712_find_network(), and if that<br>
+succeeds we're also modifying value by pcur_wlan->fixed = false;.<br>
+And after all that we're not using variable and compiler has no chance<br>
+of catching that because of what we're doing with that value.<br>
+<br>
+Please correct me if I'm wrong in something, I just found that<br>
+questionable behavior and decided to send patch, so someone can see<br>
+it and say if I'm wrong or not. In case I'm right this change can be<br>
+_possibly_ accepted.<br>
+<br>
+Also sorry for asking here, but is it okay that my commit has [PATCH v2]<br>
+and subject is [PATCH v2] in mutt, but in mailing list I still see<br>
+[PATCH]?<br>
+<br>
+Greg, thanks a lot for reviews of my code you did in past few days, I<br>
+really appreciate that, but just didn't want to flood mailing list with<br>
+my appreciation only.<br>
+<br>
+<br>
+

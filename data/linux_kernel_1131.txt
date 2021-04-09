@@ -1,0 +1,10 @@
+On Tue, Apr 06, 2021 at 08:44:54PM -0700, Saravana Kannan wrote:<br>
+><i> This can be used by frameworks to set the sync_state() helper functions</i><br>
+><i> for drivers that don't already have them set.</i><br>
+><i> </i><br>
+><i> Signed-off-by: Saravana Kannan <saravanak@xxxxxxxxxx></i><br>
+<br>
+Acked-by: Greg Kroah-Hartman <gregkh@xxxxxxxxxxxxxxxxxxx><br>
+<br>
+<br>
+

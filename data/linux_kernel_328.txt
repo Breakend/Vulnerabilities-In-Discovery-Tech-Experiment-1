@@ -1,0 +1,194 @@
+Hi Vincenzo,<br>
+<br>
+On Thu, Apr 08, 2021 at 03:37:23PM +0100, Vincenzo Frascino wrote:<br>
+><i> The check_mte_async_tcf macro sets the TIF flag non-atomically. This can</i><br>
+><i> race with another CPU doing a set_tsk_thread_flag() and the flag can be</i><br>
+><i> lost in the process.</i><br>
+><i> </i><br>
+><i> Move the tcf0 check to enter_from_user_mode() and clear tcf0 in</i><br>
+><i> exit_to_user_mode() to address the problem.</i><br>
+<br>
+Beware that these are called at critical points of the entry sequence,<br>
+so we need to take care that nothing is instrumented (e.g. we can only<br>
+safely use noinstr functions here).<br>
+<br>
+><i> Note: Moving the check in entry-common allows to use set_thread_flag()</i><br>
+><i> which is safe.</i><br>
+><i> </i><br>
+><i> Fixes: 637ec831ea4f ("arm64: mte: Handle synchronous and asynchronous</i><br>
+><i> tag check faults")</i><br>
+><i> Cc: Catalin Marinas <catalin.marinas@xxxxxxx></i><br>
+><i> Cc: Will Deacon <will@xxxxxxxxxx></i><br>
+><i> Reported-by: Will Deacon <will@xxxxxxxxxx></i><br>
+><i> Signed-off-by: Vincenzo Frascino <vincenzo.frascino@xxxxxxx></i><br>
+><i> ---</i><br>
+><i>  arch/arm64/include/asm/mte.h     |  8 ++++++++</i><br>
+><i>  arch/arm64/kernel/entry-common.c |  6 ++++++</i><br>
+><i>  arch/arm64/kernel/entry.S        | 30 ------------------------------</i><br>
+><i>  arch/arm64/kernel/mte.c          | 25 +++++++++++++++++++++++--</i><br>
+><i>  4 files changed, 37 insertions(+), 32 deletions(-)</i><br>
+><i> </i><br>
+><i> diff --git a/arch/arm64/include/asm/mte.h b/arch/arm64/include/asm/mte.h</i><br>
+><i> index 9b557a457f24..188f778c6f7b 100644</i><br>
+><i> --- a/arch/arm64/include/asm/mte.h</i><br>
+><i> +++ b/arch/arm64/include/asm/mte.h</i><br>
+><i> @@ -31,6 +31,8 @@ void mte_invalidate_tags(int type, pgoff_t offset);</i><br>
+><i>  void mte_invalidate_tags_area(int type);</i><br>
+><i>  void *mte_allocate_tag_storage(void);</i><br>
+><i>  void mte_free_tag_storage(char *storage);</i><br>
+><i> +void check_mte_async_tcf0(void);</i><br>
+><i> +void clear_mte_async_tcf0(void);</i><br>
+><i>  </i><br>
+><i>  #ifdef CONFIG_ARM64_MTE</i><br>
+><i>  </i><br>
+><i> @@ -83,6 +85,12 @@ static inline int mte_ptrace_copy_tags(struct task_struct *child,</i><br>
+><i>  {</i><br>
+><i>  	return -EIO;</i><br>
+><i>  }</i><br>
+><i> +void check_mte_async_tcf0(void)</i><br>
+><i> +{</i><br>
+><i> +}</i><br>
+><i> +void clear_mte_async_tcf0(void)</i><br>
+><i> +{</i><br>
+><i> +}</i><br>
+<br>
+Were these meant to be static inline?<br>
+<br>
+><i>  static inline void mte_assign_mem_tag_range(void *addr, size_t size)</i><br>
+><i>  {</i><br>
+><i> diff --git a/arch/arm64/kernel/entry-common.c b/arch/arm64/kernel/entry-common.c</i><br>
+><i> index 9d3588450473..837d3624a1d5 100644</i><br>
+><i> --- a/arch/arm64/kernel/entry-common.c</i><br>
+><i> +++ b/arch/arm64/kernel/entry-common.c</i><br>
+><i> @@ -289,10 +289,16 @@ asmlinkage void noinstr enter_from_user_mode(void)</i><br>
+><i>  	CT_WARN_ON(ct_state() != CONTEXT_USER);</i><br>
+><i>  	user_exit_irqoff();</i><br>
+><i>  	trace_hardirqs_off_finish();</i><br>
+><i> +</i><br>
+><i> +	/* Check for asynchronous tag check faults in user space */</i><br>
+><i> +	check_mte_async_tcf0();</i><br>
+><i>  }</i><br>
+><i>  </i><br>
+><i>  asmlinkage void noinstr exit_to_user_mode(void)</i><br>
+><i>  {</i><br>
+><i> +	/* Ignore asynchronous tag check faults in the uaccess routines */</i><br>
+><i> +	clear_mte_async_tcf0();</i><br>
+><i> +</i><br>
+><i>  	trace_hardirqs_on_prepare();</i><br>
+><i>  	lockdep_hardirqs_on_prepare(CALLER_ADDR0);</i><br>
+><i>  	user_enter_irqoff();</i><br>
+><i> diff --git a/arch/arm64/kernel/entry.S b/arch/arm64/kernel/entry.S</i><br>
+><i> index a31a0a713c85..fafd74ae5021 100644</i><br>
+><i> --- a/arch/arm64/kernel/entry.S</i><br>
+><i> +++ b/arch/arm64/kernel/entry.S</i><br>
+><i> @@ -147,32 +147,6 @@ alternative_cb_end</i><br>
+><i>  .L__asm_ssbd_skip\@:</i><br>
+><i>  	.endm</i><br>
+><i>  </i><br>
+><i> -	/* Check for MTE asynchronous tag check faults */</i><br>
+><i> -	.macro check_mte_async_tcf, flgs, tmp</i><br>
+><i> -#ifdef CONFIG_ARM64_MTE</i><br>
+><i> -alternative_if_not ARM64_MTE</i><br>
+><i> -	b	1f</i><br>
+><i> -alternative_else_nop_endif</i><br>
+><i> -	mrs_s	\tmp, SYS_TFSRE0_EL1</i><br>
+><i> -	tbz	\tmp, #SYS_TFSR_EL1_TF0_SHIFT, 1f</i><br>
+><i> -	/* Asynchronous TCF occurred for TTBR0 access, set the TI flag */</i><br>
+><i> -	orr	\flgs, \flgs, #_TIF_MTE_ASYNC_FAULT</i><br>
+><i> -	str	\flgs, [tsk, #TSK_TI_FLAGS]</i><br>
+><i> -	msr_s	SYS_TFSRE0_EL1, xzr</i><br>
+><i> -1:</i><br>
+><i> -#endif</i><br>
+><i> -	.endm</i><br>
+><i> -</i><br>
+><i> -	/* Clear the MTE asynchronous tag check faults */</i><br>
+><i> -	.macro clear_mte_async_tcf</i><br>
+><i> -#ifdef CONFIG_ARM64_MTE</i><br>
+><i> -alternative_if ARM64_MTE</i><br>
+><i> -	dsb	ish</i><br>
+><i> -	msr_s	SYS_TFSRE0_EL1, xzr</i><br>
+><i> -alternative_else_nop_endif</i><br>
+><i> -#endif</i><br>
+><i> -	.endm</i><br>
+><i> -</i><br>
+><i>  	.macro mte_set_gcr, tmp, tmp2</i><br>
+><i>  #ifdef CONFIG_ARM64_MTE</i><br>
+><i>  	/*</i><br>
+><i> @@ -243,8 +217,6 @@ alternative_else_nop_endif</i><br>
+><i>  	ldr	x19, [tsk, #TSK_TI_FLAGS]</i><br>
+><i>  	disable_step_tsk x19, x20</i><br>
+><i>  </i><br>
+><i> -	/* Check for asynchronous tag check faults in user space */</i><br>
+><i> -	check_mte_async_tcf x19, x22</i><br>
+><i>  	apply_ssbd 1, x22, x23</i><br>
+><i>  </i><br>
+><i>  	ptrauth_keys_install_kernel tsk, x20, x22, x23</i><br>
+><i> @@ -775,8 +747,6 @@ SYM_CODE_START_LOCAL(ret_to_user)</i><br>
+><i>  	cbnz	x2, work_pending</i><br>
+><i>  finish_ret_to_user:</i><br>
+><i>  	user_enter_irqoff</i><br>
+><i> -	/* Ignore asynchronous tag check faults in the uaccess routines */</i><br>
+><i> -	clear_mte_async_tcf</i><br>
+><i>  	enable_step_tsk x19, x2</i><br>
+><i>  #ifdef CONFIG_GCC_PLUGIN_STACKLEAK</i><br>
+><i>  	bl	stackleak_erase</i><br>
+><i> diff --git a/arch/arm64/kernel/mte.c b/arch/arm64/kernel/mte.c</i><br>
+><i> index b3c70a612c7a..e759b0eca47e 100644</i><br>
+><i> --- a/arch/arm64/kernel/mte.c</i><br>
+><i> +++ b/arch/arm64/kernel/mte.c</i><br>
+><i> @@ -166,14 +166,35 @@ static void set_gcr_el1_excl(u64 excl)</i><br>
+><i>  	 */</i><br>
+><i>  }</i><br>
+><i>  </i><br>
+><i> +void check_mte_async_tcf0(void)</i><br>
+<br>
+As above, this'll need to be noinstr. I also reckon we should put this<br>
+in the header so that it can be inlined.<br>
+<br>
+><i> +{</i><br>
+><i> +	/*</i><br>
+><i> +	 * dsb(ish) is not required before the register read</i><br>
+><i> +	 * because the TFSRE0_EL1 is automatically synchronized</i><br>
+><i> +	 * by the hardware on exception entry as SCTLR_EL1.ITFSB</i><br>
+><i> +	 * is set.</i><br>
+><i> +	 */</i><br>
+><i> +	u64 tcf0 = read_sysreg_s(SYS_TFSRE0_EL1);</i><br>
+<br>
+Shouldn't we have an MTE feature check first?<br>
+<br>
+><i> +</i><br>
+><i> +	if (tcf0 & SYS_TFSR_EL1_TF0)</i><br>
+><i> +		set_thread_flag(TIF_MTE_ASYNC_FAULT);</i><br>
+><i> +</i><br>
+><i> +	write_sysreg_s(0, SYS_TFSRE0_EL1);</i><br>
+><i> +}</i><br>
+><i> +</i><br>
+><i> +void clear_mte_async_tcf0(void)</i><br>
+><i> +{</i><br>
+><i> +	dsb(ish);</i><br>
+><i> +	write_sysreg_s(0, SYS_TFSRE0_EL1);</i><br>
+><i> +}</i><br>
+<br>
+Likewise here on all counts.<br>
+<br>
+Thanks,<br>
+Mark.<br>
+<br>
+><i>  void flush_mte_state(void)</i><br>
+><i>  {</i><br>
+><i>  	if (!system_supports_mte())</i><br>
+><i>  		return;</i><br>
+><i>  </i><br>
+><i>  	/* clear any pending asynchronous tag fault */</i><br>
+><i> -	dsb(ish);</i><br>
+><i> -	write_sysreg_s(0, SYS_TFSRE0_EL1);</i><br>
+><i> +	clear_mte_async_tcf0();</i><br>
+><i>  	clear_thread_flag(TIF_MTE_ASYNC_FAULT);</i><br>
+><i>  	/* disable tag checking */</i><br>
+><i>  	set_sctlr_el1_tcf0(SCTLR_EL1_TCF0_NONE);</i><br>
+><i> -- </i><br>
+><i> 2.30.2</i><br>
+><i> </i><br>
+<br>
+<br>
+

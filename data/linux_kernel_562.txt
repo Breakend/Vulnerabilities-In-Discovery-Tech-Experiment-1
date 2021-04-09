@@ -1,0 +1,56 @@
+
+Quoting DENG Qingfang <dqfext@xxxxxxxxx>:<br>
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+Add support for MT7530 interrupt controller.<br>
+<br>
+DENG Qingfang (4):<br>
+  net: phy: add MediaTek PHY driver<br>
+  net: dsa: mt7530: add interrupt support<br>
+  dt-bindings: net: dsa: add MT7530 interrupt controller binding<br>
+  staging: mt7621-dts: enable MT7530 interrupt controller<br>
+<br>
+ .../devicetree/bindings/net/dsa/mt7530.txt    |   5 +<br>
+ drivers/net/dsa/Kconfig                       |   1 +<br>
+ drivers/net/dsa/mt7530.c                      | 266 ++++++++++++++++--<br>
+ drivers/net/dsa/mt7530.h                      |  20 +-<br>
+ drivers/net/phy/Kconfig                       |   5 +<br>
+ drivers/net/phy/Makefile                      |   1 +<br>
+ drivers/net/phy/mediatek.c                    | 112 ++++++++<br>
+ drivers/staging/mt7621-dts/mt7621.dtsi        |   3 +<br>
+ 8 files changed, 384 insertions(+), 29 deletions(-)<br>
+ create mode 100644 drivers/net/phy/mediatek.c<br>
+<br>
+--<br>
+2.25.1<br>
+</blockquote>
+<br>
+I already tested v2 which works fine.<br>
+v3 works too.<br>
+<br>
+Tested on Ubiquiti ER-X-SFP (MT7621) with 1 external phy which uses irq=POLL.<br>
+<br>
+See dmesg log:<br>
+<br>
+[   12.045645] mt7530 mdio-bus:1f eth0 (uninitialized): PHY  
+[mt7530-0:00] driver [MediaTek MT7530 PHY] (irq=24)
+<br>[   12.425643] mt7530 mdio-bus:1f eth1 (uninitialized): PHY  
+[mt7530-0:01] driver [MediaTek MT7530 PHY] (irq=25)
+<br>[   12.745642] mt7530 mdio-bus:1f eth2 (uninitialized): PHY  
+[mt7530-0:02] driver [MediaTek MT7530 PHY] (irq=26)
+<br>[   13.065656] mt7530 mdio-bus:1f eth3 (uninitialized): PHY  
+[mt7530-0:03] driver [MediaTek MT7530 PHY] (irq=27)
+<br>[   13.445657] mt7530 mdio-bus:1f eth4 (uninitialized): PHY  
+[mt7530-0:04] driver [MediaTek MT7530 PHY] (irq=28)
+<br>[   13.785656] mt7530 mdio-bus:1f eth5 (uninitialized): PHY  
+[mdio-bus:07] driver [Qualcomm Atheros AR8031/AR8033] (irq=POLL)
+<br>
+<br>
+Tested-by: René van Dorst <opensource@xxxxxxxxxx><br>
+<br>
+Greats,<br>
+<br>
+René<br>
+<br>
+<br>
+

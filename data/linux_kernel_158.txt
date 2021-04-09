@@ -1,0 +1,53 @@
+In order to use upstream_bridge_distance_warn() from a dma_map function,<br>
+it must not sleep. However, pci_get_slot() takes the pci_bus_sem so it<br>
+might sleep.<br>
+<br>
+In order to avoid this, try to get the host bridge's device from<br>
+bus->self, and if that is not set, just get the first element in the<br>
+device list. It should be impossible for the host bridge's device to<br>
+go away while references are held on child devices, so the first element<br>
+should not be able to change and, thus, this should be safe.<br>
+<br>
+Signed-off-by: Logan Gunthorpe <logang@xxxxxxxxxxxx><br>
+---<br>
+ drivers/pci/p2pdma.c | 14 ++++++++++++--<br>
+ 1 file changed, 12 insertions(+), 2 deletions(-)<br>
+<br>
+diff --git a/drivers/pci/p2pdma.c b/drivers/pci/p2pdma.c<br>
+index bd89437faf06..473a08940fbc 100644<br>
+--- a/drivers/pci/p2pdma.c<br>
++++ b/drivers/pci/p2pdma.c<br>
+@@ -311,16 +311,26 @@ static const struct pci_p2pdma_whitelist_entry {<br>
+ static bool __host_bridge_whitelist(struct pci_host_bridge *host,<br>
+ 				    bool same_host_bridge)<br>
+ {<br>
+-	struct pci_dev *root = pci_get_slot(host->bus, PCI_DEVFN(0, 0));<br>
+ 	const struct pci_p2pdma_whitelist_entry *entry;<br>
++	struct pci_dev *root = host->bus->self;<br>
+ 	unsigned short vendor, device;<br>
+ <br>
++	/*<br>
++	 * This makes the assumption that the first device on the bus is the<br>
++	 * bridge itself and it has the devfn of 00.0. This assumption should<br>
++	 * hold for the devices in the white list above, and if there are cases<br>
++	 * where this isn't true they will have to be dealt with when such a<br>
++	 * case is added to the whitelist.<br>
++	 */<br>
+ 	if (!root)<br>
++		root = list_first_entry_or_null(&host->bus->devices,<br>
++						struct pci_dev, bus_list);<br>
++<br>
++	if (!root || root->devfn)<br>
+ 		return false;<br>
+ <br>
+ 	vendor = root->vendor;<br>
+ 	device = root->device;<br>
+-	pci_dev_put(root);<br>
+ <br>
+ 	for (entry = pci_p2pdma_whitelist; entry->vendor; entry++) {<br>
+ 		if (vendor != entry->vendor || device != entry->device)<br>
+-- <br>
+2.20.1<br>
+<br>
+<br>
+

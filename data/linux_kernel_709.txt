@@ -1,0 +1,29 @@
+Fix to return a negative error code from the error handling<br>
+case instead of 0, as done elsewhere in this function.<br>
+<br>
+Fixes: e3ed75bb537a8 ("perf buildid-cache: Move session...")<br>
+Reported-by: Hulk Robot <hulkci@xxxxxxxxxx><br>
+Signed-off-by: Zhihao Cheng <chengzhihao1@xxxxxxxxxx><br>
+---<br>
+ tools/perf/builtin-buildid-cache.c | 3 ++-<br>
+ 1 file changed, 2 insertions(+), 1 deletion(-)<br>
+<br>
+diff --git a/tools/perf/builtin-buildid-cache.c b/tools/perf/builtin-buildid-cache.c<br>
+index ecd0d3cb6f5c..f703ba11e12c 100644<br>
+--- a/tools/perf/builtin-buildid-cache.c<br>
++++ b/tools/perf/builtin-buildid-cache.c<br>
+@@ -448,7 +448,8 @@ int cmd_buildid_cache(int argc, const char **argv)<br>
+ 			return PTR_ERR(session);<br>
+ 	}<br>
+ <br>
+-	if (symbol__init(session ? &session->header.env : NULL) < 0)<br>
++	ret = symbol__init(session ? &session->header.env : NULL);<br>
++	if (ret < 0)<br>
+ 		goto out;<br>
+ <br>
+ 	setup_pager();<br>
+-- <br>
+2.25.4<br>
+<br>
+<br>
+

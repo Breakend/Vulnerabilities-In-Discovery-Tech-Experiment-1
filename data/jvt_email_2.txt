@@ -1,0 +1,396 @@
+
+    Primary Meeting Results
+
+    Communication Practices, Ad Hoc Groups Established, and AHG Charters
+
+ 
+
+The general JVT reflector can be subscribed to by clicking on “join jvt-experts” at http://mail.imtc.org/cgi-bin/lyris.pl?enter=jvt-experts 
+
+Email for the reflector should be sent to jvt-experts@mail.imtc.org. 
+
+The subject line of each email message will automatically be prefixed with "[jvt-experts]".  Project identification and unsubscribe information will be attached to the bottom of each reflected message. 
+
+Our new ftp site recently established for JVT use is ftp://ftp.imtc-files.org/jvt-experts/.
+
+Our prior site containing the files of the first and second JVT meetings was the VCEG site at http://standard.pictel.com/ftp/video-site.
+
+Our new work will be put on the new site, and we will be bringing our prior files from the old site to the new one shortly. 
+
+We heartily thank the International Multimedia Telecommunications Consortium for their great generosity in hosting both our email reflector and our ftp site. 
+
+    Many good technical discussions have been taking place on the JVT reflector and the reflectors of the various JVT ad hoc groups.
+
+Below is the current list of interim JVT ad hoc groups established at the Fairfax meeting that report to the Klagenfurt meeting, their chair contact information, and ad hoc reflector lists. 
+
+To AHG Chairs:
+
+    Please check this to make sure it contains correct and complete information for your ad hoc group.  (Particularly if the Discussion entry says "contact the chairs/general...")
+    Please always include the three rapporteurs on any ad hoc group discussions.
+    When possible, put an identifying tag in the subject line for discussions of a particular ad hoc group.  E.g., "[jvt-interpolation]"
+
+    We need to make sure that our process is open for participation by all interested parties.  We also hope that anyone working in an area covered by a designated ad hoc group will try to coordinate their work with the activities taking place in that group to the maximal possible extent.  Care should especially be taken in areas that affect multiple ad hoc groups. 
+
+    JVT Project Management
+
+    Chairmen: Gary Sullivan (garysull@microsoft.com), Ajay Luthra (aluthra@motorola.com), and Thomas Wiegand (wiegand@hhi.de)
+    Charter: To further the work on the JVT project as a whole, including project planning, work coordination, and status review.
+    Discussions: General JVT Reflector
+
+    Text Editing and Reference Software Development
+
+    Chairman: Thomas Wiegand (wiegand@hhi.de)
+    Charter: To further the work on the draft text and software implementation of the joint design, including incorporation of modifications as approved by the group, production of the joint committee draft text, collection of comments on the text and software, preparations to facilitate necessary future text modification work, and provision of improved software for group use in future experiments and for eventual approval as standardized reference software.
+    Discussions: Contact the chairs / General JVT Reflector
+
+    Motion Compensation Interpolation
+
+    Chairman: Thomas Wedi (wedi@tnt.uni-hannover.de)
+    Charter: To study the design of the motion compensation interpolation processing in the JVT design, including consideration of the completeness and correctness of the draft specification, the potential for use of adaptive motion interpolation and consideration of the rate-distortion-complexity tradeoffs in motion interpolation design. 
+     
+    Discussions: General JVT Reflector, tagline "[jvt-interpolation]"
+
+    Study of Complexity
+
+    Chairmen: Michael Horowitz (MHorowitz@Austin.Polycom.com) and Jan Bormans (bormans@imec.be)
+    Charter:
+
+    To study the implementation complexity of the AVC/JVT Codec
+
+    To formulate strategies to minimize the computational and implementation AVC/JVT codec complexity
+    To provide guidelines for the complexity studies of the AVC/JVT Codec
+    To collect meaningful AVC/JVT Codec parameter settings (to be provided by the JVT)
+
+    Discussions: jvt-complexity-list@imec.be
+    Subscription: Email to owner-jvt-complexity-list@imec.be
+
+    Deblocking Filter Analysis
+
+    Chairman: Peter List (Peter.List@telekom.de)
+
+Charter: To study the completeness and correctness of deblocking filter specification; to investigate quality and complexity issues for loop filter design in the JVT codec and to assess the potential for improved visual quality, reduced decoder computational complexity, and enhanced design simplicity.  It particular this ad hoc group should consider the relationship of the deblocking filter design to interlaced-scan video and the potential usefulness of turning off loop filtering around the boundaries of slices. 
+
+Discussions: jvt-loopfilter@berkom.de
+
+    Subscription: Contact the chair
+
+    High-Level Syntax
+
+    Chairmen: Miska Hannuksela (miska.hannuksela@nokia.com), Young-Kwon Lim (young@netntv.co.kr), Thomas Stockhammer (stockhammer@ei.tum.de)
+
+Charter: To Charter: To study the high-level syntax of JVT content (particularly syntax at the slice header level, picture header level, and parameter set level) to determine whether that this syntax is fully and properly specified and supports the carriage of JVT bitstreams for all appropriate transport environments. 
+
+Discussions: jvt-car@advent.ee.columbia.edu
+
+Subscription: email majordomo@advent.ee.columbia.edu
+
+                   saying "subscribe jvt-car"
+
+    Timing and Timing Information
+
+    Chairmen: Gary Sullivan (garys@microsoft.com) and Sherman Chen (schen@broadcom.com)
+    Charter: To study issues of timing (e.g. capture, presentation, etc) and Film mode video in relation to the completeness and correctness of the JVT design.
+    Discussions: Contact the chairs / General JVT reflector
+
+    CABAC
+
+    Chairman: Detlev Marpe (marpe@hhi.de)
+
+Charter: Charter: To study the CABAC design with regards to completeness and correctness of specification, rate-distortion performance, and complexity. 
+
+Discussions: jvt-CABAC@hhi.de
+
+    Subscription: contact the chair
+
+    Joint Model Reference Encoding Method Development
+
+    Chairman: Chul-Woo Kim (charlie@mcubeworks.com)
+    Charter: To further the work on description of example reference encoding methods for the JVT codec design toward eventual adoption as non-normative standard text.
+    Discussions: Contact the chair / General JVT reflector
+
+    Adaptive Block Transforms
+
+    Chairman: Mathias Wien (wien@ient.rwth-aachen.de)
+    Charter: To study the completeness and correctness of the specification of adaptive block transform use in the JVT draft specification; focusing in particular on the degree of harmonization of the ABT design with other changes adopted into the draft.
+
+Discussions: intl-abt-adhoc@ient.rwth-aachen.de
+
+Subscription: email majordomo@ient.rwth-aachen.de
+
+                    saying "subscribe intl-abt-adhoc"
+
+    Intra Coding
+
+    Chairperson: Marta Karczewicz (Marta.Karczewicz@nokia.com)
+    Charter: Consider of possible need to add new prediction modes for chroma prediction and investigate potential for reducing intra coding memory requirements.
+
+ 
+
+Discussions: jvt_intra_adhoc@yahoogroups.com
+
+Subscription: email jvt_intra_adhoc-subscribe@yahoogroups.com
+
+    Summary Information Report and Action Requests from the JVT
+
+The Joint Video Team (JVT) organization reports the following action requests and information to its ISO/IEC MPEG and ITU-T VCEG parent bodies and to its participants:
+
+            The JVT forwards the following document to its parent bodies for approval
+
+    Title 	No. 	TBP 	Available
+    Text of Committee Draft of Joint Video Specification (ITU-T Rec. H.264 | ISO/IEC 14496-10 AVC) 	JVT-C167 (WG11 N4810) 	Y 	02/05/12
+
+            The JVT reports the establishment of the following Ad Hoc groups:
+
+    Title 	Chair 	No. 	Mtg
+    JVT Project Management 	Gary Sullivan, Ajay Luthra, and Thomas Wiegand 	  	Y
+    Text Editing and Reference Software Development 	Thomas Wiegand 	  	02/05/11-12
+    Motion Compensation Interpolation 	Thomas Wedi 	  	 
+    Study of Complexity 	Michael Horowitz and Jan Bormans 	  	 
+    Deblocking Filter Analysis 	Peter List 	  	 
+    High-Level Syntax 	Miska Hannuksela, Young-Kwon Lim, Thomas Stockhammer 	  	 
+    Timing and Timing Information 	Gary Sullivan and Sherman Chen 	  	 
+    CABAC 	Detlev Marpe 	  	 
+    Joint Model Reference Encoding Method Development 	Chul Woo Kim 	  	 
+    Adaptive Block Transforms 	Mathias Wien 	  	 
+    Intra Coding 	Marta Karczewicz 	  	 
+
+            The JVT future meeting plans proposed by the JVT Chair|Rapporteur are as previously established:
+
+    Approx Date 	Auspices 	Location 	Project Milestone
+    July 22-26, 2002 	JTC1 	Klagenfurt, AT 	JM4, FCD
+    Oct. 14-18, 2002 	ITU-T 	Geneva, CH 	JM5, AAP Consent
+    Dec. 9-13, 2002 	JTC1 	TBD 	JM6, FDIS & Rec.
+    Feb./March, 2003 	<Ballot Result> 	N/A 	IS
+
+    It is noted that preparatory ad-hoc meetings within a week of the next meeting in Klagenfurt may be necessary to complete the workplan. Such meetings are to be announced with 30 days notice and approved by SG16 and WG11 management.
+
+            The JVT adopted a text of its joint draft for technically-aligned standardization approval by the parent bodies, including in particular approval in ISO/IEC as a Committee Draft [JVT-C167 / N4810].  This includes the adoption of the following changes relative to the editor’s draft text JVT-C039 (“JWD2r8”):
+
+Removal of elements not specifying normative video-layer functionality 	Removal of draft RTP payload specification (in Annex A of JWD2r8), reference example encoder (in Annex B), interim file format (Annex C), and reference example error concealment description (Annex D) 	bug-fix/clean-up
+Clarification from 
+discussion 	Change “bi-directional” picture  “bi-predictive” picture 	bug-fix/clean-up
+Conditional
+
+JVT-C056
+
+subject to cross-verification and stress testing
+	Dithered 5-tap Filter for In loop Deblocking 	quality enhancement
+Conditional
+
+JVT-C094
+
+subject to cross-verification
+	Complexity Reduction and Analysis for Deblocking Filter
+
+To adopt modification 1 (removal of recursiveness in “default” filter, and modification 3 (simplified switching for Bs=4, which is I-macroblock boundary).  Not modification 2 at this time.
+	complexity reduction
+JVT-C027 	Skip Mode Motion Compensation 	bug-fix/clean-up
+JVT-C028 	Context-adaptive VLC (CVLC) coding of coefficients 	quality improvement
+Conditional
+
+JVT-C038
+
+subject to cross-verification
+	Bounding the complexity of arithmetic decoding 	complexity reduction
+JVT-C060
+
+clearer text description for CD will be provided
+	Improved CABAC 	quality improvement
+JVT-C061 	Fast Arithmetic Coding for CABAC 	complexity reduction
+JVT-C064 	Alteration of byte stream format
+
+Adopted with N=1.
+	definition of system interface
+JVT-C066,
+
+JVT-C067,
+
+JVT-C103
+	Multiframe Interpolative Prediction
+
+Related docs:
+
+JVT-C047, JVT-C066, JVT-C067,
+
+JVT-C077, JVT-C103
+
+Adopt as in JVT-C067 and JVT-C103
+
+with revised syntax considering 
+JVT-C077 (non-baseline)
+	very significant quality improvement
+JVT-C069 	Levels and HRD 	clean-up
+JVT-C078 	Coding of Parameter Sets 	definition of system interface
+JVT-C083 	Signaling of "Clean" Random Access Points 	clean-up
+Conditional
+
+JVT-C089
+
+with limit of maximum of 8 slice groups and subject to further complexity analysis and verification
+	FMO: Flexible Macroblock Ordering 	improved error resilience
+JVT-C095 	H.320 NAL for JVT
+
+Non-system-specific start code structure elements only
+	Definition of system interface
+JVT-C107 and JVT-C140 	Adt'l Transforms and Quant.
+
+Adoption into non-baseline profile.
+	New feature
+JVT-C114 	The improved JVT-B097 SP coding scheme 	very significant improvement
+Response JVT-C116 	Color Space
+
+Add equivalent support to MPEG-2 & 4 Video
+
+If information not present: undefined or defined by system.  “Luma/Chroma” terminology agreed.
+
+Sequence level.
+	bug-fix/clean-up
+Response to JVT-C120 	Change of MV calculation for direct bi-predictive motion. Send N1, N2 and D at picture level using UVLC.
+
+MVf = N1*MV/D
+
+MVb = N2*MV/D
+	bug-fix
+JVT-C127 	MV Prediction in B Pictures 	bug-fix/clean-up
+JVT-C135 	Pixel Aspect Ratios
+
+Add equivalent support to H.263+/MPEG-4
+
+If indication is zero, undefined or defined by system. Add the 1/2, 2/3, and 3/4 variants of the nominal SDTV itemized PAR’s.  Sequence level. 8 bit table.
+	bug-fix/clean-up
+JVT-C136 	Rounding, QP Origin, Dynamic Range, and |f|
+
+item 1: Adopted.
+
+item 2: Agree to initialize QP at slice level relative to middle of range.  Check current design at MB level and use that with mid-range prediction for slice level.
+
+Note: Could change after consideration of JVT-C079.
+
+item 3: Adopt the first of the suggested alternative variants.
+
+item 4: Adopted.
+
+item 5: Adopted.
+
+item 6: Adopt subpoint 2, not the rest
+
+item 7: Not adopted.
+
+item 8: No immediate action requested.
+	bug-fix/clean-up
+JVT-C137 	Cropping, Generalized Pan-Scan, Source Formats
+
+Cropping and pan-scan concepts adopted.
+
+Source format modifications not adopted.
+	bug-fix/clean-up
+JVT-C138 	TR's, PN's, Pictures, Frames, and Fields
+
+27 MHz support via general time clock support.
+
+Dangling field support adopted
+
+Separate timing information for each field adopted.
+
+SEI for SMPTE-compatible compressed timing adopted
+
+Picture numbering aspects for further study
+	bug-fix/clean-up
+JVT-C162
+
+subject to cross-verification and some further study
+	Putting a Reasonable Upper Limit on Binarization Expansion 	bug-fix/clean-up
+JVT-C166 	Definition of HRD for VBR and CBR and low delay mode. Includes method of handling header-level data.  CBR can be same as VBR with average rate equal to peak rate.  Explicit support of 3:2 pull-down is included.  Relationship to other timing-related issues for further study. 	Clean-up
+
+ 
+
+            The JVT authorizes an editing period for production of the Joint CD text by the editor, to be provided by May 12, 2002.
+
+            The JVT reports the following summary information on the draft content of its interface to external systems-level specifications:
+
+        The joint video specification defines a common representation of all parameter set data, slice data, and “SEI” data units that are carried in the same way in bitstreams and in packets.  Each atomic chunk of such data is referred to as a NAL unit, where NAL is “network abstraction layer”.  This includes ensuring no emulation of start code prefixes of the bitstream format within a NAL unit. 
+
+        The joint video specification includes definition of a bitstream format (in a normative annex).  This format
+
+            is capable of conveying all data “in band”.
+            includes sufficient information to identify conformance of the video bitstream and this requires inclusion of sufficient relative timing information.
+            is capable of conveying temporal reference (relative timing data) within the video bitstream for use in HRD conformance verification
+
+ 
+
+        A packet-oriented interface is also defined within the joint video specification. 
+
+        To support simple conversion between these two formats, distinct parts of the joint specification describe what data needs to be carried, and
+
+            the bitstream definition section defines how to put all that into a bitstream
+            the packet-oriented definition section defines how to put this data into packets and what other information (such as timing information) is necessary for using those packets
+
+        Compound packets are not defined within the joint video spec.  If used, these are to be defined externally. 
+
+        In the bitstream format, NAL units are prefixed by a unique start code prefixes and temporal reference data is included at the picture or slice level.  In the packet format, timing information support is defined externally. 
+
+        Further information on these aspects is available in document JVT-C168C166.
+
+            The JVT reports the following summary information regarding Requirements and the definition of normative Profiles and Levels
+
+        Regarding Profiles
+
+            The Baseline Profile includes
+                I and P picture types
+                In-loop deblocking filter
+                Interlace (level-dependent, levels 2.1 and above)
+                1/4-sample motion compensation
+                Tree-structured motion segmentation down to 4x4 block size
+                VLC-based entropy coding
+                Flexible macroblock ordering (maximum 8 groups)
+            This includes all normative decoding features except:
+                B pictures
+                CABAC
+                Adaptive block-size transforms
+                1/8-sample motion compensation
+                Mixing intra and inter coding types within a macroblock
+                Data partitioning
+                SP & SI “switching” pictures
+            One additional profile is defined, the Main Profile.  This adds the following differences relative to the Baseline Profile:
+                B pictures
+                CABAC
+                Adaptive block-size transforms
+            Notes on Profiles and Levels
+                MV range will be limited
+                A limit is imposed on extreme aspect ratios
+                Number of reference pictures at highest supported picture size is level-dependent
+                Number of reference pictures increases when picture size is smaller than the highest supported size for the level, never exceeding 15
+            TBD’s
+                Exact values of MV range limits
+                Whether to allow smaller than 8x8 bi-predictive motion in B pictures for Main profile
+                Whether to include adaptive B picture interpolation coefficients for Main profile
+
+ 
+
+        Regarding Levels (in both profiles) are summarized with example typical format support as follows
+
+            Level 1=QCIF@15 (Intermediate Levels 1.1=CIF@7.5 and 1.2=CIF@15)
+            Level 2=CIF@30 (Intermediate Levels 2.1=HHR and 2.2)
+            Level 3=SDTV (Intermediate Levels 3.1 and 3.2)
+            Level 4=HDTV
+            Level 5=SHDTV (1920108860p)
+
+ 
+
+        Regarding Requirements
+
+                No 4:2:2 source format support is currently defined (pending further study and sufficiently mature contribution to next meeting)
+
+            Regarding WG11 National Body comments on technical content of the JVT draft, the JVT thanks the USNB to WG11 for its comments and reports that the actions taken by the JVT are consistent with all of the USNB requests.
+
+            Regarding the IPR status of the JVT draft text, the JVT reports that the specification of the Baseline Profile Tools as defined in the Joint CD is complete and is fully consistent with the Terms-of-Reference goal of achieving a royalty-free baseline profile status for technology essential for implementation.  Further reports to the JVT regarding the IPR status of the draft text are requested.
+
+            The JVT thanks the US National Institute of Standards and Technology, and Charles Fenimore in particular, for aid in providing equipment and support for demonstrations of video technology designs at the meeting.
+
+            The JVT thanks the USNB to WG11, and the sponsors of the social event, including Contentguard, INCITS, MPAA, Microsoft Corporation, NIST, RIAA, and Rightscom for hosting the JVT and providing excellent arrangements for our work.
+
+ 
+
+MeetingThe 3rd (Fairfax) JVT meeting was closed at 1:30pm Friday, May 10, 2002 
+ 
+

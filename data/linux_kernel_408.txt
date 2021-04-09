@@ -1,0 +1,332 @@
+Pass a pointer to the page being accessed into the dirty region helpers so<br>
+that the size of the page can be determined in case it's a transparent huge<br>
+page.<br>
+<br>
+This also required the page to be passed into the afs_page_dirty trace<br>
+point - so there's no need to specifically pass in the index or private<br>
+data as these can be retrieved directly from the page struct.<br>
+<br>
+Signed-off-by: David Howells <dhowells@xxxxxxxxxx><br>
+cc: linux-afs@xxxxxxxxxxxxxxxxxxx<br>
+cc: linux-cachefs@xxxxxxxxxx<br>
+cc: linux-fsdevel@xxxxxxxxxxxxxxx<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/160588527183.3465195.16107942526481976308.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/160588527183.3465195.16107942526481976308.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # rfc<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161118144921.1232039.11377711180492625929.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161118144921.1232039.11377711180492625929.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # rfc<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161161040747.2537118.11435394902674511430.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161161040747.2537118.11435394902674511430.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v2<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161340404553.1303470.11414163641767769882.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161340404553.1303470.11414163641767769882.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v3<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161539548385.286939.8864598314493255313.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161539548385.286939.8864598314493255313.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v4<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161653804285.2770958.3497360004849598038.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161653804285.2770958.3497360004849598038.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v5<br>
+---<br>
+<br>
+ fs/afs/file.c              |   20 +++++++--------<br>
+ fs/afs/internal.h          |   16 ++++++------<br>
+ fs/afs/write.c             |   60 ++++++++++++++++++--------------------------<br>
+ include/trace/events/afs.h |   23 ++++++++++-------<br>
+ 4 files changed, 55 insertions(+), 64 deletions(-)<br>
+<br>
+diff --git a/fs/afs/file.c b/fs/afs/file.c<br>
+index 314f6a9517c7..f1bae0b0a9c0 100644<br>
+--- a/fs/afs/file.c<br>
++++ b/fs/afs/file.c<br>
+@@ -514,8 +514,8 @@ static void afs_invalidate_dirty(struct page *page, unsigned int offset,<br>
+ 		return;<br>
+ <br>
+ 	/* We may need to shorten the dirty region */<br>
+-	f = afs_page_dirty_from(priv);<br>
+-	t = afs_page_dirty_to(priv);<br>
++	f = afs_page_dirty_from(page, priv);<br>
++	t = afs_page_dirty_to(page, priv);<br>
+ <br>
+ 	if (t <= offset || f >= end)<br>
+ 		return; /* Doesn't overlap */<br>
+@@ -533,17 +533,17 @@ static void afs_invalidate_dirty(struct page *page, unsigned int offset,<br>
+ 	if (f == t)<br>
+ 		goto undirty;<br>
+ <br>
+-	priv = afs_page_dirty(f, t);<br>
++	priv = afs_page_dirty(page, f, t);<br>
+ 	set_page_private(page, priv);<br>
+-	trace_afs_page_dirty(vnode, tracepoint_string("trunc"), page->index, priv);<br>
++	trace_afs_page_dirty(vnode, tracepoint_string("trunc"), page);<br>
+ 	return;<br>
+ <br>
+ undirty:<br>
+-	trace_afs_page_dirty(vnode, tracepoint_string("undirty"), page->index, priv);<br>
++	trace_afs_page_dirty(vnode, tracepoint_string("undirty"), page);<br>
+ 	clear_page_dirty_for_io(page);<br>
+ full_invalidate:<br>
+-	priv = (unsigned long)detach_page_private(page);<br>
+-	trace_afs_page_dirty(vnode, tracepoint_string("inval"), page->index, priv);<br>
++	detach_page_private(page);<br>
++	trace_afs_page_dirty(vnode, tracepoint_string("inval"), page);<br>
+ }<br>
+ <br>
+ /*<br>
+@@ -571,7 +571,6 @@ static void afs_invalidatepage(struct page *page, unsigned int offset,<br>
+ static int afs_releasepage(struct page *page, gfp_t gfp_flags)<br>
+ {<br>
+ 	struct afs_vnode *vnode = AFS_FS_I(page->mapping->host);<br>
+-	unsigned long priv;<br>
+ <br>
+ 	_enter("{{%llx:%llu}[%lu],%lx},%x",<br>
+ 	       vnode->fid.vid, vnode->fid.vnode, page->index, page->flags,<br>
+@@ -580,9 +579,8 @@ static int afs_releasepage(struct page *page, gfp_t gfp_flags)<br>
+ 	/* deny if page is being written to the cache and the caller hasn't<br>
+ 	 * elected to wait */<br>
+ 	if (PagePrivate(page)) {<br>
+-		priv = (unsigned long)detach_page_private(page);<br>
+-		trace_afs_page_dirty(vnode, tracepoint_string("rel"),<br>
+-				     page->index, priv);<br>
++		detach_page_private(page);<br>
++		trace_afs_page_dirty(vnode, tracepoint_string("rel"), page);<br>
+ 	}<br>
+ <br>
+ 	/* indicate that the page can be released */<br>
+diff --git a/fs/afs/internal.h b/fs/afs/internal.h<br>
+index 1627b1872812..fd437d4722b5 100644<br>
+--- a/fs/afs/internal.h<br>
++++ b/fs/afs/internal.h<br>
+@@ -875,31 +875,31 @@ struct afs_vnode_cache_aux {<br>
+ #define __AFS_PAGE_PRIV_MMAPPED	0x8000UL<br>
+ #endif<br>
+ <br>
+-static inline unsigned int afs_page_dirty_resolution(void)<br>
++static inline unsigned int afs_page_dirty_resolution(struct page *page)<br>
+ {<br>
+-	int shift = PAGE_SHIFT - (__AFS_PAGE_PRIV_SHIFT - 1);<br>
++	int shift = thp_order(page) + PAGE_SHIFT - (__AFS_PAGE_PRIV_SHIFT - 1);<br>
+ 	return (shift > 0) ? shift : 0;<br>
+ }<br>
+ <br>
+-static inline size_t afs_page_dirty_from(unsigned long priv)<br>
++static inline size_t afs_page_dirty_from(struct page *page, unsigned long priv)<br>
+ {<br>
+ 	unsigned long x = priv & __AFS_PAGE_PRIV_MASK;<br>
+ <br>
+ 	/* The lower bound is inclusive */<br>
+-	return x << afs_page_dirty_resolution();<br>
++	return x << afs_page_dirty_resolution(page);<br>
+ }<br>
+ <br>
+-static inline size_t afs_page_dirty_to(unsigned long priv)<br>
++static inline size_t afs_page_dirty_to(struct page *page, unsigned long priv)<br>
+ {<br>
+ 	unsigned long x = (priv >> __AFS_PAGE_PRIV_SHIFT) & __AFS_PAGE_PRIV_MASK;<br>
+ <br>
+ 	/* The upper bound is immediately beyond the region */<br>
+-	return (x + 1) << afs_page_dirty_resolution();<br>
++	return (x + 1) << afs_page_dirty_resolution(page);<br>
+ }<br>
+ <br>
+-static inline unsigned long afs_page_dirty(size_t from, size_t to)<br>
++static inline unsigned long afs_page_dirty(struct page *page, size_t from, size_t to)<br>
+ {<br>
+-	unsigned int res = afs_page_dirty_resolution();<br>
++	unsigned int res = afs_page_dirty_resolution(page);<br>
+ 	from >>= res;<br>
+ 	to = (to - 1) >> res;<br>
+ 	return (to << __AFS_PAGE_PRIV_SHIFT) | from;<br>
+diff --git a/fs/afs/write.c b/fs/afs/write.c<br>
+index 901bd2ee2dd0..babc84dd9719 100644<br>
+--- a/fs/afs/write.c<br>
++++ b/fs/afs/write.c<br>
+@@ -112,15 +112,14 @@ int afs_write_begin(struct file *file, struct address_space *mapping,<br>
+ 	t = f = 0;<br>
+ 	if (PagePrivate(page)) {<br>
+ 		priv = page_private(page);<br>
+-		f = afs_page_dirty_from(priv);<br>
+-		t = afs_page_dirty_to(priv);<br>
++		f = afs_page_dirty_from(page, priv);<br>
++		t = afs_page_dirty_to(page, priv);<br>
+ 		ASSERTCMP(f, <=, t);<br>
+ 	}<br>
+ <br>
+ 	if (f != t) {<br>
+ 		if (PageWriteback(page)) {<br>
+-			trace_afs_page_dirty(vnode, tracepoint_string("alrdy"),<br>
+-					     page->index, priv);<br>
++			trace_afs_page_dirty(vnode, tracepoint_string("alrdy"), page);<br>
+ 			goto flush_conflicting_write;<br>
+ 		}<br>
+ 		/* If the file is being filled locally, allow inter-write<br>
+@@ -204,21 +203,19 @@ int afs_write_end(struct file *file, struct address_space *mapping,<br>
+ <br>
+ 	if (PagePrivate(page)) {<br>
+ 		priv = page_private(page);<br>
+-		f = afs_page_dirty_from(priv);<br>
+-		t = afs_page_dirty_to(priv);<br>
++		f = afs_page_dirty_from(page, priv);<br>
++		t = afs_page_dirty_to(page, priv);<br>
+ 		if (from < f)<br>
+ 			f = from;<br>
+ 		if (to > t)<br>
+ 			t = to;<br>
+-		priv = afs_page_dirty(f, t);<br>
++		priv = afs_page_dirty(page, f, t);<br>
+ 		set_page_private(page, priv);<br>
+-		trace_afs_page_dirty(vnode, tracepoint_string("dirty+"),<br>
+-				     page->index, priv);<br>
++		trace_afs_page_dirty(vnode, tracepoint_string("dirty+"), page);<br>
+ 	} else {<br>
+-		priv = afs_page_dirty(from, to);<br>
++		priv = afs_page_dirty(page, from, to);<br>
+ 		attach_page_private(page, (void *)priv);<br>
+-		trace_afs_page_dirty(vnode, tracepoint_string("dirty"),<br>
+-				     page->index, priv);<br>
++		trace_afs_page_dirty(vnode, tracepoint_string("dirty"), page);<br>
+ 	}<br>
+ <br>
+ 	set_page_dirty(page);<br>
+@@ -321,7 +318,6 @@ static void afs_pages_written_back(struct afs_vnode *vnode,<br>
+ 				   pgoff_t first, pgoff_t last)<br>
+ {<br>
+ 	struct pagevec pv;<br>
+-	unsigned long priv;<br>
+ 	unsigned count, loop;<br>
+ <br>
+ 	_enter("{%llx:%llu},{%lx-%lx}",<br>
+@@ -340,9 +336,9 @@ static void afs_pages_written_back(struct afs_vnode *vnode,<br>
+ 		ASSERTCMP(pv.nr, ==, count);<br>
+ <br>
+ 		for (loop = 0; loop < count; loop++) {<br>
+-			priv = (unsigned long)detach_page_private(pv.pages[loop]);<br>
++			detach_page_private(pv.pages[loop]);<br>
+ 			trace_afs_page_dirty(vnode, tracepoint_string("clear"),<br>
+-					     pv.pages[loop]->index, priv);<br>
++					     pv.pages[loop]);<br>
+ 			end_page_writeback(pv.pages[loop]);<br>
+ 		}<br>
+ 		first += count;<br>
+@@ -516,15 +512,13 @@ static int afs_write_back_from_locked_page(struct address_space *mapping,<br>
+ 	 */<br>
+ 	start = primary_page->index;<br>
+ 	priv = page_private(primary_page);<br>
+-	offset = afs_page_dirty_from(priv);<br>
+-	to = afs_page_dirty_to(priv);<br>
+-	trace_afs_page_dirty(vnode, tracepoint_string("store"),<br>
+-			     primary_page->index, priv);<br>
++	offset = afs_page_dirty_from(primary_page, priv);<br>
++	to = afs_page_dirty_to(primary_page, priv);<br>
++	trace_afs_page_dirty(vnode, tracepoint_string("store"), primary_page);<br>
+ <br>
+ 	WARN_ON(offset == to);<br>
+ 	if (offset == to)<br>
+-		trace_afs_page_dirty(vnode, tracepoint_string("WARN"),<br>
+-				     primary_page->index, priv);<br>
++		trace_afs_page_dirty(vnode, tracepoint_string("WARN"), primary_page);<br>
+ <br>
+ 	if (start >= final_page ||<br>
+ 	    (to < PAGE_SIZE && !test_bit(AFS_VNODE_NEW_CONTENT, &vnode->flags)))<br>
+@@ -562,8 +556,8 @@ static int afs_write_back_from_locked_page(struct address_space *mapping,<br>
+ 			}<br>
+ <br>
+ 			priv = page_private(page);<br>
+-			f = afs_page_dirty_from(priv);<br>
+-			t = afs_page_dirty_to(priv);<br>
++			f = afs_page_dirty_from(page, priv);<br>
++			t = afs_page_dirty_to(page, priv);<br>
+ 			if (f != 0 &&<br>
+ 			    !test_bit(AFS_VNODE_NEW_CONTENT, &vnode->flags)) {<br>
+ 				unlock_page(page);<br>
+@@ -571,8 +565,7 @@ static int afs_write_back_from_locked_page(struct address_space *mapping,<br>
+ 			}<br>
+ 			to = t;<br>
+ <br>
+-			trace_afs_page_dirty(vnode, tracepoint_string("store+"),<br>
+-					     page->index, priv);<br>
++			trace_afs_page_dirty(vnode, tracepoint_string("store+"), page);<br>
+ <br>
+ 			if (!clear_page_dirty_for_io(page))<br>
+ 				BUG();<br>
+@@ -860,14 +853,13 @@ vm_fault_t afs_page_mkwrite(struct vm_fault *vmf)<br>
+ 	 */<br>
+ 	wait_on_page_writeback(vmf->page);<br>
+ <br>
+-	priv = afs_page_dirty(0, PAGE_SIZE);<br>
++	priv = afs_page_dirty(vmf->page, 0, PAGE_SIZE);<br>
+ 	priv = afs_page_dirty_mmapped(priv);<br>
+-	trace_afs_page_dirty(vnode, tracepoint_string("mkwrite"),<br>
+-			     vmf->page->index, priv);<br>
+ 	if (PagePrivate(vmf->page))<br>
+ 		set_page_private(vmf->page, priv);<br>
+ 	else<br>
+ 		attach_page_private(vmf->page, (void *)priv);<br>
++	trace_afs_page_dirty(vnode, tracepoint_string("mkwrite"), vmf->page);<br>
+ 	file_update_time(file);<br>
+ <br>
+ 	sb_end_pagefault(inode->i_sb);<br>
+@@ -920,17 +912,15 @@ int afs_launder_page(struct page *page)<br>
+ 		f = 0;<br>
+ 		t = PAGE_SIZE;<br>
+ 		if (PagePrivate(page)) {<br>
+-			f = afs_page_dirty_from(priv);<br>
+-			t = afs_page_dirty_to(priv);<br>
++			f = afs_page_dirty_from(page, priv);<br>
++			t = afs_page_dirty_to(page, priv);<br>
+ 		}<br>
+ <br>
+-		trace_afs_page_dirty(vnode, tracepoint_string("launder"),<br>
+-				     page->index, priv);<br>
++		trace_afs_page_dirty(vnode, tracepoint_string("launder"), page);<br>
+ 		ret = afs_store_data(mapping, page->index, page->index, t, f, true);<br>
+ 	}<br>
+ <br>
+-	priv = (unsigned long)detach_page_private(page);<br>
+-	trace_afs_page_dirty(vnode, tracepoint_string("laundered"),<br>
+-			     page->index, priv);<br>
++	detach_page_private(page);<br>
++	trace_afs_page_dirty(vnode, tracepoint_string("laundered"), page);<br>
+ 	return ret;<br>
+ }<br>
+diff --git a/include/trace/events/afs.h b/include/trace/events/afs.h<br>
+index 4a5cc8c64be3..9203cf6a8c53 100644<br>
+--- a/include/trace/events/afs.h<br>
++++ b/include/trace/events/afs.h<br>
+@@ -969,30 +969,33 @@ TRACE_EVENT(afs_dir_check_failed,<br>
+ 	    );<br>
+ <br>
+ TRACE_EVENT(afs_page_dirty,<br>
+-	    TP_PROTO(struct afs_vnode *vnode, const char *where,<br>
+-		     pgoff_t page, unsigned long priv),<br>
++	    TP_PROTO(struct afs_vnode *vnode, const char *where, struct page *page),<br>
+ <br>
+-	    TP_ARGS(vnode, where, page, priv),<br>
++	    TP_ARGS(vnode, where, page),<br>
+ <br>
+ 	    TP_STRUCT__entry(<br>
+ 		    __field(struct afs_vnode *,		vnode		)<br>
+ 		    __field(const char *,		where		)<br>
+ 		    __field(pgoff_t,			page		)<br>
+-		    __field(unsigned long,		priv		)<br>
++		    __field(unsigned long,		from		)<br>
++		    __field(unsigned long,		to		)<br>
+ 			     ),<br>
+ <br>
+ 	    TP_fast_assign(<br>
+ 		    __entry->vnode = vnode;<br>
+ 		    __entry->where = where;<br>
+-		    __entry->page = page;<br>
+-		    __entry->priv = priv;<br>
++		    __entry->page = page->index;<br>
++		    __entry->from = afs_page_dirty_from(page, page->private);<br>
++		    __entry->to = afs_page_dirty_to(page, page->private);<br>
++		    __entry->to |= (afs_is_page_dirty_mmapped(page->private) ?<br>
++				    (1UL << (BITS_PER_LONG - 1)) : 0);<br>
+ 			   ),<br>
+ <br>
+-	    TP_printk("vn=%p %lx %s %zx-%zx%s",<br>
++	    TP_printk("vn=%p %lx %s %lx-%lx%s",<br>
+ 		      __entry->vnode, __entry->page, __entry->where,<br>
+-		      afs_page_dirty_from(__entry->priv),<br>
+-		      afs_page_dirty_to(__entry->priv),<br>
+-		      afs_is_page_dirty_mmapped(__entry->priv) ? " M" : "")<br>
++		      __entry->from,<br>
++		      __entry->to & ~(1UL << (BITS_PER_LONG - 1)),<br>
++		      __entry->to & (1UL << (BITS_PER_LONG - 1)) ? " M" : "")<br>
+ 	    );<br>
+ <br>
+ TRACE_EVENT(afs_call_state,<br>
+<br>
+<br>
+<br>
+

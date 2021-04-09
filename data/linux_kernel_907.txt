@@ -1,0 +1,30 @@
+On Thu, Apr 8, 2021 at 11:22 AM David Hildenbrand <david@xxxxxxxxxx> wrote:<br>
+><i></i><br>
+><i> Random drivers should not override a user configuration of core knobs</i><br>
+><i> (e.g., CONFIG_DMA_CMA=n). Use "imply" instead, to still respect</i><br>
+><i> dependencies and manual overrides.</i><br>
+><i></i><br>
+><i> "This is similar to "select" as it enforces a lower limit on another</i><br>
+><i>  symbol except that the "implied" symbol's value may still be set to n</i><br>
+><i>  from a direct dependency or with a visible prompt."</i><br>
+><i></i><br>
+><i> Implying DRM_CMA should be sufficient, as that depends on CMA.</i><br>
+><i></i><br>
+><i> Note: If this is a real dependency, we should use "depends on DMA_CMA"</i><br>
+><i> instead -  but I assume the driver can work without CMA just fine --</i><br>
+><i> esp. when we wouldn't have HAVE_DMA_CONTIGUOUS right now.</i><br>
+<br>
+'imply' is almost never the right solution, and it tends to cause more<br>
+problems than it solves.<br>
+<br>
+In particular, it does not prevent a configuration with 'DRM_CMA=m'<br>
+and 'DRMA_ASPEED_GFX=y', or any build failures from such<br>
+a configuration.<br>
+<br>
+If you want this kind of soft dependency, you need<br>
+'depends on DRM_CMA || !DRM_CMA'.<br>
+<br>
+         Arnd<br>
+<br>
+<br>
+

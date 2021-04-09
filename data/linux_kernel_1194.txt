@@ -1,0 +1,23 @@
+On Thu, 8 Apr 2021, Greg KH wrote:<br>
+<br>
+><i> Removing a module from a system has always been "let's try it and see!"</i><br>
+><i> type of operation for a very long time.  </i><br>
+<br>
+Which part of it?<br>
+<br>
+If there is a driver/subsystem code that can't handle the reverse <br>
+operation to modprobe, it clearly can't handle error handling during <br>
+modprobe (which, one would hope, is supported), and should be fixed.<br>
+<br>
+If there is a particular issue in kernel dynamic linker that causes crash <br>
+on module removal, we'd better off fixing it. Is there one such that makes <br>
+you claim module removal unsupported?<br>
+<br>
+Thanks,<br>
+<br>
+-- <br>
+Jiri Kosina<br>
+SUSE Labs<br>
+<br>
+<br>
+

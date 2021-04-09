@@ -1,0 +1,251 @@
+Add a drgn-based tool to display slab information for a given memcg.<br>
+Can replace cgroup v1 memory.kmem.slabinfo interface on cgroup v2,<br>
+but in a more flexiable way.<br>
+<br>
+Currently supports only SLUB configuration, but SLAB can be trivially<br>
+added later.<br>
+<br>
+Output example:<br>
+$ sudo ./tools/cgroup/slabinfo.py /sys/fs/cgroup/user.slice/user-111017.sli=<br>
+ce/user\@111017.service<br>
+shmem_inode_cache     92     92    704   46    8 : tunables    0    0    0 =<br>
+: slabdata      2      2      0<br>
+eventpoll_pwq         56     56     72   56    1 : tunables    0    0    0 =<br>
+: slabdata      1      1      0<br>
+eventpoll_epi         32     32    128   32    1 : tunables    0    0    0 =<br>
+: slabdata      1      1      0<br>
+kmalloc-8              0      0      8  512    1 : tunables    0    0    0 =<br>
+: slabdata      0      0      0<br>
+kmalloc-96             0      0     96   42    1 : tunables    0    0    0 =<br>
+: slabdata      0      0      0<br>
+kmalloc-2048           0      0   2048   16    8 : tunables    0    0    0 =<br>
+: slabdata      0      0      0<br>
+kmalloc-64           128    128     64   64    1 : tunables    0    0    0 =<br>
+: slabdata      2      2      0<br>
+mm_struct            160    160   1024   32    8 : tunables    0    0    0 =<br>
+: slabdata      5      5      0<br>
+signal_cache          96     96   1024   32    8 : tunables    0    0    0 =<br>
+: slabdata      3      3      0<br>
+sighand_cache         45     45   2112   15    8 : tunables    0    0    0 =<br>
+: slabdata      3      3      0<br>
+files_cache          138    138    704   46    8 : tunables    0    0    0 =<br>
+: slabdata      3      3      0<br>
+task_delay_info      153    153     80   51    1 : tunables    0    0    0 =<br>
+: slabdata      3      3      0<br>
+task_struct           27     27   3520    9    8 : tunables    0    0    0 =<br>
+: slabdata      3      3      0<br>
+radix_tree_node       56     56    584   28    4 : tunables    0    0    0 =<br>
+: slabdata      2      2      0<br>
+btrfs_inode          140    140   1136   28    8 : tunables    0    0    0 =<br>
+: slabdata      5      5      0<br>
+kmalloc-1024          64     64   1024   32    8 : tunables    0    0    0 =<br>
+: slabdata      2      2      0<br>
+kmalloc-192           84     84    192   42    2 : tunables    0    0    0 =<br>
+: slabdata      2      2      0<br>
+inode_cache           54     54    600   27    4 : tunables    0    0    0 =<br>
+: slabdata      2      2      0<br>
+kmalloc-128            0      0    128   32    1 : tunables    0    0    0 =<br>
+: slabdata      0      0      0<br>
+kmalloc-512           32     32    512   32    4 : tunables    0    0    0 =<br>
+: slabdata      1      1      0<br>
+skbuff_head_cache     32     32    256   32    2 : tunables    0    0    0 =<br>
+: slabdata      1      1      0<br>
+sock_inode_cache      46     46    704   46    8 : tunables    0    0    0 =<br>
+: slabdata      1      1      0<br>
+cred_jar             378    378    192   42    2 : tunables    0    0    0 =<br>
+: slabdata      9      9      0<br>
+proc_inode_cache      96     96    672   24    4 : tunables    0    0    0 =<br>
+: slabdata      4      4      0<br>
+dentry               336    336    192   42    2 : tunables    0    0    0 =<br>
+: slabdata      8      8      0<br>
+filp                 697    864    256   32    2 : tunables    0    0    0 =<br>
+: slabdata     27     27      0<br>
+anon_vma             644    644     88   46    1 : tunables    0    0    0 =<br>
+: slabdata     14     14      0<br>
+pid                 1408   1408     64   64    1 : tunables    0    0    0 =<br>
+: slabdata     22     22      0<br>
+vm_area_struct      1200   1200    200   40    2 : tunables    0    0    0 =<br>
+: slabdata     30     30      0<br>
+<br>
+Signed-off-by: Roman Gushchin <guro@xxxxxx><br>
+Cc: Waiman Long <longman@xxxxxxxxxx><br>
+Cc: Tobin C. Harding <tobin@xxxxxxxxxx><br>
+Cc: Tejun Heo <tj@xxxxxxxxxx><br>
+---<br>
+ tools/cgroup/slabinfo.py | 158 +++++++++++++++++++++++++++++++++++++++<br>
+ 1 file changed, 158 insertions(+)<br>
+ create mode 100755 tools/cgroup/slabinfo.py<br>
+<br>
+diff --git a/tools/cgroup/slabinfo.py b/tools/cgroup/slabinfo.py<br>
+new file mode 100755<br>
+index 000000000000..0dc3a1fc260c<br>
+--- /dev/null<br>
++++ b/tools/cgroup/slabinfo.py<br>
+@@ -0,0 +1,158 @@<br>
++#!/usr/bin/env drgn<br>
++#<br>
++# Copyright (C) 2019 Roman Gushchin <guro@xxxxxx><br>
++# Copyright (C) 2019 Facebook<br>
++<br>
++from os import stat<br>
++import argparse<br>
++import sys<br>
++<br>
++from drgn.helpers.linux import list_for_each_entry, list_empty<br>
++from drgn import container_of<br>
++<br>
++<br>
++DESC =3D """<br>
++This is a drgn script to provide slab statistics for memory cgroups.<br>
++It supports cgroup v2 and v1 and can emulate memory.kmem.slabinfo<br>
++interface of cgroup v1.<br>
++For drgn, visit <a  rel="nofollow" href="https://github.com/osandov/drgn">https://github.com/osandov/drgn</a>.<br>
++"""<br>
++<br>
++<br>
++MEMCGS =3D {}<br>
++<br>
++OO_SHIFT =3D 16<br>
++OO_MASK =3D ((1 << OO_SHIFT) - 1)<br>
++<br>
++<br>
++def err(s):<br>
++    print('slabinfo.py: error: %s' % s, file=3Dsys.stderr, flush=3DTrue)<br>
++    sys.exit(1)<br>
++<br>
++<br>
++def find_memcg_ids(css=3Dprog['root_mem_cgroup'].css, prefix=3D''):<br>
++    if not list_empty(css.children.address_of_()):<br>
++        for css in list_for_each_entry('struct cgroup_subsys_state',<br>
++                                       css.children.address_of_(),<br>
++                                       'sibling'):<br>
++            name =3D prefix + '/' + css.cgroup.kn.name.string_().decode('u=<br>
+tf-8')<br>
++            memcg =3D container_of(css, 'struct mem_cgroup', 'css')<br>
++            MEMCGS[css.cgroup.kn.id.value_()] =3D memcg<br>
++            find_memcg_ids(css, name)<br>
++<br>
++<br>
++def is_root_cache(s):<br>
++    return False if s.memcg_params.root_cache else True<br>
++<br>
++<br>
++def cache_name(s):<br>
++    if is_root_cache(s):<br>
++        return s.name.string_().decode('utf-8')<br>
++    else:<br>
++        return s.memcg_params.root_cache.name.string_().decode('utf-8')<br>
++<br>
++<br>
++# SLUB<br>
++<br>
++def oo_order(s):<br>
++    return s.oo.x >> OO_SHIFT<br>
++<br>
++<br>
++def oo_objects(s):<br>
++    return s.oo.x & OO_MASK<br>
++<br>
++<br>
++def count_partial(n, fn):<br>
++    nr_pages =3D 0<br>
++    for page in list_for_each_entry('struct page', n.partial.address_of_()=<br>
+,<br>
++                                    'lru'):<br>
++         nr_pages +=3D fn(page)<br>
++    return nr_pages<br>
++<br>
++<br>
++def count_free(page):<br>
++    return page.objects - page.inuse<br>
++<br>
++<br>
++def slub_get_slabinfo(s, cfg):<br>
++    nr_slabs =3D 0<br>
++    nr_objs =3D 0<br>
++    nr_free =3D 0<br>
++<br>
++    for node in range(cfg['nr_nodes']):<br>
++        n =3D s.node[node]<br>
++        nr_slabs +=3D n.nr_slabs.counter.value_()<br>
++        nr_objs +=3D n.total_objects.counter.value_()<br>
++        nr_free +=3D count_partial(n, count_free)<br>
++<br>
++    return {'active_objs': nr_objs - nr_free,<br>
++            'num_objs': nr_objs,<br>
++            'active_slabs': nr_slabs,<br>
++            'num_slabs': nr_slabs,<br>
++            'objects_per_slab': oo_objects(s),<br>
++            'cache_order': oo_order(s),<br>
++            'limit': 0,<br>
++            'batchcount': 0,<br>
++            'shared': 0,<br>
++            'shared_avail': 0}<br>
++<br>
++<br>
++def cache_show(s, cfg):<br>
++    if cfg['allocator'] =3D=3D 'SLUB':<br>
++        sinfo =3D slub_get_slabinfo(s, cfg)<br>
++    else:<br>
++        err('SLAB isn\'t supported yet')<br>
++<br>
++    print('%-17s %6lu %6lu %6u %4u %4d'<br>
++          ' : tunables %4u %4u %4u'<br>
++          ' : slabdata %6lu %6lu %6lu' % (<br>
++              cache_name(s), sinfo['active_objs'], sinfo['num_objs'],<br>
++              s.size, sinfo['objects_per_slab'], 1 << sinfo['cache_order']=<br>
+,<br>
++              sinfo['limit'], sinfo['batchcount'], sinfo['shared'],<br>
++              sinfo['active_slabs'], sinfo['num_slabs'],<br>
++              sinfo['shared_avail']))<br>
++<br>
++<br>
++def detect_kernel_config():<br>
++    cfg =3D {}<br>
++<br>
++    cfg['nr_nodes'] =3D prog['nr_online_nodes'].value_()<br>
++<br>
++    if prog.type('struct kmem_cache').members[1][1] =3D=3D 'flags':<br>
++        cfg['allocator'] =3D 'SLUB'<br>
++    elif prog.type('struct kmem_cache').members[1][1] =3D=3D 'batchcount':<br>
++        cfg['allocator'] =3D 'SLAB'<br>
++    else:<br>
++        err('Can\'t determine the slab allocator')<br>
++<br>
++    return cfg<br>
++<br>
++<br>
++def main():<br>
++    parser =3D argparse.ArgumentParser(description=3DDESC,<br>
++                                     formatter_class=3D<br>
++                                     argparse.RawTextHelpFormatter)<br>
++    parser.add_argument('cgroup', metavar=3D'CGROUP',<br>
++                        help=3D'Target memory cgroup')<br>
++    args =3D parser.parse_args()<br>
++<br>
++    try:<br>
++        cgroup_id =3D stat(args.cgroup).st_ino<br>
++        find_memcg_ids()<br>
++        memcg =3D MEMCGS[cgroup_id]<br>
++    except KeyError:<br>
++        err('Can\'t find the memory cgroup')<br>
++<br>
++    cfg =3D detect_kernel_config()<br>
++<br>
++    print('# name            <active_objs> <num_objs> <objsize> <objpersla=<br>
+b> <pagesperslab>'<br>
++          ' : tunables <limit> <batchcount> <sharedfactor>'<br>
++          ' : slabdata <active_slabs> <num_slabs> <sharedavail>')<br>
++<br>
++    for s in list_for_each_entry('struct kmem_cache',<br>
++                                 memcg.kmem_caches.address_of_(),<br>
++                                 'memcg_params.kmem_caches_node'):<br>
++        cache_show(s, cfg)<br>
++<br>
++<br>
++main()<br>
+--=20<br>
+2.24.1<br>
+<br>
+<br>
+

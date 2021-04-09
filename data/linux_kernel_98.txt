@@ -1,0 +1,19 @@
+Hi Heiner,<br>
+<br>
+On Thu, Apr 8, 2021 at 2:22 PM Heiner Kallweit <hkallweit1@xxxxxxxxx> wrote:<br>
+><i></i><br>
+><i> Just an idea:</i><br>
+><i> RX_HEAD_PADDING is an alias for NET_IP_ALIGN that can have two values:</i><br>
+><i> 0 and 2</i><br>
+><i> The two systems you use may have different NET_IP_ALIGN values.</i><br>
+><i> This could explain the behavior. Then what I proposed should work</i><br>
+><i> for both of you: frame_length - ETH_FCS_LEN</i><br>
+<br>
+Yes, good point! I was thinking the exact same thing just now.<br>
+Subtracting 2 + RX_HEAD_PADDING from the frame length made no sense.<br>
+<br>
+George, I will send a patch for you to try shortly. Except if you're<br>
+already ahead :)<br>
+<br>
+<br>
+

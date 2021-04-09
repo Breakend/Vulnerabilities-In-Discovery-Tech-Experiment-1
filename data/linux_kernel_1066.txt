@@ -1,0 +1,150 @@
+Hi Marc,<br>
+<br>
+On 2021/4/7 21:18, Marc Zyngier wrote:<br>
+><i> On Tue, 16 Mar 2021 13:43:38 +0000,</i><br>
+><i> Keqian Zhu <zhukeqian1@xxxxxxxxxx> wrote:</i><br>
+><i>></i><br>
+><i>> The MMIO region of a device maybe huge (GB level), try to use</i><br>
+><i>> block mapping in stage2 to speedup both map and unmap.</i><br>
+><i>></i><br>
+><i>> Compared to normal memory mapping, we should consider two more</i><br>
+><i>> points when try block mapping for MMIO region:</i><br>
+><i>></i><br>
+><i>> 1. For normal memory mapping, the PA(host physical address) and</i><br>
+><i>> HVA have same alignment within PUD_SIZE or PMD_SIZE when we use</i><br>
+><i>> the HVA to request hugepage, so we don't need to consider PA</i><br>
+><i>> alignment when verifing block mapping. But for device memory</i><br>
+><i>> mapping, the PA and HVA may have different alignment.</i><br>
+><i>></i><br>
+><i>> 2. For normal memory mapping, we are sure hugepage size properly</i><br>
+><i>> fit into vma, so we don't check whether the mapping size exceeds</i><br>
+><i>> the boundary of vma. But for device memory mapping, we should pay</i><br>
+><i>> attention to this.</i><br>
+><i>></i><br>
+><i>> This adds device_rough_page_shift() to check these two points when</i><br>
+><i>> selecting block mapping size.</i><br>
+><i>></i><br>
+><i>> Signed-off-by: Keqian Zhu <zhukeqian1@xxxxxxxxxx></i><br>
+><i>> ---</i><br>
+><i>></i><br>
+><i>> Mainly for RFC, not fully tested. I will fully test it when the</i><br>
+><i>> code logic is well accepted.</i><br>
+><i>></i><br>
+><i>> ---</i><br>
+><i>>  arch/arm64/kvm/mmu.c | 42 ++++++++++++++++++++++++++++++++++++++----</i><br>
+><i>>  1 file changed, 38 insertions(+), 4 deletions(-)</i><br>
+><i>></i><br>
+><i>> diff --git a/arch/arm64/kvm/mmu.c b/arch/arm64/kvm/mmu.c</i><br>
+><i>> index c59af5ca01b0..224aa15eb4d9 100644</i><br>
+><i>> --- a/arch/arm64/kvm/mmu.c</i><br>
+><i>> +++ b/arch/arm64/kvm/mmu.c</i><br>
+><i>> @@ -624,6 +624,36 @@ static void kvm_send_hwpoison_signal(unsigned long address, short lsb)</i><br>
+><i>>  	send_sig_mceerr(BUS_MCEERR_AR, (void __user *)address, lsb, current);</i><br>
+><i>>  }</i><br>
+><i>>  </i><br>
+><i>> +/*</i><br>
+><i>> + * Find a mapping size that properly insides the intersection of vma and</i><br>
+><i>> + * memslot. And hva and pa have the same alignment to this mapping size.</i><br>
+><i>> + * It's rough because there are still other restrictions, which will be</i><br>
+><i>> + * checked by the following fault_supports_stage2_huge_mapping().</i><br>
+><i> </i><br>
+><i> I don't think these restrictions make complete sense to me. If this is</i><br>
+><i> a PFNMAP VMA, we should use the biggest mapping size that covers the</i><br>
+><i> VMA, and not more than the VMA.</i><br>
+But as described by kvm_arch_prepare_memory_region(), the memslot may not fully<br>
+cover the VMA. If that's true and we just consider the boundary of the VMA, our<br>
+block mapping may beyond the boundary of memslot. Is this a problem?<br>
+<br>
+><i> </i><br>
+><i>> + */</i><br>
+><i>> +static short device_rough_page_shift(struct kvm_memory_slot *memslot,</i><br>
+><i>> +				     struct vm_area_struct *vma,</i><br>
+><i>> +				     unsigned long hva)</i><br>
+><i>> +{</i><br>
+><i>> +	size_t size = memslot->npages * PAGE_SIZE;</i><br>
+><i>> +	hva_t sec_start = max(memslot->userspace_addr, vma->vm_start);</i><br>
+><i>> +	hva_t sec_end = min(memslot->userspace_addr + size, vma->vm_end);</i><br>
+><i>> +	phys_addr_t pa = (vma->vm_pgoff << PAGE_SHIFT) + (hva - vma->vm_start);</i><br>
+><i>> +</i><br>
+><i>> +#ifndef __PAGETABLE_PMD_FOLDED</i><br>
+><i>> +	if ((hva & (PUD_SIZE - 1)) == (pa & (PUD_SIZE - 1)) &&</i><br>
+><i>> +	    ALIGN_DOWN(hva, PUD_SIZE) >= sec_start &&</i><br>
+><i>> +	    ALIGN(hva, PUD_SIZE) <= sec_end)</i><br>
+><i>> +		return PUD_SHIFT;</i><br>
+><i>> +#endif</i><br>
+><i>> +</i><br>
+><i>> +	if ((hva & (PMD_SIZE - 1)) == (pa & (PMD_SIZE - 1)) &&</i><br>
+><i>> +	    ALIGN_DOWN(hva, PMD_SIZE) >= sec_start &&</i><br>
+><i>> +	    ALIGN(hva, PMD_SIZE) <= sec_end)</i><br>
+><i>> +		return PMD_SHIFT;</i><br>
+><i>> +</i><br>
+><i>> +	return PAGE_SHIFT;</i><br>
+><i>> +}</i><br>
+><i>> +</i><br>
+><i>>  static bool fault_supports_stage2_huge_mapping(struct kvm_memory_slot *memslot,</i><br>
+><i>>  					       unsigned long hva,</i><br>
+><i>>  					       unsigned long map_size)</i><br>
+><i>> @@ -769,7 +799,10 @@ static int user_mem_abort(struct kvm_vcpu *vcpu, phys_addr_t fault_ipa,</i><br>
+><i>>  		return -EFAULT;</i><br>
+><i>>  	}</i><br>
+><i>>  </i><br>
+><i>> -	/* Let's check if we will get back a huge page backed by hugetlbfs */</i><br>
+><i>> +	/*</i><br>
+><i>> +	 * Let's check if we will get back a huge page backed by hugetlbfs, or</i><br>
+><i>> +	 * get block mapping for device MMIO region.</i><br>
+><i>> +	 */</i><br>
+><i>>  	mmap_read_lock(current->mm);</i><br>
+><i>>  	vma = find_vma_intersection(current->mm, hva, hva + 1);</i><br>
+><i>>  	if (unlikely(!vma)) {</i><br>
+><i>> @@ -780,11 +813,12 @@ static int user_mem_abort(struct kvm_vcpu *vcpu, phys_addr_t fault_ipa,</i><br>
+><i>>  </i><br>
+><i>>  	if (is_vm_hugetlb_page(vma))</i><br>
+><i>>  		vma_shift = huge_page_shift(hstate_vma(vma));</i><br>
+><i>> +	else if (vma->vm_flags & VM_PFNMAP)</i><br>
+><i>> +		vma_shift = device_rough_page_shift(memslot, vma, hva);</i><br>
+><i>>  	else</i><br>
+><i>>  		vma_shift = PAGE_SHIFT;</i><br>
+><i>>  </i><br>
+><i>> -	if (logging_active ||</i><br>
+><i>> -	    (vma->vm_flags & VM_PFNMAP)) {</i><br>
+><i>> +	if (logging_active) {</i><br>
+><i>>  		force_pte = true;</i><br>
+><i>>  		vma_shift = PAGE_SHIFT;</i><br>
+><i> </i><br>
+><i> But why should we downgrade to page-size mappings if logging? This is</i><br>
+><i> a device, and you aren't moving the device around, are you? Or is your</i><br>
+><i> device actually memory with a device mapping that you are trying to</i><br>
+><i> migrate?</i><br>
+Thanks for the point. We should not move the device around, so we do not<br>
+need to consider logging when we build mapping for device.<br>
+<br>
+I found that logging_active is per memslot and we're sure it's always false<br>
+for memslot with PFNMAP VMA, because the kvm_arch_prepare_memory_region()<br>
+forbids that. Then I think we're OK here.<br>
+<br>
+Thanks,<br>
+Keqian<br>
+<br>
+><i> </i><br>
+><i>>  	}</i><br>
+><i>> @@ -855,7 +889,7 @@ static int user_mem_abort(struct kvm_vcpu *vcpu, phys_addr_t fault_ipa,</i><br>
+><i>>  </i><br>
+><i>>  	if (kvm_is_device_pfn(pfn)) {</i><br>
+><i>>  		device = true;</i><br>
+><i>> -		force_pte = true;</i><br>
+><i>> +		force_pte = (vma_pagesize == PAGE_SIZE);</i><br>
+><i>>  	} else if (logging_active && !write_fault) {</i><br>
+><i>>  		/*</i><br>
+><i>>  		 * Only actually map the page as writable if this was a write</i><br>
+><i>> -- </i><br>
+><i>> 2.19.1</i><br>
+><i>></i><br>
+><i>></i><br>
+><i> </i><br>
+><i> Thanks,</i><br>
+><i> </i><br>
+><i> 	M.</i><br>
+><i> </i><br>
+<br>
+<br>
+

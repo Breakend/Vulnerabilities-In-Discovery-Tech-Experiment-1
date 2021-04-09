@@ -1,0 +1,36 @@
+<br>
+<br>
+On 4/8/21 11:58 AM, Mark Brown wrote:<br>
+><i> On Mon, Apr 05, 2021 at 03:43:12PM -0500, madvenka@xxxxxxxxxxxxxxxxxxx wrote:</i><br>
+><i>> From: "Madhavan T. Venkataraman" <madvenka@xxxxxxxxxxxxxxxxxxx></i><br>
+><i>></i><br>
+><i>> When CONFIG_DYNAMIC_FTRACE_WITH_REGS is enabled and tracing is activated</i><br>
+><i>> for a function, the ftrace infrastructure is called for the function at</i><br>
+><i>> the very beginning. Ftrace creates two frames:</i><br>
+><i> </i><br>
+><i> This looks good to me however I'd really like someone who has a firmer</i><br>
+><i> understanding of what ftrace is doing to double check as it is entirely</i><br>
+><i> likely that I am missing cases here, it seems likely that if I am</i><br>
+><i> missing stuff it's extra stuff that needs to be added and we're not</i><br>
+><i> actually making use of the reliability information yet.</i><br>
+><i> </i><br>
+<br>
+OK. So, do you have some specific reviewer(s) in mind? Apart from yourself, Mark Rutland and<br>
+Josh Poimboeuf, these are some reviewers I can think of (in alphabetical order):<br>
+<br>
+AKASHI Takahiro <takahiro.akashi@xxxxxxxxxx><br>
+Ard Biesheuvel <ard.biesheuvel@xxxxxxxxxx><br>
+Catalin Marinas <catalin.marinas@xxxxxxx><br>
+Josh Poimboeuf <jpoimboe@xxxxxxxxxx><br>
+Steven Rostedt (VMware) <rostedt@xxxxxxxxxxx><br>
+Torsten Duwe <duwe@xxxxxxx><br>
+Will Deacon <will@xxxxxxxxxx><br>
+<br>
+Sorry if I missed out any of the other experts.<br>
+<br>
+Thanks.<br>
+<br>
+Madhavan                                                 <br>
+<br>
+<br>
+

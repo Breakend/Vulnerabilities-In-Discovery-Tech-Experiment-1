@@ -1,0 +1,18 @@
+On Wed, 2021-04-07 at 12:19 +0200, Peter Zijlstra wrote:<br>
+><i> On Wed, Apr 07, 2021 at 11:54:37AM +0200, Peter Zijlstra wrote:</i><br>
+><i> </i><br>
+><i> > Let me have another poke at it.</i><br>
+><i> </i><br>
+><i> Pretty much what you did, except I also did s/smt/has_idle_core/ and</i><br>
+><i> fixed that @sd thing.</i><br>
+><i> </i><br>
+><i> Like so then?</i><br>
+<br>
+Looks good to me. Thank you.<br>
+<br>
+-- <br>
+All Rights Reversed.<br>
+<p><strong>Attachment:
+<a href="00952/signature.asc" ><tt>signature.asc</tt></a></strong><br>
+<em>Description:</em> This is a digitally signed message part</p>
+

@@ -1,0 +1,187 @@
+rsa-pkcs1pad operations that require using RSA primitives rely on<br>
+creating an akcipher child RSA transform and processing the results<br>
+in the operation-specific callback. Add helpers<br>
+rsapad_akcipher_setup_child and rsapad_akcipher_req_complete for req<br>
+setup and callback handling, and switch pkcs1pad operations to use<br>
+these.<br>
+<br>
+Signed-off-by: Varad Gautam <varad.gautam@xxxxxxxx><br>
+---<br>
+ crypto/rsa-pkcs1pad.c | 106 +++++++++++++++++++-----------------------<br>
+ 1 file changed, 49 insertions(+), 57 deletions(-)<br>
+<br>
+diff --git a/crypto/rsa-pkcs1pad.c b/crypto/rsa-pkcs1pad.c<br>
+index 849573f6b44b3..6329c79316d24 100644<br>
+--- a/crypto/rsa-pkcs1pad.c<br>
++++ b/crypto/rsa-pkcs1pad.c<br>
+@@ -171,6 +171,38 @@ static void rsapad_akcipher_sg_set_buf(struct scatterlist *sg, void *buf,<br>
+ 		sg_chain(sg, nsegs, next);<br>
+ }<br>
+ <br>
++typedef int (*rsa_akcipher_complete_cb)(struct akcipher_request *, int);<br>
++static void rsapad_akcipher_req_complete(struct crypto_async_request *child_async_req,<br>
++					 int err, rsa_akcipher_complete_cb cb)<br>
++{<br>
++	struct akcipher_request *req = child_async_req->data;<br>
++	struct crypto_async_request async_req;<br>
++<br>
++	if (err == -EINPROGRESS)<br>
++		return;<br>
++<br>
++	async_req.data = req->base.data;<br>
++	async_req.tfm = crypto_akcipher_tfm(crypto_akcipher_reqtfm(req));<br>
++	async_req.flags = child_async_req->flags;<br>
++	req->base.complete(&async_req, cb(req, err));<br>
++}<br>
++<br>
++static void rsapad_akcipher_setup_child(struct akcipher_request *req,<br>
++					struct scatterlist *src_sg,<br>
++					struct scatterlist *dst_sg,<br>
++					unsigned int src_len,<br>
++					unsigned int dst_len,<br>
++					crypto_completion_t cb)<br>
++{<br>
++	struct crypto_akcipher *tfm = crypto_akcipher_reqtfm(req);<br>
++	struct pkcs1pad_ctx *ctx = akcipher_tfm_ctx(tfm);<br>
++	struct pkcs1pad_request *req_ctx = akcipher_request_ctx(req);<br>
++<br>
++	akcipher_request_set_tfm(&req_ctx->child_req, ctx->child);<br>
++	akcipher_request_set_callback(&req_ctx->child_req, req->base.flags, cb, req);<br>
++	akcipher_request_set_crypt(&req_ctx->child_req, src_sg, dst_sg, src_len, dst_len);<br>
++}<br>
++<br>
+ static int pkcs1pad_encrypt_sign_complete(struct akcipher_request *req, int err)<br>
+ {<br>
+ 	struct crypto_akcipher *tfm = crypto_akcipher_reqtfm(req);<br>
+@@ -213,17 +245,8 @@ static int pkcs1pad_encrypt_sign_complete(struct akcipher_request *req, int err)<br>
+ static void pkcs1pad_encrypt_sign_complete_cb(<br>
+ 		struct crypto_async_request *child_async_req, int err)<br>
+ {<br>
+-	struct akcipher_request *req = child_async_req->data;<br>
+-	struct crypto_async_request async_req;<br>
+-<br>
+-	if (err == -EINPROGRESS)<br>
+-		return;<br>
+-<br>
+-	async_req.data = req->base.data;<br>
+-	async_req.tfm = crypto_akcipher_tfm(crypto_akcipher_reqtfm(req));<br>
+-	async_req.flags = child_async_req->flags;<br>
+-	req->base.complete(&async_req,<br>
+-			pkcs1pad_encrypt_sign_complete(req, err));<br>
++	rsapad_akcipher_req_complete(child_async_req, err,<br>
++				     pkcs1pad_encrypt_sign_complete);<br>
+ }<br>
+ <br>
+ static int pkcs1pad_encrypt(struct akcipher_request *req)<br>
+@@ -259,13 +282,10 @@ static int pkcs1pad_encrypt(struct akcipher_request *req)<br>
+ 	rsapad_akcipher_sg_set_buf(req_ctx->in_sg, req_ctx->in_buf,<br>
+ 			ctx->key_size - 1 - req->src_len, req->src);<br>
+ <br>
+-	akcipher_request_set_tfm(&req_ctx->child_req, ctx->child);<br>
+-	akcipher_request_set_callback(&req_ctx->child_req, req->base.flags,<br>
+-			pkcs1pad_encrypt_sign_complete_cb, req);<br>
+-<br>
+ 	/* Reuse output buffer */<br>
+-	akcipher_request_set_crypt(&req_ctx->child_req, req_ctx->in_sg,<br>
+-				   req->dst, ctx->key_size - 1, req->dst_len);<br>
++	rsapad_akcipher_setup_child(req, req_ctx->in_sg, req->dst,<br>
++				    ctx->key_size - 1, req->dst_len,<br>
++				    pkcs1pad_encrypt_sign_complete_cb);<br>
+ <br>
+ 	err = crypto_akcipher_encrypt(&req_ctx->child_req);<br>
+ 	if (err != -EINPROGRESS && err != -EBUSY)<br>
+@@ -331,16 +351,7 @@ static int pkcs1pad_decrypt_complete(struct akcipher_request *req, int err)<br>
+ static void pkcs1pad_decrypt_complete_cb(<br>
+ 		struct crypto_async_request *child_async_req, int err)<br>
+ {<br>
+-	struct akcipher_request *req = child_async_req->data;<br>
+-	struct crypto_async_request async_req;<br>
+-<br>
+-	if (err == -EINPROGRESS)<br>
+-		return;<br>
+-<br>
+-	async_req.data = req->base.data;<br>
+-	async_req.tfm = crypto_akcipher_tfm(crypto_akcipher_reqtfm(req));<br>
+-	async_req.flags = child_async_req->flags;<br>
+-	req->base.complete(&async_req, pkcs1pad_decrypt_complete(req, err));<br>
++	rsapad_akcipher_req_complete(child_async_req, err, pkcs1pad_decrypt_complete);<br>
+ }<br>
+ <br>
+ static int pkcs1pad_decrypt(struct akcipher_request *req)<br>
+@@ -360,14 +371,10 @@ static int pkcs1pad_decrypt(struct akcipher_request *req)<br>
+ 	rsapad_akcipher_sg_set_buf(req_ctx->out_sg, req_ctx->out_buf,<br>
+ 			    ctx->key_size, NULL);<br>
+ <br>
+-	akcipher_request_set_tfm(&req_ctx->child_req, ctx->child);<br>
+-	akcipher_request_set_callback(&req_ctx->child_req, req->base.flags,<br>
+-			pkcs1pad_decrypt_complete_cb, req);<br>
+-<br>
+ 	/* Reuse input buffer, output to a new buffer */<br>
+-	akcipher_request_set_crypt(&req_ctx->child_req, req->src,<br>
+-				   req_ctx->out_sg, req->src_len,<br>
+-				   ctx->key_size);<br>
++	rsapad_akcipher_setup_child(req, req->src, req_ctx->out_sg,<br>
++				    req->src_len, ctx->key_size,<br>
++				    pkcs1pad_decrypt_complete_cb);<br>
+ <br>
+ 	err = crypto_akcipher_decrypt(&req_ctx->child_req);<br>
+ 	if (err != -EINPROGRESS && err != -EBUSY)<br>
+@@ -418,13 +425,10 @@ static int pkcs1pad_sign(struct akcipher_request *req)<br>
+ 	rsapad_akcipher_sg_set_buf(req_ctx->in_sg, req_ctx->in_buf,<br>
+ 			ctx->key_size - 1 - req->src_len, req->src);<br>
+ <br>
+-	akcipher_request_set_tfm(&req_ctx->child_req, ctx->child);<br>
+-	akcipher_request_set_callback(&req_ctx->child_req, req->base.flags,<br>
+-			pkcs1pad_encrypt_sign_complete_cb, req);<br>
+-<br>
+ 	/* Reuse output buffer */<br>
+-	akcipher_request_set_crypt(&req_ctx->child_req, req_ctx->in_sg,<br>
+-				   req->dst, ctx->key_size - 1, req->dst_len);<br>
++	rsapad_akcipher_setup_child(req, req_ctx->in_sg, req->dst,<br>
++				    ctx->key_size - 1, req->dst_len,<br>
++				    pkcs1pad_encrypt_sign_complete_cb);<br>
+ <br>
+ 	err = crypto_akcipher_decrypt(&req_ctx->child_req);<br>
+ 	if (err != -EINPROGRESS && err != -EBUSY)<br>
+@@ -509,16 +513,8 @@ static int pkcs1pad_verify_complete(struct akcipher_request *req, int err)<br>
+ static void pkcs1pad_verify_complete_cb(<br>
+ 		struct crypto_async_request *child_async_req, int err)<br>
+ {<br>
+-	struct akcipher_request *req = child_async_req->data;<br>
+-	struct crypto_async_request async_req;<br>
+-<br>
+-	if (err == -EINPROGRESS)<br>
+-		return;<br>
+-<br>
+-	async_req.data = req->base.data;<br>
+-	async_req.tfm = crypto_akcipher_tfm(crypto_akcipher_reqtfm(req));<br>
+-	async_req.flags = child_async_req->flags;<br>
+-	req->base.complete(&async_req, pkcs1pad_verify_complete(req, err));<br>
++	rsapad_akcipher_req_complete(child_async_req, err,<br>
++				     pkcs1pad_verify_complete);<br>
+ }<br>
+ <br>
+ /*<br>
+@@ -548,14 +544,10 @@ static int pkcs1pad_verify(struct akcipher_request *req)<br>
+ 	rsapad_akcipher_sg_set_buf(req_ctx->out_sg, req_ctx->out_buf,<br>
+ 			    ctx->key_size, NULL);<br>
+ <br>
+-	akcipher_request_set_tfm(&req_ctx->child_req, ctx->child);<br>
+-	akcipher_request_set_callback(&req_ctx->child_req, req->base.flags,<br>
+-			pkcs1pad_verify_complete_cb, req);<br>
+-<br>
+ 	/* Reuse input buffer, output to a new buffer */<br>
+-	akcipher_request_set_crypt(&req_ctx->child_req, req->src,<br>
+-				   req_ctx->out_sg, req->src_len,<br>
+-				   ctx->key_size);<br>
++	rsapad_akcipher_setup_child(req, req->src, req_ctx->out_sg,<br>
++				    req->src_len, ctx->key_size,<br>
++				    pkcs1pad_verify_complete_cb);<br>
+ <br>
+ 	err = crypto_akcipher_encrypt(&req_ctx->child_req);<br>
+ 	if (err != -EINPROGRESS && err != -EBUSY)<br>
+-- <br>
+2.30.2<br>
+<br>
+<br>
+

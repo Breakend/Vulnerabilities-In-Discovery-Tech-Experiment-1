@@ -1,0 +1,63 @@
+On Wed, Apr 07, 2021 at 08:34:24PM +0200, Peter Zijlstra <peterz@xxxxxxxxxxxxx> wrote:<br>
+><i> IMO as long as cgroups have that tasks file, you get to support people</i><br>
+><i> using it. That means that tasks joining your cgroup need to 'inherit'</i><br>
+><i> cgroup properties.</i><br>
+The tasks file is consequence of binding this to cgroups, I'm one step<br>
+back. Why to make "core isolation" a cgroup property?<br>
+<br>
+(I understand this could help "visualize" what the common domains are if<br>
+cgroups were the only API but with prctl the structure can be<br>
+arbitrarily modified anyway.)<br>
+<br>
+<br>
+><i> Given something like:</i><br>
+><i> </i><br>
+><i>         R</i><br>
+><i>        / \</i><br>
+><i>       A   B</i><br>
+><i>          / \</i><br>
+><i>         C   D</i><br>
+Thanks for the example. <br>
+<br>
+><i> B group can set core_sched=1 and then all its (and its decendants) tasks</i><br>
+><i> get to have the same (group) cookie and cannot share with others.</i><br>
+The same could be achieved with the first task of group B allocating its<br>
+new cookie which would be inherited in its descednants.<br>
+<br>
+><i> If however B is a delegate and has a subgroup D that is security</i><br>
+><i> sensitive and must not share core resources with the rest of B, then it</i><br>
+><i> can also set D.core_sched=1, such that D (and its decendants) will have</i><br>
+><i> another (group) cookie.</i><br>
+If there is such a sensitive descendant task, it could allocate a new<br>
+cookie (same way as the first one in B did).<br>
+<br>
+><i> On top of this, say C has a Real-Time tasks, that wants to limit SMT</i><br>
+><i> interference, then it can set a (task/prctl) cookie on itself, such that</i><br>
+><i> it will not share the core with the rest of the tasks of B.</i><br>
+(IIUC, in this particular example it'd be redundant if B had no inner<br>
+tasks since D isolated itself already.)<br>
+Yes, so this is again the same pattern as the tasks above have done.<br>
+<br>
+><i> In that scenario the D subtree is a restriction (doesn't share) with the</i><br>
+><i> B subtree.</i><br>
+This implies D's isolation from everything else too, not just B's<br>
+members, no?<br>
+<br>
+><i> And all of B is a restriction on all its tasks, including the Real-Time</i><br>
+><i> task that set a task cookie, in that none of them can share with tasks</i><br>
+><i> outside of B (including system tasks which are in R), irrespective of</i><br>
+><i> what they do with their task cookie.</i><br>
+IIUC, the equivalent restriction could be achieved with the PTRACE-like<br>
+check in the prctl API too (with respectively divided uids).<br>
+<br>
+I'm curious whether the cgroup API actually simplifies things that are<br>
+possible with the clone/prctl API or allows anything that wouldn't be<br>
+otherwise possible.<br>
+<br>
+Regards,<br>
+Michal<br>
+<br>
+<p><strong>Attachment:
+<a href="00655/signature.asc" ><tt>signature.asc</tt></a></strong><br>
+<em>Description:</em> Digital signature</p>
+

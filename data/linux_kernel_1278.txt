@@ -1,0 +1,129 @@
+This header contains only cpu_soft_restart() which is never used directly<br>
+anymore. So, remove this header, and rename the helper to be<br>
+cpu_soft_restart().<br>
+<br>
+Suggested-by: James Morse <james.morse@xxxxxxx><br>
+Signed-off-by: Pavel Tatashin <pasha.tatashin@xxxxxxxxxx><br>
+---<br>
+ arch/arm64/include/asm/kexec.h    |  6 ++++++<br>
+ arch/arm64/kernel/cpu-reset.S     |  7 +++----<br>
+ arch/arm64/kernel/cpu-reset.h     | 30 ------------------------------<br>
+ arch/arm64/kernel/machine_kexec.c |  6 ++----<br>
+ 4 files changed, 11 insertions(+), 38 deletions(-)<br>
+ delete mode 100644 arch/arm64/kernel/cpu-reset.h<br>
+<br>
+diff --git a/arch/arm64/include/asm/kexec.h b/arch/arm64/include/asm/kexec.h<br>
+index 5fc87b51f8a9..ee71ae3b93ed 100644<br>
+--- a/arch/arm64/include/asm/kexec.h<br>
++++ b/arch/arm64/include/asm/kexec.h<br>
+@@ -90,6 +90,12 @@ static inline void crash_prepare_suspend(void) {}<br>
+ static inline void crash_post_resume(void) {}<br>
+ #endif<br>
+ <br>
++#if defined(CONFIG_KEXEC_CORE)<br>
++void cpu_soft_restart(unsigned long el2_switch, unsigned long entry,<br>
++		      unsigned long arg0, unsigned long arg1,<br>
++		      unsigned long arg2);<br>
++#endif<br>
++<br>
+ #define ARCH_HAS_KIMAGE_ARCH<br>
+ <br>
+ struct kimage_arch {<br>
+diff --git a/arch/arm64/kernel/cpu-reset.S b/arch/arm64/kernel/cpu-reset.S<br>
+index 37721eb6f9a1..5d47d6c92634 100644<br>
+--- a/arch/arm64/kernel/cpu-reset.S<br>
++++ b/arch/arm64/kernel/cpu-reset.S<br>
+@@ -16,8 +16,7 @@<br>
+ .pushsection    .idmap.text, "awx"<br>
+ <br>
+ /*<br>
+- * __cpu_soft_restart(el2_switch, entry, arg0, arg1, arg2) - Helper for<br>
+- * cpu_soft_restart.<br>
++ * cpu_soft_restart(el2_switch, entry, arg0, arg1, arg2)<br>
+  *<br>
+  * @el2_switch: Flag to indicate a switch to EL2 is needed.<br>
+  * @entry: Location to jump to for soft reset.<br>
+@@ -29,7 +28,7 @@<br>
+  * branch to what would be the reset vector. It must be executed with the<br>
+  * flat identity mapping.<br>
+  */<br>
+-SYM_CODE_START(__cpu_soft_restart)<br>
++SYM_CODE_START(cpu_soft_restart)<br>
+ 	/* Clear sctlr_el1 flags. */<br>
+ 	mrs	x12, sctlr_el1<br>
+ 	mov_q	x13, SCTLR_ELx_FLAGS<br>
+@@ -51,6 +50,6 @@ SYM_CODE_START(__cpu_soft_restart)<br>
+ 	mov	x1, x3				// arg1<br>
+ 	mov	x2, x4				// arg2<br>
+ 	br	x8<br>
+-SYM_CODE_END(__cpu_soft_restart)<br>
++SYM_CODE_END(cpu_soft_restart)<br>
+ <br>
+ .popsection<br>
+diff --git a/arch/arm64/kernel/cpu-reset.h b/arch/arm64/kernel/cpu-reset.h<br>
+deleted file mode 100644<br>
+index f6d95512fec6..000000000000<br>
+--- a/arch/arm64/kernel/cpu-reset.h<br>
++++ /dev/null<br>
+@@ -1,30 +0,0 @@<br>
+-/* SPDX-License-Identifier: GPL-2.0-only */<br>
+-/*<br>
+- * CPU reset routines<br>
+- *<br>
+- * Copyright (C) 2015 Huawei Futurewei Technologies.<br>
+- */<br>
+-<br>
+-#ifndef _ARM64_CPU_RESET_H<br>
+-#define _ARM64_CPU_RESET_H<br>
+-<br>
+-#include <asm/virt.h><br>
+-<br>
+-void __cpu_soft_restart(unsigned long el2_switch, unsigned long entry,<br>
+-	unsigned long arg0, unsigned long arg1, unsigned long arg2);<br>
+-<br>
+-static inline void __noreturn cpu_soft_restart(unsigned long entry,<br>
+-					       unsigned long arg0,<br>
+-					       unsigned long arg1,<br>
+-					       unsigned long arg2)<br>
+-{<br>
+-	typeof(__cpu_soft_restart) *restart;<br>
+-<br>
+-	restart = (void *)__pa_symbol(__cpu_soft_restart);<br>
+-<br>
+-	cpu_install_idmap();<br>
+-	restart(0, entry, arg0, arg1, arg2);<br>
+-	unreachable();<br>
+-}<br>
+-<br>
+-#endif<br>
+diff --git a/arch/arm64/kernel/machine_kexec.c b/arch/arm64/kernel/machine_kexec.c<br>
+index a1c9bee0cddd..ef7ba93f2bd6 100644<br>
+--- a/arch/arm64/kernel/machine_kexec.c<br>
++++ b/arch/arm64/kernel/machine_kexec.c<br>
+@@ -23,8 +23,6 @@<br>
+ #include <asm/sections.h><br>
+ #include <asm/trans_pgd.h><br>
+ <br>
+-#include "cpu-reset.h"<br>
+-<br>
+ /**<br>
+  * kexec_image_info - For debugging output.<br>
+  */<br>
+@@ -197,10 +195,10 @@ void machine_kexec(struct kimage *kimage)<br>
+ 	 * In kexec_file case, the kernel starts directly without purgatory.<br>
+ 	 */<br>
+ 	if (kimage->head & IND_DONE) {<br>
+-		typeof(__cpu_soft_restart) *restart;<br>
++		typeof(cpu_soft_restart) *restart;<br>
+ <br>
+ 		cpu_install_idmap();<br>
+-		restart = (void *)__pa_symbol(__cpu_soft_restart);<br>
++		restart = (void *)__pa_symbol(cpu_soft_restart);<br>
+ 		restart(is_hyp_callable(), kimage->start, kimage->arch.dtb_mem,<br>
+ 			0, 0);<br>
+ 	} else {<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

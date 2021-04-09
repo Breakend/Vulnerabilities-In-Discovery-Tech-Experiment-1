@@ -1,0 +1,31 @@
+In current video driver, frequency is calculated for all the<br>
+running video instances and check aganist maximum supported frequency.<br>
+If both calculated frequency and maximum supported frequency are same,<br>
+even then HW overload error is printed.<br>
+Fix this by printing error log only when frequency is greater than<br>
+maximum supported frequency.<br>
+<br>
+Signed-off-by: Mansur Alisha Shaik <mansur@xxxxxxxxxxxxxx><br>
+---<br>
+ drivers/media/platform/qcom/venus/pm_helpers.c | 2 +-<br>
+ 1 file changed, 1 insertion(+), 1 deletion(-)<br>
+<br>
+diff --git a/drivers/media/platform/qcom/venus/pm_helpers.c b/drivers/media/platform/qcom/venus/pm_helpers.c<br>
+index dfe3ee8..9714ca7 100644<br>
+--- a/drivers/media/platform/qcom/venus/pm_helpers.c<br>
++++ b/drivers/media/platform/qcom/venus/pm_helpers.c<br>
+@@ -1083,7 +1083,7 @@ static int load_scale_v4(struct venus_inst *inst)<br>
+ <br>
+ 	freq = max(freq_core1, freq_core2);<br>
+ <br>
+-	if (freq >= table[0].freq) {<br>
++	if (freq > table[0].freq) {<br>
+ 		freq = table[0].freq;<br>
+ 		dev_warn(dev, "HW is overloaded, needed: %lu max: %lu\n",<br>
+ 			 freq, table[0].freq);<br>
+-- <br>
+QUALCOMM INDIA, on behalf of Qualcomm Innovation Center, Inc. is a member <br>
+of Code Aurora Forum, hosted by The Linux Foundation<br>
+<br>
+<br>
+

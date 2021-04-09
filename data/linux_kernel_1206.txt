@@ -1,0 +1,120 @@
+Hi, Matthias<br>
+<br>
+On Tue, 2021-04-06 at 15:53 +0200, Matthias Brugger wrote:<br>
+><i> </i><br>
+><i> On 01/04/2021 08:38, Nina Wu wrote:</i><br>
+><i> > From: Nina Wu <Nina-CM.Wu@xxxxxxxxxxxx></i><br>
+><i> > </i><br>
+><i> > There are 3 debug info registers in new ICs while in legacy ones,</i><br>
+><i> > we have only 2. When dumping the debug info, we need to check first</i><br>
+><i> > if the 3rd debug register exists and then we can konw how to decipher</i><br>
+><i> > the debug info.</i><br>
+><i> > </i><br>
+><i> > Signed-off-by: Nina Wu <Nina-CM.Wu@xxxxxxxxxxxx></i><br>
+><i> > ---</i><br>
+><i> >  drivers/soc/mediatek/mtk-devapc.c | 31 +++++++++++++++++++++++++++++--</i><br>
+><i> >  1 file changed, 29 insertions(+), 2 deletions(-)</i><br>
+><i> > </i><br>
+><i> > diff --git a/drivers/soc/mediatek/mtk-devapc.c b/drivers/soc/mediatek/mtk-devapc.c</i><br>
+><i> > index bcf6e3c..af55c01 100644</i><br>
+><i> > --- a/drivers/soc/mediatek/mtk-devapc.c</i><br>
+><i> > +++ b/drivers/soc/mediatek/mtk-devapc.c</i><br>
+><i> > @@ -26,9 +26,19 @@ struct mtk_devapc_vio_dbgs {</i><br>
+><i> >  			u32 addr_h:4;</i><br>
+><i> >  			u32 resv:4;</i><br>
+><i> >  		} dbg0_bits;</i><br>
+><i> > +</i><br>
+><i> > +		/* Not used, reference only */</i><br>
+><i> > +		struct {</i><br>
+><i> > +			u32 dmnid:6;</i><br>
+><i> > +			u32 vio_w:1;</i><br>
+><i> > +			u32 vio_r:1;</i><br>
+><i> > +			u32 addr_h:4;</i><br>
+><i> > +			u32 resv:20;</i><br>
+><i> > +		} dbg0_bits_ver2;</i><br>
+><i> >  	};</i><br>
+><i> >  </i><br>
+><i> >  	u32 vio_dbg1;</i><br>
+><i> > +	u32 vio_dbg2;</i><br>
+><i> >  };</i><br>
+><i> >  </i><br>
+><i> >  struct mtk_devapc_data {</i><br>
+><i> > @@ -37,6 +47,7 @@ struct mtk_devapc_data {</i><br>
+><i> >  	u32 vio_sta_offset;</i><br>
+><i> >  	u32 vio_dbg0_offset;</i><br>
+><i> >  	u32 vio_dbg1_offset;</i><br>
+><i> > +	u32 vio_dbg2_offset;</i><br>
+><i> >  	u32 apc_con_offset;</i><br>
+><i> >  	u32 vio_shift_sta_offset;</i><br>
+><i> >  	u32 vio_shift_sel_offset;</i><br>
+><i> > @@ -158,12 +169,29 @@ static void devapc_extract_vio_dbg(struct mtk_devapc_context *ctx)</i><br>
+><i> >  	struct mtk_devapc_vio_dbgs vio_dbgs;</i><br>
+><i> >  	void __iomem *vio_dbg0_reg;</i><br>
+><i> >  	void __iomem *vio_dbg1_reg;</i><br>
+><i> > +	void __iomem *vio_dbg2_reg;</i><br>
+><i> > +	u32 vio_addr, bus_id;</i><br>
+><i> >  </i><br>
+><i> >  	vio_dbg0_reg = ctx->base + ctx->data->vio_dbg0_offset;</i><br>
+><i> >  	vio_dbg1_reg = ctx->base + ctx->data->vio_dbg1_offset;</i><br>
+><i> > +	vio_dbg2_reg = ctx->base + ctx->data->vio_dbg2_offset;</i><br>
+><i> </i><br>
+><i> We should read this only if we have version2 of the devapc.</i><br>
+><i> </i><br>
+<br>
+You're right.<br>
+It is not good to read vio_dbg2_reg in version one. Even though we will<br>
+only get the value from offset 0 (which is not expected) instead of<br>
+doing any real harm. (like causing bus hang)<br>
+<br>
+<br>
+><i> >  </i><br>
+><i> >  	vio_dbgs.vio_dbg0 = readl(vio_dbg0_reg);</i><br>
+><i> >  	vio_dbgs.vio_dbg1 = readl(vio_dbg1_reg);</i><br>
+><i> > +	vio_dbgs.vio_dbg2 = readl(vio_dbg2_reg);</i><br>
+><i> > +</i><br>
+><i> > +	if (!ctx->data->vio_dbg2_offset) {</i><br>
+><i> </i><br>
+><i> I think we should add a version field to mtk_devapc_data to distinguish the two</i><br>
+><i> of them.</i><br>
+<br>
+OK.<br>
+I will try to add this field in the next version<br>
+<br>
+><i> </i><br>
+><i> > +		/* arch version 1 */</i><br>
+><i> > +		bus_id = vio_dbgs.dbg0_bits.mstid;</i><br>
+><i> > +		vio_addr = vio_dbgs.vio_dbg1;</i><br>
+><i> > +	} else {</i><br>
+><i> > +		/* arch version 2 */</i><br>
+><i> > +		bus_id = vio_dbgs.vio_dbg1;</i><br>
+><i> > +		vio_addr = vio_dbgs.vio_dbg2;</i><br>
+><i> > +</i><br>
+><i> > +		/* To align with the bit definition of arch_ver 1 */</i><br>
+><i> > +		vio_dbgs.vio_dbg0 = (vio_dbgs.vio_dbg0 << 16);</i><br>
+><i> </i><br>
+><i> That's magic, better add another variable domain_id and do here:</i><br>
+><i> domain_id = vio_dgbs.dbg0_bits_ver2.dmnid;</i><br>
+><i> </i><br>
+<br>
+OK.<br>
+I will fix it up in the next version.<br>
+<br>
+Thanks<br>
+<br>
+><i> > +	}</i><br>
+><i> >  </i><br>
+><i> >  	/* Print violation information */</i><br>
+><i> >  	if (vio_dbgs.dbg0_bits.vio_w)</i><br>
+><i> > @@ -172,8 +200,7 @@ static void devapc_extract_vio_dbg(struct mtk_devapc_context *ctx)</i><br>
+><i> >  		dev_info(ctx->dev, "Read Violation\n");</i><br>
+><i> >  </i><br>
+><i> >  	dev_info(ctx->dev, "Bus ID:0x%x, Dom ID:0x%x, Vio Addr:0x%x\n",</i><br>
+><i> > -		 vio_dbgs.dbg0_bits.mstid, vio_dbgs.dbg0_bits.dmnid,</i><br>
+><i> > -		 vio_dbgs.vio_dbg1);</i><br>
+><i> > +		 bus_id, vio_dbgs.dbg0_bits.dmnid, vio_addr);</i><br>
+><i> >  }</i><br>
+><i> >  </i><br>
+><i> >  /*</i><br>
+><i> > </i><br>
+<br>
+

@@ -1,0 +1,80 @@
+On Thu, Apr 08, 2021 at 06:01:05PM +0000, Quentin Perret wrote:<br>
+><i> The CRC calculation done by genksyms is triggered when the parser hits</i><br>
+><i> EXPORT_SYMBOL*() macros. At this point, genksyms recursively expands the</i><br>
+><i> types, and uses that as the input for the CRC calculation. In the case</i><br>
+><i> of forward-declared structs, the type expands to 'UNKNOWN'. Next, the</i><br>
+><i> result of the expansion of each type is cached, and is re-used when/if</i><br>
+><i> the same type is seen again for another exported symbol in the file.</i><br>
+><i> </i><br>
+><i> Unfortunately, this can cause CRC 'stability' issues when a struct</i><br>
+><i> definition becomes visible in the middle of a C file. For example, let's</i><br>
+><i> assume code with the following pattern:</i><br>
+><i> </i><br>
+><i>     struct foo;</i><br>
+><i> </i><br>
+><i>     int bar(struct foo *arg)</i><br>
+><i>     {</i><br>
+><i> 	/* Do work ... */</i><br>
+><i>     }</i><br>
+><i>     EXPORT_SYMBOL_GPL(bar);</i><br>
+><i> </i><br>
+><i>     /* This contains struct foo's definition */</i><br>
+><i>     #include "foo.h"</i><br>
+><i> </i><br>
+><i>     int baz(struct foo *arg)</i><br>
+><i>     {</i><br>
+><i> 	/* Do more work ... */</i><br>
+><i>     }</i><br>
+><i>     EXPORT_SYMBOL_GPL(baz);</i><br>
+><i> </i><br>
+><i> Here, baz's CRC will be computed using the expansion of struct foo that</i><br>
+><i> was cached after bar's CRC calculation ('UNKOWN' here). But if</i><br>
+><i> EXPORT_SYMBOL_GPL(bar) is removed from the file (because of e.g. symbol</i><br>
+><i> trimming using CONFIG_TRIM_UNUSED_KSYMS), struct foo will be expanded</i><br>
+><i> late, during baz's CRC calculation, which now has visibility over the</i><br>
+><i> full struct definition, hence resulting in a different CRC for baz.</i><br>
+><i> </i><br>
+><i> This can cause annoying issues for distro kernel (such as the Android</i><br>
+><i> Generic Kernel Image) which use CONFIG_UNUSED_KSYMS_WHITELIST. Indeed,</i><br>
+><i> as per the above, adding a symbol to the whitelist can change the CRC of</i><br>
+><i> symbols that are already kept exported. As such, modules built against a</i><br>
+><i> kernel with a trimmed ABI may not load against the same kernel built</i><br>
+><i> with an extended whitelist, even though they are still strictly binary</i><br>
+><i> compatible. While rebuilding the modules would obviously solve the</i><br>
+><i> issue, I believe this classifies as an odd genksyms corner case, and it</i><br>
+><i> gets in the way of kernel updates in the GKI context.</i><br>
+><i> </i><br>
+><i> To work around the issue, make sure to keep issuing the</i><br>
+><i> __GENKSYMS_EXPORT_SYMBOL macros for all trimmed symbols, hence making</i><br>
+><i> the genksyms parsing insensitive to symbol trimming.</i><br>
+><i> </i><br>
+><i> Signed-off-by: Quentin Perret <qperret@xxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  include/linux/export.h | 5 +++++</i><br>
+><i>  1 file changed, 5 insertions(+)</i><br>
+><i> </i><br>
+><i> diff --git a/include/linux/export.h b/include/linux/export.h</i><br>
+><i> index 6271a5d9c988..27d848712b90 100644</i><br>
+><i> --- a/include/linux/export.h</i><br>
+><i> +++ b/include/linux/export.h</i><br>
+><i> @@ -140,7 +140,12 @@ struct kernel_symbol {</i><br>
+><i>  #define ___cond_export_sym(sym, sec, ns, enabled)			\</i><br>
+><i>  	__cond_export_sym_##enabled(sym, sec, ns)</i><br>
+><i>  #define __cond_export_sym_1(sym, sec, ns) ___EXPORT_SYMBOL(sym, sec, ns)</i><br>
+><i> +</i><br>
+><i> +#ifdef __GENKSYMS__</i><br>
+><i> +#define __cond_export_sym_0(sym, sec, ns) __GENKSYMS_EXPORT_SYMBOL(sym)</i><br>
+><i> +#else</i><br>
+><i>  #define __cond_export_sym_0(sym, sec, ns) /* nothing */</i><br>
+><i> +#endif</i><br>
+><i>  </i><br>
+><i>  #else</i><br>
+><i>  </i><br>
+<br>
+Anything to help make these symbol values more "stable" is good, they<br>
+drive me crazy...<br>
+<br>
+Acked-by: Greg Kroah-Hartman <gregkh@xxxxxxxxxxxxxxxxxxx><br>
+<br>
+<br>
+

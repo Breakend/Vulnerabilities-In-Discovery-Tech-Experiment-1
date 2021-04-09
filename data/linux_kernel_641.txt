@@ -1,0 +1,34 @@
+There is a error message within devm_ioremap_resource<br>
+already, so remove the dev_err call to avoid redundant<br>
+error message.<br>
+<br>
+Reviewed-by: Chunfeng Yun <chunfeng.yun@xxxxxxxxxxxx><br>
+Reported-by: Hulk Robot <hulkci@xxxxxxxxxx><br>
+Signed-off-by: He Ying <heying24@xxxxxxxxxx><br>
+---<br>
+v2:<br>
+- Use 'return PTR_ERR();' instead of 'ret = PTR_ERR();return ret;'.<br>
+<br>
+ drivers/phy/mediatek/phy-mtk-mipi-dsi.c | 4 +---<br>
+ 1 file changed, 1 insertion(+), 3 deletions(-)<br>
+<br>
+diff --git a/drivers/phy/mediatek/phy-mtk-mipi-dsi.c b/drivers/phy/mediatek/phy-mtk-mipi-dsi.c<br>
+index c51114d8e437..01cf31633019 100644<br>
+--- a/drivers/phy/mediatek/phy-mtk-mipi-dsi.c<br>
++++ b/drivers/phy/mediatek/phy-mtk-mipi-dsi.c<br>
+@@ -151,9 +151,7 @@ static int mtk_mipi_tx_probe(struct platform_device *pdev)<br>
+ 	mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);<br>
+ 	mipi_tx->regs = devm_ioremap_resource(dev, mem);<br>
+ 	if (IS_ERR(mipi_tx->regs)) {<br>
+-		ret = PTR_ERR(mipi_tx->regs);<br>
+-		dev_err(dev, "Failed to get memory resource: %d\n", ret);<br>
+-		return ret;<br>
++		return PTR_ERR(mipi_tx->regs);<br>
+ 	}<br>
+ <br>
+ 	ref_clk = devm_clk_get(dev, NULL);<br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+

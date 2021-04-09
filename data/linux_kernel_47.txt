@@ -1,0 +1,31 @@
+Disable CFI for the nVHE code to avoid address space confusion.<br>
+<br>
+Signed-off-by: Sami Tolvanen <samitolvanen@xxxxxxxxxx><br>
+Reviewed-by: Kees Cook <keescook@xxxxxxxxxxxx><br>
+Tested-by: Nathan Chancellor <nathan@xxxxxxxxxx><br>
+---<br>
+ arch/arm64/kvm/hyp/nvhe/Makefile | 6 +++---<br>
+ 1 file changed, 3 insertions(+), 3 deletions(-)<br>
+<br>
+diff --git a/arch/arm64/kvm/hyp/nvhe/Makefile b/arch/arm64/kvm/hyp/nvhe/Makefile<br>
+index a6707df4f6c0..fb24a0f022ad 100644<br>
+--- a/arch/arm64/kvm/hyp/nvhe/Makefile<br>
++++ b/arch/arm64/kvm/hyp/nvhe/Makefile<br>
+@@ -75,9 +75,9 @@ quiet_cmd_hyprel = HYPREL  $@<br>
+ quiet_cmd_hypcopy = HYPCOPY $@<br>
+       cmd_hypcopy = $(OBJCOPY) --prefix-symbols=__kvm_nvhe_ $< $@<br>
+ <br>
+-# Remove ftrace and Shadow Call Stack CFLAGS.<br>
+-# This is equivalent to the 'notrace' and '__noscs' annotations.<br>
+-KBUILD_CFLAGS := $(filter-out $(CC_FLAGS_FTRACE) $(CC_FLAGS_SCS), $(KBUILD_CFLAGS))<br>
++# Remove ftrace, Shadow Call Stack, and CFI CFLAGS.<br>
++# This is equivalent to the 'notrace', '__noscs', and '__nocfi' annotations.<br>
++KBUILD_CFLAGS := $(filter-out $(CC_FLAGS_FTRACE) $(CC_FLAGS_SCS) $(CC_FLAGS_CFI), $(KBUILD_CFLAGS))<br>
+ <br>
+ # KVM nVHE code is run at a different exception code with a different map, so<br>
+ # compiler instrumentation that inserts callbacks or checks into the code may<br>
+-- <br>
+2.31.1.295.g9ea45b61b8-goog<br>
+<br>
+<br>
+

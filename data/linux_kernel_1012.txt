@@ -1,0 +1,59 @@
+On Thu, Apr 8, 2021 at 10:14 AM Lu Jialin <lujialin4@xxxxxxxxxx> wrote:<br>
+><i></i><br>
+><i> Change occured to occurred in kernel/power/autosleep.c.</i><br>
+><i> Change consiting to consisting in kernel/power/snapshot.c.</i><br>
+><i> Change avaiable to available in kernel/power/swap.c.</i><br>
+><i> No functionality changed.</i><br>
+><i></i><br>
+><i> Signed-off-by: Lu Jialin <lujialin4@xxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  kernel/power/autosleep.c | 2 +-</i><br>
+><i>  kernel/power/snapshot.c  | 2 +-</i><br>
+><i>  kernel/power/swap.c      | 2 +-</i><br>
+><i>  3 files changed, 3 insertions(+), 3 deletions(-)</i><br>
+><i></i><br>
+><i> diff --git a/kernel/power/autosleep.c b/kernel/power/autosleep.c</i><br>
+><i> index 9af5a50d3489..b29c8aca7486 100644</i><br>
+><i> --- a/kernel/power/autosleep.c</i><br>
+><i> +++ b/kernel/power/autosleep.c</i><br>
+><i> @@ -54,7 +54,7 @@ static void try_to_suspend(struct work_struct *work)</i><br>
+><i>                 goto out;</i><br>
+><i></i><br>
+><i>         /*</i><br>
+><i> -        * If the wakeup occured for an unknown reason, wait to prevent the</i><br>
+><i> +        * If the wakeup occurred for an unknown reason, wait to prevent the</i><br>
+><i>          * system from trying to suspend and waking up in a tight loop.</i><br>
+><i>          */</i><br>
+><i>         if (final_count == initial_count)</i><br>
+><i> diff --git a/kernel/power/snapshot.c b/kernel/power/snapshot.c</i><br>
+><i> index 64b7aab9aee4..27cb4e7086b7 100644</i><br>
+><i> --- a/kernel/power/snapshot.c</i><br>
+><i> +++ b/kernel/power/snapshot.c</i><br>
+><i> @@ -329,7 +329,7 @@ static void *chain_alloc(struct chain_allocator *ca, unsigned int size)</i><br>
+><i>  /**</i><br>
+><i>   * Data types related to memory bitmaps.</i><br>
+><i>   *</i><br>
+><i> - * Memory bitmap is a structure consiting of many linked lists of</i><br>
+><i> + * Memory bitmap is a structure consisting of many linked lists of</i><br>
+><i>   * objects.  The main list's elements are of type struct zone_bitmap</i><br>
+><i>   * and each of them corresonds to one zone.  For each zone bitmap</i><br>
+><i>   * object there is a list of objects of type struct bm_block that</i><br>
+><i> diff --git a/kernel/power/swap.c b/kernel/power/swap.c</i><br>
+><i> index 72e33054a2e1..bea3cb8afa11 100644</i><br>
+><i> --- a/kernel/power/swap.c</i><br>
+><i> +++ b/kernel/power/swap.c</i><br>
+><i> @@ -884,7 +884,7 @@ static int save_image_lzo(struct swap_map_handle *handle,</i><br>
+><i>   *     enough_swap - Make sure we have enough swap to save the image.</i><br>
+><i>   *</i><br>
+><i>   *     Returns TRUE or FALSE after checking the total amount of swap</i><br>
+><i> - *     space avaiable from the resume partition.</i><br>
+><i> + *     space available from the resume partition.</i><br>
+><i>   */</i><br>
+><i></i><br>
+><i>  static int enough_swap(unsigned int nr_pages)</i><br>
+><i> --</i><br>
+<br>
+Applied as 5.13 material, thanks!<br>
+<br>
+<br>
+

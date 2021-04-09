@@ -1,0 +1,35 @@
+On Wed, Apr 07, 2021 at 02:46:11PM -0700, Daniel Xu wrote:<br>
+<br>
+><i> +static void fini_seq_pagecache(void *priv_data)</i><br>
+><i> +{</i><br>
+><i> +	struct bpf_iter_seq_pagecache_info *info = priv_data;</i><br>
+><i> +	struct radix_tree_iter iter;</i><br>
+><i> +	struct super_block *sb;</i><br>
+><i> +	void **slot;</i><br>
+><i> +</i><br>
+><i> +	radix_tree_for_each_slot(slot, &info->superblocks, &iter, 0) {</i><br>
+><i> +		sb = (struct super_block *)iter.index;</i><br>
+><i> +		atomic_dec(&sb->s_active);</i><br>
+><i> +		radix_tree_delete(&info->superblocks, iter.index);</i><br>
+><i> +	}</i><br>
+<br>
+... and if in the meanwhile all other contributors to ->s_active have<br>
+gone away, that will result in...?<br>
+<br>
+IOW, NAK.  The objects you are playing with have non-trivial lifecycle<br>
+and poking into the guts of data structures without bothering to<br>
+understand it is not a good idea.<br>
+<br>
+Rule of the thumb: if your code ends up using fields that are otherwise<br>
+handled by a small part of codebase, the odds are that you need to be<br>
+bloody careful.  In particular, ->ns_lock has 3 users - all in<br>
+fs/namespace.c.  ->list/->mnt_list: all users in fs/namespace.c and<br>
+fs/pnode.c.  ->s_active: majority in fs/super.c, with several outliers<br>
+in filesystems and safety of those is not trivial.<br>
+<br>
+Any time you see that kind of pattern, you are risking to reprise<br>
+a scene from The Modern Times - the one with Charlie taking a trip<br>
+through the guts of machinery.<br>
+<br>
+<br>
+

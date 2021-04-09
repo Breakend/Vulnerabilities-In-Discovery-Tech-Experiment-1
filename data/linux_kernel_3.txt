@@ -1,0 +1,561 @@
+The XArray has better loops than the IDR has, removing the need to<br>
+open-code them.  We also don't need to call idr_destroy() any more.<br>
+Allocating the ID is a little tricky due to needing to get 'seq'<br>
+correct.  Open-code a variant of __xa_alloc() which lets us set the<br>
+ID and the seq before depositing the pointer in the array.<br>
+<br>
+Signed-off-by: Matthew Wilcox <willy@xxxxxxxxxxxxx><br>
+---<br>
+ include/linux/ipc_namespace.h |  10 +-<br>
+ ipc/ipc_sysctl.c              |  14 +--<br>
+ ipc/msg.c                     |   1 -<br>
+ ipc/namespace.c               |  13 +--<br>
+ ipc/sem.c                     |   1 -<br>
+ ipc/shm.c                     |  60 +++++-------<br>
+ ipc/util.c                    | 171 ++++++++++++++++------------------<br>
+ ipc/util.h                    |   4 +-<br>
+ 8 files changed, 122 insertions(+), 152 deletions(-)<br>
+<br>
+diff --git a/include/linux/ipc_namespace.h b/include/linux/ipc_namespace.h<br>
+index c309f43bde45..bdc39cc4d1dc 100644<br>
+--- a/include/linux/ipc_namespace.h<br>
++++ b/include/linux/ipc_namespace.h<br>
+@@ -3,13 +3,13 @@<br>
+ #define __IPC_NAMESPACE_H__<br>
+ <br>
+ #include <linux/err.h><br>
+-#include <linux/idr.h><br>
+-#include <linux/rwsem.h><br>
+ #include <linux/notifier.h><br>
+ #include <linux/nsproxy.h><br>
+ #include <linux/ns_common.h><br>
+ #include <linux/refcount.h><br>
+ #include <linux/rhashtable-types.h><br>
++#include <linux/rwsem.h><br>
++#include <linux/xarray.h><br>
+ <br>
+ struct user_namespace;<br>
+ <br>
+@@ -17,11 +17,11 @@ struct ipc_ids {<br>
+ 	int in_use;<br>
+ 	unsigned short seq;<br>
+ 	struct rw_semaphore rwsem;<br>
+-	struct idr ipcs_idr;<br>
++	struct xarray ipcs;<br>
+ 	int max_idx;<br>
+-	int last_idx;	/* For wrap around detection */<br>
++	int next_idx;<br>
+ #ifdef CONFIG_CHECKPOINT_RESTORE<br>
+-	int next_id;<br>
++	int restore_id;<br>
+ #endif<br>
+ 	struct rhashtable key_ht;<br>
+ };<br>
+diff --git a/ipc/ipc_sysctl.c b/ipc/ipc_sysctl.c<br>
+index affd66537e87..a2df5d0e27f6 100644<br>
+--- a/ipc/ipc_sysctl.c<br>
++++ b/ipc/ipc_sysctl.c<br>
+@@ -115,7 +115,7 @@ static int proc_ipc_sem_dointvec(struct ctl_table *table, int write,<br>
+ <br>
+ int ipc_mni = IPCMNI;<br>
+ int ipc_mni_shift = IPCMNI_SHIFT;<br>
+-int ipc_min_cycle = RADIX_TREE_MAP_SIZE;<br>
++int ipc_min_cycle = XA_CHUNK_SIZE;<br>
+ <br>
+ static struct ctl_table ipc_kern_table[] = {<br>
+ 	{<br>
+@@ -196,8 +196,8 @@ static struct ctl_table ipc_kern_table[] = {<br>
+ #ifdef CONFIG_CHECKPOINT_RESTORE<br>
+ 	{<br>
+ 		.procname	= "sem_next_id",<br>
+-		.data		= &init_ipc_ns.ids[IPC_SEM_IDS].next_id,<br>
+-		.maxlen		= sizeof(init_ipc_ns.ids[IPC_SEM_IDS].next_id),<br>
++		.data		= &init_ipc_ns.ids[IPC_SEM_IDS].restore_id,<br>
++		.maxlen		= sizeof(init_ipc_ns.ids[IPC_SEM_IDS].restore_id),<br>
+ 		.mode		= 0644,<br>
+ 		.proc_handler	= proc_ipc_dointvec_minmax,<br>
+ 		.extra1		= SYSCTL_ZERO,<br>
+@@ -205,8 +205,8 @@ static struct ctl_table ipc_kern_table[] = {<br>
+ 	},<br>
+ 	{<br>
+ 		.procname	= "msg_next_id",<br>
+-		.data		= &init_ipc_ns.ids[IPC_MSG_IDS].next_id,<br>
+-		.maxlen		= sizeof(init_ipc_ns.ids[IPC_MSG_IDS].next_id),<br>
++		.data		= &init_ipc_ns.ids[IPC_MSG_IDS].restore_id,<br>
++		.maxlen		= sizeof(init_ipc_ns.ids[IPC_MSG_IDS].restore_id),<br>
+ 		.mode		= 0644,<br>
+ 		.proc_handler	= proc_ipc_dointvec_minmax,<br>
+ 		.extra1		= SYSCTL_ZERO,<br>
+@@ -214,8 +214,8 @@ static struct ctl_table ipc_kern_table[] = {<br>
+ 	},<br>
+ 	{<br>
+ 		.procname	= "shm_next_id",<br>
+-		.data		= &init_ipc_ns.ids[IPC_SHM_IDS].next_id,<br>
+-		.maxlen		= sizeof(init_ipc_ns.ids[IPC_SHM_IDS].next_id),<br>
++		.data		= &init_ipc_ns.ids[IPC_SHM_IDS].restore_id,<br>
++		.maxlen		= sizeof(init_ipc_ns.ids[IPC_SHM_IDS].restore_id),<br>
+ 		.mode		= 0644,<br>
+ 		.proc_handler	= proc_ipc_dointvec_minmax,<br>
+ 		.extra1		= SYSCTL_ZERO,<br>
+diff --git a/ipc/msg.c b/ipc/msg.c<br>
+index caca67368cb5..0c4fdc2f5c08 100644<br>
+--- a/ipc/msg.c<br>
++++ b/ipc/msg.c<br>
+@@ -1308,7 +1308,6 @@ void msg_init_ns(struct ipc_namespace *ns)<br>
+ void msg_exit_ns(struct ipc_namespace *ns)<br>
+ {<br>
+ 	free_ipcs(ns, &msg_ids(ns), freeque);<br>
+-	idr_destroy(&ns->ids[IPC_MSG_IDS].ipcs_idr);<br>
+ 	rhashtable_destroy(&ns->ids[IPC_MSG_IDS].key_ht);<br>
+ }<br>
+ #endif<br>
+diff --git a/ipc/namespace.c b/ipc/namespace.c<br>
+index b3ca1476ca51..e8567c3d32e9 100644<br>
+--- a/ipc/namespace.c<br>
++++ b/ipc/namespace.c<br>
+@@ -96,22 +96,17 @@ void free_ipcs(struct ipc_namespace *ns, struct ipc_ids *ids,<br>
+ 	       void (*free)(struct ipc_namespace *, struct kern_ipc_perm *))<br>
+ {<br>
+ 	struct kern_ipc_perm *perm;<br>
+-	int next_id;<br>
+-	int total, in_use;<br>
++	unsigned long index;<br>
+ <br>
+ 	down_write(&ids->rwsem);<br>
+ <br>
+-	in_use = ids->in_use;<br>
+-<br>
+-	for (total = 0, next_id = 0; total < in_use; next_id++) {<br>
+-		perm = idr_find(&ids->ipcs_idr, next_id);<br>
+-		if (perm == NULL)<br>
+-			continue;<br>
++	xa_for_each(&ids->ipcs, index, perm) {<br>
+ 		rcu_read_lock();<br>
+ 		ipc_lock_object(perm);<br>
+ 		free(ns, perm);<br>
+-		total++;<br>
+ 	}<br>
++	BUG_ON(!xa_empty(&ids->ipcs));<br>
++<br>
+ 	up_write(&ids->rwsem);<br>
+ }<br>
+ <br>
+diff --git a/ipc/sem.c b/ipc/sem.c<br>
+index 3687b71151b3..8d6550ac035a 100644<br>
+--- a/ipc/sem.c<br>
++++ b/ipc/sem.c<br>
+@@ -258,7 +258,6 @@ void sem_init_ns(struct ipc_namespace *ns)<br>
+ void sem_exit_ns(struct ipc_namespace *ns)<br>
+ {<br>
+ 	free_ipcs(ns, &sem_ids(ns), freeary);<br>
+-	idr_destroy(&ns->ids[IPC_SEM_IDS].ipcs_idr);<br>
+ 	rhashtable_destroy(&ns->ids[IPC_SEM_IDS].key_ht);<br>
+ }<br>
+ #endif<br>
+diff --git a/ipc/shm.c b/ipc/shm.c<br>
+index 0ba6add05b35..7922c4f65234 100644<br>
+--- a/ipc/shm.c<br>
++++ b/ipc/shm.c<br>
+@@ -129,7 +129,6 @@ static void do_shm_rmid(struct ipc_namespace *ns, struct kern_ipc_perm *ipcp)<br>
+ void shm_exit_ns(struct ipc_namespace *ns)<br>
+ {<br>
+ 	free_ipcs(ns, &shm_ids(ns), do_shm_rmid);<br>
+-	idr_destroy(&ns->ids[IPC_SHM_IDS].ipcs_idr);<br>
+ 	rhashtable_destroy(&ns->ids[IPC_SHM_IDS].key_ht);<br>
+ }<br>
+ #endif<br>
+@@ -348,34 +347,30 @@ static void shm_close(struct vm_area_struct *vma)<br>
+ 	up_write(&shm_ids(ns).rwsem);<br>
+ }<br>
+ <br>
+-/* Called with ns->shm_ids(ns).rwsem locked */<br>
+-static int shm_try_destroy_orphaned(int id, void *p, void *data)<br>
++void shm_destroy_orphaned(struct ipc_namespace *ns)<br>
+ {<br>
+-	struct ipc_namespace *ns = data;<br>
+-	struct kern_ipc_perm *ipcp = p;<br>
+-	struct shmid_kernel *shp = container_of(ipcp, struct shmid_kernel, shm_perm);<br>
++	struct kern_ipc_perm *ipcp;<br>
++	unsigned long index;<br>
+ <br>
+-	/*<br>
+-	 * We want to destroy segments without users and with already<br>
+-	 * exit'ed originating process.<br>
+-	 *<br>
+-	 * As shp->* are changed under rwsem, it's safe to skip shp locking.<br>
+-	 */<br>
+-	if (shp->shm_creator != NULL)<br>
+-		return 0;<br>
++	down_write(&shm_ids(ns).rwsem);<br>
++	xa_for_each(&shm_ids(ns).ipcs, index, ipcp) {<br>
++		struct shmid_kernel *shp;<br>
+ <br>
+-	if (shm_may_destroy(ns, shp)) {<br>
+-		shm_lock_by_ptr(shp);<br>
+-		shm_destroy(ns, shp);<br>
+-	}<br>
+-	return 0;<br>
+-}<br>
++		shp = container_of(ipcp, struct shmid_kernel, shm_perm);<br>
+ <br>
+-void shm_destroy_orphaned(struct ipc_namespace *ns)<br>
+-{<br>
+-	down_write(&shm_ids(ns).rwsem);<br>
+-	if (shm_ids(ns).in_use)<br>
+-		idr_for_each(&shm_ids(ns).ipcs_idr, &shm_try_destroy_orphaned, ns);<br>
++		/*<br>
++		 * We want to destroy segments without users and with already<br>
++		 * exit'ed originating process.  As shp->* are changed under<br>
++		 * rwsem, it's safe to skip shp locking.<br>
++		 */<br>
++		if (shp->shm_creator != NULL)<br>
++			continue;<br>
++<br>
++		if (shm_may_destroy(ns, shp)) {<br>
++			shm_lock_by_ptr(shp);<br>
++			shm_destroy(ns, shp);<br>
++		}<br>
++	}<br>
+ 	up_write(&shm_ids(ns).rwsem);<br>
+ }<br>
+ <br>
+@@ -860,26 +855,17 @@ static void shm_add_rss_swap(struct shmid_kernel *shp,<br>
+ static void shm_get_stat(struct ipc_namespace *ns, unsigned long *rss,<br>
+ 		unsigned long *swp)<br>
+ {<br>
+-	int next_id;<br>
+-	int total, in_use;<br>
++	struct kern_ipc_perm *ipc;<br>
++	unsigned long index;<br>
+ <br>
+ 	*rss = 0;<br>
+ 	*swp = 0;<br>
+ <br>
+-	in_use = shm_ids(ns).in_use;<br>
+-<br>
+-	for (total = 0, next_id = 0; total < in_use; next_id++) {<br>
+-		struct kern_ipc_perm *ipc;<br>
++	xa_for_each(&shm_ids(ns).ipcs, index, ipc) {<br>
+ 		struct shmid_kernel *shp;<br>
+ <br>
+-		ipc = idr_find(&shm_ids(ns).ipcs_idr, next_id);<br>
+-		if (ipc == NULL)<br>
+-			continue;<br>
+ 		shp = container_of(ipc, struct shmid_kernel, shm_perm);<br>
+-<br>
+ 		shm_add_rss_swap(shp, rss, swp);<br>
+-<br>
+-		total++;<br>
+ 	}<br>
+ }<br>
+ <br>
+diff --git a/ipc/util.c b/ipc/util.c<br>
+index 7acccfded7cb..0f6b0e0aa17e 100644<br>
+--- a/ipc/util.c<br>
++++ b/ipc/util.c<br>
+@@ -104,12 +104,20 @@ static const struct rhashtable_params ipc_kht_params = {<br>
+ 	.automatic_shrinking	= true,<br>
+ };<br>
+ <br>
++#ifdef CONFIG_CHECKPOINT_RESTORE<br>
++#define set_restore_id(ids, x)	ids->restore_id = x<br>
++#define get_restore_id(ids)	ids->restore_id<br>
++#else<br>
++#define set_restore_id(ids, x)	do { } while (0)<br>
++#define get_restore_id(ids)	(-1)<br>
++#endif<br>
++<br>
+ /**<br>
+  * ipc_init_ids	- initialise ipc identifiers<br>
+  * @ids: ipc identifier set<br>
+  *<br>
+  * Set up the sequence range to use for the ipc identifier range (limited<br>
+- * below ipc_mni) then initialise the keys hashtable and ids idr.<br>
++ * below ipc_mni) then initialise the keys hashtable and ids xarray.<br>
+  */<br>
+ void ipc_init_ids(struct ipc_ids *ids)<br>
+ {<br>
+@@ -117,12 +125,10 @@ void ipc_init_ids(struct ipc_ids *ids)<br>
+ 	ids->seq = 0;<br>
+ 	init_rwsem(&ids->rwsem);<br>
+ 	rhashtable_init(&ids->key_ht, &ipc_kht_params);<br>
+-	idr_init(&ids->ipcs_idr);<br>
++	xa_init_flags(&ids->ipcs, XA_FLAGS_ALLOC);<br>
+ 	ids->max_idx = -1;<br>
+-	ids->last_idx = -1;<br>
+-#ifdef CONFIG_CHECKPOINT_RESTORE<br>
+-	ids->next_id = -1;<br>
+-#endif<br>
++	ids->next_idx = 0;<br>
++	set_restore_id(ids, -1);<br>
+ }<br>
+ <br>
+ #ifdef CONFIG_PROC_FS<br>
+@@ -183,12 +189,12 @@ static struct kern_ipc_perm *ipc_findkey(struct ipc_ids *ids, key_t key)<br>
+ }<br>
+ <br>
+ /*<br>
+- * Insert new IPC object into idr tree, and set sequence number and id<br>
++ * Insert new IPC object into xarray, and set sequence number and id<br>
+  * in the correct order.<br>
+  * Especially:<br>
+- * - the sequence number must be set before inserting the object into the idr,<br>
+- *   because the sequence number is accessed without a lock.<br>
+- * - the id can/must be set after inserting the object into the idr.<br>
++ * - the sequence number must be set before inserting the object into the<br>
++ *   xarray, because the sequence number is accessed without a lock.<br>
++ * - the id can/must be set after inserting the object into the xarray.<br>
+  *   All accesses must be done after getting kern_ipc_perm.lock.<br>
+  *<br>
+  * The caller must own kern_ipc_perm.lock.of the new object.<br>
+@@ -198,64 +204,48 @@ static struct kern_ipc_perm *ipc_findkey(struct ipc_ids *ids, key_t key)<br>
+  * the sequence number is incremented only when the returned ID is less than<br>
+  * the last one.<br>
+  */<br>
+-static inline int ipc_idr_alloc(struct ipc_ids *ids, struct kern_ipc_perm *new)<br>
++static inline int ipc_id_alloc(struct ipc_ids *ids, struct kern_ipc_perm *new)<br>
+ {<br>
+-	int idx, next_id = -1;<br>
+-<br>
+-#ifdef CONFIG_CHECKPOINT_RESTORE<br>
+-	next_id = ids->next_id;<br>
+-	ids->next_id = -1;<br>
+-#endif<br>
+-<br>
+-	/*<br>
+-	 * As soon as a new object is inserted into the idr,<br>
+-	 * ipc_obtain_object_idr() or ipc_obtain_object_check() can find it,<br>
+-	 * and the lockless preparations for ipc operations can start.<br>
+-	 * This means especially: permission checks, audit calls, allocation<br>
+-	 * of undo structures, ...<br>
+-	 *<br>
+-	 * Thus the object must be fully initialized, and if something fails,<br>
+-	 * then the full tear-down sequence must be followed.<br>
+-	 * (i.e.: set new->deleted, reduce refcount, call_rcu())<br>
+-	 */<br>
++	u32 idx;<br>
++	int err;<br>
+ <br>
+-	if (next_id < 0) { /* !CHECKPOINT_RESTORE or next_id is unset */<br>
++	if (get_restore_id(ids) < 0) {<br>
+ 		int max_idx;<br>
+ <br>
+ 		max_idx = max(ids->in_use*3/2, ipc_min_cycle);<br>
+-		max_idx = min(max_idx, ipc_mni);<br>
+-<br>
+-		/* allocate the idx, with a NULL struct kern_ipc_perm */<br>
+-		idx = idr_alloc_cyclic(&ids->ipcs_idr, NULL, 0, max_idx,<br>
+-					GFP_NOWAIT);<br>
+-<br>
+-		if (idx >= 0) {<br>
+-			/*<br>
+-			 * idx got allocated successfully.<br>
+-			 * Now calculate the sequence number and set the<br>
+-			 * pointer for real.<br>
+-			 */<br>
+-			if (idx <= ids->last_idx) {<br>
+-				ids->seq++;<br>
+-				if (ids->seq >= ipcid_seq_max())<br>
+-					ids->seq = 0;<br>
+-			}<br>
+-			ids->last_idx = idx;<br>
++		max_idx = min(max_idx, ipc_mni) - 1;<br>
+ <br>
++		xa_lock(&ids->ipcs);<br>
++<br>
++		err = __xa_alloc_cyclic(&ids->ipcs, &idx, NULL,<br>
++				XA_LIMIT(0, max_idx), &ids->next_idx,<br>
++				GFP_KERNEL);<br>
++		if (err == 1) {<br>
++			ids->seq++;<br>
++			if (ids->seq >= ipcid_seq_max())<br>
++				ids->seq = 0;<br>
++		}<br>
++<br>
++		if (err >= 0) {<br>
+ 			new->seq = ids->seq;<br>
+-			/* no need for smp_wmb(), this is done<br>
+-			 * inside idr_replace, as part of<br>
+-			 * rcu_assign_pointer<br>
+-			 */<br>
+-			idr_replace(&ids->ipcs_idr, new, idx);<br>
++			new->id = (new->seq << ipcmni_seq_shift()) + idx;<br>
++			/* xa_store contains a write barrier */<br>
++			__xa_store(&ids->ipcs, idx, new, GFP_KERNEL);<br>
+ 		}<br>
++<br>
++		xa_unlock(&ids->ipcs);<br>
+ 	} else {<br>
+-		new->seq = ipcid_to_seqx(next_id);<br>
+-		idx = idr_alloc(&ids->ipcs_idr, new, ipcid_to_idx(next_id),<br>
+-				0, GFP_NOWAIT);<br>
++		new->id = get_restore_id(ids);<br>
++		new->seq = ipcid_to_seqx(new->id);<br>
++		idx = ipcid_to_idx(new->id);<br>
++		err = xa_insert(&ids->ipcs, idx, new, GFP_KERNEL);<br>
++		set_restore_id(ids, -1);<br>
+ 	}<br>
+-	if (idx >= 0)<br>
+-		new->id = (new->seq << ipcmni_seq_shift()) + idx;<br>
++<br>
++	if (err == -EBUSY)<br>
++		return -ENOSPC;<br>
++	if (err < 0)<br>
++		return err;<br>
+ 	return idx;<br>
+ }<br>
+ <br>
+@@ -278,7 +268,7 @@ int ipc_addid(struct ipc_ids *ids, struct kern_ipc_perm *new, int limit)<br>
+ {<br>
+ 	kuid_t euid;<br>
+ 	kgid_t egid;<br>
+-	int idx, err;<br>
++	int idx;<br>
+ <br>
+ 	/* 1) Initialize the refcount so that ipc_rcu_putref works */<br>
+ 	refcount_set(&new->refcount, 1);<br>
+@@ -289,29 +279,42 @@ int ipc_addid(struct ipc_ids *ids, struct kern_ipc_perm *new, int limit)<br>
+ 	if (ids->in_use >= limit)<br>
+ 		return -ENOSPC;<br>
+ <br>
+-	idr_preload(GFP_KERNEL);<br>
+-<br>
++	/*<br>
++	 * 2) Hold the spinlock so that nobody else can access the object<br>
++	 * once they can find it<br>
++	 */<br>
+ 	spin_lock_init(&new->lock);<br>
+-	rcu_read_lock();<br>
+ 	spin_lock(&new->lock);<br>
+-<br>
+ 	current_euid_egid(&euid, &egid);<br>
+ 	new->cuid = new->uid = euid;<br>
+ 	new->gid = new->cgid = egid;<br>
+-<br>
+ 	new->deleted = false;<br>
+ <br>
+-	idx = ipc_idr_alloc(ids, new);<br>
+-	idr_preload_end();<br>
++	idx = ipc_id_alloc(ids, new);<br>
++<br>
++	rcu_read_lock();<br>
++<br>
++	/*<br>
++	 * As soon as a new object is inserted into the XArray,<br>
++	 * ipc_obtain_object_idr() or ipc_obtain_object_check() can find it,<br>
++	 * and the lockless preparations for ipc operations can start.<br>
++	 * This means especially: permission checks, audit calls, allocation<br>
++	 * of undo structures, ...<br>
++	 *<br>
++	 * Thus the object must be fully initialized, and if something fails,<br>
++	 * then the full tear-down sequence must be followed.<br>
++	 * (i.e.: set new->deleted, reduce refcount, call_rcu())<br>
++	 */<br>
+ <br>
+ 	if (idx >= 0 && new->key != IPC_PRIVATE) {<br>
+-		err = rhashtable_insert_fast(&ids->key_ht, &new->khtnode,<br>
++		int err = rhashtable_insert_fast(&ids->key_ht, &new->khtnode,<br>
+ 					     ipc_kht_params);<br>
+ 		if (err < 0) {<br>
+-			idr_remove(&ids->ipcs_idr, idx);<br>
++			xa_erase(&ids->ipcs, idx);<br>
+ 			idx = err;<br>
+ 		}<br>
+ 	}<br>
++<br>
+ 	if (idx < 0) {<br>
+ 		new->deleted = true;<br>
+ 		spin_unlock(&new->lock);<br>
+@@ -462,7 +465,7 @@ void ipc_rmid(struct ipc_ids *ids, struct kern_ipc_perm *ipcp)<br>
+ {<br>
+ 	int idx = ipcid_to_idx(ipcp->id);<br>
+ <br>
+-	idr_remove(&ids->ipcs_idr, idx);<br>
++	xa_erase(&ids->ipcs, idx);<br>
+ 	ipc_kht_remove(ids, ipcp);<br>
+ 	ids->in_use--;<br>
+ 	ipcp->deleted = true;<br>
+@@ -472,7 +475,7 @@ void ipc_rmid(struct ipc_ids *ids, struct kern_ipc_perm *ipcp)<br>
+ 			idx--;<br>
+ 			if (idx == -1)<br>
+ 				break;<br>
+-		} while (!idr_find(&ids->ipcs_idr, idx));<br>
++		} while (!xa_load(&ids->ipcs, idx));<br>
+ 		ids->max_idx = idx;<br>
+ 	}<br>
+ }<br>
+@@ -595,7 +598,7 @@ struct kern_ipc_perm *ipc_obtain_object_idr(struct ipc_ids *ids, int id)<br>
+ 	struct kern_ipc_perm *out;<br>
+ 	int idx = ipcid_to_idx(id);<br>
+ <br>
+-	out = idr_find(&ids->ipcs_idr, idx);<br>
++	out = xa_load(&ids->ipcs, idx);<br>
+ 	if (!out)<br>
+ 		return ERR_PTR(-EINVAL);<br>
+ <br>
+@@ -754,31 +757,19 @@ struct pid_namespace *ipc_seq_pid_ns(struct seq_file *s)<br>
+ static struct kern_ipc_perm *sysvipc_find_ipc(struct ipc_ids *ids, loff_t pos,<br>
+ 					      loff_t *new_pos)<br>
+ {<br>
++	unsigned long index = pos;<br>
+ 	struct kern_ipc_perm *ipc;<br>
+-	int total, id;<br>
+-<br>
+-	total = 0;<br>
+-	for (id = 0; id < pos && total < ids->in_use; id++) {<br>
+-		ipc = idr_find(&ids->ipcs_idr, id);<br>
+-		if (ipc != NULL)<br>
+-			total++;<br>
+-	}<br>
+ <br>
+ 	*new_pos = pos + 1;<br>
+-	if (total >= ids->in_use)<br>
++	rcu_read_lock();<br>
++	ipc = xa_find(&ids->ipcs, &index, ULONG_MAX, XA_PRESENT);<br>
++	if (!ipc) {<br>
++		rcu_read_unlock();<br>
+ 		return NULL;<br>
+-<br>
+-	for (; pos < ipc_mni; pos++) {<br>
+-		ipc = idr_find(&ids->ipcs_idr, pos);<br>
+-		if (ipc != NULL) {<br>
+-			rcu_read_lock();<br>
+-			ipc_lock_object(ipc);<br>
+-			return ipc;<br>
+-		}<br>
+ 	}<br>
+ <br>
+-	/* Out of range - return NULL to terminate iteration */<br>
+-	return NULL;<br>
++	ipc_lock_object(ipc);<br>
++	return ipc;<br>
+ }<br>
+ <br>
+ static void *sysvipc_proc_next(struct seq_file *s, void *it, loff_t *pos)<br>
+diff --git a/ipc/util.h b/ipc/util.h<br>
+index 5766c61aed0e..04d49db4cefa 100644<br>
+--- a/ipc/util.h<br>
++++ b/ipc/util.h<br>
+@@ -27,7 +27,7 @@<br>
+  */<br>
+ #define IPCMNI_SHIFT		15<br>
+ #define IPCMNI_EXTEND_SHIFT	24<br>
+-#define IPCMNI_EXTEND_MIN_CYCLE	(RADIX_TREE_MAP_SIZE * RADIX_TREE_MAP_SIZE)<br>
++#define IPCMNI_EXTEND_MIN_CYCLE	(XA_CHUNK_SIZE * XA_CHUNK_SIZE)<br>
+ #define IPCMNI			(1 << IPCMNI_SHIFT)<br>
+ #define IPCMNI_EXTEND		(1 << IPCMNI_EXTEND_SHIFT)<br>
+ <br>
+@@ -42,7 +42,7 @@ extern int ipc_min_cycle;<br>
+ #else /* CONFIG_SYSVIPC_SYSCTL */<br>
+ <br>
+ #define ipc_mni			IPCMNI<br>
+-#define ipc_min_cycle		((int)RADIX_TREE_MAP_SIZE)<br>
++#define ipc_min_cycle		((int)XA_CHUNK_SIZE)<br>
+ #define ipcmni_seq_shift()	IPCMNI_SHIFT<br>
+ #define IPCMNI_IDX_MASK		((1 << IPCMNI_SHIFT) - 1)<br>
+ #endif /* CONFIG_SYSVIPC_SYSCTL */<br>
+-- <br>
+2.26.1<br>
+<br>
+<br>
+

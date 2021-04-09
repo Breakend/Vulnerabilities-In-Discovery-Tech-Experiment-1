@@ -1,0 +1,74 @@
+On Wed, Apr 07, 2021 at 02:46:11PM -0700, Daniel Xu wrote:<br>
+><i> +struct bpf_iter_seq_pagecache_info {</i><br>
+><i> +	struct mnt_namespace *ns;</i><br>
+><i> +	struct radix_tree_root superblocks;</i><br>
+<br>
+Why are you adding a new radix tree?  Use an XArray instead.<br>
+<br>
+><i> +static struct page *goto_next_page(struct bpf_iter_seq_pagecache_info *info)</i><br>
+><i> +{</i><br>
+><i> +	struct page *page, *ret = NULL;</i><br>
+><i> +	unsigned long idx;</i><br>
+><i> +</i><br>
+><i> +	rcu_read_lock();</i><br>
+><i> +retry:</i><br>
+><i> +	BUG_ON(!info->cur_inode);</i><br>
+><i> +	ret = NULL;</i><br>
+><i> +	xa_for_each_start(&info->cur_inode->i_data.i_pages, idx, page,</i><br>
+><i> +			  info->cur_page_idx) {</i><br>
+><i> +		if (!page_cache_get_speculative(page))</i><br>
+><i> +			continue;</i><br>
+<br>
+Why do you feel the need to poke around in i_pages directly?  Is there<br>
+something wrong with find_get_entries()?<br>
+<br>
+><i> +static int __pagecache_seq_show(struct seq_file *seq, struct page *page,</i><br>
+><i> +				bool in_stop)</i><br>
+><i> +{</i><br>
+><i> +	struct bpf_iter_meta meta;</i><br>
+><i> +	struct bpf_iter__pagecache ctx;</i><br>
+><i> +	struct bpf_prog *prog;</i><br>
+><i> +</i><br>
+><i> +	meta.seq = seq;</i><br>
+><i> +	prog = bpf_iter_get_info(&meta, in_stop);</i><br>
+><i> +	if (!prog)</i><br>
+><i> +		return 0;</i><br>
+><i> +</i><br>
+><i> +	meta.seq = seq;</i><br>
+><i> +	ctx.meta = &meta;</i><br>
+><i> +	ctx.page = page;</i><br>
+><i> +	return bpf_iter_run_prog(prog, &ctx);</i><br>
+<br>
+I'm not really keen on the idea of random BPF programs being able to poke<br>
+at pages in the page cache like this.  From your initial description,<br>
+it sounded like all you needed was a list of which pages are present.<br>
+<br>
+><i> +	INIT_RADIX_TREE(&info->superblocks, GFP_KERNEL);</i><br>
+><i> +</i><br>
+><i> +	spin_lock(&info->ns->ns_lock);</i><br>
+><i> +	list_for_each_entry(mnt, &info->ns->list, mnt_list) {</i><br>
+><i> +		sb = mnt->mnt.mnt_sb;</i><br>
+><i> +</i><br>
+><i> +		/* The same mount may be mounted in multiple places */</i><br>
+><i> +		if (radix_tree_lookup(&info->superblocks, (unsigned long)sb))</i><br>
+><i> +			continue;</i><br>
+><i> +</i><br>
+><i> +		err = radix_tree_insert(&info->superblocks,</i><br>
+><i> +				        (unsigned long)sb, (void *)1);</i><br>
+><i> +		if (err)</i><br>
+><i> +			goto out;</i><br>
+><i> +	}</i><br>
+><i> +</i><br>
+><i> +	radix_tree_for_each_slot(slot, &info->superblocks, &iter, 0) {</i><br>
+><i> +		sb = (struct super_block *)iter.index;</i><br>
+><i> +		atomic_inc(&sb->s_active);</i><br>
+><i> +	}</i><br>
+<br>
+Uh.  What on earth made you think this was a good way to use the radix<br>
+tree?  And, no, the XArray doesn't change that.<br>
+<br>
+If you don't understand why this is so bad, call xa_dump() on it after<br>
+constructing it.  I'll wait.<br>
+<br>
+<br>
+

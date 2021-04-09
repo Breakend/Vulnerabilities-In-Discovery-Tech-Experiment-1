@@ -1,0 +1,19 @@
+On Thu, Apr 08, 2021 at 11:00:08PM +0800, DENG Qingfang wrote:<br>
+><i> Hi René,</i><br>
+><i> </i><br>
+><i> On Thu, Apr 8, 2021 at 10:02 PM René van Dorst <opensource@xxxxxxxxxx> wrote:</i><br>
+><i> ></i><br>
+><i> > Tested on Ubiquiti ER-X-SFP (MT7621) with 1 external phy which uses irq=POLL.</i><br>
+><i> ></i><br>
+><i> </i><br>
+><i> I wonder if the external PHY's IRQ can be registered in the devicetree.</i><br>
+><i> Change MT7530_NUM_PHYS to 6, and add the following to ER-X-SFP dts PHY node:</i><br>
+<br>
+I don't know this platform. What is the PHYs interrupt pin connected<br>
+to? A SoC GPIO? There is a generic mechanism to describe PHY<br>
+interrupts in DT. That should be used, if it is a GPIO.<br>
+<br>
+	   Andrew<br>
+<br>
+<br>
+

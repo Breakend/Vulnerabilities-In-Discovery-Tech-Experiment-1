@@ -1,0 +1,37 @@
+Random drivers should not override a user configuration of core knobs<br>
+(e.g., CONFIG_DMA_CMA=n). Use "imply" instead, to still respect<br>
+dependencies and manual overrides.<br>
+<br>
+"This is similar to "select" as it enforces a lower limit on another<br>
+ symbol except that the "implied" symbol's value may still be set to n<br>
+ from a direct dependency or with a visible prompt."<br>
+<br>
+Implying DMA_CMA should be sufficient, as that depends on CMA.<br>
+<br>
+Note: If this is a real dependency, we should use "depends on DMA_CMA"<br>
+instead -  but I assume the driver can work without CMA just fine --<br>
+esp. when we wouldn't have HAVE_DMA_CONTIGUOUS or CMA right now.<br>
+<br>
+Signed-off-by: David Hildenbrand <david@xxxxxxxxxx><br>
+---<br>
+ drivers/video/fbdev/Kconfig | 2 +-<br>
+ 1 file changed, 1 insertion(+), 1 deletion(-)<br>
+<br>
+diff --git a/drivers/video/fbdev/Kconfig b/drivers/video/fbdev/Kconfig<br>
+index 4f02db65dede..d37cd5341e1b 100644<br>
+--- a/drivers/video/fbdev/Kconfig<br>
++++ b/drivers/video/fbdev/Kconfig<br>
+@@ -2186,7 +2186,7 @@ config FB_HYPERV<br>
+ 	select FB_CFB_COPYAREA<br>
+ 	select FB_CFB_IMAGEBLIT<br>
+ 	select FB_DEFERRED_IO<br>
+-	select DMA_CMA if HAVE_DMA_CONTIGUOUS && CMA<br>
++	imply DMA_CMA<br>
+ 	help<br>
+ 	  This framebuffer driver supports Microsoft Hyper-V Synthetic Video.<br>
+ <br>
+-- <br>
+2.30.2<br>
+<br>
+<br>
+

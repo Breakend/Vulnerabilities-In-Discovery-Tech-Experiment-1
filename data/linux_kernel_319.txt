@@ -1,0 +1,117 @@
+Resumes the actual scsi device the unit descriptor of which<br>
+is being accessed instead of the hba alone.<br>
+<br>
+Reviewed-by: Can Guo <cang@xxxxxxxxxxxxxx><br>
+Signed-off-by: Asutosh Das <asutoshd@xxxxxxxxxxxxxx><br>
+---<br>
+ drivers/scsi/ufs/ufs-sysfs.c | 30 +++++++++++++++++-------------<br>
+ 1 file changed, 17 insertions(+), 13 deletions(-)<br>
+<br>
+diff --git a/drivers/scsi/ufs/ufs-sysfs.c b/drivers/scsi/ufs/ufs-sysfs.c<br>
+index d7c3cff..fa57bac 100644<br>
+--- a/drivers/scsi/ufs/ufs-sysfs.c<br>
++++ b/drivers/scsi/ufs/ufs-sysfs.c<br>
+@@ -245,9 +245,9 @@ static ssize_t wb_on_store(struct device *dev, struct device_attribute *attr,<br>
+ 		goto out;<br>
+ 	}<br>
+ <br>
+-	pm_runtime_get_sync(hba->dev);<br>
++	scsi_autopm_get_device(hba->sdev_ufs_device);<br>
+ 	res = ufshcd_wb_toggle(hba, wb_enable);<br>
+-	pm_runtime_put_sync(hba->dev);<br>
++	scsi_autopm_put_device(hba->sdev_ufs_device);<br>
+ out:<br>
+ 	up(&hba->host_sem);<br>
+ 	return res < 0 ? res : count;<br>
+@@ -297,10 +297,10 @@ static ssize_t ufs_sysfs_read_desc_param(struct ufs_hba *hba,<br>
+ 		goto out;<br>
+ 	}<br>
+ <br>
+-	pm_runtime_get_sync(hba->dev);<br>
++	scsi_autopm_get_device(hba->sdev_ufs_device);<br>
+ 	ret = ufshcd_read_desc_param(hba, desc_id, desc_index,<br>
+ 				param_offset, desc_buf, param_size);<br>
+-	pm_runtime_put_sync(hba->dev);<br>
++	scsi_autopm_put_device(hba->sdev_ufs_device);<br>
+ 	if (ret) {<br>
+ 		ret = -EINVAL;<br>
+ 		goto out;<br>
+@@ -678,7 +678,7 @@ static ssize_t _name##_show(struct device *dev,				\<br>
+ 		up(&hba->host_sem);					\<br>
+ 		return -ENOMEM;						\<br>
+ 	}								\<br>
+-	pm_runtime_get_sync(hba->dev);					\<br>
++	scsi_autopm_get_device(hba->sdev_ufs_device);			\<br>
+ 	ret = ufshcd_query_descriptor_retry(hba,			\<br>
+ 		UPIU_QUERY_OPCODE_READ_DESC, QUERY_DESC_IDN_DEVICE,	\<br>
+ 		0, 0, desc_buf, &desc_len);				\<br>
+@@ -695,7 +695,7 @@ static ssize_t _name##_show(struct device *dev,				\<br>
+ 		goto out;						\<br>
+ 	ret = sysfs_emit(buf, "%s\n", desc_buf);			\<br>
+ out:									\<br>
+-	pm_runtime_put_sync(hba->dev);					\<br>
++	scsi_autopm_put_device(hba->sdev_ufs_device);			\<br>
+ 	kfree(desc_buf);						\<br>
+ 	up(&hba->host_sem);						\<br>
+ 	return ret;							\<br>
+@@ -744,10 +744,10 @@ static ssize_t _name##_show(struct device *dev,				\<br>
+ 	}								\<br>
+ 	if (ufshcd_is_wb_flags(QUERY_FLAG_IDN##_uname))			\<br>
+ 		index = ufshcd_wb_get_query_index(hba);			\<br>
+-	pm_runtime_get_sync(hba->dev);					\<br>
++	scsi_autopm_get_device(hba->sdev_ufs_device);			\<br>
+ 	ret = ufshcd_query_flag(hba, UPIU_QUERY_OPCODE_READ_FLAG,	\<br>
+ 		QUERY_FLAG_IDN##_uname, index, &flag);			\<br>
+-	pm_runtime_put_sync(hba->dev);					\<br>
++	scsi_autopm_put_device(hba->sdev_ufs_device);			\<br>
+ 	if (ret) {							\<br>
+ 		ret = -EINVAL;						\<br>
+ 		goto out;						\<br>
+@@ -813,10 +813,10 @@ static ssize_t _name##_show(struct device *dev,				\<br>
+ 	}								\<br>
+ 	if (ufshcd_is_wb_attrs(QUERY_ATTR_IDN##_uname))			\<br>
+ 		index = ufshcd_wb_get_query_index(hba);			\<br>
+-	pm_runtime_get_sync(hba->dev);					\<br>
++	scsi_autopm_get_device(hba->sdev_ufs_device);			\<br>
+ 	ret = ufshcd_query_attr(hba, UPIU_QUERY_OPCODE_READ_ATTR,	\<br>
+ 		QUERY_ATTR_IDN##_uname, index, 0, &value);		\<br>
+-	pm_runtime_put_sync(hba->dev);					\<br>
++	scsi_autopm_put_device(hba->sdev_ufs_device);			\<br>
+ 	if (ret) {							\<br>
+ 		ret = -EINVAL;						\<br>
+ 		goto out;						\<br>
+@@ -899,11 +899,15 @@ static ssize_t _pname##_show(struct device *dev,			\<br>
+ 	struct scsi_device *sdev = to_scsi_device(dev);			\<br>
+ 	struct ufs_hba *hba = shost_priv(sdev->host);			\<br>
+ 	u8 lun = ufshcd_scsi_to_upiu_lun(sdev->lun);			\<br>
++	int ret;							\<br>
+ 	if (!ufs_is_valid_unit_desc_lun(&hba->dev_info, lun,		\<br>
+ 				_duname##_DESC_PARAM##_puname))		\<br>
+ 		return -EINVAL;						\<br>
+-	return ufs_sysfs_read_desc_param(hba, QUERY_DESC_IDN_##_duname,	\<br>
++	scsi_autopm_get_device(sdev);					\<br>
++	ret = ufs_sysfs_read_desc_param(hba, QUERY_DESC_IDN_##_duname,	\<br>
+ 		lun, _duname##_DESC_PARAM##_puname, buf, _size);	\<br>
++	scsi_autopm_put_device(sdev);					\<br>
++	return ret;							\<br>
+ }									\<br>
+ static DEVICE_ATTR_RO(_pname)<br>
+ <br>
+@@ -964,10 +968,10 @@ static ssize_t dyn_cap_needed_attribute_show(struct device *dev,<br>
+ 		goto out;<br>
+ 	}<br>
+ <br>
+-	pm_runtime_get_sync(hba->dev);<br>
++	scsi_autopm_get_device(hba->sdev_ufs_device);<br>
+ 	ret = ufshcd_query_attr(hba, UPIU_QUERY_OPCODE_READ_ATTR,<br>
+ 		QUERY_ATTR_IDN_DYN_CAP_NEEDED, lun, 0, &value);<br>
+-	pm_runtime_put_sync(hba->dev);<br>
++	scsi_autopm_put_device(hba->sdev_ufs_device);<br>
+ 	if (ret) {<br>
+ 		ret = -EINVAL;<br>
+ 		goto out;<br>
+-- <br>
+Qualcomm Innovation Center, Inc. is a member of Code Aurora Forum, a Linux Foundation Collaborative Project.<br>
+<br>
+<br>
+

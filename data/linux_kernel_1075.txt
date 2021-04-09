@@ -1,0 +1,23 @@
+Quoting Taniya Das (2021-03-16 18:22:20)<br>
+><i> +static struct clk_regmap_div gpu_cc_hub_ahb_div_clk_src = {</i><br>
+><i> +       .reg = 0x11c0,</i><br>
+><i> +       .shift = 0,</i><br>
+><i> +       .width = 4,</i><br>
+><i> +       .clkr.hw.init = &(struct clk_init_data) {</i><br>
+><i> +               .name = "gpu_cc_hub_ahb_div_clk_src",</i><br>
+><i> +               .parent_data = &(const struct clk_parent_data){</i><br>
+><i> +                       .hw = &gpu_cc_hub_clk_src.clkr.hw,</i><br>
+<br>
+Can you follow what Dmitry has done and use .hws instead of<br>
+clk_parent_data when the whole array is clk_hw pointers?<br>
+<br>
+><i> +               },</i><br>
+><i> +               .num_parents = 1,</i><br>
+><i> +               .flags = CLK_SET_RATE_PARENT,</i><br>
+><i> +               .ops = &clk_regmap_div_ro_ops,</i><br>
+><i> +       },</i><br>
+><i> +};</i><br>
+><i> +</i><br>
+<br>
+<br>
+

@@ -1,0 +1,91 @@
+On Thu, 08 Apr 2021 15:45:18 +0100,<br>
+Pavel Tatashin <pasha.tatashin@xxxxxxxxxx> wrote:<br>
+><i> </i><br>
+><i> On Thu, Apr 8, 2021 at 6:24 AM Marc Zyngier <maz@xxxxxxxxxx> wrote:</i><br>
+><i> ></i><br>
+><i> > On 2021-04-08 05:05, Pavel Tatashin wrote:</i><br>
+><i> > > From: James Morse <james.morse@xxxxxxx></i><br>
+><i> > ></i><br>
+><i> > > The hyp-stub's el1_sync code doesn't do very much, this can easily fit</i><br>
+><i> > > in the vectors.</i><br>
+><i> > ></i><br>
+><i> > > With this, all of the hyp-stubs behaviour is contained in its vectors.</i><br>
+><i> > > This lets kexec and hibernate copy the hyp-stub when they need its</i><br>
+><i> > > behaviour, instead of re-implementing it.</i><br>
+><i> > ></i><br>
+><i> > > Signed-off-by: James Morse <james.morse@xxxxxxx></i><br>
+><i> > ></i><br>
+><i> > > [Fixed merging issues]</i><br>
+><i> ></i><br>
+><i> > That's a pretty odd fix IMO.</i><br>
+><i> ></i><br>
+><i> > ></i><br>
+><i> > > Signed-off-by: Pavel Tatashin <pasha.tatashin@xxxxxxxxxx></i><br>
+><i> > > ---</i><br>
+><i> > >  arch/arm64/kernel/hyp-stub.S | 59 ++++++++++++++++++------------------</i><br>
+><i> > >  1 file changed, 29 insertions(+), 30 deletions(-)</i><br>
+><i> > ></i><br>
+><i> > > diff --git a/arch/arm64/kernel/hyp-stub.S</i><br>
+><i> > > b/arch/arm64/kernel/hyp-stub.S</i><br>
+><i> > > index ff329c5c074d..d1a73d0f74e0 100644</i><br>
+><i> > > --- a/arch/arm64/kernel/hyp-stub.S</i><br>
+><i> > > +++ b/arch/arm64/kernel/hyp-stub.S</i><br>
+><i> > > @@ -21,6 +21,34 @@ SYM_CODE_START_LOCAL(\label)</i><br>
+><i> > >       .align 7</i><br>
+><i> > >       b       \label</i><br>
+><i> > >  SYM_CODE_END(\label)</i><br>
+><i> > > +.endm</i><br>
+><i> > > +</i><br>
+><i> > > +.macro hyp_stub_el1_sync</i><br>
+><i> > > +SYM_CODE_START_LOCAL(hyp_stub_el1_sync)</i><br>
+><i> > > +     .align 7</i><br>
+><i> > > +     cmp     x0, #HVC_SET_VECTORS</i><br>
+><i> > > +     b.ne    2f</i><br>
+><i> > > +     msr     vbar_el2, x1</i><br>
+><i> > > +     b       9f</i><br>
+><i> > > +</i><br>
+><i> > > +2:   cmp     x0, #HVC_SOFT_RESTART</i><br>
+><i> > > +     b.ne    3f</i><br>
+><i> > > +     mov     x0, x2</i><br>
+><i> > > +     mov     x2, x4</i><br>
+><i> > > +     mov     x4, x1</i><br>
+><i> > > +     mov     x1, x3</i><br>
+><i> > > +     br      x4                              // no return</i><br>
+><i> > > +</i><br>
+><i> > > +3:   cmp     x0, #HVC_RESET_VECTORS</i><br>
+><i> > > +     beq     9f                              // Nothing to reset!</i><br>
+><i> > > +</i><br>
+><i> > > +     /* Someone called kvm_call_hyp() against the hyp-stub... */</i><br>
+><i> > > +     mov_q   x0, HVC_STUB_ERR</i><br>
+><i> > > +     eret</i><br>
+><i> > > +</i><br>
+><i> > > +9:   mov     x0, xzr</i><br>
+><i> > > +     eret</i><br>
+><i> > > +SYM_CODE_END(hyp_stub_el1_sync)</i><br>
+><i> ></i><br>
+><i> > You said you tested this on a TX2. I guess you don't care whether</i><br>
+><i> > it runs VHE or not...</i><br>
+><i> </i><br>
+><i> Hi Marc,</i><br>
+><i> </i><br>
+><i> Thank you for noticing this. Not sure how this missmerge happened. I</i><br>
+><i> have added the missing case, and VHE is initialized correctly during</i><br>
+><i> boot.</i><br>
+><i> [   14.698175] kvm [1]: VHE mode initialized successfully</i><br>
+><i> </i><br>
+><i> During normal boot, kexec reboot, and kdump reboot. I will respin the</i><br>
+><i> series and send the version 14 soon.</i><br>
+<br>
+Please give people a chance to review this lot first. This isn't code<br>
+that is easy to digest, and immediate re-spinning does more harm than<br>
+good (this isn't targeting 5.13, I would assume).<br>
+<br>
+Thanks,<br>
+<br>
+	M.<br>
+<br>
+-- <br>
+Without deviation from the norm, progress is not possible.<br>
+<br>
+<br>
+

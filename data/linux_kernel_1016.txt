@@ -1,0 +1,181 @@
+
+On 08/04/2021 11:13, Chunfeng Yun wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+On Wed, 2021-04-07 at 00:24 +0530, Pratyush Yadav wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+On 31/03/21 05:24PM, Chunfeng Yun wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+On Tue, 2021-03-30 at 23:03 +0530, Pratyush Yadav wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+Some platforms like TI's J721E can have the CSI2RX paired with an<br>
+external DPHY. Add support to enable and configure the DPHY using the<br>
+generic PHY framework.<br>
+<br>
+Get the pixel rate and bpp from the subdev and pass them on to the DPHY<br>
+along with the number of lanes. All other settings are left to their<br>
+default values.<br>
+<br>
+Signed-off-by: Pratyush Yadav <p.yadav@xxxxxx><br>
+---<br>
+  drivers/media/platform/cadence/cdns-csi2rx.c | 147 +++++++++++++++++--<br>
+  1 file changed, 137 insertions(+), 10 deletions(-)<br>
+<br>
+diff --git a/drivers/media/platform/cadence/cdns-csi2rx.c b/drivers/media/platform/cadence/cdns-csi2rx.c<br>
+index c68a3eac62cd..31bd80e3f780 100644<br>
+--- a/drivers/media/platform/cadence/cdns-csi2rx.c<br>
++++ b/drivers/media/platform/cadence/cdns-csi2rx.c<br>
+@@ -30,6 +30,12 @@<br>
+  #define CSI2RX_STATIC_CFG_DLANE_MAP(llane, plane)	((plane) << (16 + (llane) * 4))<br>
+  #define CSI2RX_STATIC_CFG_LANES_MASK			GENMASK(11, 8)<br>
+  
++#define CSI2RX_DPHY_LANE_CTRL_REG		0x40
+<br>
++#define CSI2RX_DPHY_CL_RST			BIT(16)<br>
++#define CSI2RX_DPHY_DL_RST(i)			BIT((i) + 12)<br>
++#define CSI2RX_DPHY_CL_EN			BIT(4)<br>
++#define CSI2RX_DPHY_DL_EN(i)			BIT(i)<br>
++<br>
+  #define CSI2RX_STREAM_BASE(n)		(((n) + 1) * 0x100)<br>
+  
+  #define CSI2RX_STREAM_CTRL_REG(n)		(CSI2RX_STREAM_BASE(n) + 0x000)
+<br>
+@@ -54,6 +60,11 @@ enum csi2rx_pads {<br>
+  	CSI2RX_PAD_MAX,<br>
+  };<br>
+  
++struct csi2rx_fmt {
+<br>
++	u32				code;<br>
++	u8				bpp;<br>
++};<br>
++<br>
+  struct csi2rx_priv {<br>
+  	struct device			*dev;<br>
+  	unsigned int			count;<br>
+@@ -85,6 +96,52 @@ struct csi2rx_priv {<br>
+  	int				source_pad;<br>
+  };<br>
+  
++static const struct csi2rx_fmt formats[] = {
+<br>
++	{<br>
++		.code	= MEDIA_BUS_FMT_YUYV8_2X8,<br>
++		.bpp	= 16,<br>
++	},<br>
++	{<br>
++		.code	= MEDIA_BUS_FMT_UYVY8_2X8,<br>
++		.bpp	= 16,<br>
++	},<br>
++	{<br>
++		.code	= MEDIA_BUS_FMT_YVYU8_2X8,<br>
++		.bpp	= 16,<br>
++	},<br>
++	{<br>
++		.code	= MEDIA_BUS_FMT_VYUY8_2X8,<br>
++		.bpp	= 16,<br>
++	},<br>
++};<br>
++<br>
++static u8 csi2rx_get_bpp(u32 code)<br>
++{<br>
++	int i;<br>
++<br>
++	for (i = 0; i < ARRAY_SIZE(formats); i++) {<br>
++		if (formats[i].code == code)<br>
++			return formats[i].bpp;<br>
++	}<br>
++<br>
++	return 0;<br>
++}<br>
++<br>
++static s64 csi2rx_get_pixel_rate(struct csi2rx_priv *csi2rx)<br>
++{<br>
++	struct v4l2_ctrl *ctrl;<br>
++<br>
++	ctrl = v4l2_ctrl_find(csi2rx->source_subdev->ctrl_handler,<br>
++			      V4L2_CID_PIXEL_RATE);<br>
++	if (!ctrl) {<br>
++		dev_err(csi2rx->dev, "no pixel rate control in subdev: %s\n",<br>
++			csi2rx->source_subdev->name);<br>
++		return -EINVAL;<br>
++	}<br>
++<br>
++	return v4l2_ctrl_g_ctrl_int64(ctrl);<br>
++}<br>
++<br>
+  static inline<br>
+  struct csi2rx_priv *v4l2_subdev_to_csi2rx(struct v4l2_subdev *subdev)<br>
+  {<br>
+@@ -101,6 +158,55 @@ static void csi2rx_reset(struct csi2rx_priv *csi2rx)<br>
+  	writel(0, csi2rx->base + CSI2RX_SOFT_RESET_REG);<br>
+  }<br>
+  
++static int csi2rx_configure_external_dphy(struct csi2rx_priv *csi2rx)
+<br>
++{<br>
++	union phy_configure_opts opts = { };<br>
++	struct phy_configure_opts_mipi_dphy *cfg = &opts.mipi_dphy;<br>
++	struct v4l2_subdev_format sd_fmt;<br>
++	s64 pixel_rate;<br>
++	int ret;<br>
++	u8 bpp;<br>
++<br>
++	sd_fmt.which = V4L2_SUBDEV_FORMAT_ACTIVE;<br>
++	sd_fmt.pad = 0;<br>
++<br>
++	ret = v4l2_subdev_call(csi2rx->source_subdev, pad, get_fmt, NULL,<br>
++			       &sd_fmt);<br>
++	if (ret)<br>
++		return ret;<br>
++<br>
++	bpp = csi2rx_get_bpp(sd_fmt.format.code);<br>
++	if (!bpp)<br>
++		return -EINVAL;<br>
++<br>
++	pixel_rate = csi2rx_get_pixel_rate(csi2rx);<br>
++	if (pixel_rate < 0)<br>
++		return pixel_rate;<br>
++<br>
++	ret = phy_mipi_dphy_get_default_config(pixel_rate, bpp,<br>
++					       csi2rx->num_lanes, cfg);<br>
++	if (ret)<br>
++		return ret;<br>
++<br>
++	ret = phy_set_mode_ext(csi2rx->dphy, PHY_MODE_MIPI_DPHY,<br>
++			       PHY_MIPI_DPHY_SUBMODE_RX);<br>
++	if (ret)<br>
++		return ret;<br>
++<br>
++	ret = phy_power_on(csi2rx->dphy);<br>
++	if (ret)<br>
++		return ret;<br>
+</blockquote>
+Seems phy_power_on, then phy_set_mode_ext?<br>
+</blockquote>
+<br>
+Shouldn't the mode be set before the PHY is powered on so the correct<br>
+power on procedure can be performed based on the mode of operation?<br>
+</blockquote>
+Of course, it is fine for cnds-dphy.<br>
+But it depends on HW design and also phy driver;<br>
+if the mode is controlled in PHY IP register, we can't access it before<br>
+phy_power_on if no phy_init called (e.g. clock/power is not enabled).<br>
+<br>
+Just let you pay attention on the phy sequence.<br>
+</blockquote>
+<br>
+I don't think the phy configuration should depend on phy_power_on, but 
+the runtime PM.
+<br>
+<br>
+I guess this could be solved with:<br>
+<br>
+phy_pm_runtime_get_sync();<br>
+phy_set_mode_ext();<br>
+phy_power_on();<br>
+phy_pm_runtime_put();<br>
+<br>
+ Tomi<br>
+<br>
+<br>
+

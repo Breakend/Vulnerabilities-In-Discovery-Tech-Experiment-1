@@ -1,0 +1,44 @@
+In IRQ handler interrupts are already disabled, hence no need<br>
+to repeat it. Even in the threaded case, it is not a problem<br>
+because IRQ framework keeps interrupt disabled there as well.<br>
+Remove disabling IRQ part in the handler.<br>
+<br>
+Signed-off-by: Andy Shevchenko <andriy.shevchenko@xxxxxxxxxxxxxxx><br>
+---<br>
+ drivers/gpio/gpio-xilinx.c | 5 ++---<br>
+ 1 file changed, 2 insertions(+), 3 deletions(-)<br>
+<br>
+diff --git a/drivers/gpio/gpio-xilinx.c b/drivers/gpio/gpio-xilinx.c<br>
+index 98d90b4c4d2b..d5a08dcdd677 100644<br>
+--- a/drivers/gpio/gpio-xilinx.c<br>
++++ b/drivers/gpio/gpio-xilinx.c<br>
+@@ -503,14 +503,13 @@ static void xgpio_irqhandler(struct irq_desc *desc)<br>
+ 	DECLARE_BITMAP(all, 64);<br>
+ 	u32 status;<br>
+ 	u32 bit;<br>
+-	unsigned long flags;<br>
+ <br>
+ 	status = xgpio_readreg(chip->regs + XGPIO_IPISR_OFFSET);<br>
+ 	xgpio_writereg(chip->regs + XGPIO_IPISR_OFFSET, status);<br>
+ <br>
+ 	chained_irq_enter(irqchip, desc);<br>
+ <br>
+-	spin_lock_irqsave(&chip->gpio_lock, flags);<br>
++	spin_lock(&chip->gpio_lock);<br>
+ <br>
+ 	xgpio_read_ch_all(chip, XGPIO_DATA_OFFSET, all);<br>
+ <br>
+@@ -527,7 +526,7 @@ static void xgpio_irqhandler(struct irq_desc *desc)<br>
+ 	bitmap_copy(chip->last_irq_read, all, 64);<br>
+ 	bitmap_or(all, rising, falling, 64);<br>
+ <br>
+-	spin_unlock_irqrestore(&chip->gpio_lock, flags);<br>
++	spin_unlock(&chip->gpio_lock);<br>
+ <br>
+ 	dev_dbg(gc->parent, "IRQ rising %*pb falling %*pb\n", 64, rising, 64, falling);<br>
+ <br>
+-- <br>
+2.30.2<br>
+<br>
+<br>
+

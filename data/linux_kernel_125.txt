@@ -1,0 +1,25 @@
+Enable the Qualcomm Q6V5_PAS (Peripheral Authentication Service)<br>
+remoteproc driver to manage the modem co-processor in SDX55 platform.<br>
+<br>
+Signed-off-by: Manivannan Sadhasivam <manivannan.sadhasivam@xxxxxxxxxx><br>
+---<br>
+ arch/arm/configs/qcom_defconfig | 1 +<br>
+ 1 file changed, 1 insertion(+)<br>
+<br>
+diff --git a/arch/arm/configs/qcom_defconfig b/arch/arm/configs/qcom_defconfig<br>
+index 47343d0ea586..695612829503 100644<br>
+--- a/arch/arm/configs/qcom_defconfig<br>
++++ b/arch/arm/configs/qcom_defconfig<br>
+@@ -237,6 +237,7 @@ CONFIG_MAILBOX=y<br>
+ CONFIG_QCOM_APCS_IPC=y<br>
+ CONFIG_REMOTEPROC=y<br>
+ CONFIG_QCOM_ADSP_PIL=y<br>
++CONFIG_QCOM_Q6V5_PAS=y<br>
+ CONFIG_QCOM_Q6V5_PIL=y<br>
+ CONFIG_QCOM_WCNSS_PIL=y<br>
+ CONFIG_RPMSG_CHAR=y<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

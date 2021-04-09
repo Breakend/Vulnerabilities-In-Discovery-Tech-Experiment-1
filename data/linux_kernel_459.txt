@@ -1,0 +1,18 @@
+On Thu, Apr 1, 2021 at 2:36 PM satya priya <skakit@xxxxxxxxxxxxxx> wrote:<br>
+<br>
+><i> satya priya (3):</i><br>
+><i>   pinctrl: qcom: spmi-gpio: Add support for four variants</i><br>
+><i>   dt-bindings: pinctrl: qcom-pmic-gpio: Update the binding to add four</i><br>
+><i>     new variants</i><br>
+><i>   dt-bindings: pinctrl: qcom-pmic-gpio: Convert qcom pmic gpio bindings</i><br>
+><i>     to YAML</i><br>
+<br>
+Please collect the ACKs and rebase like Björn says, sort stuff alphabetically<br>
+and resend so I can try to apply it! The YAML conversion may need a nod from<br>
+the DT people as well.<br>
+<br>
+Yours,<br>
+Linus Walleij<br>
+<br>
+<br>
+

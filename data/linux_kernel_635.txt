@@ -1,0 +1,83 @@
+On Thu, Apr 8, 2021 at 10:19 AM Shakeel Butt <shakeelb@xxxxxxxxxx> wrote:<br>
+><i></i><br>
+><i> Hi Tim,</i><br>
+><i></i><br>
+><i> On Mon, Apr 5, 2021 at 11:08 AM Tim Chen <tim.c.chen@xxxxxxxxxxxxxxx> wrote:</i><br>
+><i> ></i><br>
+><i> > Traditionally, all memory is DRAM.  Some DRAM might be closer/faster than</i><br>
+><i> > others NUMA wise, but a byte of media has about the same cost whether it</i><br>
+><i> > is close or far.  But, with new memory tiers such as Persistent Memory</i><br>
+><i> > (PMEM).  there is a choice between fast/expensive DRAM and slow/cheap</i><br>
+><i> > PMEM.</i><br>
+><i> ></i><br>
+><i> > The fast/expensive memory lives in the top tier of the memory hierachy.</i><br>
+><i> ></i><br>
+><i> > Previously, the patchset</i><br>
+><i> > [PATCH 00/10] [v7] Migrate Pages in lieu of discard</i><br>
+><i> > <a  rel="nofollow" href="https://lore.kernel.org/linux-mm/20210401183216.443C4443@xxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/linux-mm/20210401183216.443C4443@xxxxxxxxxxxxxxxxxx/</a></i><br>
+><i> > provides a mechanism to demote cold pages from DRAM node into PMEM.</i><br>
+><i> ></i><br>
+><i> > And the patchset</i><br>
+><i> > [PATCH 0/6] [RFC v6] NUMA balancing: optimize memory placement for memory tiering system</i><br>
+><i> > <a  rel="nofollow" href="https://lore.kernel.org/linux-mm/20210311081821.138467-1-ying.huang@xxxxxxxxx/">https://lore.kernel.org/linux-mm/20210311081821.138467-1-ying.huang@xxxxxxxxx/</a></i><br>
+><i> > provides a mechanism to promote hot pages in PMEM to the DRAM node</i><br>
+><i> > leveraging autonuma.</i><br>
+><i> ></i><br>
+><i> > The two patchsets together keep the hot pages in DRAM and colder pages</i><br>
+><i> > in PMEM.</i><br>
+><i></i><br>
+><i> Thanks for working on this as this is becoming more and more important</i><br>
+><i> particularly in the data centers where memory is a big portion of the</i><br>
+><i> cost.</i><br>
+><i></i><br>
+><i> I see you have responded to Michal and I will add my more specific</i><br>
+><i> response there. Here I wanted to give my high level concern regarding</i><br>
+><i> using v1's soft limit like semantics for top tier memory.</i><br>
+><i></i><br>
+><i> This patch series aims to distribute/partition top tier memory between</i><br>
+><i> jobs of different priorities. We want high priority jobs to have</i><br>
+><i> preferential access to the top tier memory and we don't want low</i><br>
+><i> priority jobs to hog the top tier memory.</i><br>
+><i></i><br>
+><i> Using v1's soft limit like behavior can potentially cause high</i><br>
+><i> priority jobs to stall to make enough space on top tier memory on</i><br>
+><i> their allocation path and I think this patchset is aiming to reduce</i><br>
+><i> that impact by making kswapd do that work. However I think the more</i><br>
+><i> concerning issue is the low priority job hogging the top tier memory.</i><br>
+><i></i><br>
+><i> The possible ways the low priority job can hog the top tier memory are</i><br>
+><i> by allocating non-movable memory or by mlocking the memory. (Oh there</i><br>
+><i> is also pinning the memory but I don't know if there is a user api to</i><br>
+><i> pin memory?) For the mlocked memory, you need to either modify the</i><br>
+><i> reclaim code or use a different mechanism for demoting cold memory.</i><br>
+<br>
+Do you mean long term pin? RDMA should be able to simply pin the<br>
+memory for weeks. A lot of transient pins come from Direct I/O. They<br>
+should be less concerned.<br>
+<br>
+The low priority jobs should be able to be restricted by cpuset, for<br>
+example, just keep them on second tier memory nodes. Then all the<br>
+above problems are gone.<br>
+<br>
+><i></i><br>
+><i> Basically I am saying we should put the upfront control (limit) on the</i><br>
+><i> usage of top tier memory by the jobs.</i><br>
+<br>
+This sounds similar to what I talked about in LSFMM 2019<br>
+(<a  rel="nofollow" href="https://lwn.net/Articles/787418/">https://lwn.net/Articles/787418/</a>). We used to have some potential<br>
+usecase which divides DRAM:PMEM ratio for different jobs or memcgs<br>
+when I was with Alibaba.<br>
+<br>
+In the first place I thought about per NUMA node limit, but it was<br>
+very hard to configure it correctly for users unless you know exactly<br>
+about your memory usage and hot/cold memory distribution.<br>
+<br>
+I'm wondering, just off the top of my head, if we could extend the<br>
+semantic of low and min limit. For example, just redefine low and min<br>
+to "the limit on top tier memory". Then we could have low priority<br>
+jobs have 0 low/min limit.<br>
+<br>
+><i></i><br>
+<br>
+<br>
+

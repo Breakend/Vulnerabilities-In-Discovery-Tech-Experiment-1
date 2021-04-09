@@ -1,0 +1,36 @@
+With CONFIG_CFI_CLANG, a callback function passed to<br>
+__kthread_queue_delayed_work from a module points to a jump table<br>
+entry defined in the module instead of the one used in the core<br>
+kernel, which breaks function address equality in this check:<br>
+<br>
+  WARN_ON_ONCE(timer->function != ktead_delayed_work_timer_fn);<br>
+<br>
+Use WARN_ON_FUNCTION_MISMATCH() instead to disable the warning<br>
+when CFI and modules are both enabled.<br>
+<br>
+Signed-off-by: Sami Tolvanen <samitolvanen@xxxxxxxxxx><br>
+Reviewed-by: Kees Cook <keescook@xxxxxxxxxxxx><br>
+Tested-by: Nathan Chancellor <nathan@xxxxxxxxxx><br>
+---<br>
+ kernel/kthread.c | 3 ++-<br>
+ 1 file changed, 2 insertions(+), 1 deletion(-)<br>
+<br>
+diff --git a/kernel/kthread.c b/kernel/kthread.c<br>
+index 1578973c5740..a1972eba2917 100644<br>
+--- a/kernel/kthread.c<br>
++++ b/kernel/kthread.c<br>
+@@ -963,7 +963,8 @@ static void __kthread_queue_delayed_work(struct kthread_worker *worker,<br>
+ 	struct timer_list *timer = &dwork->timer;<br>
+ 	struct kthread_work *work = &dwork->work;<br>
+ <br>
+-	WARN_ON_ONCE(timer->function != kthread_delayed_work_timer_fn);<br>
++	WARN_ON_FUNCTION_MISMATCH(timer->function,<br>
++				  kthread_delayed_work_timer_fn);<br>
+ <br>
+ 	/*<br>
+ 	 * If @delay is 0, queue @dwork->work immediately.  This is for<br>
+-- <br>
+2.31.1.295.g9ea45b61b8-goog<br>
+<br>
+<br>
+

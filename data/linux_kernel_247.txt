@@ -1,0 +1,107 @@
+__flush_dcache_icache() is only used in mem.c.<br>
+<br>
+Move it before the functions that use it and declare it static.<br>
+<br>
+And also fix the name of the parameter in the comment.<br>
+<br>
+Signed-off-by: Christophe Leroy <christophe.leroy@xxxxxxxxxx><br>
+---<br>
+ arch/powerpc/include/asm/cacheflush.h |  1 -<br>
+ arch/powerpc/mm/cacheflush.c          | 60 +++++++++++++--------------<br>
+ 2 files changed, 30 insertions(+), 31 deletions(-)<br>
+<br>
+diff --git a/arch/powerpc/include/asm/cacheflush.h b/arch/powerpc/include/asm/cacheflush.h<br>
+index f63495109f63..9110489ea411 100644<br>
+--- a/arch/powerpc/include/asm/cacheflush.h<br>
++++ b/arch/powerpc/include/asm/cacheflush.h<br>
+@@ -40,7 +40,6 @@ void flush_icache_user_page(struct vm_area_struct *vma, struct page *page,<br>
+ #define flush_icache_user_page flush_icache_user_page<br>
+ <br>
+ void flush_dcache_icache_page(struct page *page);<br>
+-void __flush_dcache_icache(void *page);<br>
+ <br>
+ /**<br>
+  * flush_dcache_range(): Write any modified data cache blocks out to memory and<br>
+diff --git a/arch/powerpc/mm/cacheflush.c b/arch/powerpc/mm/cacheflush.c<br>
+index 40613d2fda37..742d3e0fb12f 100644<br>
+--- a/arch/powerpc/mm/cacheflush.c<br>
++++ b/arch/powerpc/mm/cacheflush.c<br>
+@@ -135,6 +135,36 @@ void flush_dcache_page(struct page *page)<br>
+ }<br>
+ EXPORT_SYMBOL(flush_dcache_page);<br>
+ <br>
++/**<br>
++ * __flush_dcache_icache(): Flush a particular page from the data cache to RAM.<br>
++ * Note: this is necessary because the instruction cache does *not*<br>
++ * snoop from the data cache.<br>
++ *<br>
++ * @p: the address of the page to flush<br>
++ */<br>
++static void __flush_dcache_icache(void *p)<br>
++{<br>
++	unsigned long addr = (unsigned long)p;<br>
++<br>
++	if (flush_coherent_icache(addr))<br>
++		return;<br>
++<br>
++	clean_dcache_range(addr, addr + PAGE_SIZE);<br>
++<br>
++	/*<br>
++	 * We don't flush the icache on 44x. Those have a virtual icache and we<br>
++	 * don't have access to the virtual address here (it's not the page<br>
++	 * vaddr but where it's mapped in user space). The flushing of the<br>
++	 * icache on these is handled elsewhere, when a change in the address<br>
++	 * space occurs, before returning to user space.<br>
++	 */<br>
++<br>
++	if (mmu_has_feature(MMU_FTR_TYPE_44x))<br>
++		return;<br>
++<br>
++	invalidate_icache_range(addr, addr + PAGE_SIZE);<br>
++}<br>
++<br>
+ static void flush_dcache_icache_hugepage(struct page *page)<br>
+ {<br>
+ 	int i;<br>
+@@ -178,36 +208,6 @@ void flush_dcache_icache_page(struct page *page)<br>
+ }<br>
+ EXPORT_SYMBOL(flush_dcache_icache_page);<br>
+ <br>
+-/**<br>
+- * __flush_dcache_icache(): Flush a particular page from the data cache to RAM.<br>
+- * Note: this is necessary because the instruction cache does *not*<br>
+- * snoop from the data cache.<br>
+- *<br>
+- * @page: the address of the page to flush<br>
+- */<br>
+-void __flush_dcache_icache(void *p)<br>
+-{<br>
+-	unsigned long addr = (unsigned long)p;<br>
+-<br>
+-	if (flush_coherent_icache(addr))<br>
+-		return;<br>
+-<br>
+-	clean_dcache_range(addr, addr + PAGE_SIZE);<br>
+-<br>
+-	/*<br>
+-	 * We don't flush the icache on 44x. Those have a virtual icache and we<br>
+-	 * don't have access to the virtual address here (it's not the page<br>
+-	 * vaddr but where it's mapped in user space). The flushing of the<br>
+-	 * icache on these is handled elsewhere, when a change in the address<br>
+-	 * space occurs, before returning to user space.<br>
+-	 */<br>
+-<br>
+-	if (mmu_has_feature(MMU_FTR_TYPE_44x))<br>
+-		return;<br>
+-<br>
+-	invalidate_icache_range(addr, addr + PAGE_SIZE);<br>
+-}<br>
+-<br>
+ void clear_user_page(void *page, unsigned long vaddr, struct page *pg)<br>
+ {<br>
+ 	clear_page(page);<br>
+-- <br>
+2.25.0<br>
+<br>
+<br>
+

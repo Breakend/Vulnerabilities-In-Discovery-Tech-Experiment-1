@@ -1,0 +1,153 @@
+Adds bit perf_event_attr::inherit_thread, to restricting inheriting<br>
+events only if the child was cloned with CLONE_THREAD.<br>
+<br>
+This option supports the case where an event is supposed to be<br>
+process-wide only (including subthreads), but should not propagate<br>
+beyond the current process's shared environment.<br>
+<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/lkml/YBvj6eJR%2FDY2TsEB@xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/lkml/YBvj6eJR%2FDY2TsEB@xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/</a><br>
+Suggested-by: Peter Zijlstra <peterz@xxxxxxxxxxxxx><br>
+Signed-off-by: Marco Elver <elver@xxxxxxxxxx><br>
+---<br>
+v2:<br>
+* Add patch to series.<br>
+---<br>
+ include/linux/perf_event.h      |  5 +++--<br>
+ include/uapi/linux/perf_event.h |  3 ++-<br>
+ kernel/events/core.c            | 21 ++++++++++++++-------<br>
+ kernel/fork.c                   |  2 +-<br>
+ 4 files changed, 20 insertions(+), 11 deletions(-)<br>
+<br>
+diff --git a/include/linux/perf_event.h b/include/linux/perf_event.h<br>
+index 3d478abf411c..1660039199b2 100644<br>
+--- a/include/linux/perf_event.h<br>
++++ b/include/linux/perf_event.h<br>
+@@ -958,7 +958,7 @@ extern void __perf_event_task_sched_in(struct task_struct *prev,<br>
+ 				       struct task_struct *task);<br>
+ extern void __perf_event_task_sched_out(struct task_struct *prev,<br>
+ 					struct task_struct *next);<br>
+-extern int perf_event_init_task(struct task_struct *child);<br>
++extern int perf_event_init_task(struct task_struct *child, u64 clone_flags);<br>
+ extern void perf_event_exit_task(struct task_struct *child);<br>
+ extern void perf_event_free_task(struct task_struct *task);<br>
+ extern void perf_event_delayed_put(struct task_struct *task);<br>
+@@ -1449,7 +1449,8 @@ perf_event_task_sched_in(struct task_struct *prev,<br>
+ static inline void<br>
+ perf_event_task_sched_out(struct task_struct *prev,<br>
+ 			  struct task_struct *next)			{ }<br>
+-static inline int perf_event_init_task(struct task_struct *child)	{ return 0; }<br>
++static inline int perf_event_init_task(struct task_struct *child,<br>
++				       u64 clone_flags)			{ return 0; }<br>
+ static inline void perf_event_exit_task(struct task_struct *child)	{ }<br>
+ static inline void perf_event_free_task(struct task_struct *task)	{ }<br>
+ static inline void perf_event_delayed_put(struct task_struct *task)	{ }<br>
+diff --git a/include/uapi/linux/perf_event.h b/include/uapi/linux/perf_event.h<br>
+index ad15e40d7f5d..813efb65fea8 100644<br>
+--- a/include/uapi/linux/perf_event.h<br>
++++ b/include/uapi/linux/perf_event.h<br>
+@@ -389,7 +389,8 @@ struct perf_event_attr {<br>
+ 				cgroup         :  1, /* include cgroup events */<br>
+ 				text_poke      :  1, /* include text poke events */<br>
+ 				build_id       :  1, /* use build id in mmap2 events */<br>
+-				__reserved_1   : 29;<br>
++				inherit_thread :  1, /* children only inherit if cloned with CLONE_THREAD */<br>
++				__reserved_1   : 28;<br>
+ <br>
+ 	union {<br>
+ 		__u32		wakeup_events;	  /* wakeup every n events */<br>
+diff --git a/kernel/events/core.c b/kernel/events/core.c<br>
+index a9a0a46909af..de2917b3c59e 100644<br>
+--- a/kernel/events/core.c<br>
++++ b/kernel/events/core.c<br>
+@@ -11649,6 +11649,9 @@ static int perf_copy_attr(struct perf_event_attr __user *uattr,<br>
+ 	    (attr->sample_type & PERF_SAMPLE_WEIGHT_STRUCT))<br>
+ 		return -EINVAL;<br>
+ <br>
++	if (!attr->inherit && attr->inherit_thread)<br>
++		return -EINVAL;<br>
++<br>
+ out:<br>
+ 	return ret;<br>
+ <br>
+@@ -12869,12 +12872,13 @@ static int<br>
+ inherit_task_group(struct perf_event *event, struct task_struct *parent,<br>
+ 		   struct perf_event_context *parent_ctx,<br>
+ 		   struct task_struct *child, int ctxn,<br>
+-		   int *inherited_all)<br>
++		   u64 clone_flags, int *inherited_all)<br>
+ {<br>
+ 	int ret;<br>
+ 	struct perf_event_context *child_ctx;<br>
+ <br>
+-	if (!event->attr.inherit) {<br>
++	if (!event->attr.inherit ||<br>
++	    (event->attr.inherit_thread && !(clone_flags & CLONE_THREAD))) {<br>
+ 		*inherited_all = 0;<br>
+ 		return 0;<br>
+ 	}<br>
+@@ -12906,7 +12910,8 @@ inherit_task_group(struct perf_event *event, struct task_struct *parent,<br>
+ /*<br>
+  * Initialize the perf_event context in task_struct<br>
+  */<br>
+-static int perf_event_init_context(struct task_struct *child, int ctxn)<br>
++static int perf_event_init_context(struct task_struct *child, int ctxn,<br>
++				   u64 clone_flags)<br>
+ {<br>
+ 	struct perf_event_context *child_ctx, *parent_ctx;<br>
+ 	struct perf_event_context *cloned_ctx;<br>
+@@ -12946,7 +12951,8 @@ static int perf_event_init_context(struct task_struct *child, int ctxn)<br>
+ 	 */<br>
+ 	perf_event_groups_for_each(event, &parent_ctx->pinned_groups) {<br>
+ 		ret = inherit_task_group(event, parent, parent_ctx,<br>
+-					 child, ctxn, &inherited_all);<br>
++					 child, ctxn, clone_flags,<br>
++					 &inherited_all);<br>
+ 		if (ret)<br>
+ 			goto out_unlock;<br>
+ 	}<br>
+@@ -12962,7 +12968,8 @@ static int perf_event_init_context(struct task_struct *child, int ctxn)<br>
+ <br>
+ 	perf_event_groups_for_each(event, &parent_ctx->flexible_groups) {<br>
+ 		ret = inherit_task_group(event, parent, parent_ctx,<br>
+-					 child, ctxn, &inherited_all);<br>
++					 child, ctxn, clone_flags,<br>
++					 &inherited_all);<br>
+ 		if (ret)<br>
+ 			goto out_unlock;<br>
+ 	}<br>
+@@ -13004,7 +13011,7 @@ static int perf_event_init_context(struct task_struct *child, int ctxn)<br>
+ /*<br>
+  * Initialize the perf_event context in task_struct<br>
+  */<br>
+-int perf_event_init_task(struct task_struct *child)<br>
++int perf_event_init_task(struct task_struct *child, u64 clone_flags)<br>
+ {<br>
+ 	int ctxn, ret;<br>
+ <br>
+@@ -13013,7 +13020,7 @@ int perf_event_init_task(struct task_struct *child)<br>
+ 	INIT_LIST_HEAD(&child->perf_event_list);<br>
+ <br>
+ 	for_each_task_context_nr(ctxn) {<br>
+-		ret = perf_event_init_context(child, ctxn);<br>
++		ret = perf_event_init_context(child, ctxn, clone_flags);<br>
+ 		if (ret) {<br>
+ 			perf_event_free_task(child);<br>
+ 			return ret;<br>
+diff --git a/kernel/fork.c b/kernel/fork.c<br>
+index 426cd0c51f9e..f592c9a0272a 100644<br>
+--- a/kernel/fork.c<br>
++++ b/kernel/fork.c<br>
+@@ -2084,7 +2084,7 @@ static __latent_entropy struct task_struct *copy_process(<br>
+ 	if (retval)<br>
+ 		goto bad_fork_cleanup_policy;<br>
+ <br>
+-	retval = perf_event_init_task(p);<br>
++	retval = perf_event_init_task(p, clone_flags);<br>
+ 	if (retval)<br>
+ 		goto bad_fork_cleanup_policy;<br>
+ 	retval = audit_alloc(p);<br>
+-- <br>
+2.31.0.208.g409f899ff0-goog<br>
+<br>
+<br>
+

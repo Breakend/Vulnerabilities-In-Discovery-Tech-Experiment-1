@@ -1,0 +1,48 @@
+swap_cluster_readahead() could race with swapoff and might dereference<br>
+si->swap_file after it's released by swapoff. Close this race window by<br>
+using get/put_swap_device() pair.<br>
+<br>
+Signed-off-by: Miaohe Lin <linmiaohe@xxxxxxxxxx><br>
+---<br>
+ mm/swap_state.c | 11 +++++++++--<br>
+ 1 file changed, 9 insertions(+), 2 deletions(-)<br>
+<br>
+diff --git a/mm/swap_state.c b/mm/swap_state.c<br>
+index 3bf0d0c297bc..eba6b0cf6cf9 100644<br>
+--- a/mm/swap_state.c<br>
++++ b/mm/swap_state.c<br>
+@@ -626,12 +626,17 @@ struct page *swap_cluster_readahead(swp_entry_t entry, gfp_t gfp_mask,<br>
+ 	unsigned long offset = entry_offset;<br>
+ 	unsigned long start_offset, end_offset;<br>
+ 	unsigned long mask;<br>
+-	struct swap_info_struct *si = swp_swap_info(entry);<br>
++	struct swap_info_struct *si;<br>
+ 	struct blk_plug plug;<br>
+ 	bool do_poll = true, page_allocated;<br>
+ 	struct vm_area_struct *vma = vmf->vma;<br>
+ 	unsigned long addr = vmf->address;<br>
+ <br>
++	si = get_swap_device(entry);<br>
++	/* In case we raced with swapoff. */<br>
++	if (!si)<br>
++		return NULL;<br>
++<br>
+ 	mask = swapin_nr_pages(offset) - 1;<br>
+ 	if (!mask)<br>
+ 		goto skip;<br>
+@@ -673,7 +678,9 @@ struct page *swap_cluster_readahead(swp_entry_t entry, gfp_t gfp_mask,<br>
+ <br>
+ 	lru_add_drain();	/* Push any new pages onto the LRU now */<br>
+ skip:<br>
+-	return read_swap_cache_async(entry, gfp_mask, vma, addr, do_poll);<br>
++	page = read_swap_cache_async(entry, gfp_mask, vma, addr, do_poll);<br>
++	put_swap_device(si);<br>
++	return page;<br>
+ }<br>
+ <br>
+ int init_swap_address_space(unsigned int type, unsigned long nr_pages)<br>
+-- <br>
+2.19.1<br>
+<br>
+<br>
+

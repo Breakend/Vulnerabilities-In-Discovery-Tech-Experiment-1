@@ -1,0 +1,59 @@
+Dear Greg,<br>
+<br>
+This is extcon-next pull request for v5.13. I add detailed description of<br>
+this pull request on below. Please pull extcon with following updates.<br>
+<br>
+Best Regards,<br>
+Chanwoo Choi<br>
+<br>
+<br>
+The following changes since commit e49d033bddf5b565044e2abe4241353959bc9120:<br>
+<br>
+  Linux 5.12-rc6 (2021-04-04 14:15:36 -0700)<br>
+<br>
+are available in the Git repository at:<br>
+<br>
+  git://git.kernel.org/pub/scm/linux/kernel/git/chanwoo/extcon.git tags/extcon-next-for-5.13<br>
+<br>
+for you to fetch changes up to 7b1222b224aff41739319ae81cd266825464ad8f:<br>
+<br>
+  extcon: qcom-spmi: Add support for VBUS detection (2021-04-08 13:10:16 +0900)<br>
+<br>
+----------------------------------------------------------------<br>
+<br>
+Detailed description for this pull request:<br>
+<br>
+1. Update extcon provider driver<br>
+- Add the support of charging interrupt to detect charger connector<br>
+for extcon-max8997.c<br>
+<br>
+- Detect OTG when USB_ID pin is connected to ground for extcon-sm5502.c<br>
+<br>
+- Add the support for VBUS detection for extcon-qcom-spmi-misc.c<br>
+and replace qcom,pm8941-misc binding document with yaml style.<br>
+<br>
+----------------------------------------------------------------<br>
+Anirudh Ghayal (1):<br>
+      extcon: qcom-spmi: Add support for VBUS detection<br>
+<br>
+Guru Das Srinagesh (2):<br>
+      bindings: pm8941-misc: Convert bindings to YAML<br>
+      bindings: pm8941-misc: Add support for VBUS detection<br>
+<br>
+Nikita Travkin (1):<br>
+      extcon: sm5502: Detect OTG when USB_ID is connected to ground<br>
+<br>
+Timon Baetz (1):<br>
+      extcon: max8997: Add CHGINS and CHGRM interrupt handling<br>
+<br>
+ .../bindings/extcon/qcom,pm8941-misc.txt           | 41 ---------<br>
+ .../bindings/extcon/qcom,pm8941-misc.yaml          | 62 ++++++++++++++<br>
+ drivers/extcon/extcon-max8997.c                    |  4 +<br>
+ drivers/extcon/extcon-qcom-spmi-misc.c             | 99 +++++++++++++++++-----<br>
+ drivers/extcon/extcon-sm5502.c                     | 22 ++++-<br>
+ 5 files changed, 166 insertions(+), 62 deletions(-)<br>
+ delete mode 100644 Documentation/devicetree/bindings/extcon/qcom,pm8941-misc.txt<br>
+ create mode 100644 Documentation/devicetree/bindings/extcon/qcom,pm8941-misc.yaml<br>
+<br>
+<br>
+

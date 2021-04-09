@@ -1,0 +1,105 @@
+The GIC family of irqchips have been so far treated as "fasteoi"<br>
+chips. As handle_fasteoi_irq() states, this implies:<br>
+<br>
+ *	Only a single callback will be issued to the chip: an ->eoi()<br>
+ *	call when the interrupt has been serviced.<br>
+<br>
+However, the GICs have an operating mode (EOImode=1) which requires an<br>
+additional chip interaction during the IRQ handling. Said operating mode<br>
+already has some uses with virtualization, but could also be leveraged to<br>
+slightly optimize ONESHOT IRQs.<br>
+<br>
+This extra interaction is currently hidden away in the drivers, but further<br>
+exploiting its effects (see IRQD_IRQ_FLOW_MASKED) requires lifting it from<br>
+the driver code into core code. It so happens that it fits the role of<br>
+->irq_ack(); unfortunately, the GICs require both callbacks to be strictly<br>
+paired with one another: for a given IRQ activation, there must be a single<br>
+->irq_ack() followed by a single ->irq_eoi(). No more, no less, and in that<br>
+order.<br>
+<br>
+Introduce a new flow handler which guarantees said ack / eoi pairing. Note<br>
+that it is strikingly similar to handle_fasteoi_mask_irq() for now, but<br>
+will be further modified in later patches<br>
+<br>
+Signed-off-by: Valentin Schneider <valentin.schneider@xxxxxxx><br>
+---<br>
+ include/linux/irq.h |  1 +<br>
+ kernel/irq/chip.c   | 48 +++++++++++++++++++++++++++++++++++++++++++++<br>
+ 2 files changed, 49 insertions(+)<br>
+<br>
+diff --git a/include/linux/irq.h b/include/linux/irq.h<br>
+index 580b1b6b1799..b605f0929d97 100644<br>
+--- a/include/linux/irq.h<br>
++++ b/include/linux/irq.h<br>
+@@ -661,6 +661,7 @@ extern void handle_edge_irq(struct irq_desc *desc);<br>
+ extern void handle_edge_eoi_irq(struct irq_desc *desc);<br>
+ extern void handle_simple_irq(struct irq_desc *desc);<br>
+ extern void handle_untracked_irq(struct irq_desc *desc);<br>
++extern void handle_strict_flow_irq(struct irq_desc *desc);<br>
+ extern void handle_percpu_irq(struct irq_desc *desc);<br>
+ extern void handle_percpu_devid_irq(struct irq_desc *desc);<br>
+ extern void handle_bad_irq(struct irq_desc *desc);<br>
+diff --git a/kernel/irq/chip.c b/kernel/irq/chip.c<br>
+index 936ef247b13d..6c033b0044cb 100644<br>
+--- a/kernel/irq/chip.c<br>
++++ b/kernel/irq/chip.c<br>
+@@ -896,6 +896,54 @@ void handle_edge_eoi_irq(struct irq_desc *desc)<br>
+ }<br>
+ #endif<br>
+ <br>
++/**<br>
++ *	handle_strict_flow_irq - irq handler for strict controllers<br>
++ *	@desc:	the interrupt description structure for this irq<br>
++ *<br>
++ *      Ensures strict pairing of ->ack() and ->eoi() for any IRQ passing<br>
++ *      through here. The ->eoi() may be deferred to the tail of the IRQ thread<br>
++ *      for ONESHOT IRQs.<br>
++ */<br>
++void handle_strict_flow_irq(struct irq_desc *desc)<br>
++{<br>
++	struct irq_chip *chip = desc->irq_data.chip;<br>
++<br>
++	raw_spin_lock(&desc->lock);<br>
++	mask_ack_irq(desc);<br>
++<br>
++	if (!irq_may_run(desc))<br>
++		goto out;<br>
++<br>
++	desc->istate &= ~(IRQS_REPLAY | IRQS_WAITING);<br>
++<br>
++	/*<br>
++	 * If it's disabled or no action available then keep it masked and<br>
++	 * get out of here:<br>
++	 */<br>
++	if (unlikely(!desc->action || irqd_irq_disabled(&desc->irq_data))) {<br>
++		desc->istate |= IRQS_PENDING;<br>
++		goto out;<br>
++	}<br>
++<br>
++	kstat_incr_irqs_this_cpu(desc);<br>
++<br>
++	handle_irq_event(desc);<br>
++<br>
++	cond_unmask_eoi_irq(desc, chip);<br>
++<br>
++	raw_spin_unlock(&desc->lock);<br>
++	return;<br>
++out:<br>
++	/*<br>
++	 * XXX: this is where IRQCHIP_EOI_IF_HANDLED would be checked, but<br>
++	 * it's conceptually incompatible with this handler (it breaks the<br>
++	 * strict pairing)<br>
++	 */<br>
++	eoi_irq(desc);<br>
++	raw_spin_unlock(&desc->lock);<br>
++}<br>
++EXPORT_SYMBOL_GPL(handle_strict_flow_irq);<br>
++<br>
+ /**<br>
+  *	handle_percpu_irq - Per CPU local irq handler<br>
+  *	@desc:	the interrupt description structure for this irq<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

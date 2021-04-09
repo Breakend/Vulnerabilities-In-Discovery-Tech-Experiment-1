@@ -1,0 +1,32 @@
+pm_runtime_get_sync() will increase the runtime PM counter<br>
+even it returns an error. Thus a pairing decrement is needed<br>
+to prevent refcount leak. Fix this by replacing this API with<br>
+pm_runtime_resume_and_get(), which will not change the runtime<br>
+PM counter on error.<br>
+<br>
+Signed-off-by: Dinghao Liu <dinghao.liu@xxxxxxxxxx><br>
+---<br>
+ drivers/pci/controller/pcie-rcar-ep.c | 4 ++--<br>
+ 1 file changed, 2 insertions(+), 2 deletions(-)<br>
+<br>
+diff --git a/drivers/pci/controller/pcie-rcar-ep.c b/drivers/pci/controller/pcie-rcar-ep.c<br>
+index b4a288e24aaf..c91d85b15129 100644<br>
+--- a/drivers/pci/controller/pcie-rcar-ep.c<br>
++++ b/drivers/pci/controller/pcie-rcar-ep.c<br>
+@@ -492,9 +492,9 @@ static int rcar_pcie_ep_probe(struct platform_device *pdev)<br>
+ 	pcie->dev = dev;<br>
+ <br>
+ 	pm_runtime_enable(dev);<br>
+-	err = pm_runtime_get_sync(dev);<br>
++	err = pm_runtime_resume_and_get(dev);<br>
+ 	if (err < 0) {<br>
+-		dev_err(dev, "pm_runtime_get_sync failed\n");<br>
++		dev_err(dev, "pm_runtime_resume_and_get failed\n");<br>
+ 		goto err_pm_disable;<br>
+ 	}<br>
+ <br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+

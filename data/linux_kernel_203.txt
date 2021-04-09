@@ -1,0 +1,48 @@
+On Tue, Apr 06, 2021 at 05:47:08PM +0100, Mark Brown wrote:<br>
+><i> On Thu, Apr 01, 2021 at 05:21:42PM -0400, Jim Quinlan wrote:</i><br>
+><i> > Similar to the regulator bindings found in "rockchip-pcie-host.txt", this</i><br>
+><i> > allows optional regulators to be attached and controlled by the PCIe RC</i><br>
+><i> > driver.  That being said, this driver searches in the DT subnode (the EP</i><br>
+><i> > node, eg pci@0,0) for the regulator property.</i><br>
+><i> </i><br>
+><i> > The use of a regulator property in the pcie EP subnode such as</i><br>
+><i> > "vpcie12v-supply" depends on a pending pullreq to the pci-bus.yaml</i><br>
+><i> > file at</i><br>
+><i> > </i><br>
+><i> > <a  rel="nofollow" href="https://github.com/devicetree-org/dt-schema/pull/54">https://github.com/devicetree-org/dt-schema/pull/54</a></i><br>
+><i> > </i><br>
+><i> > Signed-off-by: Jim Quinlan <jim2101024@xxxxxxxxx></i><br>
+><i> > ---</i><br>
+><i> >  Documentation/devicetree/bindings/pci/brcm,stb-pcie.yaml | 4 ++++</i><br>
+><i> >  1 file changed, 4 insertions(+)</i><br>
+><i> > </i><br>
+><i> > diff --git a/Documentation/devicetree/bindings/pci/brcm,stb-pcie.yaml b/Documentation/devicetree/bindings/pci/brcm,stb-pcie.yaml</i><br>
+><i> > index f90557f6deb8..f2caa5b3b281 100644</i><br>
+><i> > --- a/Documentation/devicetree/bindings/pci/brcm,stb-pcie.yaml</i><br>
+><i> > +++ b/Documentation/devicetree/bindings/pci/brcm,stb-pcie.yaml</i><br>
+><i> > @@ -64,6 +64,9 @@ properties:</i><br>
+><i> >  </i><br>
+><i> >    aspm-no-l0s: true</i><br>
+><i> >  </i><br>
+><i> > +  vpcie12v-supply: true</i><br>
+><i> > +  vpcie3v3-supply: true</i><br>
+><i> > +</i><br>
+><i> </i><br>
+><i> No great problem with having these in the controller node (assming it</i><br>
+><i> accurately describes the hardware) but I do think we ought to also be</i><br>
+><i> able to describe these per slot.</i><br>
+<br>
+My hesistancy here is child nodes are already defined to be devices, not <br>
+slots. That's generally the same thing though. However, 'reg' is a bit <br>
+problematic as it includes the bus number which is dynamically <br>
+assigned. (This is a mismatch between true OpenFirmware and FDT as OF <br>
+was designed to populate the DT with what was discovered and that <br>
+includes some runtime config such as bus number assignments.) Maybe we <br>
+just say for FDT, the bus number is always 0 and ignored. In any case, <br>
+there needs to be some thought on this as well as the more complicated <br>
+case of devices needing device specific setup to be enumerated.<br>
+<br>
+Rob<br>
+<br>
+<br>
+

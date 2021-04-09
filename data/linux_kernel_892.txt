@@ -1,0 +1,35 @@
+Fix the following gcc warning:<br>
+<br>
+drivers/ide/ide-proc.c:457:37: warning: ‘ide_media_proc_fops’ defined<br>
+but not used [-Wunused-const-variable=].<br>
+<br>
+Reported-by: Abaci Robot <abaci@xxxxxxxxxxxxxxxxx><br>
+Signed-off-by: Jiapeng Chong <jiapeng.chong@xxxxxxxxxxxxxxxxx><br>
+---<br>
+ drivers/ide/ide-proc.c | 8 --------<br>
+ 1 file changed, 8 deletions(-)<br>
+<br>
+diff --git a/drivers/ide/ide-proc.c b/drivers/ide/ide-proc.c<br>
+index 15c17f3..2fad809 100644<br>
+--- a/drivers/ide/ide-proc.c<br>
++++ b/drivers/ide/ide-proc.c<br>
+@@ -454,14 +454,6 @@ static int ide_media_proc_open(struct inode *inode, struct file *file)<br>
+ 	return single_open(file, ide_media_proc_show, PDE_DATA(inode));<br>
+ }<br>
+ <br>
+-static const struct file_operations ide_media_proc_fops = {<br>
+-	.owner		= THIS_MODULE,<br>
+-	.open		= ide_media_proc_open,<br>
+-	.read		= seq_read,<br>
+-	.llseek		= seq_lseek,<br>
+-	.release	= single_release,<br>
+-};<br>
+-<br>
+ static ide_proc_entry_t generic_drive_entries[] = {<br>
+ 	{ "driver",	S_IFREG|S_IRUGO,	 ide_driver_proc_show	},<br>
+ 	{ "identify",	S_IFREG|S_IRUSR,	 ide_identify_proc_show	},<br>
+-- <br>
+1.8.3.1<br>
+<br>
+<br>
+

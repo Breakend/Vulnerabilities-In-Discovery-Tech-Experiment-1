@@ -1,0 +1,57 @@
+Hi Longfang,<br>
+<br>
+Thank you for the patch! Perhaps something to improve:<br>
+<br>
+[auto build test WARNING on usb/usb-testing]<br>
+[also build test WARNING on v5.12-rc6 next-20210408]<br>
+[If your patch is applied to the wrong git tree, kindly drop us a note.<br>
+And when submitting patch, we suggest to use '--base' as documented in<br>
+<a  rel="nofollow" href="https://git-scm.com/docs/git-format-patch">https://git-scm.com/docs/git-format-patch</a>]<br>
+<br>
+url:    <a  rel="nofollow" href="https://github.com/0day-ci/linux/commits/Longfang-Liu/USB-ehci-fix-the-no-SRBN-register-problem/20210408-215249">https://github.com/0day-ci/linux/commits/Longfang-Liu/USB-ehci-fix-the-no-SRBN-register-problem/20210408-215249</a><br>
+base:   <a  rel="nofollow" href="https://git.kernel.org/pub/scm/linux/kernel/git/gregkh/usb.git">https://git.kernel.org/pub/scm/linux/kernel/git/gregkh/usb.git</a> usb-testing<br>
+config: x86_64-randconfig-s022-20210408 (attached as .config)<br>
+compiler: gcc-9 (Debian 9.3.0-22) 9.3.0<br>
+reproduce:<br>
+        # apt-get install sparse<br>
+        # sparse version: v0.6.3-279-g6d5d9b42-dirty<br>
+        # <a  rel="nofollow" href="https://github.com/0day-ci/linux/commit/01b93fbbf8fb6137c7779062232c0fe8c1592940">https://github.com/0day-ci/linux/commit/01b93fbbf8fb6137c7779062232c0fe8c1592940</a><br>
+        git remote add linux-review <a  rel="nofollow" href="https://github.com/0day-ci/linux">https://github.com/0day-ci/linux</a><br>
+        git fetch --no-tags linux-review Longfang-Liu/USB-ehci-fix-the-no-SRBN-register-problem/20210408-215249<br>
+        git checkout 01b93fbbf8fb6137c7779062232c0fe8c1592940<br>
+        # save the attached .config to linux build tree<br>
+        make W=1 C=1 CF='-fdiagnostic-prefix -D__CHECK_ENDIAN__' ARCH=x86_64 <br>
+<br>
+If you fix the issue, kindly add following tag as appropriate<br>
+Reported-by: kernel test robot <lkp@xxxxxxxxx><br>
+<br>
+<br>
+sparse warnings: (new ones prefixed by >>)<br>
+><i>> drivers/usb/host/ehci-pci.c:57:10: sparse: sparse: incorrect type in initializer (different base types) @@     expected unsigned short [usertype] vendor @@     got void * @@</i><br>
+   drivers/usb/host/ehci-pci.c:57:10: sparse:     expected unsigned short [usertype] vendor<br>
+   drivers/usb/host/ehci-pci.c:57:10: sparse:     got void *<br>
+><i>> drivers/usb/host/ehci-pci.c:57:16: sparse: sparse: incorrect type in initializer (different base types) @@     expected unsigned short [usertype] device @@     got void * @@</i><br>
+   drivers/usb/host/ehci-pci.c:57:16: sparse:     expected unsigned short [usertype] device<br>
+   drivers/usb/host/ehci-pci.c:57:16: sparse:     got void *<br>
+<br>
+vim +57 drivers/usb/host/ehci-pci.c<br>
+<br>
+    49	<br>
+    50	static const struct usb_nosbrn_whitelist_entry {<br>
+    51		u16 vendor;<br>
+    52		u16 device;<br>
+    53	} usb_nosbrn_whitelist[] = {<br>
+    54		/* STMICRO ConneXT has no sbrn register */<br>
+    55		{PCI_VENDOR_ID_STMICRO, PCI_DEVICE_ID_STMICRO_USB_HOST},<br>
+    56		/* End of list */<br>
+  > 57		{NULL, NULL}<br>
+    58	};<br>
+    59	<br>
+<br>
+---<br>
+0-DAY CI Kernel Test Service, Intel Corporation<br>
+<a  rel="nofollow" href="https://lists.01.org/hyperkitty/list/kbuild-all@xxxxxxxxxxxx">https://lists.01.org/hyperkitty/list/kbuild-all@xxxxxxxxxxxx</a><br>
+<p><strong>Attachment:
+<a href="01149/.config.gz" ><tt>.config.gz</tt></a></strong><br>
+<em>Description:</em> application/gzip</p>
+

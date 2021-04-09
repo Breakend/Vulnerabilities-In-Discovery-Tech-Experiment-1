@@ -1,0 +1,37 @@
+module_w1_family() makes the code simpler by eliminating<br>
+boilerplate code.<br>
+<br>
+Signed-off-by: Chen Huang <chenhuang5@xxxxxxxxxx><br>
+---<br>
+ drivers/w1/slaves/w1_ds28e17.c | 16 +---------------<br>
+ 1 file changed, 1 insertion(+), 15 deletions(-)<br>
+<br>
+diff --git a/drivers/w1/slaves/w1_ds28e17.c b/drivers/w1/slaves/w1_ds28e17.c<br>
+index 6b00db7169ab..aed10b72fc99 100644<br>
+--- a/drivers/w1/slaves/w1_ds28e17.c<br>
++++ b/drivers/w1/slaves/w1_ds28e17.c<br>
+@@ -752,18 +752,4 @@ static struct w1_family w1_family_19 = {<br>
+ 	.fops = &w1_f19_fops,<br>
+ };<br>
+ <br>
+-<br>
+-/* Module init and remove functions. */<br>
+-static int __init w1_f19_init(void)<br>
+-{<br>
+-	return w1_register_family(&w1_family_19);<br>
+-}<br>
+-<br>
+-static void __exit w1_f19_fini(void)<br>
+-{<br>
+-	w1_unregister_family(&w1_family_19);<br>
+-}<br>
+-<br>
+-module_init(w1_f19_init);<br>
+-module_exit(w1_f19_fini);<br>
+-<br>
++module_w1_family(w1_family_19);<br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+

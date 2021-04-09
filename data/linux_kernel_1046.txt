@@ -1,0 +1,37 @@
+Hi Hongbo,<br>
+<br>
+Thank you for the patch! Yet something to improve:<br>
+<br>
+[auto build test ERROR on cryptodev/master]<br>
+[also build test ERROR on crypto/master security/next-testing linus/master v5.12-rc6 next-20210407]<br>
+[If your patch is applied to the wrong git tree, kindly drop us a note.<br>
+And when submitting patch, we suggest to use '--base' as documented in<br>
+<a  rel="nofollow" href="https://git-scm.com/docs/git-format-patch">https://git-scm.com/docs/git-format-patch</a>]<br>
+<br>
+url:    <a  rel="nofollow" href="https://github.com/0day-ci/linux/commits/Hongbo-Li/x509-add-support-for-rsa-pss/20210407-115738">https://github.com/0day-ci/linux/commits/Hongbo-Li/x509-add-support-for-rsa-pss/20210407-115738</a><br>
+base:   <a  rel="nofollow" href="https://git.kernel.org/pub/scm/linux/kernel/git/herbert/cryptodev-2.6.git">https://git.kernel.org/pub/scm/linux/kernel/git/herbert/cryptodev-2.6.git</a> master<br>
+config: x86_64-rhel-8.3-kselftests (attached as .config)<br>
+compiler: gcc-9 (Debian 9.3.0-22) 9.3.0<br>
+reproduce (this is a W=1 build):<br>
+        # <a  rel="nofollow" href="https://github.com/0day-ci/linux/commit/7ae494f4046fa7980cf2ee1b40f175355609a9da">https://github.com/0day-ci/linux/commit/7ae494f4046fa7980cf2ee1b40f175355609a9da</a><br>
+        git remote add linux-review <a  rel="nofollow" href="https://github.com/0day-ci/linux">https://github.com/0day-ci/linux</a><br>
+        git fetch --no-tags linux-review Hongbo-Li/x509-add-support-for-rsa-pss/20210407-115738<br>
+        git checkout 7ae494f4046fa7980cf2ee1b40f175355609a9da<br>
+        # save the attached .config to linux build tree<br>
+        make W=1 ARCH=x86_64 <br>
+<br>
+If you fix the issue, kindly add following tag as appropriate<br>
+Reported-by: kernel test robot <lkp@xxxxxxxxx><br>
+<br>
+All errors (new ones prefixed by >>):<br>
+<br>
+><i>> make[2]: *** No rule to make target 'crypto/rsa-psspad.o', needed by 'crypto/built-in.a'.</i><br>
+   make[2]: Target '__build' not remade because of errors.<br>
+<br>
+---<br>
+0-DAY CI Kernel Test Service, Intel Corporation<br>
+<a  rel="nofollow" href="https://lists.01.org/hyperkitty/list/kbuild-all@xxxxxxxxxxxx">https://lists.01.org/hyperkitty/list/kbuild-all@xxxxxxxxxxxx</a><br>
+<p><strong>Attachment:
+<a href="00177/.config.gz" ><tt>.config.gz</tt></a></strong><br>
+<em>Description:</em> application/gzip</p>
+

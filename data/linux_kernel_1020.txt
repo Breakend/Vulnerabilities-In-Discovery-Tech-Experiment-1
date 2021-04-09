@@ -1,0 +1,60 @@
+<br>
+<br>
+On Thu, 8 Apr 2021, Fabio M. De Francesco wrote:<br>
+<br>
+><i> On Thursday, April 8, 2021 10:36:32 AM CEST Greg KH wrote:</i><br>
+><i> > On Thu, Apr 08, 2021 at 10:07:14AM +0200, Fabio M. De Francesco wrote:</i><br>
+><i> > > Remove camelcase in a symbol that is used by several files.</i><br>
+><i> ></i><br>
+><i> > What symbol?</i><br>
+><i> ></i><br>
+><i></i><br>
+><i> I'm not sure I understand what you are asking. You mean</i><br>
+><i> that I have to specify the name of the variable that I changed?</i><br>
+><i> Or you mean that I shouldn't use the term "symbol" but write</i><br>
+><i> "variable", "function", "macro", and so on?</i><br>
+<br>
+He wants the name of the symbol.  Each changed line includes lots of<br>
+symbols, so it is a significant effort to scan the patch to see what<br>
+symbol is being changed.<br>
+<br>
+julia<br>
+<br>
+><i></i><br>
+><i> ></i><br>
+><i> > > --- a/drivers/staging/rtl8723bs/include/rtw_pwrctrl.h</i><br>
+><i> > > +++ b/drivers/staging/rtl8723bs/include/rtw_pwrctrl.h</i><br>
+><i> > > @@ -203,7 +203,7 @@ struct pwrctrl_priv {</i><br>
+><i> > >  	u8 LpsIdleCount;</i><br>
+><i> > >  	u8 power_mgnt;</i><br>
+><i> > >  	u8 org_power_mgnt;</i><br>
+><i> > > -	u8 bFwCurrentInPSMode;</i><br>
+><i> > > +	u8 b_fw_current_in_ps_mode;</i><br>
+><i> ></i><br>
+><i> > The "b" here means "byte" so you can drop the "b_" as that means</i><br>
+><i> > nothing, we do not use this type of notation in the kernel as the</i><br>
+><i> > compiler can check it for us.</i><br>
+><i> ></i><br>
+><i></i><br>
+><i> OK, I didn't know what the 'b' meant in this context. I'll drop it.</i><br>
+><i></i><br>
+><i> Thanks,</i><br>
+><i></i><br>
+><i> Fabio</i><br>
+><i></i><br>
+><i> > thanks,</i><br>
+><i> ></i><br>
+><i> > greg k-h</i><br>
+><i> ></i><br>
+><i></i><br>
+><i></i><br>
+><i></i><br>
+><i></i><br>
+><i> --</i><br>
+><i> You received this message because you are subscribed to the Google Groups "outreachy-kernel" group.</i><br>
+><i> To unsubscribe from this group and stop receiving emails from it, send an email to outreachy-kernel+unsubscribe@xxxxxxxxxxxxxxxx.</i><br>
+><i> To view this discussion on the web visit <a  rel="nofollow" href="https://groups.google.com/d/msgid/outreachy-kernel/2284292.R3b5UFg5HO%40localhost.localdomain">https://groups.google.com/d/msgid/outreachy-kernel/2284292.R3b5UFg5HO%40localhost.localdomain</a>.</i><br>
+><i></i><br>
+<br>
+<br>
+

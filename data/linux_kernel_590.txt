@@ -1,0 +1,78 @@
+tree:   <a  rel="nofollow" href="https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git">https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git</a> master<br>
+head:   454859c552da78b0f587205d308401922b56863e<br>
+commit: e5fc436f06eef54ef512ea55a9db8eb9f2e76959 sparse: use static inline for __chk_{user,io}_ptr()<br>
+date:   7 months ago<br>
+config: arm-randconfig-s032-20210408 (attached as .config)<br>
+compiler: arm-linux-gnueabi-gcc (GCC) 9.3.0<br>
+reproduce:<br>
+        wget <a  rel="nofollow" href="https://raw.githubusercontent.com/intel/lkp-tests/master/sbin/make.cross">https://raw.githubusercontent.com/intel/lkp-tests/master/sbin/make.cross</a> -O ~/bin/make.cross<br>
+        chmod +x ~/bin/make.cross<br>
+        # apt-get install sparse<br>
+        # sparse version: v0.6.3-279-g6d5d9b42-dirty<br>
+        # <a  rel="nofollow" href="https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=e5fc436f06eef54ef512ea55a9db8eb9f2e76959">https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=e5fc436f06eef54ef512ea55a9db8eb9f2e76959</a><br>
+        git remote add linus <a  rel="nofollow" href="https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git">https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git</a><br>
+        git fetch --no-tags linus master<br>
+        git checkout e5fc436f06eef54ef512ea55a9db8eb9f2e76959<br>
+        # save the attached .config to linux build tree<br>
+        COMPILER_INSTALL_PATH=$HOME/0day COMPILER=gcc-9.3.0 make.cross C=1 CF='-fdiagnostic-prefix -D__CHECK_ENDIAN__' ARCH=arm <br>
+<br>
+If you fix the issue, kindly add following tag as appropriate<br>
+Reported-by: kernel test robot <lkp@xxxxxxxxx><br>
+<br>
+<br>
+sparse warnings: (new ones prefixed by >>)<br>
+><i>> arch/arm/mach-omap1/board-ams-delta.c:689:9: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned int @@</i><br>
+   arch/arm/mach-omap1/board-ams-delta.c:689:9: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/arm/mach-omap1/board-ams-delta.c:689:9: sparse:     got unsigned int<br>
+<br>
+vim +689 arch/arm/mach-omap1/board-ams-delta.c<br>
+<br>
+97abda99a56949 Janusz Krzysztofik 2018-06-22  657  <br>
+1464d031c45da4 Janusz Krzysztofik 2018-09-10  658  /*<br>
+1464d031c45da4 Janusz Krzysztofik 2018-09-10  659   * Initialize latch2 pins with values which are safe for dependent on-board<br>
+1464d031c45da4 Janusz Krzysztofik 2018-09-10  660   * devices or useful for their successull initialization even before GPIO<br>
+1464d031c45da4 Janusz Krzysztofik 2018-09-10  661   * driver takes control over the latch pins:<br>
+1464d031c45da4 Janusz Krzysztofik 2018-09-10  662   * - LATCH2_PIN_LCD_VBLEN	= 0<br>
+1464d031c45da4 Janusz Krzysztofik 2018-09-10  663   * - LATCH2_PIN_LCD_NDISP	= 0	Keep LCD device powered off before its<br>
+1464d031c45da4 Janusz Krzysztofik 2018-09-10  664   *					driver takes control over it.<br>
+1464d031c45da4 Janusz Krzysztofik 2018-09-10  665   * - LATCH2_PIN_NAND_NCE	= 0<br>
+1464d031c45da4 Janusz Krzysztofik 2018-09-10  666   * - LATCH2_PIN_NAND_NWP	= 0	Keep NAND device down and write-<br>
+1464d031c45da4 Janusz Krzysztofik 2018-09-10  667   *					protected before its driver takes<br>
+1464d031c45da4 Janusz Krzysztofik 2018-09-10  668   *					control over it.<br>
+1464d031c45da4 Janusz Krzysztofik 2018-09-10  669   * - LATCH2_PIN_KEYBRD_PWR	= 0	Keep keyboard powered off before serio<br>
+1464d031c45da4 Janusz Krzysztofik 2018-09-10  670   *					driver takes control over it.<br>
+1464d031c45da4 Janusz Krzysztofik 2018-09-10  671   * - LATCH2_PIN_KEYBRD_DATAOUT	= 0	Keep low to avoid corruption of first<br>
+1464d031c45da4 Janusz Krzysztofik 2018-09-10  672   *					byte of data received from attached<br>
+1464d031c45da4 Janusz Krzysztofik 2018-09-10  673   *					keyboard when serio device is probed;<br>
+1464d031c45da4 Janusz Krzysztofik 2018-09-10  674   *					the pin is also hogged low by the latch2<br>
+1464d031c45da4 Janusz Krzysztofik 2018-09-10  675   *					GPIO driver as soon as it is ready.<br>
+1464d031c45da4 Janusz Krzysztofik 2018-09-10  676   * - LATCH2_PIN_MODEM_NRESET	= 1	Enable voice MODEM device, allowing for<br>
+1464d031c45da4 Janusz Krzysztofik 2018-09-10  677   *					its successful probe even before a<br>
+1464d031c45da4 Janusz Krzysztofik 2018-09-10  678   *					regulator it depends on, which in turn<br>
+1464d031c45da4 Janusz Krzysztofik 2018-09-10  679   *					takes control over the pin, is set up.<br>
+1464d031c45da4 Janusz Krzysztofik 2018-09-10  680   * - LATCH2_PIN_MODEM_CODEC	= 1	Attach voice MODEM CODEC data port<br>
+1464d031c45da4 Janusz Krzysztofik 2018-09-10  681   *					to the MODEM so the CODEC is under<br>
+1464d031c45da4 Janusz Krzysztofik 2018-09-10  682   *					control even if audio driver doesn't<br>
+1464d031c45da4 Janusz Krzysztofik 2018-09-10  683   *					take it over.<br>
+1464d031c45da4 Janusz Krzysztofik 2018-09-10  684   */<br>
+1464d031c45da4 Janusz Krzysztofik 2018-09-10  685  static void __init ams_delta_latch2_init(void)<br>
+1464d031c45da4 Janusz Krzysztofik 2018-09-10  686  {<br>
+1464d031c45da4 Janusz Krzysztofik 2018-09-10  687  	u16 latch2 = 1 << LATCH2_PIN_MODEM_NRESET | 1 << LATCH2_PIN_MODEM_CODEC;<br>
+1464d031c45da4 Janusz Krzysztofik 2018-09-10  688  <br>
+1464d031c45da4 Janusz Krzysztofik 2018-09-10 @689  	__raw_writew(latch2, LATCH2_VIRT);<br>
+97abda99a56949 Janusz Krzysztofik 2018-06-22  690  }<br>
+97abda99a56949 Janusz Krzysztofik 2018-06-22  691  <br>
+<br>
+:::::: The code at line 689 was first introduced by commit<br>
+:::::: 1464d031c45da44da6988623c0978b63241df40b ARM: OMAP1: ams-delta: initialize latch2 pins to safe values<br>
+<br>
+:::::: TO: Janusz Krzysztofik <jmkrzyszt@xxxxxxxxx><br>
+:::::: CC: Tony Lindgren <tony@xxxxxxxxxxx><br>
+<br>
+---<br>
+0-DAY CI Kernel Test Service, Intel Corporation<br>
+<a  rel="nofollow" href="https://lists.01.org/hyperkitty/list/kbuild-all@xxxxxxxxxxxx">https://lists.01.org/hyperkitty/list/kbuild-all@xxxxxxxxxxxx</a><br>
+<p><strong>Attachment:
+<a href="00543/.config.gz" ><tt>.config.gz</tt></a></strong><br>
+<em>Description:</em> application/gzip</p>
+

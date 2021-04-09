@@ -1,0 +1,141 @@
+Users of trans_pgd may also need a copy of vector table because it is<br>
+also may be overwritten if a linear map can be overwritten.<br>
+<br>
+Move setup of EL2 vectors from hibernate to trans_pgd, so it can be<br>
+later shared with kexec as well.<br>
+<br>
+Suggested-by: James Morse <james.morse@xxxxxxx><br>
+Signed-off-by: Pavel Tatashin <pasha.tatashin@xxxxxxxxxx><br>
+---<br>
+ arch/arm64/include/asm/trans_pgd.h |  3 +++<br>
+ arch/arm64/include/asm/virt.h      |  3 +++<br>
+ arch/arm64/kernel/hibernate.c      | 28 ++++++++++------------------<br>
+ arch/arm64/mm/trans_pgd.c          | 20 ++++++++++++++++++++<br>
+ 4 files changed, 36 insertions(+), 18 deletions(-)<br>
+<br>
+diff --git a/arch/arm64/include/asm/trans_pgd.h b/arch/arm64/include/asm/trans_pgd.h<br>
+index 5d08e5adf3d5..e0760e52d36d 100644<br>
+--- a/arch/arm64/include/asm/trans_pgd.h<br>
++++ b/arch/arm64/include/asm/trans_pgd.h<br>
+@@ -36,4 +36,7 @@ int trans_pgd_map_page(struct trans_pgd_info *info, pgd_t *trans_pgd,<br>
+ int trans_pgd_idmap_page(struct trans_pgd_info *info, phys_addr_t *trans_ttbr0,<br>
+ 			 unsigned long *t0sz, void *page);<br>
+ <br>
++int trans_pgd_copy_el2_vectors(struct trans_pgd_info *info,<br>
++			       phys_addr_t *el2_vectors);<br>
++<br>
+ #endif /* _ASM_TRANS_TABLE_H */<br>
+diff --git a/arch/arm64/include/asm/virt.h b/arch/arm64/include/asm/virt.h<br>
+index 4216c8623538..bfbb66018114 100644<br>
+--- a/arch/arm64/include/asm/virt.h<br>
++++ b/arch/arm64/include/asm/virt.h<br>
+@@ -67,6 +67,9 @@<br>
+  */<br>
+ extern u32 __boot_cpu_mode[2];<br>
+ <br>
++extern char __hyp_stub_vectors[];<br>
++#define ARM64_VECTOR_TABLE_LEN	SZ_2K<br>
++<br>
+ void __hyp_set_vectors(phys_addr_t phys_vector_base);<br>
+ void __hyp_reset_vectors(void);<br>
+ <br>
+diff --git a/arch/arm64/kernel/hibernate.c b/arch/arm64/kernel/hibernate.c<br>
+index c764574a1acb..0b8bad8bb6eb 100644<br>
+--- a/arch/arm64/kernel/hibernate.c<br>
++++ b/arch/arm64/kernel/hibernate.c<br>
+@@ -48,12 +48,6 @@<br>
+  */<br>
+ extern int in_suspend;<br>
+ <br>
+-/* temporary el2 vectors in the __hibernate_exit_text section. */<br>
+-extern char hibernate_el2_vectors[];<br>
+-<br>
+-/* hyp-stub vectors, used to restore el2 during resume from hibernate. */<br>
+-extern char __hyp_stub_vectors[];<br>
+-<br>
+ /*<br>
+  * The logical cpu number we should resume on, initialised to a non-cpu<br>
+  * number.<br>
+@@ -428,6 +422,7 @@ int swsusp_arch_resume(void)<br>
+ 	void *zero_page;<br>
+ 	size_t exit_size;<br>
+ 	pgd_t *tmp_pg_dir;<br>
++	phys_addr_t el2_vectors;<br>
+ 	void __noreturn (*hibernate_exit)(phys_addr_t, phys_addr_t, void *,<br>
+ 					  void *, phys_addr_t, phys_addr_t);<br>
+ 	struct trans_pgd_info trans_info = {<br>
+@@ -455,6 +450,14 @@ int swsusp_arch_resume(void)<br>
+ 		return -ENOMEM;<br>
+ 	}<br>
+ <br>
++	if (is_hyp_callable()) {<br>
++		rc = trans_pgd_copy_el2_vectors(&trans_info, &el2_vectors);<br>
++		if (rc) {<br>
++			pr_err("Failed to setup el2 vectors\n");<br>
++			return rc;<br>
++		}<br>
++	}<br>
++<br>
+ 	exit_size = __hibernate_exit_text_end - __hibernate_exit_text_start;<br>
+ 	/*<br>
+ 	 * Copy swsusp_arch_suspend_exit() to a safe page. This will generate<br>
+@@ -467,25 +470,14 @@ int swsusp_arch_resume(void)<br>
+ 		return rc;<br>
+ 	}<br>
+ <br>
+-	/*<br>
+-	 * The hibernate exit text contains a set of el2 vectors, that will<br>
+-	 * be executed at el2 with the mmu off in order to reload hyp-stub.<br>
+-	 */<br>
+-	__flush_dcache_area(hibernate_exit, exit_size);<br>
+-<br>
+ 	/*<br>
+ 	 * KASLR will cause the el2 vectors to be in a different location in<br>
+ 	 * the resumed kernel. Load hibernate's temporary copy into el2.<br>
+ 	 *<br>
+ 	 * We can skip this step if we booted at EL1, or are running with VHE.<br>
+ 	 */<br>
+-	if (is_hyp_callable()) {<br>
+-		phys_addr_t el2_vectors = (phys_addr_t)hibernate_exit;<br>
+-		el2_vectors += hibernate_el2_vectors -<br>
+-			       __hibernate_exit_text_start;     /* offset */<br>
+-<br>
++	if (is_hyp_callable())<br>
+ 		__hyp_set_vectors(el2_vectors);<br>
+-	}<br>
+ <br>
+ 	hibernate_exit(virt_to_phys(tmp_pg_dir), resume_hdr.ttbr1_el1,<br>
+ 		       resume_hdr.reenter_kernel, restore_pblist,<br>
+diff --git a/arch/arm64/mm/trans_pgd.c b/arch/arm64/mm/trans_pgd.c<br>
+index 527f0a39c3da..61549451ed3a 100644<br>
+--- a/arch/arm64/mm/trans_pgd.c<br>
++++ b/arch/arm64/mm/trans_pgd.c<br>
+@@ -322,3 +322,23 @@ int trans_pgd_idmap_page(struct trans_pgd_info *info, phys_addr_t *trans_ttbr0,<br>
+ <br>
+ 	return 0;<br>
+ }<br>
++<br>
++/*<br>
++ * Create a copy of the vector table so we can call HVC_SET_VECTORS or<br>
++ * HVC_SOFT_RESTART from contexts where the table may be overwritten.<br>
++ */<br>
++int trans_pgd_copy_el2_vectors(struct trans_pgd_info *info,<br>
++			       phys_addr_t *el2_vectors)<br>
++{<br>
++	void *hyp_stub = trans_alloc(info);<br>
++<br>
++	if (!hyp_stub)<br>
++		return -ENOMEM;<br>
++	*el2_vectors = virt_to_phys(hyp_stub);<br>
++	memcpy(hyp_stub, &__hyp_stub_vectors, ARM64_VECTOR_TABLE_LEN);<br>
++	__flush_icache_range((unsigned long)hyp_stub,<br>
++			     (unsigned long)hyp_stub + ARM64_VECTOR_TABLE_LEN);<br>
++	__flush_dcache_area(hyp_stub, ARM64_VECTOR_TABLE_LEN);<br>
++<br>
++	return 0;<br>
++}<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

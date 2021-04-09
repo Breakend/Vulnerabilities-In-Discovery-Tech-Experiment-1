@@ -1,0 +1,19 @@
+
+Am 2021-03-11 20:12, schrieb Pratyush Yadav:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+Currently the spi_mem_op to read from the flash is used in two places:<br>
+spi_nor_create_read_dirmap() and spi_nor_spimem_read_data(). In a later<br>
+commit this number will increase to three. Instead of repeating the 
+same
+<br>
+code thrice, add a function that returns a template of the read op. The<br>
+callers can then fill in the details like address, data length, data<br>
+buffer location.<br>
+<br>
+Signed-off-by: Pratyush Yadav <p.yadav@xxxxxx><br>
+</blockquote>
+<br>
+Reviewed-by: Michael Walle <michael@xxxxxxxx><br>
+<br>
+<br>
+

@@ -1,0 +1,29 @@
+
+<br>
+On 4/7/21 6:48 PM, Sean Christopherson wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+On Wed, Apr 07, 2021, Michael Kelley wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
++		pr_info("Hyper-V nested_features: 0x%x\n",<br>
+</blockquote>
+Nit:  Most other similar lines put the colon in a different place:<br>
+<br>
+		pr_info("Hyper-V: nested features 0x%x\n",<br>
+<br>
+One of these days, I'm going to fix the ones that don't follow this<br>
+pattern. :-)<br>
+</blockquote>
+Any reason not to use pr_fmt?<br>
+</blockquote>
+Yes, that would be the best way to go. As Michael suggested,<br>
+it would be better to fix the whole file as a cleanup patch.<br>
+I shall fix this one to conform to the previous style and use<br>
+pr_fmt as a separate fixup patch.<br>
+<br>
+Thanks,<br>
+Vineeth<br>
+<br>
+<br>
+

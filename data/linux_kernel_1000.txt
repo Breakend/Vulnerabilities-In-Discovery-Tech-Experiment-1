@@ -1,0 +1,53 @@
+On Thu, Apr 08, 2021 at 10:30:09AM +0200, Julia Lawall wrote:<br>
+><i> The subject line should be in the imperative, so "add" instead of "added".</i><br>
+><i> </i><br>
+Ok Ma'am<br>
+><i> On Thu, 8 Apr 2021, Mitali Borkar wrote:</i><br>
+><i> </i><br>
+><i> > Clean up Check:spaces preferred around that '+' (ctx:VxV)</i><br>
+><i> > Reported by checkpatch</i><br>
+><i> </i><br>
+><i> Please try to rephrase to explain what you did and why.  "Clean up" kind</i><br>
+><i> of states what the goal is, but your opinion about what is a clean up</i><br>
+><i> might be different than someone else's.  It's also not necessary to cite</i><br>
+><i> the checkpatch warning exactly.</i><br>
+><i> </i><br>
+OKay Ma'am, will rewrite the appopriate commit message. May I know while<br>
+resending this patch, what should I write in subject description, <br>
+RESEND PATCH or PATCH v2<br>
+<br>
+Thanks<br>
+Mitali<br>
+<br>
+><i> julia</i><br>
+><i> </i><br>
+><i> ></i><br>
+><i> > Signed-off-by: Mitali Borkar <mitaliborkar810@xxxxxxxxx></i><br>
+><i> > ---</i><br>
+><i> >  drivers/staging/rtl8712/wlan_bssdef.h | 2 +-</i><br>
+><i> >  1 file changed, 1 insertion(+), 1 deletion(-)</i><br>
+><i> ></i><br>
+><i> > diff --git a/drivers/staging/rtl8712/wlan_bssdef.h b/drivers/staging/rtl8712/wlan_bssdef.h</i><br>
+><i> > index b54ccaacc527..ec3749813728 100644</i><br>
+><i> > --- a/drivers/staging/rtl8712/wlan_bssdef.h</i><br>
+><i> > +++ b/drivers/staging/rtl8712/wlan_bssdef.h</i><br>
+><i> > @@ -176,7 +176,7 @@ struct NDIS_802_11_WEP {</i><br>
+><i> >  #define MIC_CHECK_TIME	60000000</i><br>
+><i> ></i><br>
+><i> >  #ifndef Ndis802_11APMode</i><br>
+><i> > -#define Ndis802_11APMode (Ndis802_11InfrastructureMax+1)</i><br>
+><i> > +#define Ndis802_11APMode (Ndis802_11InfrastructureMax + 1)</i><br>
+><i> >  #endif</i><br>
+><i> ></i><br>
+><i> >  struct	wlan_network {</i><br>
+><i> > --</i><br>
+><i> > 2.30.2</i><br>
+><i> ></i><br>
+><i> > --</i><br>
+><i> > You received this message because you are subscribed to the Google Groups "outreachy-kernel" group.</i><br>
+><i> > To unsubscribe from this group and stop receiving emails from it, send an email to outreachy-kernel+unsubscribe@xxxxxxxxxxxxxxxx.</i><br>
+><i> > To view this discussion on the web visit <a  rel="nofollow" href="https://groups.google.com/d/msgid/outreachy-kernel/YG690ZIRdCEcjoM6%40kali">https://groups.google.com/d/msgid/outreachy-kernel/YG690ZIRdCEcjoM6%40kali</a>.</i><br>
+><i> ></i><br>
+<br>
+<br>
+

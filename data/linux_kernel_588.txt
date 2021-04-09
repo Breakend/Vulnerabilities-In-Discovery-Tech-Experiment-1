@@ -1,0 +1,148 @@
+Hi,<br>
+<br>
+I decided to send another version with the fixups included as it seemed a bit<br>
+awkward otherwise. It should ease the review.<br>
+Sorry for the spam.<br>
+<br>
+Changes from v6 -> v7:<br>
+ - Fix check from "mm,memory_hotplug: Relax fully spanned sections check"<br>
+ - Add fixup from "mm,memory_hotplug: Allocate memmap from the added memory range"<br>
+ - Add Reviewed-by from David for patch#2<br>
+ - Fix changelog in "mm,memory_hotplug: Factor out adjusting present pages into<br>
+    adjust_present_page_count()"<br>
+<br>
+Changes from v5 -> v6:<br>
+ - Create memory_block_{online,offline} functions<br>
+ - Create vmemmap_* functions to deal with vmemmap stuff, so <br>
+   {online,offline}_pages remain untouched<br>
+ - Add adjust_present_page_count's patch from David<br>
+ - Relax check in {offline,online}_pages<br>
+ - Rework changelogs<br>
+<br>
+Changes from v4 -> v5:<br>
+ - Addressed feedback from David (patch#1)<br>
+ - Tested on x86_64 with different struct page sizes and on large/small memory<br>
+   blocks<br>
+ - Tested on arm64 with 4K, 64K (with and without THP) and with different struct<br>
+   page sizes<br>
+<br>
+ NOTE: We might need to make this feature and hugetlb-vmemmap feature [1] mutually<br>
+       exclusive. I raised an issue I see in [2].<br>
+       Hugetlb-vmemmap feature has been withdrawn for the time being due to the need<br>
+       in further changes  wrt. locking/freeing context.<br>
+       I will keep an eye, and when the time comes again I will see how the two<br>
+       features play together and how one another can be disabled when needed.<br>
+<br>
+Changes from v3 -> v4:<br>
+ - Addressed feedback from David<br>
+ - Wrap memmap_on_memory module thingy with #ifdef<br>
+   on MHP_MEMMAP_ON_MEMORY<br>
+ - Move "depend on MEMORY_HOTPLUG" to MHP_MEMMAP_ON_MEMORY<br>
+   in generic mm/Kconfig<br>
+ - Collect David's Reviewed-bys<br>
+<br>
+Changes from v2 -> v3:<br>
+ - Addressed feedback from David<br>
+ - Squash former patch#4 and and patch#5 into patch#1<br>
+ - Fix config dependency CONFIR_SPARSE_VMEMMAP vs CONFIG_SPARSE_VMEMMAP_ENABLE<br>
+ - Simplify module parameter functions<br>
+<br>
+Changes from v1 -> v2<br>
+ - Addressed feedback from David<br>
+ - Fence off the feature in case struct page size is not<br>
+   multiple of PMD size or pageblock alignment cannot be guaranted<br>
+ - Tested on x86_64 small and large memory_blocks<br>
+ - Tested on arm64 4KB and 64KB page sizes (for some reason I cannot boot<br>
+   my VM with 16KB page size).<br>
+<br>
+ Arm64 with 4KB page size behaves like x86_64 after [1], which made section<br>
+ size smaller.<br>
+ With 64KB, the feature gets fenced off due to pageblock alignment.<br>
+<br>
+Changes from RFCv3 -> v1:<br>
+ - Addressed feedback from David<br>
+ - Re-order patches<br>
+<br>
+Changes from v2 -> v3 (RFC):<br>
+ - Re-order patches (Michal)<br>
+ - Fold "mm,memory_hotplug: Introduce MHP_MEMMAP_ON_MEMORY" in patch#1<br>
+ - Add kernel boot option to enable this feature (Michal)<br>
+<br>
+Changes from v1 -> v2 (RFC):<br>
+ - Addressed feedback provided by David<br>
+ - Add a arch_support_memmap_on_memory to be called<br>
+   from mhp_supports_memmap_on_memory, as atm,<br>
+   only ARM, powerpc and x86_64 have altmat support.<br>
+<br>
+[1] <a  rel="nofollow" href="https://lore.kernel.org/lkml/cover.1611206601.git.sudaraja@xxxxxxxxxxxxxx">https://lore.kernel.org/lkml/cover.1611206601.git.sudaraja@xxxxxxxxxxxxxx</a><br>
+<br>
+Original cover letter:<br>
+<br>
+ The primary goal of this patchset is to reduce memory overhead of the<br>
+ hot-added memory (at least for SPARSEMEM_VMEMMAP memory model).<br>
+ The current way we use to populate memmap (struct page array) has two main drawbacks:<br>
+<br>
+ a) it consumes an additional memory until the hotadded memory itself is<br>
+    onlined and<br>
+ b) memmap might end up on a different numa node which is especially true<br>
+    for movable_node configuration.<br>
+ c) due to fragmentation we might end up populating memmap with base<br>
+    pages<br>
+<br>
+ One way to mitigate all these issues is to simply allocate memmap array<br>
+ (which is the largest memory footprint of the physical memory hotplug)<br>
+ from the hot-added memory itself. SPARSEMEM_VMEMMAP memory model allows<br>
+ us to map any pfn range so the memory doesn't need to be online to be<br>
+ usable for the array. See patch 4 for more details.<br>
+ This feature is only usable when CONFIG_SPARSEMEM_VMEMMAP is set.<br>
+<br>
+ [Overall design]:<br>
+<br>
+ Implementation wise we reuse vmem_altmap infrastructure to override<br>
+ the default allocator used by vmemap_populate.<br>
+ memory_block structure gains a new field called nr_vmemmap_pages,<br>
+ which accounts for the number of vmemmap pages used by that memory_block.<br>
+ E.g: On x86_64, that is 512 vmemmap pages on small memory bloks and 4096<br>
+      on large memory blocks (1GB)<br>
+<br>
+ We also introduce new two functions: memory_block_{online,offline}.<br>
+ These functions take care of initializing/unitializing vmemmap pages<br>
+ prior to calling {online,offline}_pages, so the latter functions can<br>
+ remain totally untouched.<br>
+<br>
+ More details can be found in the respective changelogs.<br>
+<br>
+<br>
+David Hildenbrand (1):<br>
+  mm,memory_hotplug: Factor out adjusting present pages into<br>
+    adjust_present_page_count()<br>
+<br>
+Oscar Salvador (7):<br>
+  drivers/base/memory: Introduce memory_block_{online,offline}<br>
+  mm,memory_hotplug: Relax fully spanned sections check<br>
+  mm,memory_hotplug: Allocate memmap from the added memory range<br>
+  acpi,memhotplug: Enable MHP_MEMMAP_ON_MEMORY when supported<br>
+  mm,memory_hotplug: Add kernel boot option to enable memmap_on_memory<br>
+  x86/Kconfig: Introduce ARCH_MHP_MEMMAP_ON_MEMORY_ENABLE<br>
+  arm64/Kconfig: Introduce ARCH_MHP_MEMMAP_ON_MEMORY_ENABLE<br>
+<br>
+ Documentation/admin-guide/kernel-parameters.txt |  17 ++<br>
+ arch/arm64/Kconfig                              |   3 +<br>
+ arch/x86/Kconfig                                |   3 +<br>
+ drivers/acpi/acpi_memhotplug.c                  |   5 +-<br>
+ drivers/base/memory.c                           |  93 +++++++++--<br>
+ include/linux/memory.h                          |   8 +-<br>
+ include/linux/memory_hotplug.h                  |  13 ++<br>
+ include/linux/memremap.h                        |   2 +-<br>
+ include/linux/mmzone.h                          |   7 +-<br>
+ mm/Kconfig                                      |   5 +<br>
+ mm/Makefile                                     |   5 +-<br>
+ mm/memory_hotplug.c                             | 210 ++++++++++++++++++++++--<br>
+ mm/sparse.c                                     |   2 -<br>
+ 13 files changed, 331 insertions(+), 42 deletions(-)<br>
+<br>
+-- <br>
+2.16.3<br>
+<br>
+<br>
+

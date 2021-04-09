@@ -1,0 +1,68 @@
+Some I2C controller drivers will only unregister the I2C<br>
+adapter in their .remove() callback, which can be done<br>
+by simply using a managed variant to add the I2C adapter.<br>
+<br>
+So add the managed functions for adding the I2C adapter.<br>
+<br>
+Reviewed-by: Andy Shevchenko <andriy.shevchenko@xxxxxxxxxxxxxxx><br>
+Reviewed-by: Dmitry Osipenko <digetx@xxxxxxxxx><br>
+Signed-off-by: Yicong Yang <yangyicong@xxxxxxxxxxxxx><br>
+---<br>
+ drivers/i2c/i2c-core-base.c | 26 ++++++++++++++++++++++++++<br>
+ include/linux/i2c.h         |  1 +<br>
+ 2 files changed, 27 insertions(+)<br>
+<br>
+diff --git a/drivers/i2c/i2c-core-base.c b/drivers/i2c/i2c-core-base.c<br>
+index 63ebf72..de9402c 100644<br>
+--- a/drivers/i2c/i2c-core-base.c<br>
++++ b/drivers/i2c/i2c-core-base.c<br>
+@@ -1703,6 +1703,32 @@ void i2c_del_adapter(struct i2c_adapter *adap)<br>
+ }<br>
+ EXPORT_SYMBOL(i2c_del_adapter);<br>
+ <br>
++static void devm_i2c_del_adapter(void *adapter)<br>
++{<br>
++	i2c_del_adapter(adapter);<br>
++}<br>
++<br>
++/**<br>
++ * devm_i2c_add_adapter - device-managed variant of i2c_add_adapter()<br>
++ * @dev: managing device for adding this I2C adapter<br>
++ * @adapter: the adapter to add<br>
++ * Context: can sleep<br>
++ *<br>
++ * Add adapter with dynamic bus number, same with i2c_add_adapter()<br>
++ * but the adapter will be auto deleted on driver detach.<br>
++ */<br>
++int devm_i2c_add_adapter(struct device *dev, struct i2c_adapter *adapter)<br>
++{<br>
++	int ret;<br>
++<br>
++	ret = i2c_add_adapter(adapter);<br>
++	if (ret)<br>
++		return ret;<br>
++<br>
++	return devm_add_action_or_reset(dev, devm_i2c_del_adapter, adapter);<br>
++}<br>
++EXPORT_SYMBOL_GPL(devm_i2c_add_adapter);<br>
++<br>
+ static void i2c_parse_timing(struct device *dev, char *prop_name, u32 *cur_val_p,<br>
+ 			    u32 def_val, bool use_def)<br>
+ {<br>
+diff --git a/include/linux/i2c.h b/include/linux/i2c.h<br>
+index 5662265..10bd0b0 100644<br>
+--- a/include/linux/i2c.h<br>
++++ b/include/linux/i2c.h<br>
+@@ -844,6 +844,7 @@ static inline void i2c_mark_adapter_resumed(struct i2c_adapter *adap)<br>
+  */<br>
+ #if IS_ENABLED(CONFIG_I2C)<br>
+ int i2c_add_adapter(struct i2c_adapter *adap);<br>
++int devm_i2c_add_adapter(struct device *dev, struct i2c_adapter *adapter);<br>
+ void i2c_del_adapter(struct i2c_adapter *adap);<br>
+ int i2c_add_numbered_adapter(struct i2c_adapter *adap);<br>
+ <br>
+-- <br>
+2.8.1<br>
+<br>
+<br>
+

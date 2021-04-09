@@ -1,0 +1,58 @@
+Hi Joerg,<br>
+<br>
+There's hardly anything on the SMMU front for 5.13, but please pull<br>
+these regardless. Summary in the tag.<br>
+<br>
+Cheers,<br>
+<br>
+Will<br>
+<br>
+--->8<br>
+<br>
+The following changes since commit 1e28eed17697bcf343c6743f0028cc3b5dd88bf0:<br>
+<br>
+  Linux 5.12-rc3 (2021-03-14 14:41:02 -0700)<br>
+<br>
+are available in the Git repository at:<br>
+<br>
+  git://git.kernel.org/pub/scm/linux/kernel/git/will/linux.git tags/arm-smmu-updates<br>
+<br>
+for you to fetch changes up to e0bb4b73540495111ff2723e41cf5add2f031021:<br>
+<br>
+  iommu/arm-smmu-v3: Remove the unused fields for PREFETCH_CONFIG command (2021-04-07 11:30:40 +0100)<br>
+<br>
+----------------------------------------------------------------<br>
+Arm SMMU updates for 5.13<br>
+<br>
+- SMMUv3:<br>
+<br>
+  * Drop vestigial PREFETCH_ADDR support<br>
+<br>
+  * Elide TLB sync logic for empty gather<br>
+<br>
+  * Fix "Service Failure Mode" handling<br>
+<br>
+- SMMUv2:<br>
+<br>
+  * New Qualcomm compatible string<br>
+<br>
+----------------------------------------------------------------<br>
+Sai Prakash Ranjan (1):<br>
+      dt-bindings: arm-smmu: Add compatible for SC7280 SoC<br>
+<br>
+Xiang Chen (1):<br>
+      iommu/arm-smmu-v3: Add a check to avoid invalid iotlb sync<br>
+<br>
+Zenghui Yu (1):<br>
+      iommu/arm-smmu-v3: Remove the unused fields for PREFETCH_CONFIG command<br>
+<br>
+Zhen Lei (1):<br>
+      iommu/arm-smmu-v3: add bit field SFM into GERROR_ERR_MASK<br>
+<br>
+ Documentation/devicetree/bindings/iommu/arm,smmu.yaml | 1 +<br>
+ drivers/iommu/arm/arm-smmu-v3/arm-smmu-v3.c           | 5 +++--<br>
+ drivers/iommu/arm/arm-smmu-v3/arm-smmu-v3.h           | 4 +---<br>
+ 3 files changed, 5 insertions(+), 5 deletions(-)<br>
+<br>
+<br>
+

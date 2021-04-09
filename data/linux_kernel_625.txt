@@ -1,0 +1,242 @@
+With dax we cannot deal with readpage() etc. So, we create a dax<br>
+comparison funciton which is similar with<br>
+vfs_dedupe_file_range_compare().<br>
+And introduce dax_remap_file_range_prep() for filesystem use.<br>
+<br>
+Signed-off-by: Goldwyn Rodrigues <rgoldwyn@xxxxxxxx><br>
+Signed-off-by: Shiyang Ruan <ruansy.fnst@xxxxxxxxxxx><br>
+---<br>
+ fs/dax.c             | 56 ++++++++++++++++++++++++++++++++++++++++++++<br>
+ fs/remap_range.c     | 45 ++++++++++++++++++++++++++++-------<br>
+ fs/xfs/xfs_reflink.c |  9 +++++--<br>
+ include/linux/dax.h  |  4 ++++<br>
+ include/linux/fs.h   | 12 ++++++----<br>
+ 5 files changed, 112 insertions(+), 14 deletions(-)<br>
+<br>
+diff --git a/fs/dax.c b/fs/dax.c<br>
+index fcd1e932716e..ba924b6629a6 100644<br>
+--- a/fs/dax.c<br>
++++ b/fs/dax.c<br>
+@@ -1849,3 +1849,59 @@ vm_fault_t dax_finish_sync_fault(struct vm_fault *vmf,<br>
+ 	return dax_insert_pfn_mkwrite(vmf, pfn, order);<br>
+ }<br>
+ EXPORT_SYMBOL_GPL(dax_finish_sync_fault);<br>
++<br>
++static loff_t dax_range_compare_actor(struct inode *ino1, loff_t pos1,<br>
++		struct inode *ino2, loff_t pos2, loff_t len, void *data,<br>
++		struct iomap *smap, struct iomap *dmap)<br>
++{<br>
++	void *saddr, *daddr;<br>
++	bool *same = data;<br>
++	int ret;<br>
++<br>
++	if (smap->type == IOMAP_HOLE && dmap->type == IOMAP_HOLE) {<br>
++		*same = true;<br>
++		return len;<br>
++	}<br>
++<br>
++	if (smap->type == IOMAP_HOLE || dmap->type == IOMAP_HOLE) {<br>
++		*same = false;<br>
++		return 0;<br>
++	}<br>
++<br>
++	ret = dax_iomap_direct_access(smap, pos1, ALIGN(pos1 + len, PAGE_SIZE),<br>
++				      &saddr, NULL);<br>
++	if (ret < 0)<br>
++		return -EIO;<br>
++<br>
++	ret = dax_iomap_direct_access(dmap, pos2, ALIGN(pos2 + len, PAGE_SIZE),<br>
++				      &daddr, NULL);<br>
++	if (ret < 0)<br>
++		return -EIO;<br>
++<br>
++	*same = !memcmp(saddr, daddr, len);<br>
++	return len;<br>
++}<br>
++<br>
++int dax_dedupe_file_range_compare(struct inode *src, loff_t srcoff,<br>
++		struct inode *dest, loff_t destoff, loff_t len, bool *is_same,<br>
++		const struct iomap_ops *ops)<br>
++{<br>
++	int id, ret = 0;<br>
++<br>
++	id = dax_read_lock();<br>
++	while (len) {<br>
++		ret = iomap_apply2(src, srcoff, dest, destoff, len, 0, ops,<br>
++				   is_same, dax_range_compare_actor);<br>
++		if (ret < 0 || !*is_same)<br>
++			goto out;<br>
++<br>
++		len -= ret;<br>
++		srcoff += ret;<br>
++		destoff += ret;<br>
++	}<br>
++	ret = 0;<br>
++out:<br>
++	dax_read_unlock(id);<br>
++	return ret;<br>
++}<br>
++EXPORT_SYMBOL_GPL(dax_dedupe_file_range_compare);<br>
+diff --git a/fs/remap_range.c b/fs/remap_range.c<br>
+index e4a5fdd7ad7b..1fab0db49c68 100644<br>
+--- a/fs/remap_range.c<br>
++++ b/fs/remap_range.c<br>
+@@ -14,6 +14,7 @@<br>
+ #include <linux/compat.h><br>
+ #include <linux/mount.h><br>
+ #include <linux/fs.h><br>
++#include <linux/dax.h><br>
+ #include "internal.h"<br>
+ <br>
+ #include <linux/uaccess.h><br>
+@@ -199,9 +200,9 @@ static void vfs_unlock_two_pages(struct page *page1, struct page *page2)<br>
+  * Compare extents of two files to see if they are the same.<br>
+  * Caller must have locked both inodes to prevent write races.<br>
+  */<br>
+-static int vfs_dedupe_file_range_compare(struct inode *src, loff_t srcoff,<br>
+-					 struct inode *dest, loff_t destoff,<br>
+-					 loff_t len, bool *is_same)<br>
++int vfs_dedupe_file_range_compare(struct inode *src, loff_t srcoff,<br>
++				  struct inode *dest, loff_t destoff,<br>
++				  loff_t len, bool *is_same)<br>
+ {<br>
+ 	loff_t src_poff;<br>
+ 	loff_t dest_poff;<br>
+@@ -280,6 +281,7 @@ static int vfs_dedupe_file_range_compare(struct inode *src, loff_t srcoff,<br>
+ out_error:<br>
+ 	return error;<br>
+ }<br>
++EXPORT_SYMBOL(vfs_dedupe_file_range_compare);<br>
+ <br>
+ /*<br>
+  * Check that the two inodes are eligible for cloning, the ranges make<br>
+@@ -289,9 +291,11 @@ static int vfs_dedupe_file_range_compare(struct inode *src, loff_t srcoff,<br>
+  * If there's an error, then the usual negative error code is returned.<br>
+  * Otherwise returns 0 with *len set to the request length.<br>
+  */<br>
+-int generic_remap_file_range_prep(struct file *file_in, loff_t pos_in,<br>
+-				  struct file *file_out, loff_t pos_out,<br>
+-				  loff_t *len, unsigned int remap_flags)<br>
++static int<br>
++__generic_remap_file_range_prep(struct file *file_in, loff_t pos_in,<br>
++				struct file *file_out, loff_t pos_out,<br>
++				loff_t *len, unsigned int remap_flags,<br>
++				const struct iomap_ops *ops)<br>
+ {<br>
+ 	struct inode *inode_in = file_inode(file_in);<br>
+ 	struct inode *inode_out = file_inode(file_out);<br>
+@@ -351,8 +355,15 @@ int generic_remap_file_range_prep(struct file *file_in, loff_t pos_in,<br>
+ 	if (remap_flags & REMAP_FILE_DEDUP) {<br>
+ 		bool		is_same = false;<br>
+ <br>
+-		ret = vfs_dedupe_file_range_compare(inode_in, pos_in,<br>
+-				inode_out, pos_out, *len, &is_same);<br>
++		if (!IS_DAX(inode_in) && !IS_DAX(inode_out))<br>
++			ret = vfs_dedupe_file_range_compare(inode_in, pos_in,<br>
++					inode_out, pos_out, *len, &is_same);<br>
++		else if (IS_DAX(inode_in) && IS_DAX(inode_out) && ops)<br>
++			ret = dax_dedupe_file_range_compare(inode_in, pos_in,<br>
++					inode_out, pos_out, *len, &is_same,<br>
++					ops);<br>
++		else<br>
++			return -EINVAL;<br>
+ 		if (ret)<br>
+ 			return ret;<br>
+ 		if (!is_same)<br>
+@@ -370,6 +381,24 @@ int generic_remap_file_range_prep(struct file *file_in, loff_t pos_in,<br>
+ <br>
+ 	return ret;<br>
+ }<br>
++<br>
++int dax_remap_file_range_prep(struct file *file_in, loff_t pos_in,<br>
++			      struct file *file_out, loff_t pos_out,<br>
++			      loff_t *len, unsigned int remap_flags,<br>
++			      const struct iomap_ops *ops)<br>
++{<br>
++	return __generic_remap_file_range_prep(file_in, pos_in, file_out,<br>
++					       pos_out, len, remap_flags, ops);<br>
++}<br>
++EXPORT_SYMBOL(dax_remap_file_range_prep);<br>
++<br>
++int generic_remap_file_range_prep(struct file *file_in, loff_t pos_in,<br>
++				  struct file *file_out, loff_t pos_out,<br>
++				  loff_t *len, unsigned int remap_flags)<br>
++{<br>
++	return __generic_remap_file_range_prep(file_in, pos_in, file_out,<br>
++					       pos_out, len, remap_flags, NULL);<br>
++}<br>
+ EXPORT_SYMBOL(generic_remap_file_range_prep);<br>
+ <br>
+ loff_t do_clone_file_range(struct file *file_in, loff_t pos_in,<br>
+diff --git a/fs/xfs/xfs_reflink.c b/fs/xfs/xfs_reflink.c<br>
+index 725c7d8e4438..9ef9f98725a2 100644<br>
+--- a/fs/xfs/xfs_reflink.c<br>
++++ b/fs/xfs/xfs_reflink.c<br>
+@@ -1329,8 +1329,13 @@ xfs_reflink_remap_prep(<br>
+ 	if (IS_DAX(inode_in) || IS_DAX(inode_out))<br>
+ 		goto out_unlock;<br>
+ <br>
+-	ret = generic_remap_file_range_prep(file_in, pos_in, file_out, pos_out,<br>
+-			len, remap_flags);<br>
++	if (!IS_DAX(inode_in))<br>
++		ret = generic_remap_file_range_prep(file_in, pos_in, file_out,<br>
++						    pos_out, len, remap_flags);<br>
++	else<br>
++		ret = dax_remap_file_range_prep(file_in, pos_in, file_out,<br>
++						pos_out, len, remap_flags,<br>
++						&xfs_read_iomap_ops);<br>
+ 	if (ret || *len == 0)<br>
+ 		goto out_unlock;<br>
+ <br>
+diff --git a/include/linux/dax.h b/include/linux/dax.h<br>
+index 3275e01ed33d..32e1c34349f2 100644<br>
+--- a/include/linux/dax.h<br>
++++ b/include/linux/dax.h<br>
+@@ -239,6 +239,10 @@ int dax_invalidate_mapping_entry_sync(struct address_space *mapping,<br>
+ 				      pgoff_t index);<br>
+ s64 dax_iomap_zero(loff_t pos, u64 length, struct iomap *iomap,<br>
+ 		struct iomap *srcmap);<br>
++int dax_dedupe_file_range_compare(struct inode *src, loff_t srcoff,<br>
++				  struct inode *dest, loff_t destoff,<br>
++				  loff_t len, bool *is_same,<br>
++				  const struct iomap_ops *ops);<br>
+ static inline bool dax_mapping(struct address_space *mapping)<br>
+ {<br>
+ 	return mapping->host && IS_DAX(mapping->host);<br>
+diff --git a/include/linux/fs.h b/include/linux/fs.h<br>
+index ec8f3ddf4a6a..28861e334dac 100644<br>
+--- a/include/linux/fs.h<br>
++++ b/include/linux/fs.h<br>
+@@ -70,6 +70,7 @@ struct fsverity_info;<br>
+ struct fsverity_operations;<br>
+ struct fs_context;<br>
+ struct fs_parameter_spec;<br>
++struct iomap_ops;<br>
+ <br>
+ extern void __init inode_init(void);<br>
+ extern void __init inode_init_early(void);<br>
+@@ -1989,10 +1990,13 @@ extern ssize_t vfs_copy_file_range(struct file *, loff_t , struct file *,<br>
+ extern ssize_t generic_copy_file_range(struct file *file_in, loff_t pos_in,<br>
+ 				       struct file *file_out, loff_t pos_out,<br>
+ 				       size_t len, unsigned int flags);<br>
+-extern int generic_remap_file_range_prep(struct file *file_in, loff_t pos_in,<br>
+-					 struct file *file_out, loff_t pos_out,<br>
+-					 loff_t *count,<br>
+-					 unsigned int remap_flags);<br>
++int generic_remap_file_range_prep(struct file *file_in, loff_t pos_in,<br>
++				  struct file *file_out, loff_t pos_out,<br>
++				  loff_t *count, unsigned int remap_flags);<br>
++int dax_remap_file_range_prep(struct file *file_in, loff_t pos_in,<br>
++			      struct file *file_out, loff_t pos_out,<br>
++			      loff_t *len, unsigned int remap_flags,<br>
++			      const struct iomap_ops *ops);<br>
+ extern loff_t do_clone_file_range(struct file *file_in, loff_t pos_in,<br>
+ 				  struct file *file_out, loff_t pos_out,<br>
+ 				  loff_t len, unsigned int remap_flags);<br>
+-- <br>
+2.31.0<br>
+<br>
+<br>
+<br>
+<br>
+

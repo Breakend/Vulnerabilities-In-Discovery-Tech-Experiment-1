@@ -1,0 +1,42 @@
+According to programming guide added host partial power<br>
+down exit flow in wakeup detected interrupt handler.<br>
+<br>
+Signed-off-by: Artur Petrosyan <Arthur.Petrosyan@xxxxxxxxxxxx><br>
+Acked-by: Minas Harutyunyan <Minas.Harutyunyan@xxxxxxxxxxxx><br>
+---<br>
+ drivers/usb/dwc2/core_intr.c | 17 ++++++++---------<br>
+ 1 file changed, 8 insertions(+), 9 deletions(-)<br>
+<br>
+diff --git a/drivers/usb/dwc2/core_intr.c b/drivers/usb/dwc2/core_intr.c<br>
+index 1fb957ce6c25..0a7f9330907f 100644<br>
+--- a/drivers/usb/dwc2/core_intr.c<br>
++++ b/drivers/usb/dwc2/core_intr.c<br>
+@@ -423,15 +423,14 @@ static void dwc2_handle_wakeup_detected_intr(struct dwc2_hsotg *hsotg)<br>
+ 			hsotg->lx_state = DWC2_L0;<br>
+ 		}<br>
+ 	} else {<br>
+-		if (hsotg->params.power_down)<br>
+-			return;<br>
+-<br>
+-		if (hsotg->lx_state != DWC2_L1) {<br>
+-			u32 pcgcctl = dwc2_readl(hsotg, PCGCTL);<br>
+-<br>
+-			/* Restart the Phy Clock */<br>
+-			pcgcctl &= ~PCGCTL_STOPPCLK;<br>
+-			dwc2_writel(hsotg, pcgcctl, PCGCTL);<br>
++		if (hsotg->lx_state == DWC2_L2) {<br>
++			if (hsotg->in_ppd) {<br>
++				ret = dwc2_exit_partial_power_down(hsotg, 1,<br>
++								   true);<br>
++				if (ret)<br>
++					dev_err(hsotg->dev,<br>
++						"exit partial_power_down failed\n");<br>
++			}<br>
+ <br>
+ 			/*<br>
+ 			 * If we've got this quirk then the PHY is stuck upon<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

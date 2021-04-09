@@ -1,0 +1,12 @@
+Varad Gautam <varad.gautam@xxxxxxxx> wrote:<br>
+<br>
+><i> The test harness is available at [5].</i><br>
+<br>
+Can you add this to the keyutils testsuite?<br>
+<br>
+<a  rel="nofollow" href="https://git.kernel.org/pub/scm/linux/kernel/git/dhowells/keyutils.git">https://git.kernel.org/pub/scm/linux/kernel/git/dhowells/keyutils.git</a><br>
+<br>
+David<br>
+<br>
+<br>
+

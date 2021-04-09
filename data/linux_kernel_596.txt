@@ -1,0 +1,342 @@
+The following commit has been merged into the x86/entry branch of tip:<br>
+<br>
+Commit-ID:     39218ff4c625dbf2e68224024fe0acaa60bcd51a<br>
+Gitweb:        <a  rel="nofollow" href="https://git.kernel.org/tip/39218ff4c625dbf2e68224024fe0acaa60bcd51a">https://git.kernel.org/tip/39218ff4c625dbf2e68224024fe0acaa60bcd51a</a><br>
+Author:        Kees Cook <keescook@xxxxxxxxxxxx><br>
+AuthorDate:    Thu, 01 Apr 2021 16:23:44 -07:00<br>
+Committer:     Thomas Gleixner <tglx@xxxxxxxxxxxxx><br>
+CommitterDate: Thu, 08 Apr 2021 14:05:19 +02:00<br>
+<br>
+stack: Optionally randomize kernel stack offset each syscall<br>
+<br>
+This provides the ability for architectures to enable kernel stack base<br>
+address offset randomization. This feature is controlled by the boot<br>
+param "randomize_kstack_offset=on/off", with its default value set by<br>
+CONFIG_RANDOMIZE_KSTACK_OFFSET_DEFAULT.<br>
+<br>
+This feature is based on the original idea from the last public release<br>
+of PaX's RANDKSTACK feature: <a  rel="nofollow" href="https://pax.grsecurity.net/docs/randkstack.txt">https://pax.grsecurity.net/docs/randkstack.txt</a><br>
+All the credit for the original idea goes to the PaX team. Note that<br>
+the design and implementation of this upstream randomize_kstack_offset<br>
+feature differs greatly from the RANDKSTACK feature (see below).<br>
+<br>
+Reasoning for the feature:<br>
+<br>
+This feature aims to make harder the various stack-based attacks that<br>
+rely on deterministic stack structure. We have had many such attacks in<br>
+past (just to name few):<br>
+<br>
+<a  rel="nofollow" href="https://jon.oberheide.org/files/infiltrate12-thestackisback.pdf">https://jon.oberheide.org/files/infiltrate12-thestackisback.pdf</a><br>
+<a  rel="nofollow" href="https://jon.oberheide.org/files/stackjacking-infiltrate11.pdf">https://jon.oberheide.org/files/stackjacking-infiltrate11.pdf</a><br>
+<a  rel="nofollow" href="https://googleprojectzero.blogspot.com/2016/06/exploiting-recursion-in-linux-kernel_20.html">https://googleprojectzero.blogspot.com/2016/06/exploiting-recursion-in-linux-kernel_20.html</a><br>
+<br>
+As Linux kernel stack protections have been constantly improving<br>
+(vmap-based stack allocation with guard pages, removal of thread_info,<br>
+STACKLEAK), attackers have had to find new ways for their exploits<br>
+to work. They have done so, continuing to rely on the kernel's stack<br>
+determinism, in situations where VMAP_STACK and THREAD_INFO_IN_TASK_STRUCT<br>
+were not relevant. For example, the following recent attacks would have<br>
+been hampered if the stack offset was non-deterministic between syscalls:<br>
+<br>
+<a  rel="nofollow" href="https://repositorio-aberto.up.pt/bitstream/10216/125357/2/374717.pdf">https://repositorio-aberto.up.pt/bitstream/10216/125357/2/374717.pdf</a><br>
+(page 70: targeting the pt_regs copy with linear stack overflow)<br>
+<br>
+<a  rel="nofollow" href="https://a13xp0p0v.github.io/2020/02/15/CVE-2019-18683.html">https://a13xp0p0v.github.io/2020/02/15/CVE-2019-18683.html</a><br>
+(leaked stack address from one syscall as a target during next syscall)<br>
+<br>
+The main idea is that since the stack offset is randomized on each system<br>
+call, it is harder for an attack to reliably land in any particular place<br>
+on the thread stack, even with address exposures, as the stack base will<br>
+change on the next syscall. Also, since randomization is performed after<br>
+placing pt_regs, the ptrace-based approach[1] to discover the randomized<br>
+offset during a long-running syscall should not be possible.<br>
+<br>
+Design description:<br>
+<br>
+During most of the kernel's execution, it runs on the "thread stack",<br>
+which is pretty deterministic in its structure: it is fixed in size,<br>
+and on every entry from userspace to kernel on a syscall the thread<br>
+stack starts construction from an address fetched from the per-cpu<br>
+cpu_current_top_of_stack variable. The first element to be pushed to the<br>
+thread stack is the pt_regs struct that stores all required CPU registers<br>
+and syscall parameters. Finally the specific syscall function is called,<br>
+with the stack being used as the kernel executes the resulting request.<br>
+<br>
+The goal of randomize_kstack_offset feature is to add a random offset<br>
+after the pt_regs has been pushed to the stack and before the rest of the<br>
+thread stack is used during the syscall processing, and to change it every<br>
+time a process issues a syscall. The source of randomness is currently<br>
+architecture-defined (but x86 is using the low byte of rdtsc()). Future<br>
+improvements for different entropy sources is possible, but out of scope<br>
+for this patch. Further more, to add more unpredictability, new offsets<br>
+are chosen at the end of syscalls (the timing of which should be less<br>
+easy to measure from userspace than at syscall entry time), and stored<br>
+in a per-CPU variable, so that the life of the value does not stay<br>
+explicitly tied to a single task.<br>
+<br>
+As suggested by Andy Lutomirski, the offset is added using alloca()<br>
+and an empty asm() statement with an output constraint, since it avoids<br>
+changes to assembly syscall entry code, to the unwinder, and provides<br>
+correct stack alignment as defined by the compiler.<br>
+<br>
+In order to make this available by default with zero performance impact<br>
+for those that don't want it, it is boot-time selectable with static<br>
+branches. This way, if the overhead is not wanted, it can just be<br>
+left turned off with no performance impact.<br>
+<br>
+The generated assembly for x86_64 with GCC looks like this:<br>
+<br>
+...<br>
+ffffffff81003977: 65 8b 05 02 ea 00 7f  mov %gs:0x7f00ea02(%rip),%eax<br>
+					    # 12380 <kstack_offset><br>
+ffffffff8100397e: 25 ff 03 00 00        and $0x3ff,%eax<br>
+ffffffff81003983: 48 83 c0 0f           add $0xf,%rax<br>
+ffffffff81003987: 25 f8 07 00 00        and $0x7f8,%eax<br>
+ffffffff8100398c: 48 29 c4              sub %rax,%rsp<br>
+ffffffff8100398f: 48 8d 44 24 0f        lea 0xf(%rsp),%rax<br>
+ffffffff81003994: 48 83 e0 f0           and $0xfffffffffffffff0,%rax<br>
+...<br>
+<br>
+As a result of the above stack alignment, this patch introduces about<br>
+5 bits of randomness after pt_regs is spilled to the thread stack on<br>
+x86_64, and 6 bits on x86_32 (since its has 1 fewer bit required for<br>
+stack alignment). The amount of entropy could be adjusted based on how<br>
+much of the stack space we wish to trade for security.<br>
+<br>
+My measure of syscall performance overhead (on x86_64):<br>
+<br>
+lmbench: /usr/lib/lmbench/bin/x86_64-linux-gnu/lat_syscall -N 10000 null<br>
+    randomize_kstack_offset=y	Simple syscall: 0.7082 microseconds<br>
+    randomize_kstack_offset=n	Simple syscall: 0.7016 microseconds<br>
+<br>
+So, roughly 0.9% overhead growth for a no-op syscall, which is very<br>
+manageable. And for people that don't want this, it's off by default.<br>
+<br>
+There are two gotchas with using the alloca() trick. First,<br>
+compilers that have Stack Clash protection (-fstack-clash-protection)<br>
+enabled by default (e.g. Ubuntu[3]) add pagesize stack probes to<br>
+any dynamic stack allocations. While the randomization offset is<br>
+always less than a page, the resulting assembly would still contain<br>
+(unreachable!) probing routines, bloating the resulting assembly. To<br>
+avoid this, -fno-stack-clash-protection is unconditionally added to<br>
+the kernel Makefile since this is the only dynamic stack allocation in<br>
+the kernel (now that VLAs have been removed) and it is provably safe<br>
+from Stack Clash style attacks.<br>
+<br>
+The second gotcha with alloca() is a negative interaction with<br>
+-fstack-protector*, in that it sees the alloca() as an array allocation,<br>
+which triggers the unconditional addition of the stack canary function<br>
+pre/post-amble which slows down syscalls regardless of the static<br>
+branch. In order to avoid adding this unneeded check and its associated<br>
+performance impact, architectures need to carefully remove uses of<br>
+-fstack-protector-strong (or -fstack-protector) in the compilation units<br>
+that use the add_random_kstack() macro and to audit the resulting stack<br>
+mitigation coverage (to make sure no desired coverage disappears). No<br>
+change is visible for this on x86 because the stack protector is already<br>
+unconditionally disabled for the compilation unit, but the change is<br>
+required on arm64. There is, unfortunately, no attribute that can be<br>
+used to disable stack protector for specific functions.<br>
+<br>
+Comparison to PaX RANDKSTACK feature:<br>
+<br>
+The RANDKSTACK feature randomizes the location of the stack start<br>
+(cpu_current_top_of_stack), i.e. including the location of pt_regs<br>
+structure itself on the stack. Initially this patch followed the same<br>
+approach, but during the recent discussions[2], it has been determined<br>
+to be of a little value since, if ptrace functionality is available for<br>
+an attacker, they can use PTRACE_PEEKUSR/PTRACE_POKEUSR to read/write<br>
+different offsets in the pt_regs struct, observe the cache behavior of<br>
+the pt_regs accesses, and figure out the random stack offset. Another<br>
+difference is that the random offset is stored in a per-cpu variable,<br>
+rather than having it be per-thread. As a result, these implementations<br>
+differ a fair bit in their implementation details and results, though<br>
+obviously the intent is similar.<br>
+<br>
+[1] <a  rel="nofollow" href="https://lore.kernel.org/kernel-hardening/2236FBA76BA1254E88B949DDB74E612BA4BC57C1@xxxxxxxxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/kernel-hardening/2236FBA76BA1254E88B949DDB74E612BA4BC57C1@xxxxxxxxxxxxxxxxxxxxxxxxxxxx/</a><br>
+[2] <a  rel="nofollow" href="https://lore.kernel.org/kernel-hardening/20190329081358.30497-1-elena.reshetova@xxxxxxxxx/">https://lore.kernel.org/kernel-hardening/20190329081358.30497-1-elena.reshetova@xxxxxxxxx/</a><br>
+[3] <a  rel="nofollow" href="https://lists.ubuntu.com/archives/ubuntu-devel/2019-June/040741.html">https://lists.ubuntu.com/archives/ubuntu-devel/2019-June/040741.html</a><br>
+<br>
+Co-developed-by: Elena Reshetova <elena.reshetova@xxxxxxxxx><br>
+Signed-off-by: Elena Reshetova <elena.reshetova@xxxxxxxxx><br>
+Signed-off-by: Kees Cook <keescook@xxxxxxxxxxxx><br>
+Signed-off-by: Thomas Gleixner <tglx@xxxxxxxxxxxxx><br>
+Reviewed-by: Thomas Gleixner <tglx@xxxxxxxxxxxxx><br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/20210401232347.2791257-4-keescook@xxxxxxxxxxxx">https://lore.kernel.org/r/20210401232347.2791257-4-keescook@xxxxxxxxxxxx</a><br>
+<br>
+---<br>
+ Documentation/admin-guide/kernel-parameters.txt | 11 +++-<br>
+ Makefile                                        |  4 +-<br>
+ arch/Kconfig                                    | 23 +++++++-<br>
+ include/linux/randomize_kstack.h                | 54 ++++++++++++++++-<br>
+ init/main.c                                     | 23 +++++++-<br>
+ 5 files changed, 115 insertions(+)<br>
+ create mode 100644 include/linux/randomize_kstack.h<br>
+<br>
+diff --git a/Documentation/admin-guide/kernel-parameters.txt b/Documentation/admin-guide/kernel-parameters.txt<br>
+index 0454572..bee8644 100644<br>
+--- a/Documentation/admin-guide/kernel-parameters.txt<br>
++++ b/Documentation/admin-guide/kernel-parameters.txt<br>
+@@ -4061,6 +4061,17 @@<br>
+ 			fully seed the kernel's CRNG. Default is controlled<br>
+ 			by CONFIG_RANDOM_TRUST_CPU.<br>
+ <br>
++	randomize_kstack_offset=<br>
++			[KNL] Enable or disable kernel stack offset<br>
++			randomization, which provides roughly 5 bits of<br>
++			entropy, frustrating memory corruption attacks<br>
++			that depend on stack address determinism or<br>
++			cross-syscall address exposures. This is only<br>
++			available on architectures that have defined<br>
++			CONFIG_HAVE_ARCH_RANDOMIZE_KSTACK_OFFSET.<br>
++			Format: <bool>  (1/Y/y=enable, 0/N/n=disable)<br>
++			Default is CONFIG_RANDOMIZE_KSTACK_OFFSET_DEFAULT.<br>
++<br>
+ 	ras=option[,option,...]	[KNL] RAS-specific options<br>
+ <br>
+ 		cec_disable	[X86]<br>
+diff --git a/Makefile b/Makefile<br>
+index cc77fd4..d3bf503 100644<br>
+--- a/Makefile<br>
++++ b/Makefile<br>
+@@ -813,6 +813,10 @@ KBUILD_CFLAGS	+= -ftrivial-auto-var-init=zero<br>
+ KBUILD_CFLAGS	+= -enable-trivial-auto-var-init-zero-knowing-it-will-be-removed-from-clang<br>
+ endif<br>
+ <br>
++# While VLAs have been removed, GCC produces unreachable stack probes<br>
++# for the randomize_kstack_offset feature. Disable it for all compilers.<br>
++KBUILD_CFLAGS	+= $(call cc-option, -fno-stack-clash-protection)<br>
++<br>
+ DEBUG_CFLAGS	:=<br>
+ <br>
+ # Workaround for GCC versions < 5.0<br>
+diff --git a/arch/Kconfig b/arch/Kconfig<br>
+index ecfd352..6b11c82 100644<br>
+--- a/arch/Kconfig<br>
++++ b/arch/Kconfig<br>
+@@ -1054,6 +1054,29 @@ config VMAP_STACK<br>
+ 	  backing virtual mappings with real shadow memory, and KASAN_VMALLOC<br>
+ 	  must be enabled.<br>
+ <br>
++config HAVE_ARCH_RANDOMIZE_KSTACK_OFFSET<br>
++	def_bool n<br>
++	help<br>
++	  An arch should select this symbol if it can support kernel stack<br>
++	  offset randomization with calls to add_random_kstack_offset()<br>
++	  during syscall entry and choose_random_kstack_offset() during<br>
++	  syscall exit. Careful removal of -fstack-protector-strong and<br>
++	  -fstack-protector should also be applied to the entry code and<br>
++	  closely examined, as the artificial stack bump looks like an array<br>
++	  to the compiler, so it will attempt to add canary checks regardless<br>
++	  of the static branch state.<br>
++<br>
++config RANDOMIZE_KSTACK_OFFSET_DEFAULT<br>
++	bool "Randomize kernel stack offset on syscall entry"<br>
++	depends on HAVE_ARCH_RANDOMIZE_KSTACK_OFFSET<br>
++	help<br>
++	  The kernel stack offset can be randomized (after pt_regs) by<br>
++	  roughly 5 bits of entropy, frustrating memory corruption<br>
++	  attacks that depend on stack address determinism or<br>
++	  cross-syscall address exposures. This feature is controlled<br>
++	  by kernel boot param "randomize_kstack_offset=on/off", and this<br>
++	  config chooses the default boot state.<br>
++<br>
+ config ARCH_OPTIONAL_KERNEL_RWX<br>
+ 	def_bool n<br>
+ <br>
+diff --git a/include/linux/randomize_kstack.h b/include/linux/randomize_kstack.h<br>
+new file mode 100644<br>
+index 0000000..fd80fab<br>
+--- /dev/null<br>
++++ b/include/linux/randomize_kstack.h<br>
+@@ -0,0 +1,54 @@<br>
++/* SPDX-License-Identifier: GPL-2.0-only */<br>
++#ifndef _LINUX_RANDOMIZE_KSTACK_H<br>
++#define _LINUX_RANDOMIZE_KSTACK_H<br>
++<br>
++#include <linux/kernel.h><br>
++#include <linux/jump_label.h><br>
++#include <linux/percpu-defs.h><br>
++<br>
++DECLARE_STATIC_KEY_MAYBE(CONFIG_RANDOMIZE_KSTACK_OFFSET_DEFAULT,<br>
++			 randomize_kstack_offset);<br>
++DECLARE_PER_CPU(u32, kstack_offset);<br>
++<br>
++/*<br>
++ * Do not use this anywhere else in the kernel. This is used here because<br>
++ * it provides an arch-agnostic way to grow the stack with correct<br>
++ * alignment. Also, since this use is being explicitly masked to a max of<br>
++ * 10 bits, stack-clash style attacks are unlikely. For more details see<br>
++ * "VLAs" in Documentation/process/deprecated.rst<br>
++ */<br>
++void *__builtin_alloca(size_t size);<br>
++/*<br>
++ * Use, at most, 10 bits of entropy. We explicitly cap this to keep the<br>
++ * "VLA" from being unbounded (see above). 10 bits leaves enough room for<br>
++ * per-arch offset masks to reduce entropy (by removing higher bits, since<br>
++ * high entropy may overly constrain usable stack space), and for<br>
++ * compiler/arch-specific stack alignment to remove the lower bits.<br>
++ */<br>
++#define KSTACK_OFFSET_MAX(x)	((x) & 0x3FF)<br>
++<br>
++/*<br>
++ * These macros must be used during syscall entry when interrupts and<br>
++ * preempt are disabled, and after user registers have been stored to<br>
++ * the stack.<br>
++ */<br>
++#define add_random_kstack_offset() do {					\<br>
++	if (static_branch_maybe(CONFIG_RANDOMIZE_KSTACK_OFFSET_DEFAULT,	\<br>
++				&randomize_kstack_offset)) {		\<br>
++		u32 offset = raw_cpu_read(kstack_offset);		\<br>
++		u8 *ptr = __builtin_alloca(KSTACK_OFFSET_MAX(offset));	\<br>
++		/* Keep allocation even after "ptr" loses scope. */	\<br>
++		asm volatile("" : "=o"(*ptr) :: "memory");		\<br>
++	}								\<br>
++} while (0)<br>
++<br>
++#define choose_random_kstack_offset(rand) do {				\<br>
++	if (static_branch_maybe(CONFIG_RANDOMIZE_KSTACK_OFFSET_DEFAULT,	\<br>
++				&randomize_kstack_offset)) {		\<br>
++		u32 offset = raw_cpu_read(kstack_offset);		\<br>
++		offset ^= (rand);					\<br>
++		raw_cpu_write(kstack_offset, offset);			\<br>
++	}								\<br>
++} while (0)<br>
++<br>
++#endif<br>
+diff --git a/init/main.c b/init/main.c<br>
+index 53b2788..f498aac 100644<br>
+--- a/init/main.c<br>
++++ b/init/main.c<br>
+@@ -844,6 +844,29 @@ static void __init mm_init(void)<br>
+ 	pti_init();<br>
+ }<br>
+ <br>
++#ifdef CONFIG_HAVE_ARCH_RANDOMIZE_KSTACK_OFFSET<br>
++DEFINE_STATIC_KEY_MAYBE_RO(CONFIG_RANDOMIZE_KSTACK_OFFSET_DEFAULT,<br>
++			   randomize_kstack_offset);<br>
++DEFINE_PER_CPU(u32, kstack_offset);<br>
++<br>
++static int __init early_randomize_kstack_offset(char *buf)<br>
++{<br>
++	int ret;<br>
++	bool bool_result;<br>
++<br>
++	ret = kstrtobool(buf, &bool_result);<br>
++	if (ret)<br>
++		return ret;<br>
++<br>
++	if (bool_result)<br>
++		static_branch_enable(&randomize_kstack_offset);<br>
++	else<br>
++		static_branch_disable(&randomize_kstack_offset);<br>
++	return 0;<br>
++}<br>
++early_param("randomize_kstack_offset", early_randomize_kstack_offset);<br>
++#endif<br>
++<br>
+ void __init __weak arch_call_rest_init(void)<br>
+ {<br>
+ 	rest_init();<br>
+<br>
+<br>
+

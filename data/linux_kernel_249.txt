@@ -1,0 +1,31 @@
+On Thu, Apr 08, 2021 at 05:48:19PM +0200, Paolo Bonzini wrote:<br>
+><i> On 08/04/21 17:40, Siddharth Chandrasekaran wrote:</i><br>
+><i> > > > > Although the Hyper-v TLFS mentions that a guest cannot use this feature</i><br>
+><i> > > > > unless the hypervisor advertises support for it, some hypercalls which</i><br>
+><i> > > > > we plan on upstreaming in future uses them anyway.</i><br>
+><i> > > > No, please don't do this. Check the feature bit(s) before you issue</i><br>
+><i> > > > hypercalls which rely on the extended interface.</i><br>
+><i> > > Perhaps Siddharth should clarify this, but I read it as Hyper-V being</i><br>
+><i> > > buggy and using XMM arguments unconditionally.</i><br>
+><i> > The guest is at fault here as it expects Hyper-V to consume arguments</i><br>
+><i> > from XMM registers for certain hypercalls (that we are working) even if</i><br>
+><i> > we didn't expose the feature via CPUID bits.</i><br>
+><i></i><br>
+><i> What guest is that?</i><br>
+<br>
+It is a Windows Server 2016.<br>
+<br>
+<br>
+<br>
+Amazon Development Center Germany GmbH<br>
+Krausenstr. 38<br>
+10117 Berlin<br>
+Geschaeftsfuehrung: Christian Schlaeger, Jonathan Weiss<br>
+Eingetragen am Amtsgericht Charlottenburg unter HRB 149173 B<br>
+Sitz: Berlin<br>
+Ust-ID: DE 289 237 879<br>
+<br>
+<br>
+<br>
+<br>
+

@@ -1,0 +1,1382 @@
+During runtime-suspend of ufs host, the scsi devices are<br>
+already suspended and so are the queues associated with them.<br>
+But the ufs host sends SSU (START_STOP_UNIT) to wlun<br>
+during its runtime-suspend.<br>
+During the process blk_queue_enter checks if the queue is not in<br>
+suspended state. If so, it waits for the queue to resume, and never<br>
+comes out of it.<br>
+The commit<br>
+(d55d15a33: scsi: block: Do not accept any requests while suspended)<br>
+adds the check if the queue is in suspended state in blk_queue_enter().<br>
+<br>
+Call trace:<br>
+ __switch_to+0x174/0x2c4<br>
+ __schedule+0x478/0x764<br>
+ schedule+0x9c/0xe0<br>
+ blk_queue_enter+0x158/0x228<br>
+ blk_mq_alloc_request+0x40/0xa4<br>
+ blk_get_request+0x2c/0x70<br>
+ __scsi_execute+0x60/0x1c4<br>
+ ufshcd_set_dev_pwr_mode+0x124/0x1e4<br>
+ ufshcd_suspend+0x208/0x83c<br>
+ ufshcd_runtime_suspend+0x40/0x154<br>
+ ufshcd_pltfrm_runtime_suspend+0x14/0x20<br>
+ pm_generic_runtime_suspend+0x28/0x3c<br>
+ __rpm_callback+0x80/0x2a4<br>
+ rpm_suspend+0x308/0x614<br>
+ rpm_idle+0x158/0x228<br>
+ pm_runtime_work+0x84/0xac<br>
+ process_one_work+0x1f0/0x470<br>
+ worker_thread+0x26c/0x4c8<br>
+ kthread+0x13c/0x320<br>
+ ret_from_fork+0x10/0x18<br>
+<br>
+Fix this by registering ufs device wlun as a scsi driver and<br>
+registering it for block runtime-pm. Also make this as a<br>
+supplier for all other luns. That way, this device wlun<br>
+suspends after all the consumers and resumes after<br>
+hba resumes.<br>
+<br>
+Co-developed-by: Can Guo <cang@xxxxxxxxxxxxxx><br>
+Signed-off-by: Can Guo <cang@xxxxxxxxxxxxxx><br>
+Signed-off-by: Asutosh Das <asutoshd@xxxxxxxxxxxxxx><br>
+---<br>
+ drivers/scsi/ufs/cdns-pltfrm.c     |   2 +<br>
+ drivers/scsi/ufs/tc-dwc-g210-pci.c |   2 +<br>
+ drivers/scsi/ufs/ufs-debugfs.c     |   6 +-<br>
+ drivers/scsi/ufs/ufs-debugfs.h     |   2 +-<br>
+ drivers/scsi/ufs/ufs-exynos.c      |   2 +<br>
+ drivers/scsi/ufs/ufs-hisi.c        |   2 +<br>
+ drivers/scsi/ufs/ufs-mediatek.c    |  12 +-<br>
+ drivers/scsi/ufs/ufs-qcom.c        |   2 +<br>
+ drivers/scsi/ufs/ufs_bsg.c         |   6 +-<br>
+ drivers/scsi/ufs/ufshcd-pci.c      |  36 +--<br>
+ drivers/scsi/ufs/ufshcd.c          | 642 ++++++++++++++++++++++++++-----------<br>
+ drivers/scsi/ufs/ufshcd.h          |   6 +<br>
+ include/trace/events/ufs.h         |  20 ++<br>
+ 13 files changed, 509 insertions(+), 231 deletions(-)<br>
+<br>
+diff --git a/drivers/scsi/ufs/cdns-pltfrm.c b/drivers/scsi/ufs/cdns-pltfrm.c<br>
+index 13d9204..b9105e4 100644<br>
+--- a/drivers/scsi/ufs/cdns-pltfrm.c<br>
++++ b/drivers/scsi/ufs/cdns-pltfrm.c<br>
+@@ -323,6 +323,8 @@ static const struct dev_pm_ops cdns_ufs_dev_pm_ops = {<br>
+ 	.runtime_suspend = ufshcd_pltfrm_runtime_suspend,<br>
+ 	.runtime_resume  = ufshcd_pltfrm_runtime_resume,<br>
+ 	.runtime_idle    = ufshcd_pltfrm_runtime_idle,<br>
++	.prepare	 = ufshcd_suspend_prepare,<br>
++	.complete	= ufshcd_resume_complete,<br>
+ };<br>
+ <br>
+ static struct platform_driver cdns_ufs_pltfrm_driver = {<br>
+diff --git a/drivers/scsi/ufs/tc-dwc-g210-pci.c b/drivers/scsi/ufs/tc-dwc-g210-pci.c<br>
+index 67a6a61..b01db12 100644<br>
+--- a/drivers/scsi/ufs/tc-dwc-g210-pci.c<br>
++++ b/drivers/scsi/ufs/tc-dwc-g210-pci.c<br>
+@@ -148,6 +148,8 @@ static const struct dev_pm_ops tc_dwc_g210_pci_pm_ops = {<br>
+ 	.runtime_suspend = tc_dwc_g210_pci_runtime_suspend,<br>
+ 	.runtime_resume  = tc_dwc_g210_pci_runtime_resume,<br>
+ 	.runtime_idle    = tc_dwc_g210_pci_runtime_idle,<br>
++	.prepare	 = ufshcd_suspend_prepare,<br>
++	.complete	= ufshcd_resume_complete,<br>
+ };<br>
+ <br>
+ static const struct pci_device_id tc_dwc_g210_pci_tbl[] = {<br>
+diff --git a/drivers/scsi/ufs/ufs-debugfs.c b/drivers/scsi/ufs/ufs-debugfs.c<br>
+index ced9ef4..1e8d92b 100644<br>
+--- a/drivers/scsi/ufs/ufs-debugfs.c<br>
++++ b/drivers/scsi/ufs/ufs-debugfs.c<br>
+@@ -13,7 +13,7 @@ void __init ufs_debugfs_init(void)<br>
+ 	ufs_debugfs_root = debugfs_create_dir("ufshcd", NULL);<br>
+ }<br>
+ <br>
+-void __exit ufs_debugfs_exit(void)<br>
++void ufs_debugfs_exit(void)<br>
+ {<br>
+ 	debugfs_remove_recursive(ufs_debugfs_root);<br>
+ }<br>
+@@ -60,14 +60,14 @@ __acquires(&hba->host_sem)<br>
+ 		up(&hba->host_sem);<br>
+ 		return -EBUSY;<br>
+ 	}<br>
+-	pm_runtime_get_sync(hba->dev);<br>
++	scsi_autopm_get_device(hba->sdev_ufs_device);<br>
+ 	return 0;<br>
+ }<br>
+ <br>
+ static void ufs_debugfs_put_user_access(struct ufs_hba *hba)<br>
+ __releases(&hba->host_sem)<br>
+ {<br>
+-	pm_runtime_put_sync(hba->dev);<br>
++	scsi_autopm_put_device(hba->sdev_ufs_device);<br>
+ 	up(&hba->host_sem);<br>
+ }<br>
+ <br>
+diff --git a/drivers/scsi/ufs/ufs-debugfs.h b/drivers/scsi/ufs/ufs-debugfs.h<br>
+index 3ca29d3..97548a3 100644<br>
+--- a/drivers/scsi/ufs/ufs-debugfs.h<br>
++++ b/drivers/scsi/ufs/ufs-debugfs.h<br>
+@@ -9,7 +9,7 @@ struct ufs_hba;<br>
+ <br>
+ #ifdef CONFIG_DEBUG_FS<br>
+ void __init ufs_debugfs_init(void);<br>
+-void __exit ufs_debugfs_exit(void);<br>
++void ufs_debugfs_exit(void);<br>
+ void ufs_debugfs_hba_init(struct ufs_hba *hba);<br>
+ void ufs_debugfs_hba_exit(struct ufs_hba *hba);<br>
+ void ufs_debugfs_exception_event(struct ufs_hba *hba, u16 status);<br>
+diff --git a/drivers/scsi/ufs/ufs-exynos.c b/drivers/scsi/ufs/ufs-exynos.c<br>
+index 70647ea..49a918c 100644<br>
+--- a/drivers/scsi/ufs/ufs-exynos.c<br>
++++ b/drivers/scsi/ufs/ufs-exynos.c<br>
+@@ -1267,6 +1267,8 @@ static const struct dev_pm_ops exynos_ufs_pm_ops = {<br>
+ 	.runtime_suspend = ufshcd_pltfrm_runtime_suspend,<br>
+ 	.runtime_resume  = ufshcd_pltfrm_runtime_resume,<br>
+ 	.runtime_idle    = ufshcd_pltfrm_runtime_idle,<br>
++	.prepare	 = ufshcd_suspend_prepare,<br>
++	.complete	= ufshcd_resume_complete,<br>
+ };<br>
+ <br>
+ static struct platform_driver exynos_ufs_pltform = {<br>
+diff --git a/drivers/scsi/ufs/ufs-hisi.c b/drivers/scsi/ufs/ufs-hisi.c<br>
+index 0aa5813..d463b44 100644<br>
+--- a/drivers/scsi/ufs/ufs-hisi.c<br>
++++ b/drivers/scsi/ufs/ufs-hisi.c<br>
+@@ -574,6 +574,8 @@ static const struct dev_pm_ops ufs_hisi_pm_ops = {<br>
+ 	.runtime_suspend = ufshcd_pltfrm_runtime_suspend,<br>
+ 	.runtime_resume  = ufshcd_pltfrm_runtime_resume,<br>
+ 	.runtime_idle    = ufshcd_pltfrm_runtime_idle,<br>
++	.prepare	 = ufshcd_suspend_prepare,<br>
++	.complete	= ufshcd_resume_complete,<br>
+ };<br>
+ <br>
+ static struct platform_driver ufs_hisi_pltform = {<br>
+diff --git a/drivers/scsi/ufs/ufs-mediatek.c b/drivers/scsi/ufs/ufs-mediatek.c<br>
+index a981f26..4862a7b 100644<br>
+--- a/drivers/scsi/ufs/ufs-mediatek.c<br>
++++ b/drivers/scsi/ufs/ufs-mediatek.c<br>
+@@ -810,12 +810,10 @@ static int ufs_mtk_post_link(struct ufs_hba *hba)<br>
+ 	/* enable unipro clock gating feature */<br>
+ 	ufs_mtk_cfg_unipro_cg(hba, true);<br>
+ <br>
+-	/* configure auto-hibern8 timer to 10ms */<br>
+-	if (ufshcd_is_auto_hibern8_supported(hba)) {<br>
+-		ufshcd_auto_hibern8_update(hba,<br>
+-			FIELD_PREP(UFSHCI_AHIBERN8_TIMER_MASK, 10) |<br>
+-			FIELD_PREP(UFSHCI_AHIBERN8_SCALE_MASK, 3));<br>
+-	}<br>
++	/* will be configured during probe hba */<br>
++	if (ufshcd_is_auto_hibern8_supported(hba))<br>
++		hba->ahit = FIELD_PREP(UFSHCI_AHIBERN8_TIMER_MASK, 10) |<br>
++			FIELD_PREP(UFSHCI_AHIBERN8_SCALE_MASK, 3);<br>
+ <br>
+ 	ufs_mtk_setup_clk_gating(hba);<br>
+ <br>
+@@ -1097,6 +1095,8 @@ static const struct dev_pm_ops ufs_mtk_pm_ops = {<br>
+ 	.runtime_suspend = ufshcd_pltfrm_runtime_suspend,<br>
+ 	.runtime_resume  = ufshcd_pltfrm_runtime_resume,<br>
+ 	.runtime_idle    = ufshcd_pltfrm_runtime_idle,<br>
++	.prepare	 = ufshcd_suspend_prepare,<br>
++	.complete	= ufshcd_resume_complete,<br>
+ };<br>
+ <br>
+ static struct platform_driver ufs_mtk_pltform = {<br>
+diff --git a/drivers/scsi/ufs/ufs-qcom.c b/drivers/scsi/ufs/ufs-qcom.c<br>
+index 9b711d6..6651b87 100644<br>
+--- a/drivers/scsi/ufs/ufs-qcom.c<br>
++++ b/drivers/scsi/ufs/ufs-qcom.c<br>
+@@ -1556,6 +1556,8 @@ static const struct dev_pm_ops ufs_qcom_pm_ops = {<br>
+ 	.runtime_suspend = ufshcd_pltfrm_runtime_suspend,<br>
+ 	.runtime_resume  = ufshcd_pltfrm_runtime_resume,<br>
+ 	.runtime_idle    = ufshcd_pltfrm_runtime_idle,<br>
++	.prepare	 = ufshcd_suspend_prepare,<br>
++	.complete	= ufshcd_resume_complete,<br>
+ };<br>
+ <br>
+ static struct platform_driver ufs_qcom_pltform = {<br>
+diff --git a/drivers/scsi/ufs/ufs_bsg.c b/drivers/scsi/ufs/ufs_bsg.c<br>
+index 5b2bc1a..cbb5a90 100644<br>
+--- a/drivers/scsi/ufs/ufs_bsg.c<br>
++++ b/drivers/scsi/ufs/ufs_bsg.c<br>
+@@ -97,7 +97,7 @@ static int ufs_bsg_request(struct bsg_job *job)<br>
+ <br>
+ 	bsg_reply->reply_payload_rcv_len = 0;<br>
+ <br>
+-	pm_runtime_get_sync(hba->dev);<br>
++	scsi_autopm_get_device(hba->sdev_ufs_device);<br>
+ <br>
+ 	msgcode = bsg_request->msgcode;<br>
+ 	switch (msgcode) {<br>
+@@ -106,7 +106,7 @@ static int ufs_bsg_request(struct bsg_job *job)<br>
+ 		ret = ufs_bsg_alloc_desc_buffer(hba, job, &desc_buff,<br>
+ 						&desc_len, desc_op);<br>
+ 		if (ret) {<br>
+-			pm_runtime_put_sync(hba->dev);<br>
++			scsi_autopm_put_device(hba->sdev_ufs_device);<br>
+ 			goto out;<br>
+ 		}<br>
+ <br>
+@@ -138,7 +138,7 @@ static int ufs_bsg_request(struct bsg_job *job)<br>
+ 		break;<br>
+ 	}<br>
+ <br>
+-	pm_runtime_put_sync(hba->dev);<br>
++	scsi_autopm_put_device(hba->sdev_ufs_device);<br>
+ <br>
+ 	if (!desc_buff)<br>
+ 		goto out;<br>
+diff --git a/drivers/scsi/ufs/ufshcd-pci.c b/drivers/scsi/ufs/ufshcd-pci.c<br>
+index 23ee828..e6c334b 100644<br>
+--- a/drivers/scsi/ufs/ufshcd-pci.c<br>
++++ b/drivers/scsi/ufs/ufshcd-pci.c<br>
+@@ -410,29 +410,6 @@ static int ufshcd_pci_resume(struct device *dev)<br>
+ 	return ufshcd_system_resume(dev_get_drvdata(dev));<br>
+ }<br>
+ <br>
+-/**<br>
+- * ufshcd_pci_poweroff - suspend-to-disk poweroff function<br>
+- * @dev: pointer to PCI device handle<br>
+- *<br>
+- * Returns 0 if successful<br>
+- * Returns non-zero otherwise<br>
+- */<br>
+-static int ufshcd_pci_poweroff(struct device *dev)<br>
+-{<br>
+-	struct ufs_hba *hba = dev_get_drvdata(dev);<br>
+-	int spm_lvl = hba->spm_lvl;<br>
+-	int ret;<br>
+-<br>
+-	/*<br>
+-	 * For poweroff we need to set the UFS device to PowerDown mode.<br>
+-	 * Force spm_lvl to ensure that.<br>
+-	 */<br>
+-	hba->spm_lvl = 5;<br>
+-	ret = ufshcd_system_suspend(hba);<br>
+-	hba->spm_lvl = spm_lvl;<br>
+-	return ret;<br>
+-}<br>
+-<br>
+ #endif /* !CONFIG_PM_SLEEP */<br>
+ <br>
+ #ifdef CONFIG_PM<br>
+@@ -533,17 +510,14 @@ ufshcd_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)<br>
+ }<br>
+ <br>
+ static const struct dev_pm_ops ufshcd_pci_pm_ops = {<br>
+-#ifdef CONFIG_PM_SLEEP<br>
+-	.suspend	= ufshcd_pci_suspend,<br>
+-	.resume		= ufshcd_pci_resume,<br>
+-	.freeze		= ufshcd_pci_suspend,<br>
+-	.thaw		= ufshcd_pci_resume,<br>
+-	.poweroff	= ufshcd_pci_poweroff,<br>
+-	.restore	= ufshcd_pci_resume,<br>
+-#endif<br>
+ 	SET_RUNTIME_PM_OPS(ufshcd_pci_runtime_suspend,<br>
+ 			   ufshcd_pci_runtime_resume,<br>
+ 			   ufshcd_pci_runtime_idle)<br>
++	SET_SYSTEM_SLEEP_PM_OPS(ufshcd_pci_suspend, ufshcd_pci_resume)<br>
++#ifdef CONFIG_PM_SLEEP<br>
++	.prepare	= ufshcd_suspend_prepare,<br>
++	.complete	= ufshcd_resume_complete,<br>
++#endif<br>
+ };<br>
+ <br>
+ static const struct pci_device_id ufshcd_pci_tbl[] = {<br>
+diff --git a/drivers/scsi/ufs/ufshcd.c b/drivers/scsi/ufs/ufshcd.c<br>
+index 0625da7..a0e6478 100644<br>
+--- a/drivers/scsi/ufs/ufshcd.c<br>
++++ b/drivers/scsi/ufs/ufshcd.c<br>
+@@ -16,6 +16,7 @@<br>
+ #include <linux/bitfield.h><br>
+ #include <linux/blk-pm.h><br>
+ #include <linux/blkdev.h><br>
++#include <scsi/scsi_driver.h><br>
+ #include "ufshcd.h"<br>
+ #include "ufs_quirks.h"<br>
+ #include "unipro.h"<br>
+@@ -77,6 +78,8 @@<br>
+ /* Polling time to wait for fDeviceInit */<br>
+ #define FDEVICEINIT_COMPL_TIMEOUT 1500 /* millisecs */<br>
+ <br>
++#define wlun_dev_to_hba(dv) shost_priv(to_scsi_device(dv)->host)<br>
++<br>
+ #define ufshcd_toggle_vreg(_dev, _vreg, _on)				\<br>
+ 	({                                                              \<br>
+ 		int _ret;                                               \<br>
+@@ -1551,7 +1554,7 @@ static ssize_t ufshcd_clkscale_enable_store(struct device *dev,<br>
+ 	if (value == hba->clk_scaling.is_enabled)<br>
+ 		goto out;<br>
+ <br>
+-	pm_runtime_get_sync(hba->dev);<br>
++	scsi_autopm_get_device(hba->sdev_ufs_device);<br>
+ 	ufshcd_hold(hba, false);<br>
+ <br>
+ 	hba->clk_scaling.is_enabled = value;<br>
+@@ -1567,7 +1570,7 @@ static ssize_t ufshcd_clkscale_enable_store(struct device *dev,<br>
+ 	}<br>
+ <br>
+ 	ufshcd_release(hba);<br>
+-	pm_runtime_put_sync(hba->dev);<br>
++	scsi_autopm_put_device(hba->sdev_ufs_device);<br>
+ out:<br>
+ 	up(&hba->host_sem);<br>
+ 	return err ? err : count;<br>
+@@ -2565,6 +2568,17 @@ static inline u16 ufshcd_upiu_wlun_to_scsi_wlun(u8 upiu_wlun_id)<br>
+ 	return (upiu_wlun_id & ~UFS_UPIU_WLUN_ID) | SCSI_W_LUN_BASE;<br>
+ }<br>
+ <br>
++static inline bool is_rpmb_wlun(struct scsi_device *sdev)<br>
++{<br>
++	return (sdev->lun == ufshcd_upiu_wlun_to_scsi_wlun(UFS_UPIU_RPMB_WLUN));<br>
++}<br>
++<br>
++static inline bool is_device_wlun(struct scsi_device *sdev)<br>
++{<br>
++	return (sdev->lun ==<br>
++		ufshcd_upiu_wlun_to_scsi_wlun(UFS_UPIU_UFS_DEVICE_WLUN));<br>
++}<br>
++<br>
+ static void ufshcd_init_lrb(struct ufs_hba *hba, struct ufshcd_lrb *lrb, int i)<br>
+ {<br>
+ 	struct utp_transfer_cmd_desc *cmd_descp = hba->ucdl_base_addr;<br>
+@@ -4098,12 +4112,13 @@ void ufshcd_auto_hibern8_update(struct ufs_hba *hba, u32 ahit)<br>
+ 	}<br>
+ 	spin_unlock_irqrestore(hba->host->host_lock, flags);<br>
+ <br>
+-	if (update && !pm_runtime_suspended(hba->dev)) {<br>
+-		pm_runtime_get_sync(hba->dev);<br>
++	if (update &&<br>
++	    !pm_runtime_suspended(&hba->sdev_ufs_device->sdev_gendev)) {<br>
++		scsi_autopm_get_device(hba->sdev_ufs_device);<br>
+ 		ufshcd_hold(hba, false);<br>
+ 		ufshcd_auto_hibern8_enable(hba);<br>
+ 		ufshcd_release(hba);<br>
+-		pm_runtime_put(hba->dev);<br>
++		scsi_autopm_put_device(hba->sdev_ufs_device);<br>
+ 	}<br>
+ }<br>
+ EXPORT_SYMBOL_GPL(ufshcd_auto_hibern8_update);<br>
+@@ -4801,6 +4816,40 @@ static inline void ufshcd_get_lu_power_on_wp_status(struct ufs_hba *hba,<br>
+ }<br>
+ <br>
+ /**<br>
++ * ufshcd_setup_links - associate link b/w device wlun and other luns<br>
++ * @sdev: pointer to SCSI device<br>
++ * @hba: pointer to ufs hba<br>
++ */<br>
++static void ufshcd_setup_links(struct ufs_hba *hba, struct scsi_device *sdev)<br>
++{<br>
++	struct device_link *link;<br>
++<br>
++	/*<br>
++	 * device wlun is the supplier & rest of the luns are consumers<br>
++	 * This ensures that device wlun suspends after all other luns.<br>
++	 */<br>
++	if (hba->sdev_ufs_device) {<br>
++		link = device_link_add(&sdev->sdev_gendev,<br>
++				       &hba->sdev_ufs_device->sdev_gendev,<br>
++				       DL_FLAG_PM_RUNTIME|DL_FLAG_RPM_ACTIVE);<br>
++		if (!link) {<br>
++			dev_err(&sdev->sdev_gendev, "Failed establishing link - %s\n",<br>
++				dev_name(&hba->sdev_ufs_device->sdev_gendev));<br>
++			return;<br>
++		}<br>
++		hba->luns_avail--;<br>
++		/* Ignore REPORT_LUN wlun probing */<br>
++		if (hba->luns_avail == 1) {<br>
++			pm_runtime_put(&hba->sdev_ufs_device->sdev_gendev);<br>
++			return;<br>
++		}<br>
++	} else {<br>
++		/* device wlun is probed */<br>
++		hba->luns_avail--;<br>
++	}<br>
++}<br>
++<br>
++/**<br>
+  * ufshcd_slave_alloc - handle initial SCSI device configurations<br>
+  * @sdev: pointer to SCSI device<br>
+  *<br>
+@@ -4831,6 +4880,8 @@ static int ufshcd_slave_alloc(struct scsi_device *sdev)<br>
+ <br>
+ 	ufshcd_get_lu_power_on_wp_status(hba, sdev);<br>
+ <br>
++	ufshcd_setup_links(hba, sdev);<br>
++<br>
+ 	return 0;<br>
+ }<br>
+ <br>
+@@ -4862,8 +4913,13 @@ static int ufshcd_slave_configure(struct scsi_device *sdev)<br>
+ 	blk_queue_update_dma_pad(q, PRDT_DATA_BYTE_COUNT_PAD - 1);<br>
+ 	if (hba->quirks & UFSHCD_QUIRK_ALIGN_SG_WITH_PAGE_SIZE)<br>
+ 		blk_queue_update_dma_alignment(q, PAGE_SIZE - 1);<br>
+-<br>
+-	if (ufshcd_is_rpm_autosuspend_allowed(hba))<br>
++	/*<br>
++	 * Block runtime-pm until all consumers are added.<br>
++	 * Refer ufshcd_setup_links().<br>
++	 */<br>
++	if (is_device_wlun(sdev))<br>
++		pm_runtime_get_noresume(&sdev->sdev_gendev);<br>
++	else if (ufshcd_is_rpm_autosuspend_allowed(hba))<br>
+ 		sdev->rpm_autosuspend = 1;<br>
+ <br>
+ 	ufshcd_crypto_setup_rq_keyslot_manager(hba, q);<br>
+@@ -4979,15 +5035,9 @@ ufshcd_transfer_rsp_status(struct ufs_hba *hba, struct ufshcd_lrb *lrbp)<br>
+ 			 */<br>
+ 			if (!hba->pm_op_in_progress &&<br>
+ 			    !ufshcd_eh_in_progress(hba) &&<br>
+-			    ufshcd_is_exception_event(lrbp->ucd_rsp_ptr) &&<br>
+-			    schedule_work(&hba->eeh_work)) {<br>
+-				/*<br>
+-				 * Prevent suspend once eeh_work is scheduled<br>
+-				 * to avoid deadlock between ufshcd_suspend<br>
+-				 * and exception event handler.<br>
+-				 */<br>
+-				pm_runtime_get_noresume(hba->dev);<br>
+-			}<br>
++			    ufshcd_is_exception_event(lrbp->ucd_rsp_ptr))<br>
++				/* Flushed in suspend */<br>
++				schedule_work(&hba->eeh_work);<br>
+ 			break;<br>
+ 		case UPIU_TRANSACTION_REJECT_UPIU:<br>
+ 			/* TODO: handle Reject UPIU Response */<br>
+@@ -5586,8 +5636,8 @@ static void ufshcd_rpm_dev_flush_recheck_work(struct work_struct *work)<br>
+ 	 * after a certain delay to recheck the threshold by next runtime<br>
+ 	 * suspend.<br>
+ 	 */<br>
+-	pm_runtime_get_sync(hba->dev);<br>
+-	pm_runtime_put_sync(hba->dev);<br>
++	scsi_autopm_get_device(hba->sdev_ufs_device);<br>
++	scsi_autopm_put_device(hba->sdev_ufs_device);<br>
+ }<br>
+ <br>
+ /**<br>
+@@ -5604,7 +5654,6 @@ static void ufshcd_exception_event_handler(struct work_struct *work)<br>
+ 	u32 status = 0;<br>
+ 	hba = container_of(work, struct ufs_hba, eeh_work);<br>
+ <br>
+-	pm_runtime_get_sync(hba->dev);<br>
+ 	ufshcd_scsi_block_requests(hba);<br>
+ 	err = ufshcd_get_ee_status(hba, &status);<br>
+ 	if (err) {<br>
+@@ -5621,14 +5670,6 @@ static void ufshcd_exception_event_handler(struct work_struct *work)<br>
+ 	ufs_debugfs_exception_event(hba, status);<br>
+ out:<br>
+ 	ufshcd_scsi_unblock_requests(hba);<br>
+-	/*<br>
+-	 * pm_runtime_get_noresume is called while scheduling<br>
+-	 * eeh_work to avoid suspend racing with exception work.<br>
+-	 * Hence decrement usage counter using pm_runtime_put_noidle<br>
+-	 * to allow suspend on completion of exception event handler.<br>
+-	 */<br>
+-	pm_runtime_put_noidle(hba->dev);<br>
+-	pm_runtime_put(hba->dev);<br>
+ 	return;<br>
+ }<br>
+ <br>
+@@ -5753,12 +5794,13 @@ static void ufshcd_clk_scaling_suspend(struct ufs_hba *hba, bool suspend)<br>
+ <br>
+ static void ufshcd_err_handling_prepare(struct ufs_hba *hba)<br>
+ {<br>
+-	pm_runtime_get_sync(hba->dev);<br>
+-	if (pm_runtime_status_suspended(hba->dev) || hba->is_sys_suspended) {<br>
++	scsi_autopm_get_device(hba->sdev_ufs_device);<br>
++	if (pm_runtime_status_suspended(&hba->sdev_ufs_device->sdev_gendev) ||<br>
++	    hba->is_sys_suspended) {<br>
+ 		enum ufs_pm_op pm_op;<br>
+ <br>
+ 		/*<br>
+-		 * Don't assume anything of pm_runtime_get_sync(), if<br>
++		 * Don't assume anything of resume, if<br>
+ 		 * resume fails, irq and clocks can be OFF, and powers<br>
+ 		 * can be OFF or in LPM.<br>
+ 		 */<br>
+@@ -5794,7 +5836,7 @@ static void ufshcd_err_handling_unprepare(struct ufs_hba *hba)<br>
+ 	if (ufshcd_is_clkscaling_supported(hba))<br>
+ 		ufshcd_clk_scaling_suspend(hba, false);<br>
+ 	ufshcd_clear_ua_wluns(hba);<br>
+-	pm_runtime_put(hba->dev);<br>
++	pm_runtime_put(&hba->sdev_ufs_device->sdev_gendev);<br>
+ }<br>
+ <br>
+ static inline bool ufshcd_err_handling_should_stop(struct ufs_hba *hba)<br>
+@@ -5815,14 +5857,14 @@ static void ufshcd_recover_pm_error(struct ufs_hba *hba)<br>
+ <br>
+ 	hba->is_sys_suspended = false;<br>
+ 	/*<br>
+-	 * Set RPM status of hba device to RPM_ACTIVE,<br>
++	 * Set RPM status of wlun device to RPM_ACTIVE,<br>
+ 	 * this also clears its runtime error.<br>
+ 	 */<br>
+-	ret = pm_runtime_set_active(hba->dev);<br>
++	ret = pm_runtime_set_active(&hba->sdev_ufs_device->sdev_gendev);<br>
+ 	/*<br>
+-	 * If hba device had runtime error, we also need to resume those<br>
+-	 * scsi devices under hba in case any of them has failed to be<br>
+-	 * resumed due to hba runtime resume failure. This is to unblock<br>
++	 * If wlun device had runtime error, we also need to resume those<br>
++	 * consumer scsi devices in case any of them has failed to be<br>
++	 * resumed due to supplier runtime resume failure. This is to unblock<br>
+ 	 * blk_queue_enter in case there are bios waiting inside it.<br>
+ 	 */<br>
+ 	if (!ret) {<br>
+@@ -7246,7 +7288,6 @@ static int ufshcd_scsi_add_wlus(struct ufs_hba *hba)<br>
+ 		hba->sdev_ufs_device = NULL;<br>
+ 		goto out;<br>
+ 	}<br>
+-	ufshcd_blk_pm_runtime_init(hba->sdev_ufs_device);<br>
+ 	scsi_device_put(hba->sdev_ufs_device);<br>
+ <br>
+ 	hba->sdev_rpmb = __scsi_add_device(hba->host, 0, 0,<br>
+@@ -7410,6 +7451,9 @@ static int ufs_get_device_desc(struct ufs_hba *hba)<br>
+ 		goto out;<br>
+ 	}<br>
+ <br>
++	hba->luns_avail = desc_buf[DEVICE_DESC_PARAM_NUM_LU] +<br>
++		desc_buf[DEVICE_DESC_PARAM_NUM_WLU];<br>
++<br>
+ 	ufs_fixup_device_setup(hba);<br>
+ <br>
+ 	ufshcd_wb_probe(hba, desc_buf);<br>
+@@ -7887,6 +7931,7 @@ static int ufshcd_probe_hba(struct ufs_hba *hba, bool async)<br>
+ 	ufshcd_set_ufs_dev_active(hba);<br>
+ 	ufshcd_force_reset_auto_bkops(hba);<br>
+ 	hba->wlun_dev_clr_ua = true;<br>
++	hba->wlun_rpmb_clr_ua = true;<br>
+ <br>
+ 	/* Gear up to HS gear if supported */<br>
+ 	if (hba->max_pwr_info.is_valid) {<br>
+@@ -8472,7 +8517,8 @@ static int ufshcd_set_dev_pwr_mode(struct ufs_hba *hba,<br>
+ 	 * handling context.<br>
+ 	 */<br>
+ 	hba->host->eh_noresume = 1;<br>
+-	ufshcd_clear_ua_wluns(hba);<br>
++	if (hba->wlun_dev_clr_ua)<br>
++		ufshcd_clear_ua_wlun(hba, UFS_UPIU_UFS_DEVICE_WLUN);<br>
+ <br>
+ 	cmd[4] = pwr_mode << 4;<br>
+ <br>
+@@ -8647,23 +8693,7 @@ static void ufshcd_hba_vreg_set_hpm(struct ufs_hba *hba)<br>
+ 		ufshcd_setup_hba_vreg(hba, true);<br>
+ }<br>
+ <br>
+-/**<br>
+- * ufshcd_suspend - helper function for suspend operations<br>
+- * @hba: per adapter instance<br>
+- * @pm_op: desired low power operation type<br>
+- *<br>
+- * This function will try to put the UFS device and link into low power<br>
+- * mode based on the "rpm_lvl" (Runtime PM level) or "spm_lvl"<br>
+- * (System PM level).<br>
+- *<br>
+- * If this function is called during shutdown, it will make sure that<br>
+- * both UFS device and UFS link is powered off.<br>
+- *<br>
+- * NOTE: UFS device & link must be active before we enter in this function.<br>
+- *<br>
+- * Returns 0 for success and non-zero for failure<br>
+- */<br>
+-static int ufshcd_suspend(struct ufs_hba *hba, enum ufs_pm_op pm_op)<br>
++static int __ufshcd_wl_suspend(struct ufs_hba *hba, enum ufs_pm_op pm_op)<br>
+ {<br>
+ 	int ret = 0;<br>
+ 	int check_for_bkops;<br>
+@@ -8671,7 +8701,7 @@ static int ufshcd_suspend(struct ufs_hba *hba, enum ufs_pm_op pm_op)<br>
+ 	enum ufs_dev_pwr_mode req_dev_pwr_mode;<br>
+ 	enum uic_link_state req_link_state;<br>
+ <br>
+-	hba->pm_op_in_progress = 1;<br>
++	hba->pm_op_in_progress = true;<br>
+ 	if (!ufshcd_is_shutdown_pm(pm_op)) {<br>
+ 		pm_lvl = ufshcd_is_runtime_pm(pm_op) ?<br>
+ 			 hba->rpm_lvl : hba->spm_lvl;<br>
+@@ -8694,17 +8724,17 @@ static int ufshcd_suspend(struct ufs_hba *hba, enum ufs_pm_op pm_op)<br>
+ <br>
+ 	if (req_dev_pwr_mode == UFS_ACTIVE_PWR_MODE &&<br>
+ 			req_link_state == UIC_LINK_ACTIVE_STATE) {<br>
+-		goto disable_clks;<br>
++		goto enable_scaling;<br>
+ 	}<br>
+ <br>
+ 	if ((req_dev_pwr_mode == hba->curr_dev_pwr_mode) &&<br>
+ 	    (req_link_state == hba->uic_link_state))<br>
+-		goto enable_gating;<br>
++		goto enable_scaling;<br>
+ <br>
+ 	/* UFS device & link must be active before we enter in this function */<br>
+ 	if (!ufshcd_is_ufs_dev_active(hba) || !ufshcd_is_link_active(hba)) {<br>
+ 		ret = -EINVAL;<br>
+-		goto enable_gating;<br>
++		goto enable_scaling;<br>
+ 	}<br>
+ <br>
+ 	if (ufshcd_is_runtime_pm(pm_op)) {<br>
+@@ -8716,7 +8746,7 @@ static int ufshcd_suspend(struct ufs_hba *hba, enum ufs_pm_op pm_op)<br>
+ 			 */<br>
+ 			ret = ufshcd_urgent_bkops(hba);<br>
+ 			if (ret)<br>
+-				goto enable_gating;<br>
++				goto enable_scaling;<br>
+ 		} else {<br>
+ 			/* make sure that auto bkops is disabled */<br>
+ 			ufshcd_disable_auto_bkops(hba);<br>
+@@ -8744,7 +8774,7 @@ static int ufshcd_suspend(struct ufs_hba *hba, enum ufs_pm_op pm_op)<br>
+ 		if (!hba->dev_info.b_rpm_dev_flush_capable) {<br>
+ 			ret = ufshcd_set_dev_pwr_mode(hba, req_dev_pwr_mode);<br>
+ 			if (ret)<br>
+-				goto enable_gating;<br>
++				goto enable_scaling;<br>
+ 		}<br>
+ 	}<br>
+ <br>
+@@ -8757,7 +8787,6 @@ static int ufshcd_suspend(struct ufs_hba *hba, enum ufs_pm_op pm_op)<br>
+ 	if (ret)<br>
+ 		goto set_dev_active;<br>
+ <br>
+-disable_clks:<br>
+ 	/*<br>
+ 	 * Call vendor specific suspend callback. As these callbacks may access<br>
+ 	 * vendor specific host controller register space call them before the<br>
+@@ -8766,28 +8795,9 @@ static int ufshcd_suspend(struct ufs_hba *hba, enum ufs_pm_op pm_op)<br>
+ 	ret = ufshcd_vops_suspend(hba, pm_op);<br>
+ 	if (ret)<br>
+ 		goto set_link_active;<br>
+-	/*<br>
+-	 * Disable the host irq as host controller as there won't be any<br>
+-	 * host controller transaction expected till resume.<br>
+-	 */<br>
+-	ufshcd_disable_irq(hba);<br>
+-<br>
+-	ufshcd_setup_clocks(hba, false);<br>
+-<br>
+-	if (ufshcd_is_clkgating_allowed(hba)) {<br>
+-		hba->clk_gating.state = CLKS_OFF;<br>
+-		trace_ufshcd_clk_gating(dev_name(hba->dev),<br>
+-					hba->clk_gating.state);<br>
+-	}<br>
+-<br>
+-	ufshcd_vreg_set_lpm(hba);<br>
+-<br>
+-	/* Put the host controller in low power mode if possible */<br>
+-	ufshcd_hba_vreg_set_lpm(hba);<br>
+ 	goto out;<br>
+ <br>
+ set_link_active:<br>
+-	ufshcd_vreg_set_hpm(hba);<br>
+ 	/*<br>
+ 	 * Device hardware reset is required to exit DeepSleep. Also, for<br>
+ 	 * DeepSleep, the link is off so host reset and restore will be done<br>
+@@ -8809,57 +8819,32 @@ static int ufshcd_suspend(struct ufs_hba *hba, enum ufs_pm_op pm_op)<br>
+ 	}<br>
+ 	if (!ufshcd_set_dev_pwr_mode(hba, UFS_ACTIVE_PWR_MODE))<br>
+ 		ufshcd_disable_auto_bkops(hba);<br>
+-enable_gating:<br>
++enable_scaling:<br>
+ 	if (ufshcd_is_clkscaling_supported(hba))<br>
+ 		ufshcd_clk_scaling_suspend(hba, false);<br>
+ <br>
+-	hba->clk_gating.is_suspended = false;<br>
+ 	hba->dev_info.b_rpm_dev_flush_capable = false;<br>
+-	ufshcd_clear_ua_wluns(hba);<br>
+-	ufshcd_release(hba);<br>
+ out:<br>
+ 	if (hba->dev_info.b_rpm_dev_flush_capable) {<br>
+ 		schedule_delayed_work(&hba->rpm_dev_flush_recheck_work,<br>
+ 			msecs_to_jiffies(RPM_DEV_FLUSH_RECHECK_WORK_DELAY_MS));<br>
+ 	}<br>
+ <br>
+-	hba->pm_op_in_progress = 0;<br>
+-<br>
+-	if (ret)<br>
+-		ufshcd_update_evt_hist(hba, UFS_EVT_SUSPEND_ERR, (u32)ret);<br>
++	if (ret) {<br>
++		ufshcd_update_evt_hist(hba, UFS_EVT_WL_SUSP_ERR, (u32)ret);<br>
++		hba->clk_gating.is_suspended = false;<br>
++		ufshcd_release(hba);<br>
++	}<br>
++	hba->pm_op_in_progress = false;<br>
+ 	return ret;<br>
+ }<br>
+ <br>
+-/**<br>
+- * ufshcd_resume - helper function for resume operations<br>
+- * @hba: per adapter instance<br>
+- * @pm_op: runtime PM or system PM<br>
+- *<br>
+- * This function basically brings the UFS device, UniPro link and controller<br>
+- * to active state.<br>
+- *<br>
+- * Returns 0 for success and non-zero for failure<br>
+- */<br>
+-static int ufshcd_resume(struct ufs_hba *hba, enum ufs_pm_op pm_op)<br>
++static int __ufshcd_wl_resume(struct ufs_hba *hba, enum ufs_pm_op pm_op)<br>
+ {<br>
+ 	int ret;<br>
+-	enum uic_link_state old_link_state;<br>
+-<br>
+-	hba->pm_op_in_progress = 1;<br>
+-	old_link_state = hba->uic_link_state;<br>
+-<br>
+-	ufshcd_hba_vreg_set_hpm(hba);<br>
+-	ret = ufshcd_vreg_set_hpm(hba);<br>
+-	if (ret)<br>
+-		goto out;<br>
++	enum uic_link_state old_link_state = hba->uic_link_state;<br>
+ <br>
+-	/* Make sure clocks are enabled before accessing controller */<br>
+-	ret = ufshcd_setup_clocks(hba, true);<br>
+-	if (ret)<br>
+-		goto disable_vreg;<br>
+-<br>
+-	/* enable the host irq as host controller would be active soon */<br>
+-	ufshcd_enable_irq(hba);<br>
++	hba->pm_op_in_progress = true;<br>
+ <br>
+ 	/*<br>
+ 	 * Call vendor specific resume callback. As these callbacks may access<br>
+@@ -8868,7 +8853,7 @@ static int ufshcd_resume(struct ufs_hba *hba, enum ufs_pm_op pm_op)<br>
+ 	 */<br>
+ 	ret = ufshcd_vops_resume(hba, pm_op);<br>
+ 	if (ret)<br>
+-		goto disable_irq_and_vops_clks;<br>
++		goto out;<br>
+ <br>
+ 	/* For DeepSleep, the only supported option is to have the link off */<br>
+ 	WARN_ON(ufshcd_is_ufs_dev_deepsleep(hba) && !ufshcd_is_link_off(hba));<br>
+@@ -8916,31 +8901,152 @@ static int ufshcd_resume(struct ufs_hba *hba, enum ufs_pm_op pm_op)<br>
+ 	if (hba->ee_usr_mask)<br>
+ 		ufshcd_write_ee_control(hba);<br>
+ <br>
+-	hba->clk_gating.is_suspended = false;<br>
+-<br>
+-	if (ufshcd_is_clkscaling_supported(hba))<br>
+-		ufshcd_clk_scaling_suspend(hba, false);<br>
+-<br>
+-	/* Enable Auto-Hibernate if configured */<br>
+-	ufshcd_auto_hibern8_enable(hba);<br>
++	if (hba->clk_scaling.is_allowed)<br>
++		ufshcd_resume_clkscaling(hba);<br>
+ <br>
+ 	if (hba->dev_info.b_rpm_dev_flush_capable) {<br>
+ 		hba->dev_info.b_rpm_dev_flush_capable = false;<br>
+ 		cancel_delayed_work(&hba->rpm_dev_flush_recheck_work);<br>
+ 	}<br>
+ <br>
+-	ufshcd_clear_ua_wluns(hba);<br>
+-<br>
+-	/* Schedule clock gating in case of no access to UFS device yet */<br>
+-	ufshcd_release(hba);<br>
+-<br>
++	/* Enable Auto-Hibernate if configured */<br>
++	ufshcd_auto_hibern8_enable(hba);<br>
+ 	goto out;<br>
+ <br>
+ set_old_link_state:<br>
+ 	ufshcd_link_state_transition(hba, old_link_state, 0);<br>
+ vendor_suspend:<br>
+ 	ufshcd_vops_suspend(hba, pm_op);<br>
+-disable_irq_and_vops_clks:<br>
++out:<br>
++	if (ret)<br>
++		ufshcd_update_evt_hist(hba, UFS_EVT_WL_RES_ERR, (u32)ret);<br>
++	hba->clk_gating.is_suspended = false;<br>
++	ufshcd_release(hba);<br>
++	hba->pm_op_in_progress = false;<br>
++	return ret;<br>
++}<br>
++<br>
++static int ufshcd_wl_runtime_suspend(struct device *dev)<br>
++{<br>
++	struct scsi_device *sdev = to_scsi_device(dev);<br>
++	struct ufs_hba *hba;<br>
++	int ret;<br>
++	ktime_t start = ktime_get();<br>
++<br>
++	hba = shost_priv(sdev->host);<br>
++<br>
++	ret = __ufshcd_wl_suspend(hba, UFS_RUNTIME_PM);<br>
++	if (ret)<br>
++		dev_err(&sdev->sdev_gendev, "%s failed: %d\n", __func__, ret);<br>
++<br>
++	trace_ufshcd_wl_runtime_suspend(dev_name(dev), ret,<br>
++		ktime_to_us(ktime_sub(ktime_get(), start)),<br>
++		hba->curr_dev_pwr_mode, hba->uic_link_state);<br>
++<br>
++	return ret;<br>
++}<br>
++<br>
++static int ufshcd_wl_runtime_resume(struct device *dev)<br>
++{<br>
++	struct scsi_device *sdev = to_scsi_device(dev);<br>
++	struct ufs_hba *hba;<br>
++	int ret = 0;<br>
++	ktime_t start = ktime_get();<br>
++<br>
++	hba = shost_priv(sdev->host);<br>
++<br>
++	ret = __ufshcd_wl_resume(hba, UFS_RUNTIME_PM);<br>
++	if (ret)<br>
++		dev_err(&sdev->sdev_gendev, "%s failed: %d\n", __func__, ret);<br>
++<br>
++	trace_ufshcd_wl_runtime_resume(dev_name(dev), ret,<br>
++		ktime_to_us(ktime_sub(ktime_get(), start)),<br>
++		hba->curr_dev_pwr_mode, hba->uic_link_state);<br>
++<br>
++	return ret;<br>
++}<br>
++<br>
++#ifdef CONFIG_PM_SLEEP<br>
++static int ufshcd_wl_suspend(struct device *dev)<br>
++{<br>
++	struct scsi_device *sdev = to_scsi_device(dev);<br>
++	struct ufs_hba *hba;<br>
++	int ret;<br>
++	ktime_t start = ktime_get();<br>
++<br>
++	hba = shost_priv(sdev->host);<br>
++	ret = __ufshcd_wl_suspend(hba, UFS_SYSTEM_PM);<br>
++	if (ret)<br>
++		dev_err(&sdev->sdev_gendev, "%s failed: %d\n", __func__,  ret);<br>
++<br>
++	trace_ufshcd_wl_suspend(dev_name(dev), ret,<br>
++		ktime_to_us(ktime_sub(ktime_get(), start)),<br>
++		hba->curr_dev_pwr_mode, hba->uic_link_state);<br>
++<br>
++	return ret;<br>
++}<br>
++<br>
++static int ufshcd_wl_resume(struct device *dev)<br>
++{<br>
++	struct scsi_device *sdev = to_scsi_device(dev);<br>
++	struct ufs_hba *hba;<br>
++	int ret = 0;<br>
++	ktime_t start = ktime_get();<br>
++<br>
++	if (pm_runtime_suspended(dev))<br>
++		return 0;<br>
++	hba = shost_priv(sdev->host);<br>
++<br>
++	ret = __ufshcd_wl_resume(hba, UFS_SYSTEM_PM);<br>
++	if (ret)<br>
++		dev_err(&sdev->sdev_gendev, "%s failed: %d\n", __func__, ret);<br>
++<br>
++	trace_ufshcd_wl_resume(dev_name(dev), ret,<br>
++		ktime_to_us(ktime_sub(ktime_get(), start)),<br>
++		hba->curr_dev_pwr_mode, hba->uic_link_state);<br>
++<br>
++	return ret;<br>
++}<br>
++#endif<br>
++<br>
++static void ufshcd_wl_shutdown(struct device *dev)<br>
++{<br>
++	struct scsi_device *sdev = to_scsi_device(dev);<br>
++	struct ufs_hba *hba;<br>
++<br>
++	hba = shost_priv(sdev->host);<br>
++<br>
++	down(&hba->host_sem);<br>
++	hba->shutting_down = true;<br>
++	up(&hba->host_sem);<br>
++<br>
++	/* Turn on everything while shutting down */<br>
++	scsi_autopm_get_device(sdev);<br>
++	scsi_device_quiesce(sdev);<br>
++	shost_for_each_device(sdev, hba->host) {<br>
++		if (sdev == hba->sdev_ufs_device)<br>
++			continue;<br>
++		scsi_device_quiesce(sdev);<br>
++	}<br>
++	__ufshcd_wl_suspend(hba, UFS_SHUTDOWN_PM);<br>
++}<br>
++<br>
++/**<br>
++ * ufshcd_suspend - helper function for suspend operations<br>
++ * @hba: per adapter instance<br>
++ *<br>
++ * This function will put disable irqs, turn off clocks<br>
++ * and set vreg and hba-vreg in lpm mode.<br>
++ * Also check the description of __ufshcd_wl_suspend().<br>
++ */<br>
++static void ufshcd_suspend(struct ufs_hba *hba)<br>
++{<br>
++	hba->pm_op_in_progress = 1;<br>
++<br>
++	/*<br>
++	 * Disable the host irq as host controller as there won't be any<br>
++	 * host controller transaction expected till resume.<br>
++	 */<br>
+ 	ufshcd_disable_irq(hba);<br>
+ 	ufshcd_setup_clocks(hba, false);<br>
+ 	if (ufshcd_is_clkgating_allowed(hba)) {<br>
+@@ -8948,6 +9054,43 @@ static int ufshcd_resume(struct ufs_hba *hba, enum ufs_pm_op pm_op)<br>
+ 		trace_ufshcd_clk_gating(dev_name(hba->dev),<br>
+ 					hba->clk_gating.state);<br>
+ 	}<br>
++<br>
++	ufshcd_vreg_set_lpm(hba);<br>
++	/* Put the host controller in low power mode if possible */<br>
++	ufshcd_hba_vreg_set_lpm(hba);<br>
++	hba->pm_op_in_progress = 0;<br>
++}<br>
++<br>
++/**<br>
++ * ufshcd_resume - helper function for resume operations<br>
++ * @hba: per adapter instance<br>
++ *<br>
++ * This function basically turns on the regulators, clocks and<br>
++ * irqs of the hba.<br>
++ * Also check the description of __ufshcd_wl_resume().<br>
++ *<br>
++ * Returns 0 for success and non-zero for failure<br>
++ */<br>
++static int ufshcd_resume(struct ufs_hba *hba)<br>
++{<br>
++	int ret;<br>
++<br>
++	hba->pm_op_in_progress = 1;<br>
++<br>
++	ufshcd_hba_vreg_set_hpm(hba);<br>
++	ret = ufshcd_vreg_set_hpm(hba);<br>
++	if (ret)<br>
++		goto out;<br>
++<br>
++	/* Make sure clocks are enabled before accessing controller */<br>
++	ret = ufshcd_setup_clocks(hba, true);<br>
++	if (ret)<br>
++		goto disable_vreg;<br>
++<br>
++	/* enable the host irq as host controller would be active soon */<br>
++	ufshcd_enable_irq(hba);<br>
++	goto out;<br>
++<br>
+ disable_vreg:<br>
+ 	ufshcd_vreg_set_lpm(hba);<br>
+ out:<br>
+@@ -8962,6 +9105,7 @@ static int ufshcd_resume(struct ufs_hba *hba, enum ufs_pm_op pm_op)<br>
+  * @hba: per adapter instance<br>
+  *<br>
+  * Check the description of ufshcd_suspend() function for more details.<br>
++ * Also check the description of __ufshcd_wl_suspend().<br>
+  *<br>
+  * Returns 0 for success and non-zero for failure<br>
+  */<br>
+@@ -8982,21 +9126,7 @@ int ufshcd_system_suspend(struct ufs_hba *hba)<br>
+ 	     !hba->dev_info.b_rpm_dev_flush_capable)<br>
+ 		goto out;<br>
+ <br>
+-	if (pm_runtime_suspended(hba->dev)) {<br>
+-		/*<br>
+-		 * UFS device and/or UFS link low power states during runtime<br>
+-		 * suspend seems to be different than what is expected during<br>
+-		 * system suspend. Hence runtime resume the devic & link and<br>
+-		 * let the system suspend low power states to take effect.<br>
+-		 * TODO: If resume takes longer time, we might have optimize<br>
+-		 * it in future by not resuming everything if possible.<br>
+-		 */<br>
+-		ret = ufshcd_runtime_resume(hba);<br>
+-		if (ret)<br>
+-			goto out;<br>
+-	}<br>
+-<br>
+-	ret = ufshcd_suspend(hba, UFS_SYSTEM_PM);<br>
++	ufshcd_suspend(hba);<br>
+ out:<br>
+ 	trace_ufshcd_system_suspend(dev_name(hba->dev), ret,<br>
+ 		ktime_to_us(ktime_sub(ktime_get(), start)),<br>
+@@ -9018,25 +9148,20 @@ EXPORT_SYMBOL(ufshcd_system_suspend);<br>
+ <br>
+ int ufshcd_system_resume(struct ufs_hba *hba)<br>
+ {<br>
+-	int ret = 0;<br>
+ 	ktime_t start = ktime_get();<br>
+ <br>
+-	if (!hba->is_powered || pm_runtime_suspended(hba->dev))<br>
+-		/*<br>
+-		 * Let the runtime resume take care of resuming<br>
+-		 * if runtime suspended.<br>
+-		 */<br>
++	if (!hba->is_powered)<br>
+ 		goto out;<br>
+ 	else<br>
+-		ret = ufshcd_resume(hba, UFS_SYSTEM_PM);<br>
++		ufshcd_resume(hba);<br>
+ out:<br>
+-	trace_ufshcd_system_resume(dev_name(hba->dev), ret,<br>
++	trace_ufshcd_system_resume(dev_name(hba->dev), 0,<br>
+ 		ktime_to_us(ktime_sub(ktime_get(), start)),<br>
+ 		hba->curr_dev_pwr_mode, hba->uic_link_state);<br>
+-	if (!ret)<br>
+-		hba->is_sys_suspended = false;<br>
++<br>
++	hba->is_sys_suspended = false;<br>
+ 	up(&hba->host_sem);<br>
+-	return ret;<br>
++	return 0;<br>
+ }<br>
+ EXPORT_SYMBOL(ufshcd_system_resume);<br>
+ <br>
+@@ -9045,23 +9170,23 @@ EXPORT_SYMBOL(ufshcd_system_resume);<br>
+  * @hba: per adapter instance<br>
+  *<br>
+  * Check the description of ufshcd_suspend() function for more details.<br>
++ * Also check the description of __ufshcd_wl_suspend().<br>
+  *<br>
+  * Returns 0 for success and non-zero for failure<br>
+  */<br>
+ int ufshcd_runtime_suspend(struct ufs_hba *hba)<br>
+ {<br>
+-	int ret = 0;<br>
+ 	ktime_t start = ktime_get();<br>
+ <br>
+ 	if (!hba->is_powered)<br>
+ 		goto out;<br>
+ 	else<br>
+-		ret = ufshcd_suspend(hba, UFS_RUNTIME_PM);<br>
++		ufshcd_suspend(hba);<br>
+ out:<br>
+-	trace_ufshcd_runtime_suspend(dev_name(hba->dev), ret,<br>
++	trace_ufshcd_runtime_suspend(dev_name(hba->dev), 0,<br>
+ 		ktime_to_us(ktime_sub(ktime_get(), start)),<br>
+ 		hba->curr_dev_pwr_mode, hba->uic_link_state);<br>
+-	return ret;<br>
++	return 0;<br>
+ }<br>
+ EXPORT_SYMBOL(ufshcd_runtime_suspend);<br>
+ <br>
+@@ -9069,37 +9194,25 @@ EXPORT_SYMBOL(ufshcd_runtime_suspend);<br>
+  * ufshcd_runtime_resume - runtime resume routine<br>
+  * @hba: per adapter instance<br>
+  *<br>
+- * This function basically brings the UFS device, UniPro link and controller<br>
++ * This function basically brings controller<br>
+  * to active state. Following operations are done in this function:<br>
+  *<br>
+  * 1. Turn on all the controller related clocks<br>
+- * 2. Bring the UniPro link out of Hibernate state<br>
+- * 3. If UFS device is in sleep state, turn ON VCC rail and bring the UFS device<br>
+- *    to active state.<br>
+- * 4. If auto-bkops is enabled on the device, disable it.<br>
+- *<br>
+- * So following would be the possible power state after this function return<br>
+- * successfully:<br>
+- *	S1: UFS device in Active state with VCC rail ON<br>
+- *	    UniPro link in Active state<br>
+- *	    All the UFS/UniPro controller clocks are ON<br>
+- *<br>
+- * Returns 0 for success and non-zero for failure<br>
++ * 2. Turn ON VCC rail<br>
+  */<br>
+ int ufshcd_runtime_resume(struct ufs_hba *hba)<br>
+ {<br>
+-	int ret = 0;<br>
+ 	ktime_t start = ktime_get();<br>
+ <br>
+ 	if (!hba->is_powered)<br>
+ 		goto out;<br>
+ 	else<br>
+-		ret = ufshcd_resume(hba, UFS_RUNTIME_PM);<br>
++		ufshcd_resume(hba);<br>
+ out:<br>
+-	trace_ufshcd_runtime_resume(dev_name(hba->dev), ret,<br>
++	trace_ufshcd_runtime_resume(dev_name(hba->dev), 0,<br>
+ 		ktime_to_us(ktime_sub(ktime_get(), start)),<br>
+ 		hba->curr_dev_pwr_mode, hba->uic_link_state);<br>
+-	return ret;<br>
++	return 0;<br>
+ }<br>
+ EXPORT_SYMBOL(ufshcd_runtime_resume);<br>
+ <br>
+@@ -9113,18 +9226,13 @@ EXPORT_SYMBOL(ufshcd_runtime_idle);<br>
+  * ufshcd_shutdown - shutdown routine<br>
+  * @hba: per adapter instance<br>
+  *<br>
+- * This function would power off both UFS device and UFS link.<br>
++ * This function would turn off both UFS device and UFS hba<br>
++ * regulators. It would also disable clocks.<br>
+  *<br>
+  * Returns 0 always to allow force shutdown even in case of errors.<br>
+  */<br>
+ int ufshcd_shutdown(struct ufs_hba *hba)<br>
+ {<br>
+-	int ret = 0;<br>
+-<br>
+-	down(&hba->host_sem);<br>
+-	hba->shutting_down = true;<br>
+-	up(&hba->host_sem);<br>
+-<br>
+ 	if (!hba->is_powered)<br>
+ 		goto out;<br>
+ <br>
+@@ -9133,10 +9241,8 @@ int ufshcd_shutdown(struct ufs_hba *hba)<br>
+ <br>
+ 	pm_runtime_get_sync(hba->dev);<br>
+ <br>
+-	ret = ufshcd_suspend(hba, UFS_SHUTDOWN_PM);<br>
++	ufshcd_suspend(hba);<br>
+ out:<br>
+-	if (ret)<br>
+-		dev_err(hba->dev, "%s failed, err %d\n", __func__, ret);<br>
+ 	hba->is_powered = false;<br>
+ 	/* allow force shutdown even in case of errors */<br>
+ 	return 0;<br>
+@@ -9150,6 +9256,8 @@ EXPORT_SYMBOL(ufshcd_shutdown);<br>
+  */<br>
+ void ufshcd_remove(struct ufs_hba *hba)<br>
+ {<br>
++	if (hba->sdev_ufs_device)<br>
++		scsi_autopm_get_device(hba->sdev_ufs_device);<br>
+ 	ufs_bsg_remove(hba);<br>
+ 	ufs_sysfs_remove_nodes(hba->dev);<br>
+ 	blk_cleanup_queue(hba->tmf_queue);<br>
+@@ -9453,15 +9561,175 @@ int ufshcd_init(struct ufs_hba *hba, void __iomem *mmio_base, unsigned int irq)<br>
+ }<br>
+ EXPORT_SYMBOL_GPL(ufshcd_init);<br>
+ <br>
++void ufshcd_resume_complete(struct device *dev)<br>
++{<br>
++	struct ufs_hba *hba = dev_get_drvdata(dev);<br>
++<br>
++	pm_runtime_put_noidle(&hba->sdev_ufs_device->sdev_gendev);<br>
++}<br>
++EXPORT_SYMBOL_GPL(ufshcd_resume_complete);<br>
++<br>
++int ufshcd_suspend_prepare(struct device *dev)<br>
++{<br>
++	struct ufs_hba *hba = dev_get_drvdata(dev);<br>
++<br>
++	/*<br>
++	 * SCSI assumes that runtime-pm and system-pm for scsi drivers<br>
++	 * are same. And it doesn't wake up the device for system-suspend<br>
++	 * if it's runtime suspended. But ufs doesn't follow that.<br>
++	 * The rpm-lvl and spm-lvl can be different in ufs.<br>
++	 * Force it to honor system-suspend.<br>
++	 */<br>
++	scsi_autopm_get_device(hba->sdev_ufs_device);<br>
++	/* Refer ufshcd_resume_complete() */<br>
++	pm_runtime_get_noresume(&hba->sdev_ufs_device->sdev_gendev);<br>
++	scsi_autopm_put_device(hba->sdev_ufs_device);<br>
++	return 0;<br>
++}<br>
++EXPORT_SYMBOL_GPL(ufshcd_suspend_prepare);<br>
++<br>
++#ifdef CONFIG_PM_SLEEP<br>
++static int ufshcd_wl_poweroff(struct device *dev)<br>
++{<br>
++	struct scsi_device *sdev = to_scsi_device(dev);<br>
++	struct ufs_hba *hba = shost_priv(sdev->host);<br>
++<br>
++	__ufshcd_wl_suspend(hba, UFS_SHUTDOWN_PM);<br>
++	return 0;<br>
++}<br>
++#endif<br>
++<br>
++static int ufshcd_wl_probe(struct device *dev)<br>
++{<br>
++	struct scsi_device *sdev = to_scsi_device(dev);<br>
++<br>
++	if (!is_device_wlun(sdev))<br>
++		return -ENODEV;<br>
++<br>
++	blk_pm_runtime_init(sdev->request_queue, dev);<br>
++	pm_runtime_set_autosuspend_delay(dev, 0);<br>
++	pm_runtime_allow(dev);<br>
++<br>
++	return  0;<br>
++}<br>
++<br>
++static int ufshcd_wl_remove(struct device *dev)<br>
++{<br>
++	pm_runtime_forbid(dev);<br>
++	return 0;<br>
++}<br>
++<br>
++static const struct dev_pm_ops ufshcd_wl_pm_ops = {<br>
++#ifdef CONFIG_PM_SLEEP<br>
++	.suspend = ufshcd_wl_suspend,<br>
++	.resume = ufshcd_wl_resume,<br>
++	.freeze = ufshcd_wl_suspend,<br>
++	.thaw = ufshcd_wl_resume,<br>
++	.poweroff = ufshcd_wl_poweroff,<br>
++	.restore = ufshcd_wl_resume,<br>
++#endif<br>
++	SET_RUNTIME_PM_OPS(ufshcd_wl_runtime_suspend, ufshcd_wl_runtime_resume, NULL)<br>
++};<br>
++<br>
++/**<br>
++ * ufs_dev_wlun_template - describes ufs device wlun<br>
++ * ufs-device wlun - used to send pm commands<br>
++ * All luns are consumers of ufs-device wlun.<br>
++ *<br>
++ * Currently, no sd driver is present for wluns.<br>
++ * Hence the no specific pm operations are performed.<br>
++ * With ufs design, SSU should be sent to ufs-device wlun.<br>
++ * Hence register a scsi driver for ufs wluns only.<br>
++ */<br>
++static struct scsi_driver ufs_dev_wlun_template = {<br>
++	.gendrv = {<br>
++		.name = "ufs_device_wlun",<br>
++		.owner = THIS_MODULE,<br>
++		.probe = ufshcd_wl_probe,<br>
++		.remove = ufshcd_wl_remove,<br>
++		.pm = &ufshcd_wl_pm_ops,<br>
++		.shutdown = ufshcd_wl_shutdown,<br>
++	},<br>
++};<br>
++<br>
++static int ufshcd_rpmb_probe(struct device *dev)<br>
++{<br>
++	return is_rpmb_wlun(to_scsi_device(dev)) ? 0 : -ENODEV;<br>
++}<br>
++<br>
++static inline int ufshcd_clear_rpmb_uac(struct ufs_hba *hba)<br>
++{<br>
++	int ret = 0;<br>
++<br>
++	if (!hba->wlun_rpmb_clr_ua)<br>
++		return 0;<br>
++	ret = ufshcd_clear_ua_wlun(hba, UFS_UPIU_RPMB_WLUN);<br>
++	if (!ret)<br>
++		hba->wlun_rpmb_clr_ua = 0;<br>
++	return ret;<br>
++}<br>
++<br>
++static int ufshcd_rpmb_runtime_resume(struct device *dev)<br>
++{<br>
++	struct ufs_hba *hba = wlun_dev_to_hba(dev);<br>
++<br>
++	if (hba->sdev_rpmb)<br>
++		return ufshcd_clear_rpmb_uac(hba);<br>
++	return 0;<br>
++}<br>
++<br>
++static int ufshcd_rpmb_resume(struct device *dev)<br>
++{<br>
++	struct ufs_hba *hba = wlun_dev_to_hba(dev);<br>
++<br>
++	if (hba->sdev_rpmb && !pm_runtime_suspended(dev))<br>
++		return ufshcd_clear_rpmb_uac(hba);<br>
++	return 0;<br>
++}<br>
++<br>
++static const struct dev_pm_ops ufs_rpmb_pm_ops = {<br>
++	SET_RUNTIME_PM_OPS(NULL, ufshcd_rpmb_runtime_resume, NULL)<br>
++	SET_SYSTEM_SLEEP_PM_OPS(NULL, ufshcd_rpmb_resume)<br>
++};<br>
++<br>
++/**<br>
++ * Describes the ufs rpmb wlun.<br>
++ * Used only to send uac.<br>
++ */<br>
++static struct scsi_driver ufs_rpmb_wlun_template = {<br>
++	.gendrv = {<br>
++		.name = "ufs_rpmb_wlun",<br>
++		.owner = THIS_MODULE,<br>
++		.probe = ufshcd_rpmb_probe,<br>
++		.pm = &ufs_rpmb_pm_ops,<br>
++	},<br>
++};<br>
++<br>
+ static int __init ufshcd_core_init(void)<br>
+ {<br>
++	int ret;<br>
++<br>
+ 	ufs_debugfs_init();<br>
++<br>
++	ret = scsi_register_driver(&ufs_dev_wlun_template.gendrv);<br>
++	if (ret) {<br>
++		ufs_debugfs_exit();<br>
++		return ret;<br>
++	}<br>
++	ret = scsi_register_driver(&ufs_rpmb_wlun_template.gendrv);<br>
++	if (ret) {<br>
++		ufs_debugfs_exit();<br>
++		scsi_unregister_driver(&ufs_dev_wlun_template.gendrv);<br>
++		return ret;<br>
++	}<br>
+ 	return 0;<br>
+ }<br>
+ <br>
+ static void __exit ufshcd_core_exit(void)<br>
+ {<br>
+ 	ufs_debugfs_exit();<br>
++	scsi_unregister_driver(&ufs_rpmb_wlun_template.gendrv);<br>
++	scsi_unregister_driver(&ufs_dev_wlun_template.gendrv);<br>
+ }<br>
+ <br>
+ module_init(ufshcd_core_init);<br>
+diff --git a/drivers/scsi/ufs/ufshcd.h b/drivers/scsi/ufs/ufshcd.h<br>
+index 5eb66a8..40436e3 100644<br>
+--- a/drivers/scsi/ufs/ufshcd.h<br>
++++ b/drivers/scsi/ufs/ufshcd.h<br>
+@@ -72,6 +72,8 @@ enum ufs_event_type {<br>
+ 	UFS_EVT_LINK_STARTUP_FAIL,<br>
+ 	UFS_EVT_RESUME_ERR,<br>
+ 	UFS_EVT_SUSPEND_ERR,<br>
++	UFS_EVT_WL_SUSP_ERR,<br>
++	UFS_EVT_WL_RES_ERR,<br>
+ <br>
+ 	/* abnormal events */<br>
+ 	UFS_EVT_DEV_RESET,<br>
+@@ -807,6 +809,7 @@ struct ufs_hba {<br>
+ 	struct list_head clk_list_head;<br>
+ <br>
+ 	bool wlun_dev_clr_ua;<br>
++	bool wlun_rpmb_clr_ua;<br>
+ <br>
+ 	/* Number of requests aborts */<br>
+ 	int req_abort_count;<br>
+@@ -846,6 +849,7 @@ struct ufs_hba {<br>
+ 	struct delayed_work debugfs_ee_work;<br>
+ 	u32 debugfs_ee_rate_limit_ms;<br>
+ #endif<br>
++	u32 luns_avail;<br>
+ };<br>
+ <br>
+ /* Returns true if clocks can be gated. Otherwise false */<br>
+@@ -1105,6 +1109,8 @@ int ufshcd_exec_raw_upiu_cmd(struct ufs_hba *hba,<br>
+ 			     enum query_opcode desc_op);<br>
+ <br>
+ int ufshcd_wb_toggle(struct ufs_hba *hba, bool enable);<br>
++int ufshcd_suspend_prepare(struct device *dev);<br>
++void ufshcd_resume_complete(struct device *dev);<br>
+ <br>
+ /* Wrapper functions for safely calling variant operations */<br>
+ static inline const char *ufshcd_get_var_name(struct ufs_hba *hba)<br>
+diff --git a/include/trace/events/ufs.h b/include/trace/events/ufs.h<br>
+index 1cb6f1a..599739e 100644<br>
+--- a/include/trace/events/ufs.h<br>
++++ b/include/trace/events/ufs.h<br>
+@@ -246,6 +246,26 @@ DEFINE_EVENT(ufshcd_template, ufshcd_init,<br>
+ 		      int dev_state, int link_state),<br>
+ 	     TP_ARGS(dev_name, err, usecs, dev_state, link_state));<br>
+ <br>
++DEFINE_EVENT(ufshcd_template, ufshcd_wl_suspend,<br>
++	     TP_PROTO(const char *dev_name, int err, s64 usecs,<br>
++		      int dev_state, int link_state),<br>
++	     TP_ARGS(dev_name, err, usecs, dev_state, link_state));<br>
++<br>
++DEFINE_EVENT(ufshcd_template, ufshcd_wl_resume,<br>
++	     TP_PROTO(const char *dev_name, int err, s64 usecs,<br>
++		      int dev_state, int link_state),<br>
++	     TP_ARGS(dev_name, err, usecs, dev_state, link_state));<br>
++<br>
++DEFINE_EVENT(ufshcd_template, ufshcd_wl_runtime_suspend,<br>
++	     TP_PROTO(const char *dev_name, int err, s64 usecs,<br>
++		      int dev_state, int link_state),<br>
++	     TP_ARGS(dev_name, err, usecs, dev_state, link_state));<br>
++<br>
++DEFINE_EVENT(ufshcd_template, ufshcd_wl_runtime_resume,<br>
++	     TP_PROTO(const char *dev_name, int err, s64 usecs,<br>
++		      int dev_state, int link_state),<br>
++	     TP_ARGS(dev_name, err, usecs, dev_state, link_state));<br>
++<br>
+ TRACE_EVENT(ufshcd_command,<br>
+ 	TP_PROTO(const char *dev_name, enum ufs_trace_str_t str_t,<br>
+ 		 unsigned int tag, u32 doorbell, int transfer_len, u32 intr,<br>
+-- <br>
+Qualcomm Innovation Center, Inc. is a member of Code Aurora Forum, a Linux Foundation Collaborative Project.<br>
+<br>
+<br>
+

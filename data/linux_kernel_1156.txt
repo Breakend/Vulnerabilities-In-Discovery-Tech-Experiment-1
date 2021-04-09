@@ -1,0 +1,28 @@
+Fix sparse warnings:<br>
+<br>
+arch/powerpc/platforms/pseries/rtas-fadump.c:250:6: warning:<br>
+ symbol 'rtas_fadump_set_regval' was not declared. Should it be static?<br>
+<br>
+Signed-off-by: Pu Lehui <pulehui@xxxxxxxxxx><br>
+---<br>
+ arch/powerpc/platforms/pseries/rtas-fadump.c | 2 +-<br>
+ 1 file changed, 1 insertion(+), 1 deletion(-)<br>
+<br>
+diff --git a/arch/powerpc/platforms/pseries/rtas-fadump.c b/arch/powerpc/platforms/pseries/rtas-fadump.c<br>
+index 81343908ed33..f8f73b47b107 100644<br>
+--- a/arch/powerpc/platforms/pseries/rtas-fadump.c<br>
++++ b/arch/powerpc/platforms/pseries/rtas-fadump.c<br>
+@@ -247,7 +247,7 @@ static inline int rtas_fadump_gpr_index(u64 id)<br>
+ 	return i;<br>
+ }<br>
+ <br>
+-void rtas_fadump_set_regval(struct pt_regs *regs, u64 reg_id, u64 reg_val)<br>
++static void rtas_fadump_set_regval(struct pt_regs *regs, u64 reg_id, u64 reg_val)<br>
+ {<br>
+ 	int i;<br>
+ <br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+

@@ -1,0 +1,38 @@
+Add support for the 2 GPIOs present on Qualcomm Technologies, Inc.<br>
+PM8008.<br>
+<br>
+Acked-by: Bjorn Andersson <bjorn.andersson@xxxxxxxxxx><br>
+Signed-off-by: Guru Das Srinagesh <gurus@xxxxxxxxxxxxxx><br>
+---<br>
+Changes from last patchset:<br>
+- Moved "pm8008" up a line to keep things sorted alphabetically<br>
+<br>
+ Documentation/devicetree/bindings/pinctrl/qcom,pmic-gpio.txt | 2 ++<br>
+ 1 file changed, 2 insertions(+)<br>
+<br>
+diff --git a/Documentation/devicetree/bindings/pinctrl/qcom,pmic-gpio.txt b/Documentation/devicetree/bindings/pinctrl/qcom,pmic-gpio.txt<br>
+index 70e119b..f6a97605 100644<br>
+--- a/Documentation/devicetree/bindings/pinctrl/qcom,pmic-gpio.txt<br>
++++ b/Documentation/devicetree/bindings/pinctrl/qcom,pmic-gpio.txt<br>
+@@ -35,6 +35,7 @@ PMIC's from Qualcomm.<br>
+ 		    "qcom,pmr735b-gpio"<br>
+ 		    "qcom,pm6150-gpio"<br>
+ 		    "qcom,pm6150l-gpio"<br>
++		    "qcom,pm8008-gpio"<br>
+ 		    "qcom,pmx55-gpio"<br>
+ <br>
+ 		    And must contain either "qcom,spmi-gpio" or "qcom,ssbi-gpio"<br>
+@@ -123,6 +124,7 @@ to specify in a pin configuration subnode:<br>
+ 		    gpio1-gpio4 for pmr735b<br>
+ 		    gpio1-gpio10 for pm6150<br>
+ 		    gpio1-gpio12 for pm6150l<br>
++		    gpio1-gpio2 for pm8008<br>
+ 		    gpio1-gpio11 for pmx55 (holes on gpio3, gpio7, gpio10<br>
+ 					    and gpio11)<br>
+ <br>
+-- <br>
+The Qualcomm Innovation Center, Inc. is a member of the Code Aurora Forum,<br>
+a Linux Foundation Collaborative Project<br>
+<br>
+<br>
+

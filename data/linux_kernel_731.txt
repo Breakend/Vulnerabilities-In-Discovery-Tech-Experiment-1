@@ -1,0 +1,49 @@
+Vineeth Pillai <viremana@xxxxxxxxxxxxxxxxxxx> writes:<br>
+<br>
+><i> Detect nested features exposed by Hyper-V if SVM is enabled.</i><br>
+><i></i><br>
+><i> Signed-off-by: Vineeth Pillai <viremana@xxxxxxxxxxxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  arch/x86/kernel/cpu/mshyperv.c | 10 +++++++++-</i><br>
+><i>  1 file changed, 9 insertions(+), 1 deletion(-)</i><br>
+><i></i><br>
+><i> diff --git a/arch/x86/kernel/cpu/mshyperv.c b/arch/x86/kernel/cpu/mshyperv.c</i><br>
+><i> index 3546d3e21787..4d364acfe95d 100644</i><br>
+><i> --- a/arch/x86/kernel/cpu/mshyperv.c</i><br>
+><i> +++ b/arch/x86/kernel/cpu/mshyperv.c</i><br>
+><i> @@ -325,9 +325,17 @@ static void __init ms_hyperv_init_platform(void)</i><br>
+><i>  			ms_hyperv.isolation_config_a, ms_hyperv.isolation_config_b);</i><br>
+><i>  	}</i><br>
+><i>  </i><br>
+><i> -	if (ms_hyperv.hints & HV_X64_ENLIGHTENED_VMCS_RECOMMENDED) {</i><br>
+><i> +	/*</i><br>
+><i> +	 * AMD does not need enlightened VMCS as VMCB is already a</i><br>
+><i> +	 * datastructure in memory. </i><br>
+<br>
+Well, VMCS is also a structure in memory, isn't it? It's just that we<br>
+don't have a 'clean field' concept for it and we can't use normal memory<br>
+accesses.<br>
+<br>
+><i> 	We need to get the nested</i><br>
+><i> +	 * features if SVM is enabled.</i><br>
+><i> +	 */</i><br>
+><i> +	if (boot_cpu_has(X86_FEATURE_SVM) ||</i><br>
+><i> +	    ms_hyperv.hints & HV_X64_ENLIGHTENED_VMCS_RECOMMENDED) {</i><br>
+<br>
+Do I understand correctly that we can just look at CPUID.0x40000000.EAX<br>
+and in case it is >= 0x4000000A we can read HYPERV_CPUID_NESTED_FEATURES<br>
+leaf? I'd suggest we do that intead then.<br>
+<br>
+><i>  		ms_hyperv.nested_features =</i><br>
+><i>  			cpuid_eax(HYPERV_CPUID_NESTED_FEATURES);</i><br>
+><i> +		pr_info("Hyper-V nested_features: 0x%x\n",</i><br>
+><i> +			ms_hyperv.nested_features);</i><br>
+><i>  	}</i><br>
+><i>  </i><br>
+><i>  	/*</i><br>
+<br>
+-- <br>
+Vitaly<br>
+<br>
+<br>
+

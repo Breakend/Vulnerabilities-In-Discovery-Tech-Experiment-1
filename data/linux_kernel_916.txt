@@ -1,0 +1,54 @@
+><i> From: Stephen Hemminger <stephen@xxxxxxxxxxxxxxxxxx></i><br>
+><i> Sent: Thursday, April 8, 2021 9:52 AM</i><br>
+<br>
+Thanks all for your input! We'll make the below changes as suggested:<br>
+<br>
+Microsoft Azure Network Device ==> Microsoft Network Devices<br>
+Drop the default m<br>
+validated ==> supported<br>
+<br>
+We'll also fix some warnings reported by "kernel test robot".<br>
+<br>
+Will post v3 later today.<br>
+<br>
+Thanks,<br>
+Dexuan<br>
+<br>
+diff --git a/drivers/net/ethernet/microsoft/Kconfig b/drivers/net/ethernet/microsoft/Kconfig<br>
+index 12ef6b581566..e1ac0a5d808d 100644<br>
+--- a/drivers/net/ethernet/microsoft/Kconfig<br>
++++ b/drivers/net/ethernet/microsoft/Kconfig<br>
+@@ -3,26 +3,25 @@<br>
+ #<br>
+ <br>
+ config NET_VENDOR_MICROSOFT<br>
+-	bool "Microsoft Azure Network Device"<br>
++	bool "Microsoft Network Devices"<br>
+ 	default y<br>
+ 	help<br>
+ 	  If you have a network (Ethernet) device belonging to this class, say Y.<br>
+ <br>
+ 	  Note that the answer to this question doesn't directly affect the<br>
+ 	  kernel: saying N will just cause the configurator to skip the<br>
+-	  question about Microsoft Azure network device. If you say Y, you<br>
+-	  will be asked for your specific device in the following question.<br>
++	  question about Microsoft network devices. If you say Y, you will be<br>
++	  asked for your specific device in the following question.<br>
+ <br>
+ if NET_VENDOR_MICROSOFT<br>
+ <br>
+ config MICROSOFT_MANA<br>
+ 	tristate "Microsoft Azure Network Adapter (MANA) support"<br>
+-	default m<br>
+ 	depends on PCI_MSI && X86_64<br>
+ 	select PCI_HYPERV<br>
+ 	help<br>
+ 	  This driver supports Microsoft Azure Network Adapter (MANA).<br>
+-	  So far, the driver is only validated on X86_64.<br>
++	  So far, the driver is only supported on X86_64.<br>
+ <br>
+ 	  To compile this driver as a module, choose M here.<br>
+ 	  The module will be called mana.<br>
+<br>
+<br>
+

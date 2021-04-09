@@ -1,0 +1,18 @@
+This patch series resolves a kernel-doc warning and a clk freeing bug<br>
+that was causing a crash.<br>
+<br>
+This patch series is on top of:<br>
+<a  rel="nofollow" href="https://git.kernel.org/pub/scm/linux/kernel/git/next/linux-next.git/commit/drivers/usb/dwc3?id=84770f028fabab4cb66188d583ed12652f30576b">https://git.kernel.org/pub/scm/linux/kernel/git/next/linux-next.git/commit/drivers/usb/dwc3?id=84770f028fabab4cb66188d583ed12652f30576b</a><br>
+<br>
+Manish Narani (2):<br>
+  usb: dwc3: Resolve kernel-doc warning for Xilinx DWC3 driver<br>
+  usb: dwc3: xilinx: Remove the extra freeing of clocks<br>
+<br>
+ drivers/usb/dwc3/dwc3-xilinx.c | 4 +---<br>
+ 1 file changed, 1 insertion(+), 3 deletions(-)<br>
+<br>
+-- <br>
+2.1.1<br>
+<br>
+<br>
+

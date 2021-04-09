@@ -1,0 +1,33 @@
+Address a kbuild issue where a developer created an ECDSA key for signing<br>
+kernel modules and then builds an older version of the kernel, when bi-<br>
+secting the kernel for example, that does not support ECDSA keys.<br>
+<br>
+Trigger the creation of an RSA module signing key if it is not an RSA key.<br>
+<br>
+Fixes: cfc411e7fff3 ("Move certificate handling to its own directory")<br>
+Signed-off-by: Stefan Berger <stefanb@xxxxxxxxxxxxx><br>
+---<br>
+ certs/Makefile | 5 +++++<br>
+ 1 file changed, 5 insertions(+)<br>
+<br>
+diff --git a/certs/Makefile b/certs/Makefile<br>
+index e3185c57fbd8..f64bc89ccbf1 100644<br>
+--- a/certs/Makefile<br>
++++ b/certs/Makefile<br>
+@@ -59,6 +59,11 @@ silent_redirect_openssl = 2>/dev/null<br>
+ # external private key, because 'make randconfig' might enable such a<br>
+ # boolean option and we unfortunately can't make it depend on !RANDCONFIG.<br>
+ ifeq ($(CONFIG_MODULE_SIG_KEY),"certs/signing_key.pem")<br>
++<br>
++X509TEXT=$(shell openssl x509 -in $(CONFIG_MODULE_SIG_KEY) -text)<br>
++<br>
++$(if $(findstring rsaEncryption,$(X509TEXT)),,$(shell rm -f $(CONFIG_MODULE_SIG_KEY)))<br>
++<br>
+ $(obj)/signing_key.pem: $(obj)/x509.genkey<br>
+ 	@$(kecho) "###"<br>
+ 	@$(kecho) "### Now generating an X.509 key pair to be used for signing modules."<br>
+-- <br>
+2.29.2<br>
+<br>
+<br>
+

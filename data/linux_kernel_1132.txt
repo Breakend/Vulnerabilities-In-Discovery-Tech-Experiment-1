@@ -1,0 +1,15 @@
+On Wed, Apr 07, 2021 at 05:29:19PM -0700, Stephen Boyd wrote:<br>
+><i> Quoting Saravana Kannan (2021-04-06 20:44:53)</i><br>
+><i> > Stephen,</i><br>
+><i> > </i><br>
+><i> > We can decide later if both these patches land through clk tree or the</i><br>
+><i> > driver-core tree. The meat of the series is in Patch 2/2 and that commit</i><br>
+><i> > text gives all the details.</i><br>
+><i> </i><br>
+><i> The majority of the diff is in drivers/clk so presumably it can be</i><br>
+><i> merged through the clk tree if Greg acks the include file API.</i><br>
+<br>
+Now acked, merge away!<br>
+<br>
+<br>
+

@@ -1,0 +1,38 @@
+pm_runtime_get_sync will increment pm usage counter even it failed.<br>
+Forgetting to putting operation will result in reference leak here. Fix<br>
+it by replacing it with pm_runtime_resume_and_get to keep usage counter<br>
+balanced.<br>
+<br>
+Reported-by: Hulk Robot <hulkci@xxxxxxxxxx><br>
+Signed-off-by: Li Huafei <lihuafei1@xxxxxxxxxx><br>
+---<br>
+ drivers/i2c/busses/i2c-omap.c | 4 ++--<br>
+ 1 file changed, 2 insertions(+), 2 deletions(-)<br>
+<br>
+diff --git a/drivers/i2c/busses/i2c-omap.c b/drivers/i2c/busses/i2c-omap.c<br>
+index 12ac4212aded..edbe498d49b8 100644<br>
+--- a/drivers/i2c/busses/i2c-omap.c<br>
++++ b/drivers/i2c/busses/i2c-omap.c<br>
+@@ -1404,7 +1404,7 @@ omap_i2c_probe(struct platform_device *pdev)<br>
+ 	pm_runtime_set_autosuspend_delay(omap->dev, OMAP_I2C_PM_TIMEOUT);<br>
+ 	pm_runtime_use_autosuspend(omap->dev);<br>
+ <br>
+-	r = pm_runtime_get_sync(omap->dev);<br>
++	r = pm_runtime_resume_and_get(omap->dev);<br>
+ 	if (r < 0)<br>
+ 		goto err_free_mem;<br>
+ <br>
+@@ -1525,7 +1525,7 @@ static int omap_i2c_remove(struct platform_device *pdev)<br>
+ 	int ret;<br>
+ <br>
+ 	i2c_del_adapter(&omap->adapter);<br>
+-	ret = pm_runtime_get_sync(&pdev->dev);<br>
++	ret = pm_runtime_resume_and_get(&pdev->dev);<br>
+ 	if (ret < 0)<br>
+ 		return ret;<br>
+ <br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+

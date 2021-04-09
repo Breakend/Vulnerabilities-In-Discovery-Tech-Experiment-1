@@ -1,0 +1,146 @@
+When I was investigating the swap code, I found the below possible race<br>
+window:<br>
+<br>
+CPU 1					CPU 2<br>
+-----					-----<br>
+do_swap_page<br>
+  synchronous swap_readpage<br>
+    alloc_page_vma<br>
+					swapoff<br>
+					  release swap_file, bdev, or ...<br>
+      swap_readpage<br>
+	check sis->flags is ok<br>
+	  access swap_file, bdev...[oops!]<br>
+					    si->flags = 0<br>
+<br>
+Using current get/put_swap_device() to guard against concurrent swapoff for<br>
+swap_readpage() looks terrible because swap_readpage() may take really long<br>
+time. And this race may not be really pernicious because swapoff is usually<br>
+done when system shutdown only. To reduce the performance overhead on the<br>
+hot-path as much as possible, it appears we can use the percpu_ref to close<br>
+this race window(as suggested by Huang, Ying).<br>
+<br>
+Fixes: 235b62176712 ("mm/swap: add cluster lock")<br>
+Signed-off-by: Miaohe Lin <linmiaohe@xxxxxxxxxx><br>
+---<br>
+ include/linux/swap.h |  2 +-<br>
+ mm/memory.c          | 10 ++++++++++<br>
+ mm/swapfile.c        | 28 +++++++++++-----------------<br>
+ 3 files changed, 22 insertions(+), 18 deletions(-)<br>
+<br>
+diff --git a/include/linux/swap.h b/include/linux/swap.h<br>
+index 849ba5265c11..9066addb57fd 100644<br>
+--- a/include/linux/swap.h<br>
++++ b/include/linux/swap.h<br>
+@@ -513,7 +513,7 @@ sector_t swap_page_sector(struct page *page);<br>
+ <br>
+ static inline void put_swap_device(struct swap_info_struct *si)<br>
+ {<br>
+-	rcu_read_unlock();<br>
++	percpu_ref_put(&si->users);<br>
+ }<br>
+ <br>
+ #else /* CONFIG_SWAP */<br>
+diff --git a/mm/memory.c b/mm/memory.c<br>
+index cc71a445c76c..8543c47b955c 100644<br>
+--- a/mm/memory.c<br>
++++ b/mm/memory.c<br>
+@@ -3311,6 +3311,7 @@ vm_fault_t do_swap_page(struct vm_fault *vmf)<br>
+ {<br>
+ 	struct vm_area_struct *vma = vmf->vma;<br>
+ 	struct page *page = NULL, *swapcache;<br>
++	struct swap_info_struct *si = NULL;<br>
+ 	swp_entry_t entry;<br>
+ 	pte_t pte;<br>
+ 	int locked;<br>
+@@ -3339,6 +3340,11 @@ vm_fault_t do_swap_page(struct vm_fault *vmf)<br>
+ 	}<br>
+ <br>
+ <br>
++	si = get_swap_device(entry);<br>
++	/* In case we raced with swapoff. */<br>
++	if (unlikely(!si))<br>
++		goto out;<br>
++<br>
+ 	delayacct_set_flag(DELAYACCT_PF_SWAPIN);<br>
+ 	page = lookup_swap_cache(entry, vma, vmf->address);<br>
+ 	swapcache = page;<br>
+@@ -3514,6 +3520,8 @@ vm_fault_t do_swap_page(struct vm_fault *vmf)<br>
+ unlock:<br>
+ 	pte_unmap_unlock(vmf->pte, vmf->ptl);<br>
+ out:<br>
++	if (si)<br>
++		put_swap_device(si);<br>
+ 	return ret;<br>
+ out_nomap:<br>
+ 	pte_unmap_unlock(vmf->pte, vmf->ptl);<br>
+@@ -3525,6 +3533,8 @@ vm_fault_t do_swap_page(struct vm_fault *vmf)<br>
+ 		unlock_page(swapcache);<br>
+ 		put_page(swapcache);<br>
+ 	}<br>
++	if (si)<br>
++		put_swap_device(si);<br>
+ 	return ret;<br>
+ }<br>
+ <br>
+diff --git a/mm/swapfile.c b/mm/swapfile.c<br>
+index 724173cd7d0c..01032c72ceae 100644<br>
+--- a/mm/swapfile.c<br>
++++ b/mm/swapfile.c<br>
+@@ -1280,18 +1280,12 @@ static unsigned char __swap_entry_free_locked(struct swap_info_struct *p,<br>
+  * via preventing the swap device from being swapoff, until<br>
+  * put_swap_device() is called.  Otherwise return NULL.<br>
+  *<br>
+- * The entirety of the RCU read critical section must come before the<br>
+- * return from or after the call to synchronize_rcu() in<br>
+- * enable_swap_info() or swapoff().  So if "si->flags & SWP_VALID" is<br>
+- * true, the si->map, si->cluster_info, etc. must be valid in the<br>
+- * critical section.<br>
+- *<br>
+  * Notice that swapoff or swapoff+swapon can still happen before the<br>
+- * rcu_read_lock() in get_swap_device() or after the rcu_read_unlock()<br>
+- * in put_swap_device() if there isn't any other way to prevent<br>
+- * swapoff, such as page lock, page table lock, etc.  The caller must<br>
+- * be prepared for that.  For example, the following situation is<br>
+- * possible.<br>
++ * percpu_ref_tryget_live() in get_swap_device() or after the<br>
++ * percpu_ref_put() in put_swap_device() if there isn't any other way<br>
++ * to prevent swapoff, such as page lock, page table lock, etc.  The<br>
++ * caller must be prepared for that.  For example, the following<br>
++ * situation is possible.<br>
+  *<br>
+  *   CPU1				CPU2<br>
+  *   do_swap_page()<br>
+@@ -1319,21 +1313,21 @@ struct swap_info_struct *get_swap_device(swp_entry_t entry)<br>
+ 	si = swp_swap_info(entry);<br>
+ 	if (!si)<br>
+ 		goto bad_nofile;<br>
+-<br>
+-	rcu_read_lock();<br>
+ 	if (data_race(!(si->flags & SWP_VALID)))<br>
+-		goto unlock_out;<br>
++		goto out;<br>
++	if (!percpu_ref_tryget_live(&si->users))<br>
++		goto out;<br>
+ 	offset = swp_offset(entry);<br>
+ 	if (offset >= si->max)<br>
+-		goto unlock_out;<br>
++		goto put_out;<br>
+ <br>
+ 	return si;<br>
+ bad_nofile:<br>
+ 	pr_err("%s: %s%08lx\n", __func__, Bad_file, entry.val);<br>
+ out:<br>
+ 	return NULL;<br>
+-unlock_out:<br>
+-	rcu_read_unlock();<br>
++put_out:<br>
++	percpu_ref_put(&si->users);<br>
+ 	return NULL;<br>
+ }<br>
+ <br>
+-- <br>
+2.19.1<br>
+<br>
+<br>
+

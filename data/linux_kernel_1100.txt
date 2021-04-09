@@ -1,0 +1,39 @@
+On Wed, 07 Apr 2021, min.li.xe@xxxxxxxxxxx wrote:<br>
+<br>
+><i> From: Min Li <min.li.xe@xxxxxxxxxxx></i><br>
+><i> </i><br>
+><i> Add support for ClockMatrix(TM) and 82P33xxx families of timing</i><br>
+><i> and synchronization devices. The access interface can be either</i><br>
+><i> SPI or I2C. Currently, it will create 2 types of MFD devices,</i><br>
+><i> which are to be used by the corresponding rsmu character device</i><br>
+><i> driver and the PTP hardware clock driver, respectively.</i><br>
+><i> </i><br>
+><i> Signed-off-by: Min Li <min.li.xe@xxxxxxxxxxx></i><br>
+><i> ---</i><br>
+<br>
+If this is v3, there should be a changelog here.<br>
+<br>
+><i>  drivers/mfd/Kconfig              |  28 ++</i><br>
+><i>  drivers/mfd/Makefile             |   3 +</i><br>
+><i>  drivers/mfd/rsmu_i2c.c           | 349 +++++++++++++++++</i><br>
+><i>  drivers/mfd/rsmu_private.h       |  32 ++</i><br>
+><i>  drivers/mfd/rsmu_spi.c           | 376 ++++++++++++++++++</i><br>
+><i>  include/linux/mfd/idt82p33_reg.h | 116 ++++++</i><br>
+><i>  include/linux/mfd/idt8a340_reg.h | 817 +++++++++++++++++++++++++++++++++++++++</i><br>
+><i>  include/linux/mfd/rsmu.h         |  54 +++</i><br>
+><i>  8 files changed, 1775 insertions(+)</i><br>
+><i>  create mode 100644 drivers/mfd/rsmu_i2c.c</i><br>
+><i>  create mode 100644 drivers/mfd/rsmu_private.h</i><br>
+><i>  create mode 100644 drivers/mfd/rsmu_spi.c</i><br>
+><i>  create mode 100644 include/linux/mfd/idt82p33_reg.h</i><br>
+><i>  create mode 100644 include/linux/mfd/idt8a340_reg.h</i><br>
+><i>  create mode 100644 include/linux/mfd/rsmu.h</i><br>
+<br>
+-- <br>
+Lee Jones [李琼斯]<br>
+Senior Technical Lead - Developer Services<br>
+Linaro.org │ Open source software for Arm SoCs<br>
+Follow Linaro: Facebook | Twitter | Blog<br>
+<br>
+<br>
+

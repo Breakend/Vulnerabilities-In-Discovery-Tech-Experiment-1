@@ -1,0 +1,278 @@
+In the following patch, workingset detection will be applied to<br>
+anonymous LRU. To prepare it, this patch adds some code to<br>
+distinguish/handle the both LRUs.<br>
+<br>
+Signed-off-by: Joonsoo Kim <iamjoonsoo.kim@xxxxxxx><br>
+---<br>
+ include/linux/mmzone.h | 14 +++++++++-----<br>
+ mm/memcontrol.c        | 12 ++++++++----<br>
+ mm/vmscan.c            | 15 ++++++++++-----<br>
+ mm/vmstat.c            |  6 ++++--<br>
+ mm/workingset.c        | 35 ++++++++++++++++++++++-------------<br>
+ 5 files changed, 53 insertions(+), 29 deletions(-)<br>
+<br>
+diff --git a/include/linux/mmzone.h b/include/linux/mmzone.h<br>
+index 5334ad8fc7bd..b78fd8c7284b 100644<br>
+--- a/include/linux/mmzone.h<br>
++++ b/include/linux/mmzone.h<br>
+@@ -220,8 +220,12 @@ enum node_stat_item {<br>
+  NR_ISOLATED_ANON, /* Temporary isolated pages from anon lru */<br>
+  NR_ISOLATED_FILE, /* Temporary isolated pages from file lru */<br>
+  WORKINGSET_NODES,<br>
+- WORKINGSET_REFAULT,<br>
+- WORKINGSET_ACTIVATE,<br>
++ WORKINGSET_REFAULT_BASE,<br>
++ WORKINGSET_REFAULT_ANON =3D WORKINGSET_REFAULT_BASE,<br>
++ WORKINGSET_REFAULT_FILE,<br>
++ WORKINGSET_ACTIVATE_BASE,<br>
++ WORKINGSET_ACTIVATE_ANON =3D WORKINGSET_ACTIVATE_BASE,<br>
++ WORKINGSET_ACTIVATE_FILE,<br>
+  WORKINGSET_RESTORE,<br>
+  WORKINGSET_NODERECLAIM,<br>
+  NR_ANON_MAPPED, /* Mapped anonymous pages */<br>
+@@ -304,10 +308,10 @@ enum lruvec_flags {<br>
+ struct lruvec {<br>
+  struct list_head lists[NR_LRU_LISTS];<br>
+  struct zone_reclaim_stat reclaim_stat;<br>
+- /* Evictions & activations on the inactive file list */<br>
+- atomic_long_t inactive_age;<br>
++ /* Evictions & activations on the inactive list */<br>
++ atomic_long_t inactive_age[2];<br>
+  /* Refaults at the time of last reclaim cycle */<br>
+- unsigned long refaults;<br>
++ unsigned long refaults[2];<br>
+  /* Various lruvec state flags (enum lruvec_flags) */<br>
+  unsigned long flags;<br>
+ #ifdef CONFIG_MEMCG<br>
+diff --git a/mm/memcontrol.c b/mm/memcontrol.c<br>
+index 6c83cf4ed970..8f4473d6ff9c 100644<br>
+--- a/mm/memcontrol.c<br>
++++ b/mm/memcontrol.c<br>
+@@ -1431,10 +1431,14 @@ static char *memory_stat_format(struct<br>
+mem_cgroup *memcg)<br>
+  seq_buf_printf(&s, "%s %lu\n", vm_event_name(PGMAJFAULT),<br>
+         memcg_events(memcg, PGMAJFAULT));<br>
+<br>
+- seq_buf_printf(&s, "workingset_refault %lu\n",<br>
+-        memcg_page_state(memcg, WORKINGSET_REFAULT));<br>
+- seq_buf_printf(&s, "workingset_activate %lu\n",<br>
+-        memcg_page_state(memcg, WORKINGSET_ACTIVATE));<br>
++ seq_buf_printf(&s, "workingset_refault_anon %lu\n",<br>
++        memcg_page_state(memcg, WORKINGSET_REFAULT_ANON));<br>
++ seq_buf_printf(&s, "workingset_refault_file %lu\n",<br>
++        memcg_page_state(memcg, WORKINGSET_REFAULT_FILE));<br>
++ seq_buf_printf(&s, "workingset_activate_anon %lu\n",<br>
++        memcg_page_state(memcg, WORKINGSET_ACTIVATE_ANON));<br>
++ seq_buf_printf(&s, "workingset_activate_file %lu\n",<br>
++        memcg_page_state(memcg, WORKINGSET_ACTIVATE_FILE));<br>
+  seq_buf_printf(&s, "workingset_nodereclaim %lu\n",<br>
+         memcg_page_state(memcg, WORKINGSET_NODERECLAIM));<br>
+<br>
+diff --git a/mm/vmscan.c b/mm/vmscan.c<br>
+index 4122a841dfce..74c3adefc933 100644<br>
+--- a/mm/vmscan.c<br>
++++ b/mm/vmscan.c<br>
+@@ -2735,7 +2735,10 @@ static bool shrink_node(pg_data_t *pgdat,<br>
+struct scan_control *sc)<br>
+  if (!sc->force_deactivate) {<br>
+  unsigned long refaults;<br>
+<br>
+- if (inactive_is_low(target_lruvec, LRU_INACTIVE_ANON))<br>
++ refaults =3D lruvec_page_state(target_lruvec,<br>
++ WORKINGSET_ACTIVATE_ANON);<br>
++ if (refaults !=3D target_lruvec->refaults[0] ||<br>
++ inactive_is_low(target_lruvec, LRU_INACTIVE_ANON))<br>
+  sc->may_deactivate |=3D DEACTIVATE_ANON;<br>
+  else<br>
+  sc->may_deactivate &=3D ~DEACTIVATE_ANON;<br>
+@@ -2746,8 +2749,8 @@ static bool shrink_node(pg_data_t *pgdat, struct<br>
+scan_control *sc)<br>
+  * rid of any stale active pages quickly.<br>
+  */<br>
+  refaults =3D lruvec_page_state(target_lruvec,<br>
+-      WORKINGSET_ACTIVATE);<br>
+- if (refaults !=3D target_lruvec->refaults ||<br>
++ WORKINGSET_ACTIVATE_FILE);<br>
++ if (refaults !=3D target_lruvec->refaults[1] ||<br>
+      inactive_is_low(target_lruvec, LRU_INACTIVE_FILE))<br>
+  sc->may_deactivate |=3D DEACTIVATE_FILE;<br>
+  else<br>
+@@ -3026,8 +3029,10 @@ static void snapshot_refaults(struct mem_cgroup<br>
+*target_memcg, pg_data_t *pgdat)<br>
+  unsigned long refaults;<br>
+<br>
+  target_lruvec =3D mem_cgroup_lruvec(target_memcg, pgdat);<br>
+- refaults =3D lruvec_page_state(target_lruvec, WORKINGSET_ACTIVATE);<br>
+- target_lruvec->refaults =3D refaults;<br>
++ refaults =3D lruvec_page_state(target_lruvec, WORKINGSET_ACTIVATE_ANON);<br>
++ target_lruvec->refaults[0] =3D refaults;<br>
++ refaults =3D lruvec_page_state(target_lruvec, WORKINGSET_ACTIVATE_FILE);<br>
++ target_lruvec->refaults[1] =3D refaults;<br>
+ }<br>
+<br>
+ /*<br>
+diff --git a/mm/vmstat.c b/mm/vmstat.c<br>
+index 78d53378db99..3cdf8e9b0ba2 100644<br>
+--- a/mm/vmstat.c<br>
++++ b/mm/vmstat.c<br>
+@@ -1146,8 +1146,10 @@ const char * const vmstat_text[] =3D {<br>
+  "nr_isolated_anon",<br>
+  "nr_isolated_file",<br>
+  "workingset_nodes",<br>
+- "workingset_refault",<br>
+- "workingset_activate",<br>
++ "workingset_refault_anon",<br>
++ "workingset_refault_file",<br>
++ "workingset_activate_anon",<br>
++ "workingset_activate_file",<br>
+  "workingset_restore",<br>
+  "workingset_nodereclaim",<br>
+  "nr_anon_pages",<br>
+diff --git a/mm/workingset.c b/mm/workingset.c<br>
+index 474186b76ced..5fb8f85d1fec 100644<br>
+--- a/mm/workingset.c<br>
++++ b/mm/workingset.c<br>
+@@ -15,6 +15,7 @@<br>
+ #include <linux/dax.h><br>
+ #include <linux/fs.h><br>
+ #include <linux/mm.h><br>
++#include <linux/mm_inline.h><br>
+<br>
+ /*<br>
+  * Double CLOCK lists<br>
+@@ -156,7 +157,7 @@<br>
+  *<br>
+  * Implementation<br>
+  *<br>
+- * For each node's file LRU lists, a counter for inactive evictions<br>
++ * For each node's anon/file LRU lists, a counter for inactive evictions<br>
+  * and activations is maintained (node->inactive_age).<br>
+  *<br>
+  * On eviction, a snapshot of this counter (along with some bits to<br>
+@@ -213,7 +214,8 @@ static void unpack_shadow(void *shadow, int<br>
+*memcgidp, pg_data_t **pgdat,<br>
+  *workingsetp =3D workingset;<br>
+ }<br>
+<br>
+-static void advance_inactive_age(struct mem_cgroup *memcg, pg_data_t *pgda=<br>
+t)<br>
++static void advance_inactive_age(struct mem_cgroup *memcg, pg_data_t *pgda=<br>
+t,<br>
++ int is_file)<br>
+ {<br>
+  /*<br>
+  * Reclaiming a cgroup means reclaiming all its children in a<br>
+@@ -230,7 +232,7 @@ static void advance_inactive_age(struct mem_cgroup<br>
+*memcg, pg_data_t *pgdat)<br>
+  struct lruvec *lruvec;<br>
+<br>
+  lruvec =3D mem_cgroup_lruvec(memcg, pgdat);<br>
+- atomic_long_inc(&lruvec->inactive_age);<br>
++ atomic_long_inc(&lruvec->inactive_age[is_file]);<br>
+  } while (memcg && (memcg =3D parent_mem_cgroup(memcg)));<br>
+ }<br>
+<br>
+@@ -248,18 +250,19 @@ void *workingset_eviction(struct page *page,<br>
+struct mem_cgroup *target_memcg)<br>
+  unsigned long eviction;<br>
+  struct lruvec *lruvec;<br>
+  int memcgid;<br>
++ int is_file =3D page_is_file_cache(page);<br>
+<br>
+  /* Page is fully exclusive and pins page->mem_cgroup */<br>
+  VM_BUG_ON_PAGE(PageLRU(page), page);<br>
+  VM_BUG_ON_PAGE(page_count(page), page);<br>
+  VM_BUG_ON_PAGE(!PageLocked(page), page);<br>
+<br>
+- advance_inactive_age(page_memcg(page), pgdat);<br>
++ advance_inactive_age(page_memcg(page), pgdat, is_file);<br>
+<br>
+  lruvec =3D mem_cgroup_lruvec(target_memcg, pgdat);<br>
+  /* XXX: target_memcg can be NULL, go through lruvec */<br>
+  memcgid =3D mem_cgroup_id(lruvec_memcg(lruvec));<br>
+- eviction =3D atomic_long_read(&lruvec->inactive_age);<br>
++ eviction =3D atomic_long_read(&lruvec->inactive_age[is_file]);<br>
+  return pack_shadow(memcgid, pgdat, eviction, PageWorkingset(page));<br>
+ }<br>
+<br>
+@@ -278,13 +281,16 @@ void workingset_refault(struct page *page, void *shad=<br>
+ow)<br>
+  struct lruvec *eviction_lruvec;<br>
+  unsigned long refault_distance;<br>
+  struct pglist_data *pgdat;<br>
+- unsigned long active_file;<br>
++ unsigned long active;<br>
+  struct mem_cgroup *memcg;<br>
+  unsigned long eviction;<br>
+  struct lruvec *lruvec;<br>
+  unsigned long refault;<br>
+  bool workingset;<br>
+  int memcgid;<br>
++ int is_file =3D page_is_file_cache(page);<br>
++ enum lru_list active_lru =3D page_lru_base_type(page) + LRU_ACTIVE;<br>
++ enum node_stat_item workingset_stat;<br>
+<br>
+  unpack_shadow(shadow, &memcgid, &pgdat, &eviction, &workingset);<br>
+<br>
+@@ -309,8 +315,8 @@ void workingset_refault(struct page *page, void *shadow=<br>
+)<br>
+  if (!mem_cgroup_disabled() && !eviction_memcg)<br>
+  goto out;<br>
+  eviction_lruvec =3D mem_cgroup_lruvec(eviction_memcg, pgdat);<br>
+- refault =3D atomic_long_read(&eviction_lruvec->inactive_age);<br>
+- active_file =3D lruvec_page_state(eviction_lruvec, NR_ACTIVE_FILE);<br>
++ refault =3D atomic_long_read(&eviction_lruvec->inactive_age[is_file]);<br>
++ active =3D lruvec_page_state(eviction_lruvec, active_lru);<br>
+<br>
+  /*<br>
+  * Calculate the refault distance<br>
+@@ -341,19 +347,21 @@ void workingset_refault(struct page *page, void *shad=<br>
+ow)<br>
+  memcg =3D page_memcg(page);<br>
+  lruvec =3D mem_cgroup_lruvec(memcg, pgdat);<br>
+<br>
+- inc_lruvec_state(lruvec, WORKINGSET_REFAULT);<br>
++ workingset_stat =3D WORKINGSET_REFAULT_BASE + is_file;<br>
++ inc_lruvec_state(lruvec, workingset_stat);<br>
+<br>
+  /*<br>
+  * Compare the distance to the existing workingset size. We<br>
+  * don't act on pages that couldn't stay resident even if all<br>
+  * the memory was available to the page cache.<br>
+  */<br>
+- if (refault_distance > active_file)<br>
++ if (refault_distance > active)<br>
+  goto out;<br>
+<br>
+  SetPageActive(page);<br>
+- advance_inactive_age(memcg, pgdat);<br>
+- inc_lruvec_state(lruvec, WORKINGSET_ACTIVATE);<br>
++ advance_inactive_age(memcg, pgdat, is_file);<br>
++ workingset_stat =3D WORKINGSET_ACTIVATE_BASE + is_file;<br>
++ inc_lruvec_state(lruvec, workingset_stat);<br>
+<br>
+  /* Page was active prior to eviction */<br>
+  if (workingset) {<br>
+@@ -371,6 +379,7 @@ void workingset_refault(struct page *page, void *shadow=<br>
+)<br>
+ void workingset_activation(struct page *page)<br>
+ {<br>
+  struct mem_cgroup *memcg;<br>
++ int is_file =3D page_is_file_cache(page);<br>
+<br>
+  rcu_read_lock();<br>
+  /*<br>
+@@ -383,7 +392,7 @@ void workingset_activation(struct page *page)<br>
+  memcg =3D page_memcg_rcu(page);<br>
+  if (!mem_cgroup_disabled() && !memcg)<br>
+  goto out;<br>
+- advance_inactive_age(memcg, page_pgdat(page));<br>
++ advance_inactive_age(memcg, page_pgdat(page), is_file);<br>
+ out:<br>
+  rcu_read_unlock();<br>
+ }<br>
+--=20<br>
+2.17.1<br>
+<br>
+<br>
+

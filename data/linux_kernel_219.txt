@@ -1,0 +1,35 @@
+Signed-off-by: Andy Shevchenko <andriy.shevchenko@xxxxxxxxxxxxxxx><br>
+---<br>
+ arch/x86/configs/i386_defconfig   | 1 +<br>
+ arch/x86/configs/x86_64_defconfig | 1 +<br>
+ 2 files changed, 2 insertions(+)<br>
+<br>
+diff --git a/arch/x86/configs/i386_defconfig b/arch/x86/configs/i386_defconfig<br>
+index d696336674b0..e36dc940a83c 100644<br>
+--- a/arch/x86/configs/i386_defconfig<br>
++++ b/arch/x86/configs/i386_defconfig<br>
+@@ -309,6 +309,7 @@ CONFIG_GPIO_PCA953X=y<br>
+ CONFIG_GPIO_PCA953X_IRQ=y<br>
+ CONFIG_GPIO_PCH=m<br>
+ CONFIG_GPIO_SCH=m<br>
++CONFIG_GPIO_SIM=m<br>
+ CONFIG_GPIO_XILINX=m<br>
+ CONFIG_X86_EXTENDED_PLATFORM=y<br>
+ CONFIG_X86_INTEL_MID=y<br>
+diff --git a/arch/x86/configs/x86_64_defconfig b/arch/x86/configs/x86_64_defconfig<br>
+index 20a955acf775..97d42dd67c8a 100644<br>
+--- a/arch/x86/configs/x86_64_defconfig<br>
++++ b/arch/x86/configs/x86_64_defconfig<br>
+@@ -305,6 +305,7 @@ CONFIG_GPIO_PCA953X=y<br>
+ CONFIG_GPIO_PCA953X_IRQ=y<br>
+ CONFIG_GPIO_PCH=m<br>
+ CONFIG_GPIO_SCH=m<br>
++CONFIG_GPIO_SIM=m<br>
+ CONFIG_GPIO_XILINX=m<br>
+ CONFIG_X86_EXTENDED_PLATFORM=y<br>
+ CONFIG_X86_INTEL_MID=y<br>
+-- <br>
+2.30.2<br>
+<br>
+<br>
+

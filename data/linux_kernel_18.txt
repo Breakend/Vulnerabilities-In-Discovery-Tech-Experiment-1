@@ -1,0 +1,575 @@
+Tested on the OnePlus 7 Pro (including DMA).<br>
+<br>
+Signed-off-by: Caleb Connolly <caleb@xxxxxxxxxxxxx><br>
+Reviewed-by: Vinod Koul <vkoul@xxxxxxxxxx><br>
+Reviewed-by: Bhupesh Sharma <bhupesh.sharma@xxxxxxxxxx><br>
+---<br>
+ arch/arm64/boot/dts/qcom/sm8150.dtsi | 521 +++++++++++++++++++++++++++<br>
+ 1 file changed, 521 insertions(+)<br>
+<br>
+diff --git a/arch/arm64/boot/dts/qcom/sm8150.dtsi b/arch/arm64/boot/dts/qcom/sm8150.dtsi<br>
+index 543417d74216..7207a3689d9d 100644<br>
+--- a/arch/arm64/boot/dts/qcom/sm8150.dtsi<br>
++++ b/arch/arm64/boot/dts/qcom/sm8150.dtsi<br>
+@@ -588,6 +588,111 @@ qupv3_id_0: geniqup@8c0000 {<br>
+ 			#size-cells = <2>;<br>
+ 			ranges;<br>
+ 			status = "disabled";<br>
++<br>
++			i2c0: i2c@880000 {<br>
++				compatible = "qcom,geni-i2c";<br>
++				reg = <0 0x00880000 0 0x4000>;<br>
++				clock-names = "se";<br>
++				clocks = <&gcc GCC_QUPV3_WRAP0_S0_CLK>;<br>
++				pinctrl-names = "default";<br>
++				pinctrl-0 = <&qup_i2c0_default>;<br>
++				interrupts = <GIC_SPI 601 IRQ_TYPE_LEVEL_HIGH>;<br>
++				#address-cells = <1>;<br>
++				#size-cells = <0>;<br>
++				status = "disabled";<br>
++			};<br>
++<br>
++			i2c1: i2c@884000 {<br>
++				compatible = "qcom,geni-i2c";<br>
++				reg = <0 0x00884000 0 0x4000>;<br>
++				clock-names = "se";<br>
++				clocks = <&gcc GCC_QUPV3_WRAP0_S1_CLK>;<br>
++				pinctrl-names = "default";<br>
++				pinctrl-0 = <&qup_i2c1_default>;<br>
++				interrupts = <GIC_SPI 602 IRQ_TYPE_LEVEL_HIGH>;<br>
++				#address-cells = <1>;<br>
++				#size-cells = <0>;<br>
++				status = "disabled";<br>
++			};<br>
++<br>
++			i2c2: i2c@888000 {<br>
++				compatible = "qcom,geni-i2c";<br>
++				reg = <0 0x00888000 0 0x4000>;<br>
++				clock-names = "se";<br>
++				clocks = <&gcc GCC_QUPV3_WRAP0_S2_CLK>;<br>
++				pinctrl-names = "default";<br>
++				pinctrl-0 = <&qup_i2c2_default>;<br>
++				interrupts = <GIC_SPI 603 IRQ_TYPE_LEVEL_HIGH>;<br>
++				#address-cells = <1>;<br>
++				#size-cells = <0>;<br>
++				status = "disabled";<br>
++			};<br>
++<br>
++			i2c3: i2c@88c000 {<br>
++				compatible = "qcom,geni-i2c";<br>
++				reg = <0 0x0088c000 0 0x4000>;<br>
++				clock-names = "se";<br>
++				clocks = <&gcc GCC_QUPV3_WRAP0_S3_CLK>;<br>
++				pinctrl-names = "default";<br>
++				pinctrl-0 = <&qup_i2c3_default>;<br>
++				interrupts = <GIC_SPI 604 IRQ_TYPE_LEVEL_HIGH>;<br>
++				#address-cells = <1>;<br>
++				#size-cells = <0>;<br>
++				status = "disabled";<br>
++			};<br>
++<br>
++			i2c4: i2c@890000 {<br>
++				compatible = "qcom,geni-i2c";<br>
++				reg = <0 0x00890000 0 0x4000>;<br>
++				clock-names = "se";<br>
++				clocks = <&gcc GCC_QUPV3_WRAP0_S4_CLK>;<br>
++				pinctrl-names = "default";<br>
++				pinctrl-0 = <&qup_i2c4_default>;<br>
++				interrupts = <GIC_SPI 605 IRQ_TYPE_LEVEL_HIGH>;<br>
++				#address-cells = <1>;<br>
++				#size-cells = <0>;<br>
++				status = "disabled";<br>
++			};<br>
++<br>
++			i2c5: i2c@894000 {<br>
++				compatible = "qcom,geni-i2c";<br>
++				reg = <0 0x00894000 0 0x4000>;<br>
++				clock-names = "se";<br>
++				clocks = <&gcc GCC_QUPV3_WRAP0_S5_CLK>;<br>
++				pinctrl-names = "default";<br>
++				pinctrl-0 = <&qup_i2c5_default>;<br>
++				interrupts = <GIC_SPI 606 IRQ_TYPE_LEVEL_HIGH>;<br>
++				#address-cells = <1>;<br>
++				#size-cells = <0>;<br>
++				status = "disabled";<br>
++			};<br>
++<br>
++			i2c6: i2c@898000 {<br>
++				compatible = "qcom,geni-i2c";<br>
++				reg = <0 0x00898000 0 0x4000>;<br>
++				clock-names = "se";<br>
++				clocks = <&gcc GCC_QUPV3_WRAP0_S6_CLK>;<br>
++				pinctrl-names = "default";<br>
++				pinctrl-0 = <&qup_i2c6_default>;<br>
++				interrupts = <GIC_SPI 607 IRQ_TYPE_LEVEL_HIGH>;<br>
++				#address-cells = <1>;<br>
++				#size-cells = <0>;<br>
++				status = "disabled";<br>
++			};<br>
++<br>
++			i2c7: i2c@89c000 {<br>
++				compatible = "qcom,geni-i2c";<br>
++				reg = <0 0x0089c000 0 0x4000>;<br>
++				clock-names = "se";<br>
++				clocks = <&gcc GCC_QUPV3_WRAP0_S7_CLK>;<br>
++				pinctrl-names = "default";<br>
++				pinctrl-0 = <&qup_i2c7_default>;<br>
++				interrupts = <GIC_SPI 607 IRQ_TYPE_LEVEL_HIGH>;<br>
++				#address-cells = <1>;<br>
++				#size-cells = <0>;<br>
++				status = "disabled";<br>
++			};<br>
++<br>
+ 		};<br>
+ <br>
+ 		qupv3_id_1: geniqup@ac0000 {<br>
+@@ -602,6 +707,58 @@ qupv3_id_1: geniqup@ac0000 {<br>
+ 			ranges;<br>
+ 			status = "disabled";<br>
+ <br>
++			i2c8: i2c@a80000 {<br>
++				compatible = "qcom,geni-i2c";<br>
++				reg = <0 0x00a80000 0 0x4000>;<br>
++				clock-names = "se";<br>
++				clocks = <&gcc GCC_QUPV3_WRAP1_S0_CLK>;<br>
++				pinctrl-names = "default";<br>
++				pinctrl-0 = <&qup_i2c8_default>;<br>
++				interrupts = <GIC_SPI 353 IRQ_TYPE_LEVEL_HIGH>;<br>
++				#address-cells = <1>;<br>
++				#size-cells = <0>;<br>
++				status = "disabled";<br>
++			};<br>
++<br>
++			i2c9: i2c@a84000 {<br>
++				compatible = "qcom,geni-i2c";<br>
++				reg = <0 0x00a84000 0 0x4000>;<br>
++				clock-names = "se";<br>
++				clocks = <&gcc GCC_QUPV3_WRAP1_S1_CLK>;<br>
++				pinctrl-names = "default";<br>
++				pinctrl-0 = <&qup_i2c9_default>;<br>
++				interrupts = <GIC_SPI 354 IRQ_TYPE_LEVEL_HIGH>;<br>
++				#address-cells = <1>;<br>
++				#size-cells = <0>;<br>
++				status = "disabled";<br>
++			};<br>
++<br>
++			i2c10: i2c@a88000 {<br>
++				compatible = "qcom,geni-i2c";<br>
++				reg = <0 0x00a88000 0 0x4000>;<br>
++				clock-names = "se";<br>
++				clocks = <&gcc GCC_QUPV3_WRAP1_S2_CLK>;<br>
++				pinctrl-names = "default";<br>
++				pinctrl-0 = <&qup_i2c10_default>;<br>
++				interrupts = <GIC_SPI 355 IRQ_TYPE_LEVEL_HIGH>;<br>
++				#address-cells = <1>;<br>
++				#size-cells = <0>;<br>
++				status = "disabled";<br>
++			};<br>
++<br>
++			i2c11: i2c@a8c000 {<br>
++				compatible = "qcom,geni-i2c";<br>
++				reg = <0 0x00a8c000 0 0x4000>;<br>
++				clock-names = "se";<br>
++				clocks = <&gcc GCC_QUPV3_WRAP1_S3_CLK>;<br>
++				pinctrl-names = "default";<br>
++				pinctrl-0 = <&qup_i2c11_default>;<br>
++				interrupts = <GIC_SPI 356 IRQ_TYPE_LEVEL_HIGH>;<br>
++				#address-cells = <1>;<br>
++				#size-cells = <0>;<br>
++				status = "disabled";<br>
++			};<br>
++<br>
+ 			uart2: serial@a90000 {<br>
+ 				compatible = "qcom,geni-debug-uart";<br>
+ 				reg = <0x0 0x00a90000 0x0 0x4000>;<br>
+@@ -610,6 +767,32 @@ uart2: serial@a90000 {<br>
+ 				interrupts = <GIC_SPI 357 IRQ_TYPE_LEVEL_HIGH>;<br>
+ 				status = "disabled";<br>
+ 			};<br>
++<br>
++			i2c12: i2c@a90000 {<br>
++				compatible = "qcom,geni-i2c";<br>
++				reg = <0 0x00a90000 0 0x4000>;<br>
++				clock-names = "se";<br>
++				clocks = <&gcc GCC_QUPV3_WRAP1_S4_CLK>;<br>
++				pinctrl-names = "default";<br>
++				pinctrl-0 = <&qup_i2c12_default>;<br>
++				interrupts = <GIC_SPI 357 IRQ_TYPE_LEVEL_HIGH>;<br>
++				#address-cells = <1>;<br>
++				#size-cells = <0>;<br>
++				status = "disabled";<br>
++			};<br>
++<br>
++			i2c16: i2c@94000 {<br>
++				compatible = "qcom,geni-i2c";<br>
++				reg = <0 0x0094000 0 0x4000>;<br>
++				clock-names = "se";<br>
++				clocks = <&gcc GCC_QUPV3_WRAP1_S5_CLK>;<br>
++				pinctrl-names = "default";<br>
++				pinctrl-0 = <&qup_i2c16_default>;<br>
++				interrupts = <GIC_SPI 358 IRQ_TYPE_LEVEL_HIGH>;<br>
++				#address-cells = <1>;<br>
++				#size-cells = <0>;<br>
++				status = "disabled";<br>
++			};<br>
+ 		};<br>
+ <br>
+ 		qupv3_id_2: geniqup@cc0000 {<br>
+@@ -624,6 +807,84 @@ qupv3_id_2: geniqup@cc0000 {<br>
+ 			#size-cells = <2>;<br>
+ 			ranges;<br>
+ 			status = "disabled";<br>
++<br>
++			i2c17: i2c@c80000 {<br>
++				compatible = "qcom,geni-i2c";<br>
++				reg = <0 0x00c80000 0 0x4000>;<br>
++				clock-names = "se";<br>
++				clocks = <&gcc GCC_QUPV3_WRAP2_S0_CLK>;<br>
++				pinctrl-names = "default";<br>
++				pinctrl-0 = <&qup_i2c17_default>;<br>
++				interrupts = <GIC_SPI 373 IRQ_TYPE_LEVEL_HIGH>;<br>
++				#address-cells = <1>;<br>
++				#size-cells = <0>;<br>
++				status = "disabled";<br>
++			};<br>
++<br>
++			i2c18: i2c@c84000 {<br>
++				compatible = "qcom,geni-i2c";<br>
++				reg = <0 0x00c84000 0 0x4000>;<br>
++				clock-names = "se";<br>
++				clocks = <&gcc GCC_QUPV3_WRAP2_S1_CLK>;<br>
++				pinctrl-names = "default";<br>
++				pinctrl-0 = <&qup_i2c18_default>;<br>
++				interrupts = <GIC_SPI 583 IRQ_TYPE_LEVEL_HIGH>;<br>
++				#address-cells = <1>;<br>
++				#size-cells = <0>;<br>
++				status = "disabled";<br>
++			};<br>
++<br>
++			i2c19: i2c@c88000 {<br>
++				compatible = "qcom,geni-i2c";<br>
++				reg = <0 0x00c88000 0 0x4000>;<br>
++				clock-names = "se";<br>
++				clocks = <&gcc GCC_QUPV3_WRAP2_S2_CLK>;<br>
++				pinctrl-names = "default";<br>
++				pinctrl-0 = <&qup_i2c19_default>;<br>
++				interrupts = <GIC_SPI 584 IRQ_TYPE_LEVEL_HIGH>;<br>
++				#address-cells = <1>;<br>
++				#size-cells = <0>;<br>
++				status = "disabled";<br>
++			};<br>
++<br>
++			i2c13: i2c@c8c000 {<br>
++				compatible = "qcom,geni-i2c";<br>
++				reg = <0 0x00c8c000 0 0x4000>;<br>
++				clock-names = "se";<br>
++				clocks = <&gcc GCC_QUPV3_WRAP2_S3_CLK>;<br>
++				pinctrl-names = "default";<br>
++				pinctrl-0 = <&qup_i2c13_default>;<br>
++				interrupts = <GIC_SPI 585 IRQ_TYPE_LEVEL_HIGH>;<br>
++				#address-cells = <1>;<br>
++				#size-cells = <0>;<br>
++				status = "disabled";<br>
++			};<br>
++<br>
++			i2c14: i2c@c90000 {<br>
++				compatible = "qcom,geni-i2c";<br>
++				reg = <0 0x00c90000 0 0x4000>;<br>
++				clock-names = "se";<br>
++				clocks = <&gcc GCC_QUPV3_WRAP2_S4_CLK>;<br>
++				pinctrl-names = "default";<br>
++				pinctrl-0 = <&qup_i2c14_default>;<br>
++				interrupts = <GIC_SPI 586 IRQ_TYPE_LEVEL_HIGH>;<br>
++				#address-cells = <1>;<br>
++				#size-cells = <0>;<br>
++				status = "disabled";<br>
++			};<br>
++<br>
++			i2c15: i2c@c94000 {<br>
++				compatible = "qcom,geni-i2c";<br>
++				reg = <0 0x00c94000 0 0x4000>;<br>
++				clock-names = "se";<br>
++				clocks = <&gcc GCC_QUPV3_WRAP2_S5_CLK>;<br>
++				pinctrl-names = "default";<br>
++				pinctrl-0 = <&qup_i2c15_default>;<br>
++				interrupts = <GIC_SPI 587 IRQ_TYPE_LEVEL_HIGH>;<br>
++				#address-cells = <1>;<br>
++				#size-cells = <0>;<br>
++				status = "disabled";<br>
++			};<br>
+ 		};<br>
+ <br>
+ 		config_noc: interconnect@1500000 {<br>
+@@ -947,6 +1208,266 @@ tlmm: pinctrl@3100000 {<br>
+ 			#gpio-cells = <2>;<br>
+ 			interrupt-controller;<br>
+ 			#interrupt-cells = <2>;<br>
++<br>
++			qup_i2c0_default: qup-i2c0-default {<br>
++				mux {<br>
++					pins = "gpio0", "gpio1";<br>
++					function = "qup0";<br>
++				};<br>
++<br>
++				config {<br>
++					pins = "gpio0", "gpio1";<br>
++					drive-strength = <0x02>;<br>
++					bias-disable;<br>
++				};<br>
++			};<br>
++<br>
++			qup_i2c1_default: qup-i2c1-default {<br>
++				mux {<br>
++					pins = "gpio114", "gpio115";<br>
++					function = "qup1";<br>
++				};<br>
++<br>
++				config {<br>
++					pins = "gpio114", "gpio115";<br>
++					drive-strength = <0x02>;<br>
++					bias-disable;<br>
++				};<br>
++			};<br>
++<br>
++			qup_i2c2_default: qup-i2c2-default {<br>
++				mux {<br>
++					pins = "gpio126", "gpio127";<br>
++					function = "qup2";<br>
++				};<br>
++<br>
++				config {<br>
++					pins = "gpio126", "gpio127";<br>
++					drive-strength = <0x02>;<br>
++					bias-disable;<br>
++				};<br>
++			};<br>
++<br>
++			qup_i2c3_default: qup-i2c3-default {<br>
++				mux {<br>
++					pins = "gpio144", "gpio145";<br>
++					function = "qup3";<br>
++				};<br>
++<br>
++				config {<br>
++					pins = "gpio144", "gpio145";<br>
++					drive-strength = <0x02>;<br>
++					bias-disable;<br>
++				};<br>
++			};<br>
++<br>
++			qup_i2c4_default: qup-i2c4-default {<br>
++				mux {<br>
++					pins = "gpio51", "gpio52";<br>
++					function = "qup4";<br>
++				};<br>
++<br>
++				config {<br>
++					pins = "gpio51", "gpio52";<br>
++					drive-strength = <0x02>;<br>
++					bias-disable;<br>
++				};<br>
++			};<br>
++<br>
++			qup_i2c5_default: qup-i2c5-default {<br>
++				mux {<br>
++					pins = "gpio121", "gpio122";<br>
++					function = "qup5";<br>
++				};<br>
++<br>
++				config {<br>
++					pins = "gpio121", "gpio122";<br>
++					drive-strength = <0x02>;<br>
++					bias-disable;<br>
++				};<br>
++			};<br>
++<br>
++			qup_i2c6_default: qup-i2c6-default {<br>
++				mux {<br>
++					pins = "gpio6", "gpio7";<br>
++					function = "qup6";<br>
++				};<br>
++<br>
++				config {<br>
++					pins = "gpio6", "gpio7";<br>
++					drive-strength = <0x02>;<br>
++					bias-disable;<br>
++				};<br>
++			};<br>
++<br>
++			qup_i2c7_default: qup-i2c7-default {<br>
++				mux {<br>
++					pins = "gpio98", "gpio99";<br>
++					function = "qup7";<br>
++				};<br>
++<br>
++				config {<br>
++					pins = "gpio98", "gpio99";<br>
++					drive-strength = <0x02>;<br>
++					bias-disable;<br>
++				};<br>
++			};<br>
++<br>
++			qup_i2c8_default: qup-i2c8-default {<br>
++				mux {<br>
++					pins = "gpio88", "gpio89";<br>
++					function = "qup8";<br>
++				};<br>
++<br>
++				config {<br>
++					pins = "gpio88", "gpio89";<br>
++					drive-strength = <0x02>;<br>
++					bias-disable;<br>
++				};<br>
++			};<br>
++<br>
++			qup_i2c9_default: qup-i2c9-default {<br>
++				mux {<br>
++					pins = "gpio39", "gpio40";<br>
++					function = "qup9";<br>
++				};<br>
++<br>
++				config {<br>
++					pins = "gpio39", "gpio40";<br>
++					drive-strength = <0x02>;<br>
++					bias-disable;<br>
++				};<br>
++			};<br>
++<br>
++			qup_i2c10_default: qup-i2c10-default {<br>
++				mux {<br>
++					pins = "gpio9", "gpio10";<br>
++					function = "qup10";<br>
++				};<br>
++<br>
++				config {<br>
++					pins = "gpio9", "gpio10";<br>
++					drive-strength = <0x02>;<br>
++					bias-disable;<br>
++				};<br>
++			};<br>
++<br>
++			qup_i2c11_default: qup-i2c11-default {<br>
++				mux {<br>
++					pins = "gpio94", "gpio95";<br>
++					function = "qup11";<br>
++				};<br>
++<br>
++				config {<br>
++					pins = "gpio94", "gpio95";<br>
++					drive-strength = <0x02>;<br>
++					bias-disable;<br>
++				};<br>
++			};<br>
++<br>
++			qup_i2c12_default: qup-i2c12-default {<br>
++				mux {<br>
++					pins = "gpio83", "gpio84";<br>
++					function = "qup12";<br>
++				};<br>
++<br>
++				config {<br>
++					pins = "gpio83", "gpio84";<br>
++					drive-strength = <0x02>;<br>
++					bias-disable;<br>
++				};<br>
++			};<br>
++<br>
++			qup_i2c13_default: qup-i2c13-default {<br>
++				mux {<br>
++					pins = "gpio43", "gpio44";<br>
++					function = "qup13";<br>
++				};<br>
++<br>
++				config {<br>
++					pins = "gpio43", "gpio44";<br>
++					drive-strength = <0x02>;<br>
++					bias-disable;<br>
++				};<br>
++			};<br>
++<br>
++			qup_i2c14_default: qup-i2c14-default {<br>
++				mux {<br>
++					pins = "gpio47", "gpio48";<br>
++					function = "qup14";<br>
++				};<br>
++<br>
++				config {<br>
++					pins = "gpio47", "gpio48";<br>
++					drive-strength = <0x02>;<br>
++					bias-disable;<br>
++				};<br>
++			};<br>
++<br>
++			qup_i2c15_default: qup-i2c15-default {<br>
++				mux {<br>
++					pins = "gpio27", "gpio28";<br>
++					function = "qup15";<br>
++				};<br>
++<br>
++				config {<br>
++					pins = "gpio27", "gpio28";<br>
++					drive-strength = <0x02>;<br>
++					bias-disable;<br>
++				};<br>
++			};<br>
++<br>
++			qup_i2c16_default: qup-i2c16-default {<br>
++				mux {<br>
++					pins = "gpio86", "gpio85";<br>
++					function = "qup16";<br>
++				};<br>
++<br>
++				config {<br>
++					pins = "gpio86", "gpio85";<br>
++					drive-strength = <0x02>;<br>
++					bias-disable;<br>
++				};<br>
++			};<br>
++<br>
++			qup_i2c17_default: qup-i2c17-default {<br>
++				mux {<br>
++					pins = "gpio55", "gpio56";<br>
++					function = "qup17";<br>
++				};<br>
++<br>
++				config {<br>
++					pins = "gpio55", "gpio56";<br>
++					drive-strength = <0x02>;<br>
++					bias-disable;<br>
++				};<br>
++			};<br>
++<br>
++			qup_i2c18_default: qup-i2c18-default {<br>
++				mux {<br>
++					pins = "gpio23", "gpio24";<br>
++					function = "qup18";<br>
++				};<br>
++<br>
++				config {<br>
++					pins = "gpio23", "gpio24";<br>
++					drive-strength = <0x02>;<br>
++					bias-disable;<br>
++				};<br>
++			};<br>
++<br>
++			qup_i2c19_default: qup-i2c19-default {<br>
++				mux {<br>
++					pins = "gpio57", "gpio58";<br>
++					function = "qup19";<br>
++				};<br>
++<br>
++				config {<br>
++					pins = "gpio57", "gpio58";<br>
++					drive-strength = <0x02>;<br>
++					bias-disable;<br>
++				};<br>
++			};<br>
+ 		};<br>
+ <br>
+ 		remoteproc_mpss: remoteproc@4080000 {<br>
+-- <br>
+2.30.2<br>
+<br>
+<br>
+<br>
+

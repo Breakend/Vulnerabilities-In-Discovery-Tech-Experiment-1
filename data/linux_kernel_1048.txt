@@ -1,0 +1,31 @@
+Quoting Jian Dong (2021-04-07 18:53:12)<br>
+><i> On Tue, 30 Mar 2021 19:16:48 -0700</i><br>
+><i> Stephen Boyd <sboyd@xxxxxxxxxx> wrote:</i><br>
+><i> </i><br>
+><i> > Quoting Jian Dong (2021-03-22 20:10:34)</i><br>
+><i> > > From: Jian Dong <dongjian@xxxxxxxxxx></i><br>
+><i> > > </i><br>
+><i> > >  when register failed, clk will be freed, it will generate dangling</i><br>
+><i> > > pointer problem in later reference. it should return directly.</i><br>
+><i> > > </i><br>
+><i> > > Signed-off-by: Jian Dong <dongjian@xxxxxxxxxx></i><br>
+><i> > > ---  </i><br>
+><i> > </i><br>
+><i> > Any Fixes tag?</i><br>
+><i> </i><br>
+><i> Sorry for late, I'm unfamiliar with tag rule.</i><br>
+><i> </i><br>
+><i> For this patch include two files commit 2f77296d3 and fe37b482</i><br>
+><i> maybe likes:</i><br>
+><i> </i><br>
+><i> Fixes: 2f77296d3        (clk: imx: add lpcg clock support)</i><br>
+><i> Fixes: fe37b482         (clk: imx: add scu clock common part)</i><br>
+><i> </i><br>
+><i> and I noticed this patch has been merged, do I need RESEND again with</i><br>
+><i> tags like above?</i><br>
+><i> </i><br>
+<br>
+Looks like Abel already picked it up so no need to resend.<br>
+<br>
+<br>
+

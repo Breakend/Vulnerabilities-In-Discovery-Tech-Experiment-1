@@ -1,0 +1,40 @@
+On 08/04/2021 17:08, Arnd Bergmann wrote:<br>
+><i> Greetings to all Arm platform maintainers,</i><br>
+><i> </i><br>
+><i> I've just gone through the DT merges I've received so far and, with a</i><br>
+><i> little help from Rob,</i><br>
+><i> managed to run 'make dtbs_check W=1' before and after, to see what</i><br>
+><i> warnings we get.</i><br>
+><i> The good news is that the number of warnings is going down, but</i><br>
+><i> unfortunately there</i><br>
+><i> is still an unmanageable amount of remaining warnings, and some new</i><br>
+><i> ones crept in.</i><br>
+><i> </i><br>
+><i> I'm still working on my tooling for this, to catch these better, but</i><br>
+><i> ideally I think we should</i><br>
+><i> try to not introduce new warnings. I think some platforms are already</i><br>
+><i> clean, and I did</i><br>
+><i> not see any new warnings for mvebu, samsung and broadcom. There were a lot of</i><br>
+><i> warnings from .dtsi files, and I probably did an incomplete job at</i><br>
+><i> deduplicating those.</i><br>
+><i> </i><br>
+><i> See below for the other platforms, and the new warnings that I found.</i><br>
+><i> If these are</i><br>
+><i> valid, please send a fixup before the merge window, and let me know if</i><br>
+><i> you have ideas</i><br>
+><i> for how we should handle these in the future.</i><br>
+><i> </i><br>
+><i> For this merge window, I don't think any of them are show-stoppers (Rob, let me</i><br>
+><i> know if you disagree), but in the long run we may want to gradually enforce</i><br>
+><i> a rule about not merging changes that introduce any new warnings, in order to</i><br>
+><i> have a chance of cleaning up the existing ones.</i><br>
+<br>
++1 for such rule, although the best would be to get a report about new<br>
+warnings on posted patches or shortly after applying, e.g. via 0-day<br>
+kbuild robot.<br>
+<br>
+Best regards,<br>
+Krzysztof<br>
+<br>
+<br>
+

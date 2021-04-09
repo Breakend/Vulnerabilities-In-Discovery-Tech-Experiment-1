@@ -1,0 +1,78 @@
+On Wed, Apr 07, 2021 at 05:12:06PM -0700, Stephen Boyd wrote:<br>
+><i> Quoting Stephan Gerhold (2021-04-05 05:50:26)</i><br>
+><i> > On Fri, Apr 02, 2021 at 10:21:58AM -0700, Stephen Boyd wrote:</i><br>
+><i> > > </i><br>
+><i> > > Ah right, the whole secure world running in 32-bit mode thing. Is</i><br>
+><i> > > msm8916 the only SoC that's using that? Or are there more? If only</i><br>
+><i> > > msm8916 is affected then we could use a combination of CONFIG_ARM64 and</i><br>
+><i> > > the compatible string to differentiate and then if more SoCs use 32-bit</i><br>
+><i> > > secure world then we could have a new compatible string like qcom,scm-32</i><br>
+><i> > > that tells us this fact. Maybe this was all discussed before and I</i><br>
+><i> > > missed it. Either way, I'm trying to get rid of this boot call so that</i><br>
+><i> > > we don't have to bounce to the firmware an extra time to figure out</i><br>
+><i> > > something we can figure out from the kernel arch and scm compatible</i><br>
+><i> > > string.</i><br>
+><i> > </i><br>
+><i> > At least MSM8994 also uses SMC32 from what I heard. Overall it's</i><br>
+><i> > probably quite hard to get that right now since all boards were tested</i><br>
+><i> > with the dynamic detection so far. I suppose you could do the opposite,</i><br>
+><i> > add an optional qcom,scm-64 to skip the detection step and force SMC64.</i><br>
+><i> </i><br>
+><i> Isn't SMC64 going to be the overall majority going forward? Legacy</i><br>
+><i> convention is for sure limited to CONFIG_ARM so I'll send another</i><br>
+><i> follow-up patch to add a warning if we find legacy on CONFIG_ARM64.</i><br>
+><i> SMC32 is hopefully no longer being produced given that it was introduced</i><br>
+><i> at the time that the bootloader team wasn't supporting PSCI and didn't</i><br>
+><i> want to support it. So we're making all new boards/SoCs/firmwares do</i><br>
+><i> this calling convention probing to figure out something they already</i><br>
+><i> know?</i><br>
+><i> </i><br>
+><i> Maybe we should probe the calling convention on msm8994/msm8916 and</i><br>
+><i> otherwise assume SMC64 on CONFIG_ARM64 kernels. I'd expect the exception</i><br>
+><i> list to be smaller that way.</i><br>
+><i> </i><br>
+<br>
+Personally, I think it would be best to introduce a new, SMC64 only<br>
+compatible (e.g. "qcom,scm-64" like I mentioned). Then you can skip the<br>
+detection check for the boards that opt-in by adding the compatible.<br>
+You can then use it on all newer boards/SoCs/firmwares where you know<br>
+exactly that there is SMC64.<br>
+<br>
+I would just like to avoid breaking any existing boards where we don't<br>
+know exactly if they have SMC32 or SMC64.<br>
+<br>
+><i> > </i><br>
+><i> > Also note that this could even be firmware-specific, not necessarily</i><br>
+><i> > SoC-specific. There are some ancient MSM8916 firmwares that have legacy</i><br>
+><i> > instead of SMC32. I could also imagine that there is also some SoC where</i><br>
+><i> > there are different firmware versions with SMC32 or SMC64.</i><br>
+><i> </i><br>
+><i> Sure but in theory the firmware would update the DT to indicate what</i><br>
+><i> sort of firmware is there.</i><br>
+><i> </i><br>
+<br>
+In a perfect world the firmware would do that, but there is certainly<br>
+no such mechanism on any of the old SoCs :/<br>
+<br>
+><i> > </i><br>
+><i> > Plus, IMO the overhead for this detection is negligible. At least it</i><br>
+><i> > ensures that we always use the right calling convention. The PSCI code</i><br>
+><i> > probably does much more firmware calls to figure out all supported</i><br>
+><i> > features.</i><br>
+><i> > </i><br>
+><i> </i><br>
+><i> Heh, it tried to ensure we use the right calling convention but broke</i><br>
+><i> things in the process, because the way of detecting the convention isn't</i><br>
+><i> always there. I wouldn't be surprised if this comes up again for other</i><br>
+><i> boards that use TF-A.</i><br>
+<br>
+Ah okay, this sounds like a better reason than just trying to avoid the<br>
+"overhead" of the detection step. :) I still think it should work if you<br>
+just start marking all newer boards/SoCs/... as "qcom,scm-64" or<br>
+something like that, right?<br>
+<br>
+Thanks,<br>
+Stephan<br>
+<br>
+<br>
+

@@ -1,0 +1,14 @@
+
+On 08/04/21 18:27, Sean Christopherson wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+For your approach, can we put the out label after the success path?  Setting<br>
+mmu->root_pgd isn't wrong per se, but doing so might mislead future readers into<br>
+thinking that it's functionally necessary.<br>
+</blockquote>
+<br>
+Indeed, thanks for the speedy review.  I'll get it queued tomorrow.<br>
+<br>
+Paolo<br>
+<br>
+<br>
+

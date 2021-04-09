@@ -1,0 +1,283 @@
+These are wrapper functions which are calling device or host<br>
+enter/exit partial power down functions.<br>
+<br>
+This change is done because we need to separate device and<br>
+host partial power down functions as the programming flow<br>
+has a lot of difference between host and device. With this<br>
+update during partial power down exit driver relies on<br>
+backup value of "GOTGCTL_CURMODE_HOST" to determine the<br>
+mode of core before entering to PPD.<br>
+<br>
+Signed-off-by: Artur Petrosyan <Arthur.Petrosyan@xxxxxxxxxxxx><br>
+Acked-by: Minas Harutyunyan <Minas.Harutyunyan@xxxxxxxxxxxx><br>
+---<br>
+ drivers/usb/dwc2/core.c      | 113 ++++++-----------------------------<br>
+ drivers/usb/dwc2/core.h      |   3 +-<br>
+ drivers/usb/dwc2/core_intr.c |  21 ++++---<br>
+ drivers/usb/dwc2/gadget.c    |  20 ++++---<br>
+ drivers/usb/dwc2/hcd.c       |   2 +-<br>
+ drivers/usb/dwc2/hw.h        |   1 +<br>
+ 6 files changed, 45 insertions(+), 115 deletions(-)<br>
+<br>
+diff --git a/drivers/usb/dwc2/core.c b/drivers/usb/dwc2/core.c<br>
+index fec17a2d2447..cb65f7f60573 100644<br>
+--- a/drivers/usb/dwc2/core.c<br>
++++ b/drivers/usb/dwc2/core.c<br>
+@@ -131,54 +131,26 @@ int dwc2_restore_global_registers(struct dwc2_hsotg *hsotg)<br>
+  * dwc2_exit_partial_power_down() - Exit controller from Partial Power Down.<br>
+  *<br>
+  * @hsotg: Programming view of the DWC_otg controller<br>
++ * @rem_wakeup: indicates whether resume is initiated by Reset.<br>
+  * @restore: Controller registers need to be restored<br>
+  */<br>
+-int dwc2_exit_partial_power_down(struct dwc2_hsotg *hsotg, bool restore)<br>
++int dwc2_exit_partial_power_down(struct dwc2_hsotg *hsotg, int rem_wakeup,<br>
++				 bool restore)<br>
+ {<br>
+-	u32 pcgcctl;<br>
+-	int ret = 0;<br>
+-<br>
+-	if (hsotg->params.power_down != DWC2_POWER_DOWN_PARAM_PARTIAL)<br>
+-		return -ENOTSUPP;<br>
+-<br>
+-	pcgcctl = dwc2_readl(hsotg, PCGCTL);<br>
+-	pcgcctl &= ~PCGCTL_STOPPCLK;<br>
+-	dwc2_writel(hsotg, pcgcctl, PCGCTL);<br>
+-<br>
+-	pcgcctl = dwc2_readl(hsotg, PCGCTL);<br>
+-	pcgcctl &= ~PCGCTL_PWRCLMP;<br>
+-	dwc2_writel(hsotg, pcgcctl, PCGCTL);<br>
+-<br>
+-	pcgcctl = dwc2_readl(hsotg, PCGCTL);<br>
+-	pcgcctl &= ~PCGCTL_RSTPDWNMODULE;<br>
+-	dwc2_writel(hsotg, pcgcctl, PCGCTL);<br>
++	struct dwc2_gregs_backup *gr;<br>
+ <br>
+-	udelay(100);<br>
+-	if (restore) {<br>
+-		ret = dwc2_restore_global_registers(hsotg);<br>
+-		if (ret) {<br>
+-			dev_err(hsotg->dev, "%s: failed to restore registers\n",<br>
+-				__func__);<br>
+-			return ret;<br>
+-		}<br>
+-		if (dwc2_is_host_mode(hsotg)) {<br>
+-			ret = dwc2_restore_host_registers(hsotg);<br>
+-			if (ret) {<br>
+-				dev_err(hsotg->dev, "%s: failed to restore host registers\n",<br>
+-					__func__);<br>
+-				return ret;<br>
+-			}<br>
+-		} else {<br>
+-			ret = dwc2_restore_device_registers(hsotg, 0);<br>
+-			if (ret) {<br>
+-				dev_err(hsotg->dev, "%s: failed to restore device registers\n",<br>
+-					__func__);<br>
+-				return ret;<br>
+-			}<br>
+-		}<br>
+-	}<br>
++	gr = &hsotg->gr_backup;<br>
+ <br>
+-	return ret;<br>
++	/*<br>
++	 * Restore host or device regisers with the same mode core enterted<br>
++	 * to partial power down by checking "GOTGCTL_CURMODE_HOST" backup<br>
++	 * value of the "gotgctl" register.<br>
++	 */<br>
++	if (gr->gotgctl & GOTGCTL_CURMODE_HOST)<br>
++		return dwc2_host_exit_partial_power_down(hsotg, rem_wakeup,<br>
++							 restore);<br>
++	else<br>
++		return dwc2_gadget_exit_partial_power_down(hsotg, restore);<br>
+ }<br>
+ <br>
+ /**<br>
+@@ -188,57 +160,10 @@ int dwc2_exit_partial_power_down(struct dwc2_hsotg *hsotg, bool restore)<br>
+  */<br>
+ int dwc2_enter_partial_power_down(struct dwc2_hsotg *hsotg)<br>
+ {<br>
+-	u32 pcgcctl;<br>
+-	int ret = 0;<br>
+-<br>
+-	if (!hsotg->params.power_down)<br>
+-		return -ENOTSUPP;<br>
+-<br>
+-	/* Backup all registers */<br>
+-	ret = dwc2_backup_global_registers(hsotg);<br>
+-	if (ret) {<br>
+-		dev_err(hsotg->dev, "%s: failed to backup global registers\n",<br>
+-			__func__);<br>
+-		return ret;<br>
+-	}<br>
+-<br>
+-	if (dwc2_is_host_mode(hsotg)) {<br>
+-		ret = dwc2_backup_host_registers(hsotg);<br>
+-		if (ret) {<br>
+-			dev_err(hsotg->dev, "%s: failed to backup host registers\n",<br>
+-				__func__);<br>
+-			return ret;<br>
+-		}<br>
+-	} else {<br>
+-		ret = dwc2_backup_device_registers(hsotg);<br>
+-		if (ret) {<br>
+-			dev_err(hsotg->dev, "%s: failed to backup device registers\n",<br>
+-				__func__);<br>
+-			return ret;<br>
+-		}<br>
+-	}<br>
+-<br>
+-	/*<br>
+-	 * Clear any pending interrupts since dwc2 will not be able to<br>
+-	 * clear them after entering partial_power_down.<br>
+-	 */<br>
+-	dwc2_writel(hsotg, 0xffffffff, GINTSTS);<br>
+-<br>
+-	/* Put the controller in low power state */<br>
+-	pcgcctl = dwc2_readl(hsotg, PCGCTL);<br>
+-<br>
+-	pcgcctl |= PCGCTL_PWRCLMP;<br>
+-	dwc2_writel(hsotg, pcgcctl, PCGCTL);<br>
+-	ndelay(20);<br>
+-<br>
+-	pcgcctl |= PCGCTL_RSTPDWNMODULE;<br>
+-	dwc2_writel(hsotg, pcgcctl, PCGCTL);<br>
+-	ndelay(20);<br>
+-<br>
+-	pcgcctl |= PCGCTL_STOPPCLK;<br>
+-	dwc2_writel(hsotg, pcgcctl, PCGCTL);<br>
+-<br>
+-	return ret;<br>
++	if (dwc2_is_host_mode(hsotg))<br>
++		return dwc2_host_enter_partial_power_down(hsotg);<br>
++	else<br>
++		return dwc2_gadget_enter_partial_power_down(hsotg);<br>
+ }<br>
+ <br>
+ /**<br>
+diff --git a/drivers/usb/dwc2/core.h b/drivers/usb/dwc2/core.h<br>
+index 1a97df8bf5cb..39037709a2ad 100644<br>
+--- a/drivers/usb/dwc2/core.h<br>
++++ b/drivers/usb/dwc2/core.h<br>
+@@ -1303,7 +1303,8 @@ static inline bool dwc2_is_hs_iot(struct dwc2_hsotg *hsotg)<br>
+  */<br>
+ int dwc2_core_reset(struct dwc2_hsotg *hsotg, bool skip_wait);<br>
+ int dwc2_enter_partial_power_down(struct dwc2_hsotg *hsotg);<br>
+-int dwc2_exit_partial_power_down(struct dwc2_hsotg *hsotg, bool restore);<br>
++int dwc2_exit_partial_power_down(struct dwc2_hsotg *hsotg, int rem_wakeup,<br>
++				 bool restore);<br>
+ int dwc2_enter_hibernation(struct dwc2_hsotg *hsotg, int is_host);<br>
+ int dwc2_exit_hibernation(struct dwc2_hsotg *hsotg, int rem_wakeup,<br>
+ 		int reset, int is_host);<br>
+diff --git a/drivers/usb/dwc2/core_intr.c b/drivers/usb/dwc2/core_intr.c<br>
+index 55f1d14fc414..1fb957ce6c25 100644<br>
+--- a/drivers/usb/dwc2/core_intr.c<br>
++++ b/drivers/usb/dwc2/core_intr.c<br>
+@@ -315,9 +315,10 @@ static void dwc2_handle_session_req_intr(struct dwc2_hsotg *hsotg)<br>
+ 		hsotg->lx_state);<br>
+ <br>
+ 	if (dwc2_is_device_mode(hsotg)) {<br>
+-		if (hsotg->lx_state == DWC2_L2) {<br>
+-			ret = dwc2_exit_partial_power_down(hsotg, true);<br>
+-			if (ret && (ret != -ENOTSUPP))<br>
++		if (hsotg->lx_state == DWC2_L2 && hsotg->in_ppd) {<br>
++			ret = dwc2_exit_partial_power_down(hsotg, 0,<br>
++							   true);<br>
++			if (ret)<br>
+ 				dev_err(hsotg->dev,<br>
+ 					"exit power_down failed\n");<br>
+ 		}<br>
+@@ -406,18 +407,16 @@ static void dwc2_handle_wakeup_detected_intr(struct dwc2_hsotg *hsotg)<br>
+ 	if (dwc2_is_device_mode(hsotg)) {<br>
+ 		dev_dbg(hsotg->dev, "DSTS=0x%0x\n",<br>
+ 			dwc2_readl(hsotg, DSTS));<br>
+-		if (hsotg->lx_state == DWC2_L2) {<br>
++		if (hsotg->lx_state == DWC2_L2 && hsotg->in_ppd) {<br>
+ 			u32 dctl = dwc2_readl(hsotg, DCTL);<br>
+-<br>
+ 			/* Clear Remote Wakeup Signaling */<br>
+ 			dctl &= ~DCTL_RMTWKUPSIG;<br>
+ 			dwc2_writel(hsotg, dctl, DCTL);<br>
+-			ret = dwc2_exit_partial_power_down(hsotg, true);<br>
+-			if (ret && (ret != -ENOTSUPP))<br>
+-				dev_err(hsotg->dev, "exit power_down failed\n");<br>
+-<br>
+-			/* Change to L0 state */<br>
+-			hsotg->lx_state = DWC2_L0;<br>
++			ret = dwc2_exit_partial_power_down(hsotg, 1,<br>
++							   true);<br>
++			if (ret)<br>
++				dev_err(hsotg->dev,<br>
++					"exit partial_power_down failed\n");<br>
+ 			call_gadget(hsotg, resume);<br>
+ 		} else {<br>
+ 			/* Change to L0 state */<br>
+diff --git a/drivers/usb/dwc2/gadget.c b/drivers/usb/dwc2/gadget.c<br>
+index 98a2a63c67ae..e08baee4987b 100644<br>
+--- a/drivers/usb/dwc2/gadget.c<br>
++++ b/drivers/usb/dwc2/gadget.c<br>
+@@ -3689,10 +3689,10 @@ static irqreturn_t dwc2_hsotg_irq(int irq, void *pw)<br>
+ 		dwc2_writel(hsotg, GINTSTS_RESETDET, GINTSTS);<br>
+ <br>
+ 		/* This event must be used only if controller is suspended */<br>
+-		if (hsotg->lx_state == DWC2_L2) {<br>
+-			dwc2_exit_partial_power_down(hsotg, true);<br>
+-			hsotg->lx_state = DWC2_L0;<br>
+-		}<br>
++		if (hsotg->in_ppd && hsotg->lx_state == DWC2_L2)<br>
++			dwc2_exit_partial_power_down(hsotg, 0, true);<br>
++<br>
++		hsotg->lx_state = DWC2_L0;<br>
+ 	}<br>
+ <br>
+ 	if (gintsts & (GINTSTS_USBRST | GINTSTS_RESETDET)) {<br>
+@@ -4615,11 +4615,15 @@ static int dwc2_hsotg_vbus_session(struct usb_gadget *gadget, int is_active)<br>
+ 	spin_lock_irqsave(&hsotg->lock, flags);<br>
+ <br>
+ 	/*<br>
+-	 * If controller is hibernated, it must exit from power_down<br>
+-	 * before being initialized / de-initialized<br>
++	 * If controller is in partial power down state, it must exit from<br>
++	 * that state before being initialized / de-initialized<br>
+ 	 */<br>
+-	if (hsotg->lx_state == DWC2_L2)<br>
+-		dwc2_exit_partial_power_down(hsotg, false);<br>
++	if (hsotg->lx_state == DWC2_L2 && hsotg->in_ppd)<br>
++		/*<br>
++		 * No need to check the return value as<br>
++		 * registers are not being restored.<br>
++		 */<br>
++		dwc2_exit_partial_power_down(hsotg, 0, false);<br>
+ <br>
+ 	if (is_active) {<br>
+ 		hsotg->op_state = OTG_STATE_B_PERIPHERAL;<br>
+diff --git a/drivers/usb/dwc2/hcd.c b/drivers/usb/dwc2/hcd.c<br>
+index 35e617be4bc3..dd0362e07444 100644<br>
+--- a/drivers/usb/dwc2/hcd.c<br>
++++ b/drivers/usb/dwc2/hcd.c<br>
+@@ -4418,7 +4418,7 @@ static int _dwc2_hcd_resume(struct usb_hcd *hcd)<br>
+ <br>
+ <br>
+ 		/* Exit partial_power_down */<br>
+-		ret = dwc2_exit_partial_power_down(hsotg, true);<br>
++		ret = dwc2_exit_partial_power_down(hsotg, 0, true);<br>
+ 		if (ret && (ret != -ENOTSUPP))<br>
+ 			dev_err(hsotg->dev, "exit partial_power_down failed\n");<br>
+ 	} else {<br>
+diff --git a/drivers/usb/dwc2/hw.h b/drivers/usb/dwc2/hw.h<br>
+index c3d6dde2aca4..6b16fbf98bc6 100644<br>
+--- a/drivers/usb/dwc2/hw.h<br>
++++ b/drivers/usb/dwc2/hw.h<br>
+@@ -44,6 +44,7 @@<br>
+ #define GOTGCTL_CHIRPEN			BIT(27)<br>
+ #define GOTGCTL_MULT_VALID_BC_MASK	(0x1f << 22)<br>
+ #define GOTGCTL_MULT_VALID_BC_SHIFT	22<br>
++#define GOTGCTL_CURMODE_HOST		BIT(21)<br>
+ #define GOTGCTL_OTGVER			BIT(20)<br>
+ #define GOTGCTL_BSESVLD			BIT(19)<br>
+ #define GOTGCTL_ASESVLD			BIT(18)<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

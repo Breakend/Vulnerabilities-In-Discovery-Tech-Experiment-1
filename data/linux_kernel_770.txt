@@ -1,0 +1,56 @@
+
+On 08.04.2021 14:15, Christoph Hellwig wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+On Thu, Apr 08, 2021 at 12:30:16PM +0200, Javier González wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em"><blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em"><blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+Aligning to MDTS is our current behavior, although all kernels up to<br>
+5.11 had a bug in the calculation.<br>
+</blockquote>
+<br>
+I see. Let me check internally and see what's going on with<br>
+write-zeroes on this model.<br>
+</blockquote>
+<br>
+We still need to confirm, but it seems like MDTS for write-zeroes is<br>
+reported wrong in the FW that Dmitry is using. We can at least reproduce<br>
+it.<br>
+<br>
+Would it be a possibility to add quirk infrastructure to hardcode MDTS<br>
+for FW versions prior TP4040?<br>
+<br>
+Another possibility is to add quirks to the TP4040 support patches to<br>
+enable this - it might also help reduce the list of models currently<br>
+blacklisted for write-zeroes.<br>
+</blockquote>
+<br>
+I'm not sure I understand you.  Before TP4040 there is only the MDTS,<br>
+which only applies to data transfer commands, although we also<br>
+"volunarily" apply it to Write Zeroes.  If MDTS is wrong this would<br>
+also affect normal I/O, so we really either need a firmware update<br>
+or a quirk.  Or is the Write Zeroes limit even smaller than MTDS?<br>
+</blockquote>
+<br>
+The latter. The Write Zeroes limit is smaller than MDTS.<br>
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+I'd rather not add another quirk with a specific limit in that case,<br>
+as well grow way too many of those.<br>
+</blockquote>
+<br>
+This is what I had in mind - a structure with the quirks that would set<br>
+the write zeroes limit for the cases prior to TP4040 and where this is<br>
+lower than MDTS. But fair enough; I can see how painful it can be to<br>
+maintain this.<br>
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+TP4040 is the way to go for that case.<br>
+</blockquote>
+<br>
+I agree TP4040 is the way to move forward.<br>
+<br>
+Here I have one question: How do you envision adding support for FW<br>
+updates that add TP4040 support (or fix MDTS) with regards with existing<br>
+quirks.<br>
+<br>
+<br>
+

@@ -1,0 +1,30 @@
+Hi all,<br>
+When I was investigating the swap code, I found some possible race<br>
+windows. This series aims to fix all these races. But using current<br>
+get/put_swap_device() to guard against concurrent swapoff for<br>
+swap_readpage() looks terrible because swap_readpage() may take really<br>
+long time. And to reduce the performance overhead on the hot-path as<br>
+much as possible, it appears we can use the percpu_ref to close this<br>
+race window(as suggested by Huang, Ying). The patch 1 adds percpu_ref<br>
+support for swap and the rest of the patches use this to close various<br>
+race windows. More details can be found in the respective changelogs.<br>
+Thanks!<br>
+<br>
+Miaohe Lin (5):<br>
+  mm/swapfile: add percpu_ref support for swap<br>
+  swap: fix do_swap_page() race with swapoff<br>
+  mm/swap_state: fix get_shadow_from_swap_cache() race with swapoff<br>
+  mm/swap_state: fix potential faulted in race in swap_ra_info()<br>
+  mm/swap_state: fix swap_cluster_readahead() race with swapoff<br>
+<br>
+ include/linux/swap.h |  4 +++-<br>
+ mm/memory.c          | 10 +++++++++<br>
+ mm/swap_state.c      | 33 +++++++++++++++++++++--------<br>
+ mm/swapfile.c        | 50 +++++++++++++++++++++++++++-----------------<br>
+ 4 files changed, 68 insertions(+), 29 deletions(-)<br>
+<br>
+-- <br>
+2.19.1<br>
+<br>
+<br>
+

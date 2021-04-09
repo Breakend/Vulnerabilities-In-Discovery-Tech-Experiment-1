@@ -1,0 +1,66 @@
+From: David Hildenbrand <david@xxxxxxxxxx><br>
+<br>
+Let's have a single place (inspired by adjust_managed_page_count()) where<br>
+we adjust present pages.<br>
+In contrast to adjust_managed_page_count(), only memory onlining/offlining<br>
+is allowed to modify the number of present pages.<br>
+<br>
+Signed-off-by: David Hildenbrand <david@xxxxxxxxxx><br>
+Signed-off-by: Oscar Salvador <osalvador@xxxxxxx><br>
+Reviewed-by: Oscar Salvador <osalvador@xxxxxxx><br>
+---<br>
+ mm/memory_hotplug.c | 22 ++++++++++++----------<br>
+ 1 file changed, 12 insertions(+), 10 deletions(-)<br>
+<br>
+diff --git a/mm/memory_hotplug.c b/mm/memory_hotplug.c<br>
+index 25e59d5dc13c..d05056b3c173 100644<br>
+--- a/mm/memory_hotplug.c<br>
++++ b/mm/memory_hotplug.c<br>
+@@ -829,6 +829,16 @@ struct zone * zone_for_pfn_range(int online_type, int nid, unsigned start_pfn,<br>
+ 	return default_zone_for_pfn(nid, start_pfn, nr_pages);<br>
+ }<br>
+ <br>
++static void adjust_present_page_count(struct zone *zone, long nr_pages)<br>
++{<br>
++	unsigned long flags;<br>
++<br>
++	zone->present_pages += nr_pages;<br>
++	pgdat_resize_lock(zone->zone_pgdat, &flags);<br>
++	zone->zone_pgdat->node_present_pages += nr_pages;<br>
++	pgdat_resize_unlock(zone->zone_pgdat, &flags);<br>
++}<br>
++<br>
+ int __ref online_pages(unsigned long pfn, unsigned long nr_pages,<br>
+ 		       int online_type, int nid)<br>
+ {<br>
+@@ -882,11 +892,7 @@ int __ref online_pages(unsigned long pfn, unsigned long nr_pages,<br>
+ 	}<br>
+ <br>
+ 	online_pages_range(pfn, nr_pages);<br>
+-	zone->present_pages += nr_pages;<br>
+-<br>
+-	pgdat_resize_lock(zone->zone_pgdat, &flags);<br>
+-	zone->zone_pgdat->node_present_pages += nr_pages;<br>
+-	pgdat_resize_unlock(zone->zone_pgdat, &flags);<br>
++	adjust_present_page_count(zone, nr_pages);<br>
+ <br>
+ 	node_states_set_node(nid, &arg);<br>
+ 	if (need_zonelists_rebuild)<br>
+@@ -1701,11 +1707,7 @@ int __ref offline_pages(unsigned long start_pfn, unsigned long nr_pages)<br>
+ <br>
+ 	/* removal success */<br>
+ 	adjust_managed_page_count(pfn_to_page(start_pfn), -nr_pages);<br>
+-	zone->present_pages -= nr_pages;<br>
+-<br>
+-	pgdat_resize_lock(zone->zone_pgdat, &flags);<br>
+-	zone->zone_pgdat->node_present_pages -= nr_pages;<br>
+-	pgdat_resize_unlock(zone->zone_pgdat, &flags);<br>
++	adjust_present_page_count(zone, -nr_pages);<br>
+ <br>
+ 	init_per_zone_wmark_min();<br>
+ <br>
+-- <br>
+2.16.3<br>
+<br>
+<br>
+

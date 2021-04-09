@@ -1,0 +1,23 @@
+><i> > Thank you for noticing this. Not sure how this missmerge happened. I</i><br>
+><i> > have added the missing case, and VHE is initialized correctly during</i><br>
+><i> > boot.</i><br>
+><i> > [   14.698175] kvm [1]: VHE mode initialized successfully</i><br>
+><i> ></i><br>
+><i> > During normal boot, kexec reboot, and kdump reboot. I will respin the</i><br>
+><i> > series and send the version 14 soon.</i><br>
+><i></i><br>
+><i> Please give people a chance to review this lot first. This isn't code</i><br>
+><i> that is easy to digest, and immediate re-spinning does more harm than</i><br>
+><i> good (this isn't targeting 5.13, I would assume).</i><br>
+><i></i><br>
+<br>
+There are people who are testing this series, this is why I wanted to<br>
+respin. But, I will wait for review comments before sending the next<br>
+version. In the meantime I will send a fixed version of this patch as<br>
+a reply to this thread instead.<br>
+<br>
+Thanks,<br>
+Pasha<br>
+<br>
+<br>
+

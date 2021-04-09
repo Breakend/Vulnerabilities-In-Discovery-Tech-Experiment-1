@@ -1,0 +1,100 @@
+From: Junlin Yang <yangjunlin@xxxxxxxxxx><br>
+<br>
+Remove unnecessary PTR_ERR(), it has been assigned to ret before,<br>
+so return ret directly.<br>
+<br>
+Signed-off-by: Junlin Yang <yangjunlin@xxxxxxxxxx><br>
+---<br>
+ drivers/remoteproc/qcom_q6v5_wcss.c | 18 +++++++++---------<br>
+ 1 file changed, 9 insertions(+), 9 deletions(-)<br>
+<br>
+diff --git a/drivers/remoteproc/qcom_q6v5_wcss.c b/drivers/remoteproc/qcom_q6v5_wcss.c<br>
+index 71ec1a4..7581983 100644<br>
+--- a/drivers/remoteproc/qcom_q6v5_wcss.c<br>
++++ b/drivers/remoteproc/qcom_q6v5_wcss.c<br>
+@@ -913,7 +913,7 @@ static int q6v5_wcss_init_clock(struct q6v5_wcss *wcss)<br>
+ 		ret = PTR_ERR(wcss->gcc_abhs_cbcr);<br>
+ 		if (ret != -EPROBE_DEFER)<br>
+ 			dev_err(wcss->dev, "failed to get gcc abhs clock");<br>
+-		return PTR_ERR(wcss->gcc_abhs_cbcr);<br>
++		return ret;<br>
+ 	}<br>
+ <br>
+ 	wcss->gcc_axim_cbcr = devm_clk_get(wcss->dev, "gcc_axim_cbcr");<br>
+@@ -921,7 +921,7 @@ static int q6v5_wcss_init_clock(struct q6v5_wcss *wcss)<br>
+ 		ret = PTR_ERR(wcss->gcc_axim_cbcr);<br>
+ 		if (ret != -EPROBE_DEFER)<br>
+ 			dev_err(wcss->dev, "failed to get gcc axim clock\n");<br>
+-		return PTR_ERR(wcss->gcc_axim_cbcr);<br>
++		return ret;<br>
+ 	}<br>
+ <br>
+ 	wcss->ahbfabric_cbcr_clk = devm_clk_get(wcss->dev,<br>
+@@ -930,7 +930,7 @@ static int q6v5_wcss_init_clock(struct q6v5_wcss *wcss)<br>
+ 		ret = PTR_ERR(wcss->ahbfabric_cbcr_clk);<br>
+ 		if (ret != -EPROBE_DEFER)<br>
+ 			dev_err(wcss->dev, "failed to get ahbfabric clock\n");<br>
+-		return PTR_ERR(wcss->ahbfabric_cbcr_clk);<br>
++		return ret;<br>
+ 	}<br>
+ <br>
+ 	wcss->lcc_csr_cbcr = devm_clk_get(wcss->dev, "tcsr_lcc_cbc");<br>
+@@ -938,7 +938,7 @@ static int q6v5_wcss_init_clock(struct q6v5_wcss *wcss)<br>
+ 		ret = PTR_ERR(wcss->lcc_csr_cbcr);<br>
+ 		if (ret != -EPROBE_DEFER)<br>
+ 			dev_err(wcss->dev, "failed to get csr cbcr clk\n");<br>
+-		return PTR_ERR(wcss->lcc_csr_cbcr);<br>
++		return ret;<br>
+ 	}<br>
+ <br>
+ 	wcss->ahbs_cbcr = devm_clk_get(wcss->dev,<br>
+@@ -947,7 +947,7 @@ static int q6v5_wcss_init_clock(struct q6v5_wcss *wcss)<br>
+ 		ret = PTR_ERR(wcss->ahbs_cbcr);<br>
+ 		if (ret != -EPROBE_DEFER)<br>
+ 			dev_err(wcss->dev, "failed to get ahbs_cbcr clk\n");<br>
+-		return PTR_ERR(wcss->ahbs_cbcr);<br>
++		return ret;<br>
+ 	}<br>
+ <br>
+ 	wcss->tcm_slave_cbcr = devm_clk_get(wcss->dev,<br>
+@@ -956,7 +956,7 @@ static int q6v5_wcss_init_clock(struct q6v5_wcss *wcss)<br>
+ 		ret = PTR_ERR(wcss->tcm_slave_cbcr);<br>
+ 		if (ret != -EPROBE_DEFER)<br>
+ 			dev_err(wcss->dev, "failed to get tcm cbcr clk\n");<br>
+-		return PTR_ERR(wcss->tcm_slave_cbcr);<br>
++		return ret;<br>
+ 	}<br>
+ <br>
+ 	wcss->qdsp6ss_abhm_cbcr = devm_clk_get(wcss->dev, "lcc_abhm_cbc");<br>
+@@ -964,7 +964,7 @@ static int q6v5_wcss_init_clock(struct q6v5_wcss *wcss)<br>
+ 		ret = PTR_ERR(wcss->qdsp6ss_abhm_cbcr);<br>
+ 		if (ret != -EPROBE_DEFER)<br>
+ 			dev_err(wcss->dev, "failed to get abhm cbcr clk\n");<br>
+-		return PTR_ERR(wcss->qdsp6ss_abhm_cbcr);<br>
++		return ret;<br>
+ 	}<br>
+ <br>
+ 	wcss->qdsp6ss_axim_cbcr = devm_clk_get(wcss->dev, "lcc_axim_cbc");<br>
+@@ -972,7 +972,7 @@ static int q6v5_wcss_init_clock(struct q6v5_wcss *wcss)<br>
+ 		ret = PTR_ERR(wcss->qdsp6ss_axim_cbcr);<br>
+ 		if (ret != -EPROBE_DEFER)<br>
+ 			dev_err(wcss->dev, "failed to get axim cbcr clk\n");<br>
+-		return PTR_ERR(wcss->qdsp6ss_abhm_cbcr);<br>
++		return ret;<br>
+ 	}<br>
+ <br>
+ 	wcss->lcc_bcr_sleep = devm_clk_get(wcss->dev, "lcc_bcr_sleep");<br>
+@@ -980,7 +980,7 @@ static int q6v5_wcss_init_clock(struct q6v5_wcss *wcss)<br>
+ 		ret = PTR_ERR(wcss->lcc_bcr_sleep);<br>
+ 		if (ret != -EPROBE_DEFER)<br>
+ 			dev_err(wcss->dev, "failed to get bcr cbcr clk\n");<br>
+-		return PTR_ERR(wcss->lcc_bcr_sleep);<br>
++		return ret;<br>
+ 	}<br>
+ <br>
+ 	return 0;<br>
+-- <br>
+1.9.1<br>
+<br>
+<br>
+

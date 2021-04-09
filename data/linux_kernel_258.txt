@@ -1,0 +1,22 @@
+On Wed, Apr 07, 2021 at 11:29:26PM +0200, Siddharth Chandrasekaran wrote:<br>
+><i> Hyper-V supports the use of XMM registers to perform fast hypercalls.</i><br>
+><i> This allows guests to take advantage of the improved performance of the</i><br>
+><i> fast hypercall interface even though a hypercall may require more than</i><br>
+><i> (the current maximum of) two general purpose registers.</i><br>
+><i> </i><br>
+><i> The XMM fast hypercall interface uses an additional six XMM registers</i><br>
+><i> (XMM0 to XMM5) to allow the caller to pass an input parameter block of</i><br>
+><i> up to 112 bytes. Hyper-V can also return data back to the guest in the</i><br>
+><i> remaining XMM registers that are not used by the current hypercall.</i><br>
+><i> </i><br>
+><i> Although the Hyper-v TLFS mentions that a guest cannot use this feature</i><br>
+><i> unless the hypervisor advertises support for it, some hypercalls which</i><br>
+><i> we plan on upstreaming in future uses them anyway. </i><br>
+<br>
+No, please don't do this. Check the feature bit(s) before you issue<br>
+hypercalls which rely on the extended interface.<br>
+<br>
+Wei.<br>
+<br>
+<br>
+

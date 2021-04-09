@@ -1,0 +1,112 @@
+Currently, kexec relocation function (arm64_relocate_new_kernel) accepts<br>
+the following arguments:<br>
+<br>
+head:		start of array that contains relocation information.<br>
+entry:		entry point for new kernel or purgatory.<br>
+dtb_mem:	first and only argument to entry.<br>
+<br>
+The number of arguments cannot be easily expended, because this<br>
+function is also called from HVC_SOFT_RESTART, which preserves only<br>
+three arguments. And, also arm64_relocate_new_kernel is written in<br>
+assembly but called without stack, thus no place to move extra arguments<br>
+to free registers.<br>
+<br>
+Soon, we will need to pass more arguments: once we enable MMU we<br>
+will need to pass information about page tables.<br>
+<br>
+Pass kimage to arm64_relocate_new_kernel, and teach it to get the<br>
+required fields from kimage.<br>
+<br>
+Suggested-by: James Morse <james.morse@xxxxxxx><br>
+Signed-off-by: Pavel Tatashin <pasha.tatashin@xxxxxxxxxx><br>
+---<br>
+ arch/arm64/kernel/asm-offsets.c     |  7 +++++++<br>
+ arch/arm64/kernel/machine_kexec.c   |  6 ++++--<br>
+ arch/arm64/kernel/relocate_kernel.S | 10 ++++------<br>
+ 3 files changed, 15 insertions(+), 8 deletions(-)<br>
+<br>
+diff --git a/arch/arm64/kernel/asm-offsets.c b/arch/arm64/kernel/asm-offsets.c<br>
+index a36e2fc330d4..0c92e193f866 100644<br>
+--- a/arch/arm64/kernel/asm-offsets.c<br>
++++ b/arch/arm64/kernel/asm-offsets.c<br>
+@@ -9,6 +9,7 @@<br>
+ <br>
+ #include <linux/arm_sdei.h><br>
+ #include <linux/sched.h><br>
++#include <linux/kexec.h><br>
+ #include <linux/mm.h><br>
+ #include <linux/dma-mapping.h><br>
+ #include <linux/kvm_host.h><br>
+@@ -153,6 +154,12 @@ int main(void)<br>
+   DEFINE(PTRAUTH_USER_KEY_APGA,		offsetof(struct ptrauth_keys_user, apga));<br>
+   DEFINE(PTRAUTH_KERNEL_KEY_APIA,	offsetof(struct ptrauth_keys_kernel, apia));<br>
+   BLANK();<br>
++#endif<br>
++#ifdef CONFIG_KEXEC_CORE<br>
++  DEFINE(KIMAGE_ARCH_DTB_MEM,		offsetof(struct kimage, arch.dtb_mem));<br>
++  DEFINE(KIMAGE_HEAD,			offsetof(struct kimage, head));<br>
++  DEFINE(KIMAGE_START,			offsetof(struct kimage, start));<br>
++  BLANK();<br>
+ #endif<br>
+   return 0;<br>
+ }<br>
+diff --git a/arch/arm64/kernel/machine_kexec.c b/arch/arm64/kernel/machine_kexec.c<br>
+index b150b65f0b84..2e734e4ae12e 100644<br>
+--- a/arch/arm64/kernel/machine_kexec.c<br>
++++ b/arch/arm64/kernel/machine_kexec.c<br>
+@@ -83,6 +83,8 @@ static void kexec_list_flush(struct kimage *kimage)<br>
+ {<br>
+ 	kimage_entry_t *entry;<br>
+ <br>
++	__flush_dcache_area(kimage, sizeof(*kimage));<br>
++<br>
+ 	for (entry = &kimage->head; ; entry++) {<br>
+ 		unsigned int flag;<br>
+ 		void *addr;<br>
+@@ -198,8 +200,8 @@ void machine_kexec(struct kimage *kimage)<br>
+ 		restart(is_hyp_callable(), kimage->start, kimage->arch.dtb_mem,<br>
+ 			0, 0);<br>
+ 	} else {<br>
+-		cpu_soft_restart(kimage->arch.kern_reloc, kimage->head,<br>
+-				 kimage->start, kimage->arch.dtb_mem);<br>
++		cpu_soft_restart(kimage->arch.kern_reloc, virt_to_phys(kimage),<br>
++				 0, 0);<br>
+ 	}<br>
+ <br>
+ 	BUG(); /* Should never get here. */<br>
+diff --git a/arch/arm64/kernel/relocate_kernel.S b/arch/arm64/kernel/relocate_kernel.S<br>
+index 718037bef560..36b4496524c3 100644<br>
+--- a/arch/arm64/kernel/relocate_kernel.S<br>
++++ b/arch/arm64/kernel/relocate_kernel.S<br>
+@@ -27,9 +27,7 @@<br>
+  */<br>
+ SYM_CODE_START(arm64_relocate_new_kernel)<br>
+ 	/* Setup the list loop variables. */<br>
+-	mov	x18, x2				/* x18 = dtb address */<br>
+-	mov	x17, x1				/* x17 = kimage_start */<br>
+-	mov	x16, x0				/* x16 = kimage_head */<br>
++	ldr	x16, [x0, #KIMAGE_HEAD]		/* x16 = kimage_head */<br>
+ 	mov	x14, xzr			/* x14 = entry ptr */<br>
+ 	mov	x13, xzr			/* x13 = copy dest */<br>
+ 	raw_dcache_line_size x15, x1		/* x15 = dcache line size */<br>
+@@ -63,12 +61,12 @@ SYM_CODE_START(arm64_relocate_new_kernel)<br>
+ 	isb<br>
+ <br>
+ 	/* Start new image. */<br>
+-	mov	x0, x18<br>
++	ldr	x4, [x0, #KIMAGE_START]		/* relocation start */<br>
++	ldr	x0, [x0, #KIMAGE_ARCH_DTB_MEM]	/* dtb address */<br>
+ 	mov	x1, xzr<br>
+ 	mov	x2, xzr<br>
+ 	mov	x3, xzr<br>
+-	br	x17<br>
+-<br>
++	br	x4<br>
+ SYM_CODE_END(arm64_relocate_new_kernel)<br>
+ <br>
+ .align 3	/* To keep the 64-bit values below naturally aligned. */<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

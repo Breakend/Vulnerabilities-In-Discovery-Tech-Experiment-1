@@ -1,0 +1,23 @@
+Re: [w3ctag/design-reviews] WebRTC-SVC (Scalable Video Coding) (#396)
+
+    This message: [ Message body ] [ Respond ] [ More options ]
+    Related messages: [ Next message ] [ Previous message ] [ Maybe in reply to ] [ Next in thread ]
+
+From: Bernard Aboba <notifications@github.com>
+Date: Tue, 03 Mar 2020 10:27:45 -0800
+To: w3ctag/design-reviews <design-reviews@noreply.github.com>
+Cc: Subscribed <subscribed@noreply.github.com>
+Message-ID: <w3ctag/design-reviews/issues/396/594097933@github.com>
+
+@kenchris When used in SDP, H264, VP, VP9 and AV1 are capitalized, as noted in:
+[VP8 RTP Payload specification](https://tools.ietf.org/html/rfc7741#page-23),
+[VP9 RTP Payload specification](https://tools.ietf.org/html/draft-ietf-payload-vp9-09#page-19),
+[H264 RTP Payload specification](https://tools.ietf.org/html/rfc6184#page-58),
+[AV1 RTP Payload specification](https://aomediacodec.github.io/av1-rtp-spec/#73-example)
+
+
+-- 
+You are receiving this because you are subscribed to this thread.
+Reply to this email directly or view it on GitHub:
+https://github.com/w3ctag/design-reviews/issues/396#issuecomment-594097933
+

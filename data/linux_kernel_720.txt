@@ -1,0 +1,27 @@
+There is a error message within devm_ioremap_resource<br>
+already, so remove the dev_err call to avoid redundant<br>
+error message.<br>
+<br>
+Reported-by: Hulk Robot <hulkci@xxxxxxxxxx><br>
+Signed-off-by: Yu Kuai <yukuai3@xxxxxxxxxx><br>
+---<br>
+ drivers/mtd/maps/plat-ram.c | 1 -<br>
+ 1 file changed, 1 deletion(-)<br>
+<br>
+diff --git a/drivers/mtd/maps/plat-ram.c b/drivers/mtd/maps/plat-ram.c<br>
+index 0bec7c791d17..cedd8ef9a6bf 100644<br>
+--- a/drivers/mtd/maps/plat-ram.c<br>
++++ b/drivers/mtd/maps/plat-ram.c<br>
+@@ -127,7 +127,6 @@ static int platram_probe(struct platform_device *pdev)<br>
+ 	info->map.virt = devm_ioremap_resource(&pdev->dev, res);<br>
+ 	if (IS_ERR(info->map.virt)) {<br>
+ 		err = PTR_ERR(info->map.virt);<br>
+-		dev_err(&pdev->dev, "failed to ioremap() region\n");<br>
+ 		goto exit_free;<br>
+ 	}<br>
+ <br>
+-- <br>
+2.25.4<br>
+<br>
+<br>
+

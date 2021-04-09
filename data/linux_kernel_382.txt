@@ -1,0 +1,63 @@
+This series proposes a set of improvements and new features for the<br>
+tracing subsystem to facilitate the debugging of low latency<br>
+deployments.<br>
+<br>
+Currently, hwlat runs on a single CPU at a time, migrating across a<br>
+set of CPUs in a round-robin fashion. The first three patches are<br>
+changes made to allow hwlat to run on multiple CPUs in parallel,<br>
+increasing the chances of detecting a hardware latency.<br>
+<br>
+The fourth patch is a helper to print a timestamp in a u64 in<br>
+seconds.nanoseconds format on tracepoints.<br>
+<br>
+The fifth patch proposes a new tracer named osnoise and aims to help<br>
+users of isolcpus= (or a similar method) to measure how much noise the<br>
+OS and the hardware add to the isolated application. The osnoise tracer<br>
+bases on the hwlat detector code. The difference is that, instead of<br>
+sampling with interrupts disabled, the osnoise tracer samples the CPU with<br>
+interrupts and preemption enabled. In this way, the sampling thread will<br>
+suffer any source of noise from the OS. The detection and classification<br>
+of the type of noise are then made by observing the entry points of NMIs,<br>
+IRQs, SoftIRQs, and threads. If none of these sources of noise is detected,<br>
+the tool associates the noise with the hardware. The tool periodically<br>
+prints a status, printing the total noise of the period, the max single<br>
+noise observed, the percentage of CPU available for the task, along with<br>
+the counters of each source of the noise. To debug the sources of noise,<br>
+the tracer also adds a set of tracepoints that print any NMI, IRQ, SofIRQ,<br>
+and thread occurrence. These tracepoints print the starting time and the<br>
+noise's net duration at the end of the noise. In this way, it reduces the<br>
+number of tracepoints (one instead of two) and the need to manually<br>
+accounting the contribution of each noise independently.<br>
+<br>
+Daniel Bristot de Oliveira (4):<br>
+  tracing/hwlat: Add a cpus file specific for hwlat_detector<br>
+  tracing/hwlat: Implement the mode config option<br>
+  tracing/hwlat: Implement the per-cpu mode<br>
+  tracing: Add the osnoise tracer<br>
+<br>
+Steven Rostedt (1):<br>
+  tracing: Add __print_ns_to_secs() and __print_ns_without_secs()<br>
+    helpers<br>
+<br>
+ Documentation/trace/hwlat_detector.rst |   29 +-<br>
+ Documentation/trace/osnoise_tracer.rst |  149 ++<br>
+ include/linux/ftrace_irq.h             |   16 +<br>
+ include/trace/events/osnoise.h         |  141 ++<br>
+ include/trace/trace_events.h           |   25 +<br>
+ kernel/trace/Kconfig                   |   34 +<br>
+ kernel/trace/Makefile                  |    1 +<br>
+ kernel/trace/trace.h                   |    9 +-<br>
+ kernel/trace/trace_entries.h           |   27 +<br>
+ kernel/trace/trace_hwlat.c             |  445 +++++-<br>
+ kernel/trace/trace_osnoise.c           | 1714 ++++++++++++++++++++++++<br>
+ kernel/trace/trace_output.c            |   72 +-<br>
+ 12 files changed, 2604 insertions(+), 58 deletions(-)<br>
+ create mode 100644 Documentation/trace/osnoise_tracer.rst<br>
+ create mode 100644 include/trace/events/osnoise.h<br>
+ create mode 100644 kernel/trace/trace_osnoise.c<br>
+<br>
+-- <br>
+2.30.2<br>
+<br>
+<br>
+

@@ -1,0 +1,100 @@
+Dear Rafael,<br>
+<br>
+This is devfreq-next pull request for v5.13-rc1. I add detailed description of<br>
+this pull request on the following tag. Please pull devfreq with following updates.<br>
+- tag name : devfreq-next-for-5.12<br>
+<br>
+This pull request contains the immutable branch to keep the immutable patch[1]<br>
+between devfreq and drm for gpu driver.<br>
+[1] <a  rel="nofollow" href="https://patchwork.kernel.org/project/linux-pm/patch/20210308133041.10516-1-daniel.lezcano@xxxxxxxxxx/">https://patchwork.kernel.org/project/linux-pm/patch/20210308133041.10516-1-daniel.lezcano@xxxxxxxxxx/</a><br>
+<br>
+Best Regards,<br>
+Chanwoo Choi<br>
+<br>
+<br>
+The following changes since commit e49d033bddf5b565044e2abe4241353959bc9120:<br>
+<br>
+  Linux 5.12-rc6 (2021-04-04 14:15:36 -0700)<br>
+<br>
+are available in the Git repository at:<br>
+<br>
+  git://git.kernel.org/pub/scm/linux/kernel/git/chanwoo/linux.git tags/devfreq-next-for-5.13<br>
+<br>
+for you to fetch changes up to 0a7dc8318c2817fb33dc50946f7ca6e0ff28f036:<br>
+<br>
+  PM / devfreq: imx8m-ddrc: Remove unneeded of_match_ptr() (2021-04-08 13:14:51 +0900)<br>
+<br>
+----------------------------------------------------------------<br>
+Detailed description for this pull request:<br>
+1. Update devfreq core<br>
+- Register devfreq as a cooling device when adding devfreq device<br>
+basically if the flag of devfreq device is set as cooling device.<br>
+<br>
+- Add missing unlock opeation in devfreq_add_device<br>
+<br>
+- Use the next frequency as resume_freq instead of previous frequency<br>
+  when using opp-suspend property<br>
+<br>
+- Check whether .get_dev_status in struct devfreq_dev_profile is<br>
+implemented or not by devfreq driver before calling .get_dev_status<br>
+function.<br>
+<br>
+2. Update devfreq driver<br>
+- Use dev_err_probe to simplify the error handling on rk3399_dmc.c<br>
+<br>
+- Remove unused .get_dev_status function on imx8m-ddrc.c because<br>
+imx8m_ddrc_get_dev_status has not returend the any current status of<br>
+device.<br>
+<br>
+- Remove unneeded of_match_ptr() from imx-bus.c and imx8m-ddrc.ca<br>
+<br>
+- Add missing phandle informatioon and replace undefined variable<br>
+with integer value for rk3399_dmc.txt devicetree binding document.<br>
+<br>
+3. Update minor issue<br>
+- Fix the wrong set_freq path of userspace governor in drivers/devfreq/Kconfig<br>
+- Remove the invalid description from .get_target_freq in struct<br>
+devfreq_dev_profile<br>
+----------------------------------------------------------------<br>
+Chanwoo Choi (1):<br>
+      Merge branch 'immutable-devfreq-v5.13-rc1' into devfreq-next<br>
+<br>
+Daniel Lezcano (1):<br>
+      PM / devfreq: Register devfreq as a cooling device on demand<br>
+<br>
+Dong Aisheng (5):<br>
+      PM / devfreq: Use more accurate returned new_freq as resume_freq<br>
+      PM / devfreq: Fix the wrong set_freq path for userspace governor in Kconfig<br>
+      PM / devfreq: Check get_dev_status in devfreq_update_stats<br>
+      PM / devfreq: Remove the invalid description for get_target_freq<br>
+      PM / devfreq: imx8m-ddrc: Remove imx8m_ddrc_get_dev_status<br>
+<br>
+Enric Balletbo i Serra (1):<br>
+      dt-bindings: devfreq: rk3399_dmc: Add rockchip,pmu phandle.<br>
+<br>
+Fabio Estevam (2):<br>
+      PM / devfreq: imx-bus: Remove unneeded of_match_ptr()<br>
+      PM / devfreq: imx8m-ddrc: Remove unneeded of_match_ptr()<br>
+<br>
+Gaël PORTAY (1):<br>
+      dt-bindings: devfreq: rk3399_dmc: Remove references of unexistant defines<br>
+<br>
+Krzysztof Kozlowski (1):<br>
+      PM / devfreq: rk3399_dmc: Simplify with dev_err_probe()<br>
+<br>
+Lukasz Luba (1):<br>
+      PM / devfreq: Unlock mutex and free devfreq struct in error path<br>
+<br>
+ Documentation/ABI/testing/sysfs-class-devfreq      |  5 +-<br>
+ .../devicetree/bindings/devfreq/rk3399_dmc.txt     | 75 +++++++++++-----------<br>
+ drivers/devfreq/Kconfig                            |  2 +-<br>
+ drivers/devfreq/devfreq.c                          | 14 +++-<br>
+ drivers/devfreq/governor.h                         |  5 +-<br>
+ drivers/devfreq/imx-bus.c                          |  2 +-<br>
+ drivers/devfreq/imx8m-ddrc.c                       | 16 +----<br>
+ drivers/devfreq/rk3399_dmc.c                       | 20 ++----<br>
+ include/linux/devfreq.h                            |  9 +++<br>
+ 9 files changed, 70 insertions(+), 78 deletions(-)<br>
+<br>
+<br>
+

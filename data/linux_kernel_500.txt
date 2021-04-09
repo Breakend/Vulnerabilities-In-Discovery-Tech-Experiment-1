@@ -1,0 +1,137 @@
+Suspend fails on a system in fips mode because md5 is used for the e820<br>
+integrity check and is not available. Use crc32 instead.<br>
+<br>
+This patch changes the integrity check algorithm from md5 to<br>
+crc32. This integrity check is used only to verify accidental<br>
+corruption of the hybernation data and is not intended as a<br>
+cryptographic integrity check.<br>
+Md5 is overkill in this case and also disabled in FIPS mode because it<br>
+is known to be broken for cryptographic purposes.<br>
+<br>
+Fixes: 62a03defeabd ("PM / hibernate: Verify the consistent of e820 memory map<br>
+       by md5 digest")<br>
+<br>
+Tested-by: Dexuan Cui <decui@xxxxxxxxxxxxx><br>
+Reviewed-by: Dexuan Cui <decui@xxxxxxxxxxxxx><br>
+Signed-off-by: Chris von Recklinghausen <crecklin@xxxxxxxxxx><br>
+---<br>
+v1 -> v2<br>
+   bump up RESTORE_MAGIC<br>
+v2 -> v3<br>
+   move embelishment from cover letter to commit comments (no code change)<br>
+v3 -> v4<br>
+   add note to comments that md5 isn't used for encryption here.<br>
+v4 -> v5<br>
+   reword comment per Simo's suggestion<br>
+<br>
+ arch/x86/power/hibernate.c | 35 +++++++++++++++++++----------------<br>
+ 1 file changed, 19 insertions(+), 16 deletions(-)<br>
+<br>
+diff --git a/arch/x86/power/hibernate.c b/arch/x86/power/hibernate.c<br>
+index cd3914fc9f3d..b56172553275 100644<br>
+--- a/arch/x86/power/hibernate.c<br>
++++ b/arch/x86/power/hibernate.c<br>
+@@ -55,31 +55,31 @@ int pfn_is_nosave(unsigned long pfn)<br>
+ }<br>
+ <br>
+ <br>
+-#define MD5_DIGEST_SIZE 16<br>
++#define CRC32_DIGEST_SIZE 16<br>
+ <br>
+ struct restore_data_record {<br>
+ 	unsigned long jump_address;<br>
+ 	unsigned long jump_address_phys;<br>
+ 	unsigned long cr3;<br>
+ 	unsigned long magic;<br>
+-	u8 e820_digest[MD5_DIGEST_SIZE];<br>
++	u8 e820_digest[CRC32_DIGEST_SIZE];<br>
+ };<br>
+ <br>
+-#if IS_BUILTIN(CONFIG_CRYPTO_MD5)<br>
++#if IS_BUILTIN(CONFIG_CRYPTO_CRC32)<br>
+ /**<br>
+- * get_e820_md5 - calculate md5 according to given e820 table<br>
++ * get_e820_crc32 - calculate crc32 according to given e820 table<br>
+  *<br>
+  * @table: the e820 table to be calculated<br>
+- * @buf: the md5 result to be stored to<br>
++ * @buf: the crc32 result to be stored to<br>
+  */<br>
+-static int get_e820_md5(struct e820_table *table, void *buf)<br>
++static int get_e820_crc32(struct e820_table *table, void *buf)<br>
+ {<br>
+ 	struct crypto_shash *tfm;<br>
+ 	struct shash_desc *desc;<br>
+ 	int size;<br>
+ 	int ret = 0;<br>
+ <br>
+-	tfm = crypto_alloc_shash("md5", 0, 0);<br>
++	tfm = crypto_alloc_shash("crc32", 0, 0);<br>
+ 	if (IS_ERR(tfm))<br>
+ 		return -ENOMEM;<br>
+ <br>
+@@ -107,24 +107,24 @@ static int get_e820_md5(struct e820_table *table, void *buf)<br>
+ <br>
+ static int hibernation_e820_save(void *buf)<br>
+ {<br>
+-	return get_e820_md5(e820_table_firmware, buf);<br>
++	return get_e820_crc32(e820_table_firmware, buf);<br>
+ }<br>
+ <br>
+ static bool hibernation_e820_mismatch(void *buf)<br>
+ {<br>
+ 	int ret;<br>
+-	u8 result[MD5_DIGEST_SIZE];<br>
++	u8 result[CRC32_DIGEST_SIZE];<br>
+ <br>
+-	memset(result, 0, MD5_DIGEST_SIZE);<br>
++	memset(result, 0, CRC32_DIGEST_SIZE);<br>
+ 	/* If there is no digest in suspend kernel, let it go. */<br>
+-	if (!memcmp(result, buf, MD5_DIGEST_SIZE))<br>
++	if (!memcmp(result, buf, CRC32_DIGEST_SIZE))<br>
+ 		return false;<br>
+ <br>
+-	ret = get_e820_md5(e820_table_firmware, result);<br>
++	ret = get_e820_crc32(e820_table_firmware, result);<br>
+ 	if (ret)<br>
+ 		return true;<br>
+ <br>
+-	return memcmp(result, buf, MD5_DIGEST_SIZE) ? true : false;<br>
++	return memcmp(result, buf, CRC32_DIGEST_SIZE) ? true : false;<br>
+ }<br>
+ #else<br>
+ static int hibernation_e820_save(void *buf)<br>
+@@ -134,15 +134,15 @@ static int hibernation_e820_save(void *buf)<br>
+ <br>
+ static bool hibernation_e820_mismatch(void *buf)<br>
+ {<br>
+-	/* If md5 is not builtin for restore kernel, let it go. */<br>
++	/* If crc32 is not builtin for restore kernel, let it go. */<br>
+ 	return false;<br>
+ }<br>
+ #endif<br>
+ <br>
+ #ifdef CONFIG_X86_64<br>
+-#define RESTORE_MAGIC	0x23456789ABCDEF01UL<br>
++#define RESTORE_MAGIC	0x23456789ABCDEF02UL<br>
+ #else<br>
+-#define RESTORE_MAGIC	0x12345678UL<br>
++#define RESTORE_MAGIC	0x12345679UL<br>
+ #endif<br>
+ <br>
+ /**<br>
+@@ -160,6 +160,9 @@ int arch_hibernation_header_save(void *addr, unsigned int max_size)<br>
+ 	rdr->jump_address = (unsigned long)restore_registers;<br>
+ 	rdr->jump_address_phys = __pa_symbol(restore_registers);<br>
+ <br>
++	/* crc32 digest size is 4 but digest buffer size is 16 so zero it all */<br>
++	memset(rdr->e820_digest, 0, CRC32_DIGEST_SIZE);<br>
++<br>
+ 	/*<br>
+ 	 * The restore code fixes up CR3 and CR4 in the following sequence:<br>
+ 	 *<br>
+-- <br>
+2.18.1<br>
+<br>
+<br>
+

@@ -1,0 +1,113 @@
+Hi, Matthias<br>
+<br>
+<br>
+On Tue, 2021-04-06 at 15:41 +0200, Matthias Brugger wrote:<br>
+><i> </i><br>
+><i> On 01/04/2021 08:38, Nina Wu wrote:</i><br>
+><i> > From: Nina Wu <Nina-CM.Wu@xxxxxxxxxxxx></i><br>
+><i> > </i><br>
+><i> > For new ICs, there are multiple devapc HWs for different subsys.</i><br>
+><i> > The number of devices controlled by each devapc (i.e. 'vio_idx_num'</i><br>
+><i> > in the code) varies.</i><br>
+><i> > We move this info from compatible data to DT so that we do not need</i><br>
+><i> > to add n compatible for a certain IC which has n devapc HWs with</i><br>
+><i> > different 'vio_idx_num', respectively.</i><br>
+><i> > </i><br>
+><i> > Signed-off-by: Nina Wu <Nina-CM.Wu@xxxxxxxxxxxx></i><br>
+><i> > ---</i><br>
+><i> >  drivers/soc/mediatek/mtk-devapc.c | 18 +++++++++---------</i><br>
+><i> >  1 file changed, 9 insertions(+), 9 deletions(-)</i><br>
+><i> > </i><br>
+><i> > diff --git a/drivers/soc/mediatek/mtk-devapc.c b/drivers/soc/mediatek/mtk-devapc.c</i><br>
+><i> > index f1cea04..a0f6fbd 100644</i><br>
+><i> > --- a/drivers/soc/mediatek/mtk-devapc.c</i><br>
+><i> > +++ b/drivers/soc/mediatek/mtk-devapc.c</i><br>
+><i> > @@ -32,9 +32,6 @@ struct mtk_devapc_vio_dbgs {</i><br>
+><i> >  };</i><br>
+><i> >  </i><br>
+><i> >  struct mtk_devapc_data {</i><br>
+><i> > -	/* numbers of violation index */</i><br>
+><i> > -	u32 vio_idx_num;</i><br>
+><i> > -</i><br>
+><i> >  	/* reg offset */</i><br>
+><i> >  	u32 vio_mask_offset;</i><br>
+><i> >  	u32 vio_sta_offset;</i><br>
+><i> > @@ -49,6 +46,7 @@ struct mtk_devapc_data {</i><br>
+><i> >  struct mtk_devapc_context {</i><br>
+><i> >  	struct device *dev;</i><br>
+><i> >  	void __iomem *infra_base;</i><br>
+><i> > +	u32 vio_idx_num;</i><br>
+><i> </i><br>
+><i> We should try to stay backwards compatible (newer kernel with older DTS). I</i><br>
+><i> think we don't need to move vio_idx_num to mtk_devapc_context. Just don't</i><br>
+><i> declare it in the per SoC match data. More details see below...</i><br>
+><i> </i><br>
+><i> >  	struct clk *infra_clk;</i><br>
+><i> >  	const struct mtk_devapc_data *data;</i><br>
+><i> >  };</i><br>
+><i> > @@ -60,10 +58,10 @@ static void clear_vio_status(struct mtk_devapc_context *ctx)</i><br>
+><i> >  </i><br>
+><i> >  	reg = ctx->infra_base + ctx->data->vio_sta_offset;</i><br>
+><i> >  </i><br>
+><i> > -	for (i = 0; i < VIO_MOD_TO_REG_IND(ctx->data->vio_idx_num) - 1; i++)</i><br>
+><i> > +	for (i = 0; i < VIO_MOD_TO_REG_IND(ctx->vio_idx_num - 1); i++)</i><br>
+><i> >  		writel(GENMASK(31, 0), reg + 4 * i);</i><br>
+><i> >  </i><br>
+><i> > -	writel(GENMASK(VIO_MOD_TO_REG_OFF(ctx->data->vio_idx_num) - 1, 0),</i><br>
+><i> > +	writel(GENMASK(VIO_MOD_TO_REG_OFF(ctx->vio_idx_num - 1), 0),</i><br>
+><i> >  	       reg + 4 * i);</i><br>
+><i> >  }</i><br>
+><i> >  </i><br>
+><i> > @@ -80,15 +78,15 @@ static void mask_module_irq(struct mtk_devapc_context *ctx, bool mask)</i><br>
+><i> >  	else</i><br>
+><i> >  		val = 0;</i><br>
+><i> >  </i><br>
+><i> > -	for (i = 0; i < VIO_MOD_TO_REG_IND(ctx->data->vio_idx_num) - 1; i++)</i><br>
+><i> > +	for (i = 0; i < VIO_MOD_TO_REG_IND(ctx->vio_idx_num - 1); i++)</i><br>
+><i> >  		writel(val, reg + 4 * i);</i><br>
+><i> >  </i><br>
+><i> >  	val = readl(reg + 4 * i);</i><br>
+><i> >  	if (mask)</i><br>
+><i> > -		val |= GENMASK(VIO_MOD_TO_REG_OFF(ctx->data->vio_idx_num) - 1,</i><br>
+><i> > +		val |= GENMASK(VIO_MOD_TO_REG_OFF(ctx->vio_idx_num - 1),</i><br>
+><i> >  			       0);</i><br>
+><i> >  	else</i><br>
+><i> > -		val &= ~GENMASK(VIO_MOD_TO_REG_OFF(ctx->data->vio_idx_num) - 1,</i><br>
+><i> > +		val &= ~GENMASK(VIO_MOD_TO_REG_OFF(ctx->vio_idx_num - 1),</i><br>
+><i> >  				0);</i><br>
+><i> >  </i><br>
+><i> >  	writel(val, reg + 4 * i);</i><br>
+><i> > @@ -216,7 +214,6 @@ static void stop_devapc(struct mtk_devapc_context *ctx)</i><br>
+><i> >  }</i><br>
+><i> >  </i><br>
+><i> >  static const struct mtk_devapc_data devapc_mt6779 = {</i><br>
+><i> > -	.vio_idx_num = 511,</i><br>
+><i> >  	.vio_mask_offset = 0x0,</i><br>
+><i> >  	.vio_sta_offset = 0x400,</i><br>
+><i> >  	.vio_dbg0_offset = 0x900,</i><br>
+><i> > @@ -256,6 +253,9 @@ static int mtk_devapc_probe(struct platform_device *pdev)</i><br>
+><i> >  	if (!ctx->infra_base)</i><br>
+><i> >  		return -EINVAL;</i><br>
+><i> >  </i><br>
+><i> > +	if (of_property_read_u32(node, "vio_idx_num", &ctx->vio_idx_num))</i><br>
+><i> > +		return -EINVAL;</i><br>
+><i> > +</i><br>
+><i> </i><br>
+><i> ...only read the property if  vio_idx_num == 0.</i><br>
+><i> What do you think?</i><br>
+><i> </i><br>
+><i> Regards,</i><br>
+><i> Matthias</i><br>
+><i> </i><br>
+<br>
+Good idea. I will fix it in the next version.<br>
+<br>
+Thanks<br>
+<br>
+<br>
+><i> >  	devapc_irq = irq_of_parse_and_map(node, 0);</i><br>
+><i> >  	if (!devapc_irq)</i><br>
+><i> >  		return -EINVAL;</i><br>
+><i> > </i><br>
+<br>
+

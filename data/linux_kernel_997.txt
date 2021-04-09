@@ -1,0 +1,44 @@
+This patch mandates 1.0 for vDPA devices. The goal is to have the<br>
+semantic of normative statement in the virtio spec and eliminate the<br>
+burden of transitional device for both vDPA bus and vDPA parent.<br>
+<br>
+uAPI seems fine since all the vDPA parent mandates<br>
+VIRTIO_F_ACCESS_PLATFORM which implies 1.0 devices.<br>
+<br>
+For legacy guests, it can still work since Qemu will mediate when<br>
+necessary (e.g doing the endian conversion).<br>
+<br>
+Signed-off-by: Jason Wang <jasowang@xxxxxxxxxx><br>
+---<br>
+ include/linux/vdpa.h | 6 ++++++<br>
+ 1 file changed, 6 insertions(+)<br>
+<br>
+diff --git a/include/linux/vdpa.h b/include/linux/vdpa.h<br>
+index 0fefeb976877..cfde4ec999b4 100644<br>
+--- a/include/linux/vdpa.h<br>
++++ b/include/linux/vdpa.h<br>
+@@ -6,6 +6,7 @@<br>
+ #include <linux/device.h><br>
+ #include <linux/interrupt.h><br>
+ #include <linux/vhost_iotlb.h><br>
++#include <uapi/linux/virtio_config.h><br>
+ <br>
+ /**<br>
+  * vDPA callback definition.<br>
+@@ -317,6 +318,11 @@ static inline int vdpa_set_features(struct vdpa_device *vdev, u64 features)<br>
+ {<br>
+         const struct vdpa_config_ops *ops = vdev->config;<br>
+ <br>
++        /* Mandating 1.0 to have semantics of normative statements in<br>
++         * the spec. */<br>
++        if (!(features & BIT_ULL(VIRTIO_F_VERSION_1)))<br>
++		return -EINVAL;<br>
++<br>
+ 	vdev->features_valid = true;<br>
+         return ops->set_features(vdev, features);<br>
+ }<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

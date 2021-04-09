@@ -1,0 +1,148 @@
+remove declared and assigned unused variables<br>
+<br>
+Reported-by: kernel test robot <lkp@xxxxxxxxx><br>
+Signed-off-by: Fabio Aiuto <fabioaiuto83@xxxxxxxxx><br>
+---<br>
+ drivers/staging/rtl8723bs/core/rtw_cmd.c      |  3 ---<br>
+ .../staging/rtl8723bs/include/rtw_security.h  | 18 -------------<br>
+ .../staging/rtl8723bs/os_dep/ioctl_linux.c    | 26 +++----------------<br>
+ 3 files changed, 3 insertions(+), 44 deletions(-)<br>
+<br>
+diff --git a/drivers/staging/rtl8723bs/core/rtw_cmd.c b/drivers/staging/rtl8723bs/core/rtw_cmd.c<br>
+index baf8b1e0f43c..e94eb1138cf1 100644<br>
+--- a/drivers/staging/rtl8723bs/core/rtw_cmd.c<br>
++++ b/drivers/staging/rtl8723bs/core/rtw_cmd.c<br>
+@@ -387,7 +387,6 @@ int rtw_cmd_thread(void *context)<br>
+ 	u8 ret;<br>
+ 	struct cmd_obj *pcmd;<br>
+ 	u8 *pcmdbuf;<br>
+-	unsigned long cmd_start_time;<br>
+ 	u8 (*cmd_hdl)(struct adapter *padapter, u8 *pbuf);<br>
+ 	void (*pcmd_callback)(struct adapter *dev, struct cmd_obj *pcmd);<br>
+ 	struct adapter *padapter = context;<br>
+@@ -438,8 +437,6 @@ int rtw_cmd_thread(void *context)<br>
+ 			continue;<br>
+ 		}<br>
+ <br>
+-		cmd_start_time = jiffies;<br>
+-<br>
+ 		if (rtw_cmd_filter(pcmdpriv, pcmd) == _FAIL) {<br>
+ 			pcmd->res = H2C_DROPPED;<br>
+ 			goto post_process;<br>
+diff --git a/drivers/staging/rtl8723bs/include/rtw_security.h b/drivers/staging/rtl8723bs/include/rtw_security.h<br>
+index b71f0959108b..5c787e999aab 100644<br>
+--- a/drivers/staging/rtl8723bs/include/rtw_security.h<br>
++++ b/drivers/staging/rtl8723bs/include/rtw_security.h<br>
+@@ -332,24 +332,6 @@ static inline u32 rotr(u32 val, int bits)<br>
+ /* This is based on SHA256 implementation in LibTomCrypt that was released into<br>
+  * public domain by Tom St Denis. */<br>
+ <br>
+-/* the K array */<br>
+-static const unsigned long K[64] = {<br>
+-	0x428a2f98UL, 0x71374491UL, 0xb5c0fbcfUL, 0xe9b5dba5UL, 0x3956c25bUL,<br>
+-	0x59f111f1UL, 0x923f82a4UL, 0xab1c5ed5UL, 0xd807aa98UL, 0x12835b01UL,<br>
+-	0x243185beUL, 0x550c7dc3UL, 0x72be5d74UL, 0x80deb1feUL, 0x9bdc06a7UL,<br>
+-	0xc19bf174UL, 0xe49b69c1UL, 0xefbe4786UL, 0x0fc19dc6UL, 0x240ca1ccUL,<br>
+-	0x2de92c6fUL, 0x4a7484aaUL, 0x5cb0a9dcUL, 0x76f988daUL, 0x983e5152UL,<br>
+-	0xa831c66dUL, 0xb00327c8UL, 0xbf597fc7UL, 0xc6e00bf3UL, 0xd5a79147UL,<br>
+-	0x06ca6351UL, 0x14292967UL, 0x27b70a85UL, 0x2e1b2138UL, 0x4d2c6dfcUL,<br>
+-	0x53380d13UL, 0x650a7354UL, 0x766a0abbUL, 0x81c2c92eUL, 0x92722c85UL,<br>
+-	0xa2bfe8a1UL, 0xa81a664bUL, 0xc24b8b70UL, 0xc76c51a3UL, 0xd192e819UL,<br>
+-	0xd6990624UL, 0xf40e3585UL, 0x106aa070UL, 0x19a4c116UL, 0x1e376c08UL,<br>
+-	0x2748774cUL, 0x34b0bcb5UL, 0x391c0cb3UL, 0x4ed8aa4aUL, 0x5b9cca4fUL,<br>
+-	0x682e6ff3UL, 0x748f82eeUL, 0x78a5636fUL, 0x84c87814UL, 0x8cc70208UL,<br>
+-	0x90befffaUL, 0xa4506cebUL, 0xbef9a3f7UL, 0xc67178f2UL<br>
+-};<br>
+-<br>
+-<br>
+ /* Various logical functions */<br>
+ #define RORc(x, y) \<br>
+ (((((unsigned long) (x) & 0xFFFFFFFFUL) >> (unsigned long) ((y) & 31)) | \<br>
+diff --git a/drivers/staging/rtl8723bs/os_dep/ioctl_linux.c b/drivers/staging/rtl8723bs/os_dep/ioctl_linux.c<br>
+index a9820d813d8b..8d29ca9ba67f 100644<br>
+--- a/drivers/staging/rtl8723bs/os_dep/ioctl_linux.c<br>
++++ b/drivers/staging/rtl8723bs/os_dep/ioctl_linux.c<br>
+@@ -33,10 +33,6 @@<br>
+ static u32 rtw_rates[] = {1000000, 2000000, 5500000, 11000000,<br>
+ 	6000000, 9000000, 12000000, 18000000, 24000000, 36000000, 48000000, 54000000};<br>
+ <br>
+-static const char * const iw_operation_mode[] = {<br>
+-	"Auto", "Ad-Hoc", "Managed",  "Master", "Repeater", "Secondary", "Monitor"<br>
+-};<br>
+-<br>
+ void indicate_wx_scan_complete_event(struct adapter *padapter)<br>
+ {<br>
+ 	union iwreq_data wrqu;<br>
+@@ -1125,7 +1121,6 @@ static int rtw_wx_set_mlme(struct net_device *dev,<br>
+ 			     union iwreq_data *wrqu, char *extra)<br>
+ {<br>
+ 	int ret = 0;<br>
+-	u16 reason;<br>
+ 	struct adapter *padapter = rtw_netdev_priv(dev);<br>
+ 	struct iw_mlme *mlme = (struct iw_mlme *)extra;<br>
+ <br>
+@@ -1133,8 +1128,6 @@ static int rtw_wx_set_mlme(struct net_device *dev,<br>
+ 	if (mlme == NULL)<br>
+ 		return -1;<br>
+ <br>
+-	reason = mlme->reason_code;<br>
+-<br>
+ 	switch (mlme->cmd) {<br>
+ 	case IW_MLME_DEAUTH:<br>
+ 		if (!rtw_set_802_11_disassociate(padapter))<br>
+@@ -2440,7 +2433,6 @@ static int rtw_dbg_port(struct net_device *dev,<br>
+ 	u8 major_cmd, minor_cmd;<br>
+ 	u16 arg;<br>
+ 	u32 extra_arg, *pdata, val32;<br>
+-	struct sta_info *psta;<br>
+ 	struct adapter *padapter = rtw_netdev_priv(dev);<br>
+ 	struct mlme_priv *pmlmepriv = &(padapter->mlmepriv);<br>
+ 	struct mlme_ext_priv *pmlmeext = &padapter->mlmeextpriv;<br>
+@@ -2542,15 +2534,7 @@ static int rtw_dbg_port(struct net_device *dev,<br>
+ <br>
+ 					break;<br>
+ 				case 0x05:<br>
+-					psta = rtw_get_stainfo(pstapriv, cur_network->network.MacAddress);<br>
+-					if (psta) {<br>
+-						int i;<br>
+-						struct recv_reorder_ctrl *preorder_ctrl;<br>
+-<br>
+-						for (i = 0; i < 16; i++)<br>
+-							preorder_ctrl = &psta->recvreorder_ctrl[i];<br>
+-<br>
+-					}<br>
++					rtw_get_stainfo(pstapriv, cur_network->network.MacAddress);<br>
+ 					break;<br>
+ 				case 0x06:<br>
+ 					{<br>
+@@ -2568,9 +2552,8 @@ static int rtw_dbg_port(struct net_device *dev,<br>
+ 					break;<br>
+ 				case 0x09:<br>
+ 					{<br>
+-						int i, j;<br>
++						int i;<br>
+ 						struct list_head	*plist, *phead;<br>
+-						struct recv_reorder_ctrl *preorder_ctrl;<br>
+ <br>
+ 						spin_lock_bh(&pstapriv->sta_hash_lock);<br>
+ <br>
+@@ -2579,13 +2562,10 @@ static int rtw_dbg_port(struct net_device *dev,<br>
+ 							plist = get_next(phead);<br>
+ <br>
+ 							while (phead != plist) {<br>
+-								psta = container_of(plist, struct sta_info, hash_list);<br>
++								container_of(plist, struct sta_info, hash_list);<br>
+ <br>
+ 								plist = get_next(plist);<br>
+ <br>
+-								if (extra_arg == psta->aid)<br>
+-									for (j = 0; j < 16; j++)<br>
+-										preorder_ctrl = &psta->recvreorder_ctrl[j];<br>
+ 							}<br>
+ 						}<br>
+ <br>
+-- <br>
+2.20.1<br>
+<br>
+<br>
+

@@ -1,0 +1,25 @@
+Closed: [ortc] H264 caps vs params
+
+    This message: [ Message body ] [ Respond ] [ More options ]
+    Related messages: [ Next message ] [ Previous message ] [ In reply to ]
+
+From: aboba via GitHub <sysbot+gh@w3.org>
+Date: Mon, 25 Apr 2016 20:25:43 +0000
+To: public-ortc@w3.org
+Message-ID: <issues.closed-150697765-1461615942-sysbot+gh@w3.org>
+
+aboba closed this issue. See 
+https://github.com/openpeer/ortc/issues/501
+
+Received on Monday, 25 April 2016 20:25:44 UTC
+
+    This message: [ Message body ]
+    Next message: Robin Raymond via GitHub: "[ortc] Merged Pull Request: RTCRtpCodecParameters clock rate nullable"
+    Previous message: Robin Raymond via GitHub: "Closed: [ortc] dictionary RTCDataChannelParameters id is null and other "null if unset"?"
+    In reply to: Robin Raymond via GitHub: "[ortc] H264 caps vs params"
+
+    Mail actions: [ respond to this message ] [ mail a new topic ]
+    Contemporary messages sorted: [ by date ] [ by thread ] [ by subject ] [ by author ]
+    Help: [ How to use the archives ] [ Search in the archives ] 
+
+

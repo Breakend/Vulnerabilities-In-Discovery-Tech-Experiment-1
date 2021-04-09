@@ -1,0 +1,111 @@
+On Thu, Apr 08, 2021 at 10:09:20AM +0000, Artur Petrosyan wrote:<br>
+><i> Hi Greg,</i><br>
+><i> </i><br>
+><i> On 4/8/2021 13:17, Artur Petrosyan wrote:</i><br>
+><i> > Hi Greg,</i><br>
+><i> > </i><br>
+><i> > On 4/8/2021 11:28, Artur Petrosyan wrote:</i><br>
+><i> >> This patch set fixes and improves the Partial Power Down mode for</i><br>
+><i> >> dwc2 core.</i><br>
+><i> >> It adds support for the following cases</i><br>
+><i> >>       1. Entering and exiting partial power down when a port is</i><br>
+><i> >>          suspended, resumed, port reset is asserted.</i><br>
+><i> >>       2. Exiting the partial power down mode before removing driver.</i><br>
+><i> >>       3. Exiting partial power down in wakeup detected interrupt handler.</i><br>
+><i> >>       4. Exiting from partial power down mode when connector ID.</i><br>
+><i> >>          status changes to "connId B</i><br>
+><i> >></i><br>
+><i> >> It updates and fixes the implementation of dwc2 entering and</i><br>
+><i> >> exiting partial power down mode when the system (PC) is suspended.</i><br>
+><i> >></i><br>
+><i> >> The patch set also improves the implementation of function handlers</i><br>
+><i> >> for entering and exiting host or device partial power down.</i><br>
+><i> >></i><br>
+><i> >> NOTE: This is the second patch set in the power saving mode fixes</i><br>
+><i> >> series.</i><br>
+><i> >> This patch set is part of multiple series and is continuation</i><br>
+><i> >> of the "usb: dwc2: Fix and improve power saving modes" patch set.</i><br>
+><i> >> (Patch set link: <a  rel="nofollow" href="https://urldefense.com/v3/__https://marc.info/?l=linux-usb&m=160379622403975&w=2__;!!A4F2R9G_pg!IJ-Xl1ZwQU2kmqHB3ITyWyno9BgpWUsC647AqK7GIlgzJu9BzT6VN7jt--__fGdMtgWF69M$">https://urldefense.com/v3/__https://marc.info/?l=linux-usb&m=160379622403975&w=2__;!!A4F2R9G_pg!IJ-Xl1ZwQU2kmqHB3ITyWyno9BgpWUsC647AqK7GIlgzJu9BzT6VN7jt--__fGdMtgWF69M$</a> ).</i><br>
+><i> >> The patches that were included in the "usb: dwc2:</i><br>
+><i> >> Fix and improve power saving modes" which was submitted</i><br>
+><i> >> earlier was too large and needed to be split up into</i><br>
+><i> >> smaller patch sets.</i><br>
+><i> >></i><br>
+><i> >> Changes since V1:</i><br>
+><i> >> No changes in the patches or the source code.</i><br>
+><i> >> Sending the second version of the patch set because the first version</i><br>
+><i> >> was not received by vger.kernel.org.</i><br>
+><i> >></i><br>
+><i> >></i><br>
+><i> >></i><br>
+><i> >> Artur Petrosyan (14):</i><br>
+><i> >>     usb: dwc2: Add device partial power down functions</i><br>
+><i> >>     usb: dwc2: Add host partial power down functions</i><br>
+><i> >>     usb: dwc2: Update enter and exit partial power down functions</i><br>
+><i> >>     usb: dwc2: Add partial power down exit flow in wakeup intr.</i><br>
+><i> >>     usb: dwc2: Update port suspend/resume function definitions.</i><br>
+><i> >>     usb: dwc2: Add enter partial power down when port is suspended</i><br>
+><i> >>     usb: dwc2: Add exit partial power down when port is resumed</i><br>
+><i> >>     usb: dwc2: Add exit partial power down when port reset is asserted</i><br>
+><i> >>     usb: dwc2: Add part. power down exit from</i><br>
+><i> >>       dwc2_conn_id_status_change().</i><br>
+><i> >>     usb: dwc2: Allow exit partial power down in urb enqueue</i><br>
+><i> >>     usb: dwc2: Fix session request interrupt handler</i><br>
+><i> >>     usb: dwc2: Update partial power down entering by system suspend</i><br>
+><i> >>     usb: dwc2: Fix partial power down exiting by system resume</i><br>
+><i> >>     usb: dwc2: Add exit partial power down before removing driver</i><br>
+><i> >></i><br>
+><i> >>    drivers/usb/dwc2/core.c      | 113 ++-------</i><br>
+><i> >>    drivers/usb/dwc2/core.h      |  27 ++-</i><br>
+><i> >>    drivers/usb/dwc2/core_intr.c |  46 ++--</i><br>
+><i> >>    drivers/usb/dwc2/gadget.c    | 148 ++++++++++-</i><br>
+><i> >>    drivers/usb/dwc2/hcd.c       | 458 +++++++++++++++++++++++++----------</i><br>
+><i> >>    drivers/usb/dwc2/hw.h        |   1 +</i><br>
+><i> >>    drivers/usb/dwc2/platform.c  |  11 +-</i><br>
+><i> >>    7 files changed, 558 insertions(+), 246 deletions(-)</i><br>
+><i> >></i><br>
+><i> >></i><br>
+><i> >> base-commit: e9fcb07704fcef6fa6d0333fd2b3a62442eaf45b</i><br>
+><i> >></i><br>
+><i> > </i><br>
+><i> > Re sending as a "v2" did not work :(.</i><br>
+><i> > The patches are not in lore again.</i><br>
+><i> > </i><br>
+><i> > Could the issue be with a comma in the end of To: or Cc: list?</i><br>
+><i> > Let me remove the comma in the end of those lists and try sending as "v3".</i><br>
+><i> > </i><br>
+><i> > Regards,</i><br>
+><i> > Artur</i><br>
+><i> > </i><br>
+><i> </i><br>
+><i> I just removed the comma in the end of those lists and resent the patch </i><br>
+><i> set as a "v3" and they are already seen in lore.</i><br>
+><i> There is one strange thing though on lore. Some patch titles are not </i><br>
+><i> fully visible.</i><br>
+><i> </i><br>
+><i> For sure the issue was comma in the end of To: or Cc: lists.</i><br>
+><i> Not working example.</i><br>
+><i> To: Greg Kroah-Hartman <gregkh@xxxxxxxxxxxxxxxxxxx>, </i><br>
+><i> linux-usb@xxxxxxxxxxxxxxx, linux-kernel@xxxxxxxxxxxxxxx,</i><br>
+<br>
+That's an invalid To: line for email.<br>
+<br>
+><i> Working example.</i><br>
+><i> To: Greg Kroah-Hartman <gregkh@xxxxxxxxxxxxxxxxxxx>, </i><br>
+><i> linux-usb@xxxxxxxxxxxxxxx, linux-kernel@xxxxxxxxxxxxxxx</i><br>
+<br>
+That's a correct line.<br>
+<br>
+><i> If the comma is at least in the end of one of those lists (To: or Cc:) </i><br>
+><i> vger.kernel.org mailing server will not accept them.</i><br>
+<br>
+I recommend using 'git send-email' with the --to="foo@xxxxxxx" type<br>
+options so that you don't have to hand-edit the lines to try to get<br>
+stuff like this correct, as it is easy to get wrong.<br>
+<br>
+thanks,<br>
+<br>
+greg k-h<br>
+<br>
+<br>
+

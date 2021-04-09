@@ -1,0 +1,26 @@
+The snd_soc_dai_ops structures is only stored in the ops field of a<br>
+snd_soc_dai_driver structure, so make the snd_soc_dai_ops structure<br>
+const to allow the compiler to put it in read-only memory.<br>
+<br>
+Reported-by: Hulk Robot <hulkci@xxxxxxxxxx><br>
+Signed-off-by: Ye Bin <yebin10@xxxxxxxxxx><br>
+---<br>
+ sound/soc/intel/keembay/kmb_platform.c | 2 +-<br>
+ 1 file changed, 1 insertion(+), 1 deletion(-)<br>
+<br>
+diff --git a/sound/soc/intel/keembay/kmb_platform.c b/sound/soc/intel/keembay/kmb_platform.c<br>
+index 0fd1e8f62c89..ef73392f8cff 100644<br>
+--- a/sound/soc/intel/keembay/kmb_platform.c<br>
++++ b/sound/soc/intel/keembay/kmb_platform.c<br>
+@@ -729,7 +729,7 @@ static int kmb_dai_hw_free(struct snd_pcm_substream *substream,<br>
+ 	return 0;<br>
+ }<br>
+ <br>
+-static struct snd_soc_dai_ops kmb_dai_ops = {<br>
++static const struct snd_soc_dai_ops kmb_dai_ops = {<br>
+ 	.startup	= kmb_dai_startup,<br>
+ 	.trigger	= kmb_dai_trigger,<br>
+ 	.hw_params	= kmb_dai_hw_params,<br>
+<br>
+<br>
+

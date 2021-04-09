@@ -1,0 +1,25 @@
+Remove including <linux/version.h> that don't need it.<br>
+<br>
+Signed-off-by: Tian Tao <tiantao6@xxxxxxxxxxxxx><br>
+Signed-off-by: Zhiqi Song <songzhiqi1@xxxxxxxxxx><br>
+---<br>
+ init/version.c | 1 -<br>
+ 1 file changed, 1 deletion(-)<br>
+<br>
+diff --git a/init/version.c b/init/version.c<br>
+index 92afc78..b1329f1 100644<br>
+--- a/init/version.c<br>
++++ b/init/version.c<br>
+@@ -13,7 +13,6 @@<br>
+ #include <linux/uts.h><br>
+ #include <linux/utsname.h><br>
+ #include <generated/utsrelease.h><br>
+-#include <linux/version.h><br>
+ #include <linux/proc_ns.h><br>
+ <br>
+ struct uts_namespace init_uts_ns = {<br>
+-- <br>
+2.7.4<br>
+<br>
+<br>
+

@@ -1,0 +1,22 @@
+On Thu, 2021-04-08 at 03:20 -0300, Leonardo Bras wrote:<br>
+><i> > > +#define QUERY_DDW_PGSIZE_4K	0x01</i><br>
+><i> > > +#define QUERY_DDW_PGSIZE_64K	0x02</i><br>
+><i> > > +#define QUERY_DDW_PGSIZE_16M	0x04</i><br>
+><i> > > +#define QUERY_DDW_PGSIZE_32M	0x08</i><br>
+><i> > > +#define QUERY_DDW_PGSIZE_64M	0x10</i><br>
+><i> > > +#define QUERY_DDW_PGSIZE_128M	0x20</i><br>
+><i> > > +#define QUERY_DDW_PGSIZE_256M	0x40</i><br>
+><i> > > +#define QUERY_DDW_PGSIZE_16G	0x80</i><br>
+><i> > </i><br>
+><i> > I'm not sure the #defines really gain us much vs just putting the</i><br>
+><i> > literal values in the array below?</i><br>
+><i> </i><br>
+><i> My v1 did not use the define approach, what do you think of that?</i><br>
+><i> <a  rel="nofollow" href="http://patchwork.ozlabs.org/project/linuxppc-dev/patch/20210322190943.715368-1-leobras.c@xxxxxxxxx/">http://patchwork.ozlabs.org/project/linuxppc-dev/patch/20210322190943.715368-1-leobras.c@xxxxxxxxx/</a></i><br>
+><i> </i><br>
+><i> </i><br>
+(of course, it would be that without the pageshift defines also, using<br>
+the __builtin_ctz() approach suggested by Alexey.)<br>
+<br>
+<br>
+

@@ -1,0 +1,29 @@
+pm_runtime_get_sync() will increase the rumtime PM counter<br>
+even it returns an error. Thus a pairing decrement is needed<br>
+to prevent refcount leak. Fix this by replacing this API with<br>
+pm_runtime_resume_and_get(), which will not change the runtime<br>
+PM counter on error.<br>
+<br>
+Signed-off-by: Dinghao Liu <dinghao.liu@xxxxxxxxxx><br>
+---<br>
+ drivers/media/platform/ti-vpe/cal.c | 2 +-<br>
+ 1 file changed, 1 insertion(+), 1 deletion(-)<br>
+<br>
+diff --git a/drivers/media/platform/ti-vpe/cal.c b/drivers/media/platform/ti-vpe/cal.c<br>
+index fa0931788040..ce4e53b9be10 100644<br>
+--- a/drivers/media/platform/ti-vpe/cal.c<br>
++++ b/drivers/media/platform/ti-vpe/cal.c<br>
+@@ -1010,7 +1010,7 @@ static int cal_probe(struct platform_device *pdev)<br>
+ <br>
+ 	/* Read the revision and hardware info to verify hardware access. */<br>
+ 	pm_runtime_enable(&pdev->dev);<br>
+-	ret = pm_runtime_get_sync(&pdev->dev);<br>
++	ret = pm_runtime_resume_and_get(&pdev->dev);<br>
+ 	if (ret)<br>
+ 		goto error_pm_runtime;<br>
+ <br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+

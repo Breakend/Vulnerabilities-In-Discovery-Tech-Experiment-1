@@ -1,0 +1,26 @@
+The snd_soc_dai_ops structures is only stored in the ops field of a<br>
+snd_soc_dai_driver structure, so make the snd_soc_dai_ops structure<br>
+const to allow the compiler to put it in read-only memory.<br>
+<br>
+Reported-by: Hulk Robot <hulkci@xxxxxxxxxx><br>
+Signed-off-by: Ye Bin <yebin10@xxxxxxxxxx><br>
+---<br>
+ sound/soc/codecs/wcd9335.c | 2 +-<br>
+ 1 file changed, 1 insertion(+), 1 deletion(-)<br>
+<br>
+diff --git a/sound/soc/codecs/wcd9335.c b/sound/soc/codecs/wcd9335.c<br>
+index adb325fac930..86c92e03ea5d 100644<br>
+--- a/sound/soc/codecs/wcd9335.c<br>
++++ b/sound/soc/codecs/wcd9335.c<br>
+@@ -2058,7 +2058,7 @@ static int wcd9335_get_channel_map(struct snd_soc_dai *dai,<br>
+ 	return 0;<br>
+ }<br>
+ <br>
+-static struct snd_soc_dai_ops wcd9335_dai_ops = {<br>
++static const struct snd_soc_dai_ops wcd9335_dai_ops = {<br>
+ 	.hw_params = wcd9335_hw_params,<br>
+ 	.trigger = wcd9335_trigger,<br>
+ 	.set_channel_map = wcd9335_set_channel_map,<br>
+<br>
+<br>
+

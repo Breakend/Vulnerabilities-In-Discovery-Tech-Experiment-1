@@ -1,0 +1,123 @@
+Move the TTY_LOCK_* enums and tty_ldisc lock functions out of the global<br>
+tty.h into the local header file to clean things up.<br>
+<br>
+Cc: Jiri Slaby <jirislaby@xxxxxxxxxx><br>
+Signed-off-by: Greg Kroah-Hartman <gregkh@xxxxxxxxxxxxxxxxxxx><br>
+---<br>
+ drivers/tty/tty.h        | 26 ++++++++++++++++++++++++++<br>
+ drivers/tty/tty_buffer.c |  2 +-<br>
+ drivers/tty/tty_mutex.c  |  1 +<br>
+ include/linux/tty.h      | 26 --------------------------<br>
+ 4 files changed, 28 insertions(+), 27 deletions(-)<br>
+<br>
+diff --git a/drivers/tty/tty.h b/drivers/tty/tty.h<br>
+index a8a7abe5d635..ff904e947483 100644<br>
+--- a/drivers/tty/tty.h<br>
++++ b/drivers/tty/tty.h<br>
+@@ -6,6 +6,32 @@<br>
+ #ifndef _TTY_INTERNAL_H<br>
+ #define _TTY_INTERNAL_H<br>
+ <br>
++/*<br>
++ * Lock subclasses for tty locks<br>
++ *<br>
++ * TTY_LOCK_NORMAL is for normal ttys and master ptys.<br>
++ * TTY_LOCK_SLAVE is for slave ptys only.<br>
++ *<br>
++ * Lock subclasses are necessary for handling nested locking with pty pairs.<br>
++ * tty locks which use nested locking:<br>
++ *<br>
++ * legacy_mutex - Nested tty locks are necessary for releasing pty pairs.<br>
++ *		  The stable lock order is master pty first, then slave pty.<br>
++ * termios_rwsem - The stable lock order is tty_buffer lock->termios_rwsem.<br>
++ *		   Subclassing this lock enables the slave pty to hold its<br>
++ *		   termios_rwsem when claiming the master tty_buffer lock.<br>
++ * tty_buffer lock - slave ptys can claim nested buffer lock when handling<br>
++ *		     signal chars. The stable lock order is slave pty, then<br>
++ *		     master.<br>
++ */<br>
++enum {<br>
++	TTY_LOCK_NORMAL = 0,<br>
++	TTY_LOCK_SLAVE,<br>
++};<br>
++<br>
++int tty_ldisc_lock(struct tty_struct *tty, unsigned long timeout);<br>
++void tty_ldisc_unlock(struct tty_struct *tty);<br>
++<br>
+ /* tty_audit.c */<br>
+ #ifdef CONFIG_AUDIT<br>
+ void tty_audit_add_data(struct tty_struct *tty, const void *data, size_t size);<br>
+diff --git a/drivers/tty/tty_buffer.c b/drivers/tty/tty_buffer.c<br>
+index 6d4995a5f318..9733469a14b2 100644<br>
+--- a/drivers/tty/tty_buffer.c<br>
++++ b/drivers/tty/tty_buffer.c<br>
+@@ -17,7 +17,7 @@<br>
+ #include <linux/delay.h><br>
+ #include <linux/module.h><br>
+ #include <linux/ratelimit.h><br>
+-<br>
++#include "tty.h"<br>
+ <br>
+ #define MIN_TTYB_SIZE	256<br>
+ #define TTYB_ALIGN_MASK	255<br>
+diff --git a/drivers/tty/tty_mutex.c b/drivers/tty/tty_mutex.c<br>
+index 2640635ee177..393518a24cfe 100644<br>
+--- a/drivers/tty/tty_mutex.c<br>
++++ b/drivers/tty/tty_mutex.c<br>
+@@ -4,6 +4,7 @@<br>
+ #include <linux/kallsyms.h><br>
+ #include <linux/semaphore.h><br>
+ #include <linux/sched.h><br>
++#include "tty.h"<br>
+ <br>
+ /* Legacy tty mutex glue */<br>
+ <br>
+diff --git a/include/linux/tty.h b/include/linux/tty.h<br>
+index 981ee31c58e1..4b21d47bc098 100644<br>
+--- a/include/linux/tty.h<br>
++++ b/include/linux/tty.h<br>
+@@ -16,30 +16,6 @@<br>
+ #include <linux/llist.h><br>
+ <br>
+ <br>
+-/*<br>
+- * Lock subclasses for tty locks<br>
+- *<br>
+- * TTY_LOCK_NORMAL is for normal ttys and master ptys.<br>
+- * TTY_LOCK_SLAVE is for slave ptys only.<br>
+- *<br>
+- * Lock subclasses are necessary for handling nested locking with pty pairs.<br>
+- * tty locks which use nested locking:<br>
+- *<br>
+- * legacy_mutex - Nested tty locks are necessary for releasing pty pairs.<br>
+- *		  The stable lock order is master pty first, then slave pty.<br>
+- * termios_rwsem - The stable lock order is tty_buffer lock->termios_rwsem.<br>
+- *		   Subclassing this lock enables the slave pty to hold its<br>
+- *		   termios_rwsem when claiming the master tty_buffer lock.<br>
+- * tty_buffer lock - slave ptys can claim nested buffer lock when handling<br>
+- *		     signal chars. The stable lock order is slave pty, then<br>
+- *		     master.<br>
+- */<br>
+-<br>
+-enum {<br>
+-	TTY_LOCK_NORMAL = 0,<br>
+-	TTY_LOCK_SLAVE,<br>
+-};<br>
+-<br>
+ /*<br>
+  * (Note: the *_driver.minor_start values 1, 64, 128, 192 are<br>
+  * hardcoded at present.)<br>
+@@ -419,8 +395,6 @@ extern struct tty_struct *tty_kopen_exclusive(dev_t device);<br>
+ extern struct tty_struct *tty_kopen_shared(dev_t device);<br>
+ extern void tty_kclose(struct tty_struct *tty);<br>
+ extern int tty_dev_name_to_number(const char *name, dev_t *number);<br>
+-extern int tty_ldisc_lock(struct tty_struct *tty, unsigned long timeout);<br>
+-extern void tty_ldisc_unlock(struct tty_struct *tty);<br>
+ extern ssize_t redirected_tty_write(struct kiocb *, struct iov_iter *);<br>
+ extern struct file *tty_release_redirect(struct tty_struct *tty);<br>
+ #else<br>
+-- <br>
+2.31.1<br>
+<br>
+<br>
+

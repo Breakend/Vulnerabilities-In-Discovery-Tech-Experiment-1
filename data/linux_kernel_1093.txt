@@ -1,0 +1,52 @@
+On Wed, Apr 07, 2021 at 05:56:55PM -0700, Mike Kravetz wrote:<br>
+><i> Hello Andrew,</i><br>
+><i> </i><br>
+><i> It has been suggested that this series be included before Oscar Salvador's</i><br>
+><i> series "Make alloc_contig_range handle Hugetlb pages".  At a logical</i><br>
+><i> level, here is what I think needs to happen.  However, I am not sure how</i><br>
+><i> you do tree management and I am open to anything you suggest.  Please do</i><br>
+><i> not start until we get an Ack from Oscar as he will need to participate.</i><br>
+<br>
+As I said, this is fine by me.<br>
+I think it is the most straightforward way to proceed with this series<br>
+as this is a problem that has been bugging us fore quite some time now.<br>
+<br>
+See below:<br>
+<br>
+ <br>
+><i> Remove patches for the series "Make alloc_contig_range handle Hugetlb pages"</i><br>
+><i> from Oscar Salvador.</i><br>
+><i> - mm,page_alloc: drop unnecessary checks from pfn_range_valid_contig</i><br>
+><i> - mm: make alloc_contig_range handle in-use hugetlb pages</i><br>
+><i> - mm: make alloc_contig_range handle free hugetlb pages</i><br>
+<br>
+Yes, those need to be removed<br>
+<br>
+><i>   /*</i><br>
+><i>    * Technically, the following patches do not need to be removed as</i><br>
+><i>    * they do not interact with Mike's changes.  Again, they do</i><br>
+><i>    * contain 'cover letter comments' in the commit messages which may</i><br>
+><i>    * not make sense out of context.</i><br>
+><i>    */</i><br>
+><i> - mmcompaction-let-isolate_migratepages_rangeblock-return-error-codes-fix</i><br>
+><i> - mm,compaction: let isolate_migratepages_{range,block} return error codes</i><br>
+<br>
+Those could stay as well, but they mention a change in<br>
+alloc_contig_range() and without the context of the whole patchset might<br>
+be misleading, so I would pull those out as well.<br>
+<br>
+><i> - mm,page_alloc: bail out earlier on -ENOMEM in alloc_contig_migrate_range</i><br>
+<br>
+I think this one can stay.<br>
+<br>
+But if It is going to be easier for Andrew, just pull them all out and I<br>
+will resend the whole series once this work goes in.<br>
+<br>
+Thanks!<br>
+<br>
+-- <br>
+Oscar Salvador<br>
+SUSE L3<br>
+<br>
+<br>
+

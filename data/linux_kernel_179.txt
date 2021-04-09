@@ -1,0 +1,140 @@
+On Mon, Apr 05, 2021 at 08:10:50AM -0700, kan.liang@xxxxxxxxxxxxxxx wrote:<br>
+><i> diff --git a/arch/x86/events/core.c b/arch/x86/events/core.c</i><br>
+><i> index 0bd9554..d71ca69 100644</i><br>
+><i> --- a/arch/x86/events/core.c</i><br>
+><i> +++ b/arch/x86/events/core.c</i><br>
+><i> @@ -356,6 +356,7 @@ set_ext_hw_attr(struct hw_perf_event *hwc, struct perf_event *event)</i><br>
+><i>  {</i><br>
+><i>  	struct perf_event_attr *attr = &event->attr;</i><br>
+><i>  	unsigned int cache_type, cache_op, cache_result;</i><br>
+><i> +	struct x86_hybrid_pmu *pmu = is_hybrid() ? hybrid_pmu(event->pmu) : NULL;</i><br>
+><i>  	u64 config, val;</i><br>
+><i>  </i><br>
+><i>  	config = attr->config;</i><br>
+><i> @@ -375,7 +376,10 @@ set_ext_hw_attr(struct hw_perf_event *hwc, struct perf_event *event)</i><br>
+><i>  		return -EINVAL;</i><br>
+><i>  	cache_result = array_index_nospec(cache_result, PERF_COUNT_HW_CACHE_RESULT_MAX);</i><br>
+><i>  </i><br>
+><i> -	val = hw_cache_event_ids[cache_type][cache_op][cache_result];</i><br>
+><i> +	if (pmu)</i><br>
+><i> +		val = pmu->hw_cache_event_ids[cache_type][cache_op][cache_result];</i><br>
+><i> +	else</i><br>
+><i> +		val = hw_cache_event_ids[cache_type][cache_op][cache_result];</i><br>
+><i>  </i><br>
+><i>  	if (val == 0)</i><br>
+><i>  		return -ENOENT;</i><br>
+><i> @@ -384,7 +388,10 @@ set_ext_hw_attr(struct hw_perf_event *hwc, struct perf_event *event)</i><br>
+><i>  		return -EINVAL;</i><br>
+><i>  </i><br>
+><i>  	hwc->config |= val;</i><br>
+><i> -	attr->config1 = hw_cache_extra_regs[cache_type][cache_op][cache_result];</i><br>
+><i> +	if (pmu)</i><br>
+><i> +		attr->config1 = pmu->hw_cache_extra_regs[cache_type][cache_op][cache_result];</i><br>
+><i> +	else</i><br>
+><i> +		attr->config1 = hw_cache_extra_regs[cache_type][cache_op][cache_result];</i><br>
+><i>  	return x86_pmu_extra_regs(val, event);</i><br>
+><i>  }</i><br>
+<br>
+So I'm still bugged by this, and you have the same pattern for<br>
+unconstrained, plus that other issue you couldn't use hybrid() for.<br>
+<br>
+How's something like this on top?<br>
+<br>
+---<br>
+--- a/arch/x86/events/core.c<br>
++++ b/arch/x86/events/core.c<br>
+@@ -356,7 +356,6 @@ set_ext_hw_attr(struct hw_perf_event *hw<br>
+ {<br>
+ 	struct perf_event_attr *attr = &event->attr;<br>
+ 	unsigned int cache_type, cache_op, cache_result;<br>
+-	struct x86_hybrid_pmu *pmu = is_hybrid() ? hybrid_pmu(event->pmu) : NULL;<br>
+ 	u64 config, val;<br>
+ <br>
+ 	config = attr->config;<br>
+@@ -376,11 +375,7 @@ set_ext_hw_attr(struct hw_perf_event *hw<br>
+ 		return -EINVAL;<br>
+ 	cache_result = array_index_nospec(cache_result, PERF_COUNT_HW_CACHE_RESULT_MAX);<br>
+ <br>
+-	if (pmu)<br>
+-		val = pmu->hw_cache_event_ids[cache_type][cache_op][cache_result];<br>
+-	else<br>
+-		val = hw_cache_event_ids[cache_type][cache_op][cache_result];<br>
+-<br>
++	val = hybrid_var(event->pmu, hw_cache_event_ids)[cache_type][cache_op][cache_result];<br>
+ 	if (val == 0)<br>
+ 		return -ENOENT;<br>
+ <br>
+@@ -388,10 +383,8 @@ set_ext_hw_attr(struct hw_perf_event *hw<br>
+ 		return -EINVAL;<br>
+ <br>
+ 	hwc->config |= val;<br>
+-	if (pmu)<br>
+-		attr->config1 = pmu->hw_cache_extra_regs[cache_type][cache_op][cache_result];<br>
+-	else<br>
+-		attr->config1 = hw_cache_extra_regs[cache_type][cache_op][cache_result];<br>
++	attr->config1 = hybrid_var(event->pmu, hw_cache_extra_regs)[cache_type][cache_op][cache_result];<br>
++<br>
+ 	return x86_pmu_extra_regs(val, event);<br>
+ }<br>
+ <br>
+--- a/arch/x86/events/perf_event.h<br>
++++ b/arch/x86/events/perf_event.h<br>
+@@ -660,14 +660,24 @@ static __always_inline struct x86_hybrid<br>
+ #define is_hybrid()			(!!x86_pmu.num_hybrid_pmus)<br>
+ <br>
+ #define hybrid(_pmu, _field)				\<br>
+-({							\<br>
+-	typeof(x86_pmu._field) __F = x86_pmu._field;	\<br>
++(*({							\<br>
++	typeof(&x86_pmu._field) __Fp = &x86_pmu._field;	\<br>
+ 							\<br>
+ 	if (is_hybrid() && (_pmu))			\<br>
+-		__F = hybrid_pmu(_pmu)->_field;		\<br>
++		__Fp = &hybrid_pmu(_pmu)->_field;	\<br>
+ 							\<br>
+-	__F;						\<br>
+-})<br>
++	__Fp;						\<br>
++}))<br>
++<br>
++#define hybrid_var(_pmu, _var)				\<br>
++(*({							\<br>
++	typeof(&_var) __Fp = &_var;			\<br>
++							\<br>
++	if (is_hybrid() && (_pmu))			\<br>
++		__Fp = &hybrid_pmu(_pmu)->_var;		\<br>
++							\<br>
++	__Fp;						\<br>
++}))<br>
+ <br>
+ /*<br>
+  * struct x86_pmu - generic x86 pmu<br>
+--- a/arch/x86/events/intel/core.c<br>
++++ b/arch/x86/events/intel/core.c<br>
+@@ -3147,10 +3147,7 @@ x86_get_event_constraints(struct cpu_hw_<br>
+ 		}<br>
+ 	}<br>
+ <br>
+-	if (!is_hybrid() || !cpuc->pmu)<br>
+-		return &unconstrained;<br>
+-<br>
+-	return &hybrid_pmu(cpuc->pmu)->unconstrained;<br>
++	return &hybrid_var(cpuc->pmu, unconstrained);<br>
+ }<br>
+ <br>
+ static struct event_constraint *<br>
+@@ -3656,10 +3653,7 @@ static inline bool is_mem_loads_aux_even<br>
+ <br>
+ static inline bool intel_pmu_has_cap(struct perf_event *event, int idx)<br>
+ {<br>
+-	union perf_capabilities *intel_cap;<br>
+-<br>
+-	intel_cap = is_hybrid() ? &hybrid_pmu(event->pmu)->intel_cap :<br>
+-				  &x86_pmu.intel_cap;<br>
++	union perf_capabilities *intel_cap = &hybrid(event->pmu, intel_cap);<br>
+ <br>
+ 	return test_bit(idx, (unsigned long *)&intel_cap->capabilities);<br>
+ }<br>
+<br>
+<br>
+

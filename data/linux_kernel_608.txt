@@ -1,0 +1,24 @@
+On Thu, Apr 8, 2021 at 6:10 AM Sergei Krainov<br>
+<sergei.krainov.lkd@xxxxxxxxx> wrote:<br>
+><i> No side effects can be seen locally or in r8712_find_network()</i><br>
+<br>
+I am sorry to jump in. Sergei, what Greg is asking is basically why<br>
+you want to delete the r8712_find_network call in the first place.<br>
+Deleting an unused variable is fine, but the problem here is that you<br>
+are _also_ deleting a call to a function that _probably_ does some<br>
+things that, even if you want to get rid of the variable, you would<br>
+probably like to keep on doing (and so the call would remain). Is that<br>
+call really not doing anything relevant? That's what you will have to<br>
+explain in the patch in order for it to make sense.<br>
+<br>
+As a side note on top of the question about the call, it's not like<br>
+the variable is not being used. It's used right after the call to<br>
+r8712_find_network to check the result of the call... so is the real<br>
+purpose of the patch to remove the call in the first place and then<br>
+having the variable removed because there is no point in having it if<br>
+the call goes away?<br>
+<br>
+I hope that helps.<br>
+<br>
+<br>
+

@@ -1,0 +1,56 @@
+chromium / external / webrtc / 8a5cef8d0a594a1f46f6eeb2a37d785f3afe236d
+commit	8a5cef8d0a594a1f46f6eeb2a37d785f3afe236d	[log] [tgz]
+author	stefan <stefan@webrtc.org>	Fri Sep 02 11:07:28 2016
+committer	Commit bot <commit-bot@chromium.org>	Fri Sep 02 11:07:35 2016
+tree	c39b238d36f9390c6b01c9a5765954b0d50c9b66
+parent	06a5e1aa3982177e875ddc10c82b1fa4f14393ce [diff]
+
+Reland of Add pps id and sps id parsing to the h.264 depacketizer. (patchset #1 id:1 of https://codereview.webrtc.org/2265023002/ )
+
+Reason for revert:
+Reland this now that downstream tests have been fixed.
+
+Original issue's description:
+> Revert of Add pps id and sps id parsing to the h.264 depacketizer. (patchset #5 id:80001 of https://codereview.webrtc.org/2238253002/ )
+>
+> Reason for revert:
+> Breaks some h264 bitstream tests downstream. Reverting for now.
+>
+> Original issue's description:
+> > Add pps id and sps id parsing to the h.264 depacketizer.
+> >
+> > BUG=webrtc:6208
+> >
+> > Committed: https://crrev.com/abcc3de169d8896ad60e920e5677600fb3d40180
+> > Cr-Commit-Position: refs/heads/master@{#13838}
+>
+> TBR=sprang@webrtc.org,stefan@webrtc.org
+> # Skipping CQ checks because original CL landed less than 1 days ago.
+> NOPRESUBMIT=true
+> NOTREECHECKS=true
+> NOTRY=true
+> BUG=webrtc:6208
+>
+> Committed: https://crrev.com/83d79cd4a2bfbdd1abc1f75480488df4446f5fe0
+> Cr-Commit-Position: refs/heads/master@{#13844}
+
+TBR=sprang@webrtc.org,kjellander@webrtc.org
+# Not skipping CQ checks because original CL landed more than 1 days ago.
+BUG=webrtc:6208
+
+Review-Url: https://codereview.webrtc.org/2302893002
+Cr-Commit-Position: refs/heads/master@{#14042}
+
+    webrtc/common_video/h264/pps_parser.cc[diff]
+    webrtc/common_video/h264/pps_parser.h[diff]
+    webrtc/common_video/h264/pps_parser_unittest.cc[diff]
+    webrtc/common_video/h264/sps_parser.cc[diff]
+    webrtc/common_video/h264/sps_parser.h[diff]
+    webrtc/common_video/h264/sps_parser_unittest.cc[diff]
+    webrtc/common_video/h264/sps_vui_rewriter.cc[diff]
+    webrtc/common_video/h264/sps_vui_rewriter_unittest.cc[diff]
+    webrtc/modules/include/module_common_types.h[diff]
+    webrtc/modules/rtp_rtcp/source/rtp_format_h264.cc[diff]
+    webrtc/modules/rtp_rtcp/source/rtp_format_h264_unittest.cc[diff]
+
+11 files changed

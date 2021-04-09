@@ -1,0 +1,29 @@
+
+On 07/04/21 16:41, Vineeth Pillai wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">  
++#if IS_ENABLED(CONFIG_HYPERV)
+<br>
++static inline void hv_vmcb_dirty_nested_enlightenments(struct kvm_vcpu *vcpu)<br>
++{<br>
++	struct vmcb *vmcb = to_svm(vcpu)->vmcb;<br>
++<br>
++	/*<br>
++	 * vmcb can be NULL if called during early vcpu init.<br>
++	 * And its okay not to mark vmcb dirty during vcpu init<br>
++	 * as we mark it dirty unconditionally towards end of vcpu<br>
++	 * init phase.<br>
++	 */<br>
++	if (vmcb && vmcb_is_clean(vmcb, VMCB_HV_NESTED_ENLIGHTENMENTS) &&<br>
++	    vmcb->hv_enlightenments.hv_enlightenments_control.msr_bitmap)<br>
++		vmcb_mark_dirty(vmcb, VMCB_HV_NESTED_ENLIGHTENMENTS);<br>
++}<br>
+</blockquote>
+<br>
+In addition to what Vitaly said, can svm->vmcb really be NULL?  If so it 
+might be better to reorder initializations and skip the NULL check.
+<br>
+<br>
+Paolo<br>
+<br>
+<br>
+

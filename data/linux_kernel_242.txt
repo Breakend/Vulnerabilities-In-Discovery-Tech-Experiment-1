@@ -1,0 +1,74 @@
+__flush_dcache_icache() is usable for non HIGHMEM pages on<br>
+every platform.<br>
+<br>
+It is only for HIGHMEM pages that BOOKE needs kmap() and<br>
+BOOK3S needs flush_dcache_icache_phys().<br>
+<br>
+So make flush_dcache_icache_phys() dependent on CONFIG_HIGHMEM and<br>
+call it only when it is a HIGHMEM page.<br>
+<br>
+We could make flush_dcache_icache_phys() available at all time,<br>
+but as it is declared NOKPROBE_SYMBOL(), GCC doesn't optimise<br>
+it out when it is not used.<br>
+<br>
+So define a stub for !CONFIG_HIGHMEM in order to remove the #ifdef in<br>
+flush_dcache_icache_page() and use IS_ENABLED() instead.<br>
+<br>
+Signed-off-by: Christophe Leroy <christophe.leroy@xxxxxxxxxx><br>
+---<br>
+ arch/powerpc/mm/cacheflush.c | 17 +++++++++--------<br>
+ 1 file changed, 9 insertions(+), 8 deletions(-)<br>
+<br>
+diff --git a/arch/powerpc/mm/cacheflush.c b/arch/powerpc/mm/cacheflush.c<br>
+index 3268a3e55c3f..2d92cb6bc423 100644<br>
+--- a/arch/powerpc/mm/cacheflush.c<br>
++++ b/arch/powerpc/mm/cacheflush.c<br>
+@@ -76,7 +76,7 @@ void flush_icache_range(unsigned long start, unsigned long stop)<br>
+ }<br>
+ EXPORT_SYMBOL(flush_icache_range);<br>
+ <br>
+-#if !defined(CONFIG_PPC_8xx) && !defined(CONFIG_PPC64)<br>
++#ifdef CONFIG_HIGHMEM<br>
+ /**<br>
+  * flush_dcache_icache_phys() - Flush a page by it's physical address<br>
+  * @physaddr: the physical address of the page<br>
+@@ -115,7 +115,11 @@ static void flush_dcache_icache_phys(unsigned long physaddr)<br>
+ 		: "ctr", "memory");<br>
+ }<br>
+ NOKPROBE_SYMBOL(flush_dcache_icache_phys)<br>
+-#endif // !defined(CONFIG_PPC_8xx) && !defined(CONFIG_PPC64)<br>
++#else<br>
++static void flush_dcache_icache_phys(unsigned long physaddr)<br>
++{<br>
++}<br>
++#endif<br>
+ <br>
+ /*<br>
+  * This is called when a page has been modified by the kernel.<br>
+@@ -185,18 +189,15 @@ void flush_dcache_icache_page(struct page *page)<br>
+ 	if (PageCompound(page))<br>
+ 		return flush_dcache_icache_hugepage(page);<br>
+ <br>
+-#if defined(CONFIG_PPC_8xx) || defined(CONFIG_PPC64)<br>
+-	/* On 8xx there is no need to kmap since highmem is not supported */<br>
+-	__flush_dcache_icache(page_address(page));<br>
+-#else<br>
+-	if (IS_ENABLED(CONFIG_BOOKE) || sizeof(phys_addr_t) > sizeof(void *)) {<br>
++	if (!PageHighMem(page)) {<br>
++		__flush_dcache_icache(lowmem_page_address(page));<br>
++	} else if (IS_ENABLED(CONFIG_BOOKE) || sizeof(phys_addr_t) > sizeof(void *)) {<br>
+ 		void *start = kmap_atomic(page);<br>
+ 		__flush_dcache_icache(start);<br>
+ 		kunmap_atomic(start);<br>
+ 	} else {<br>
+ 		flush_dcache_icache_phys(page_to_phys(page));<br>
+ 	}<br>
+-#endif<br>
+ }<br>
+ EXPORT_SYMBOL(flush_dcache_icache_page);<br>
+ <br>
+-- <br>
+2.25.0<br>
+<br>
+<br>
+

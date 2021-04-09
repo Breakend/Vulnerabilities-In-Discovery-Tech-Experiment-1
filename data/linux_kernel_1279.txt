@@ -1,0 +1,111 @@
+From: Pingfan Liu <kernelfans@xxxxxxxxx><br>
+<br>
+The intend of trans_pgd_map_page() was to map contigous range of VA<br>
+memory to the memory that is getting relocated during kexec. However,<br>
+since we are now using linear map instead of contigous range this<br>
+function is not needed<br>
+<br>
+Signed-off-by: Pingfan Liu <kernelfans@xxxxxxxxx><br>
+[Changed commit message]<br>
+Signed-off-by: Pavel Tatashin <pasha.tatashin@xxxxxxxxxx><br>
+---<br>
+ arch/arm64/include/asm/trans_pgd.h |  5 +--<br>
+ arch/arm64/mm/trans_pgd.c          | 57 ------------------------------<br>
+ 2 files changed, 1 insertion(+), 61 deletions(-)<br>
+<br>
+diff --git a/arch/arm64/include/asm/trans_pgd.h b/arch/arm64/include/asm/trans_pgd.h<br>
+index e0760e52d36d..234353df2f13 100644<br>
+--- a/arch/arm64/include/asm/trans_pgd.h<br>
++++ b/arch/arm64/include/asm/trans_pgd.h<br>
+@@ -15,7 +15,7 @@<br>
+ /*<br>
+  * trans_alloc_page<br>
+  *	- Allocator that should return exactly one zeroed page, if this<br>
+- *	  allocator fails, trans_pgd_create_copy() and trans_pgd_map_page()<br>
++ *	  allocator fails, trans_pgd_create_copy() and trans_pgd_idmap_page()<br>
+  *	  return -ENOMEM error.<br>
+  *<br>
+  * trans_alloc_arg<br>
+@@ -30,9 +30,6 @@ struct trans_pgd_info {<br>
+ int trans_pgd_create_copy(struct trans_pgd_info *info, pgd_t **trans_pgd,<br>
+ 			  unsigned long start, unsigned long end);<br>
+ <br>
+-int trans_pgd_map_page(struct trans_pgd_info *info, pgd_t *trans_pgd,<br>
+-		       void *page, unsigned long dst_addr, pgprot_t pgprot);<br>
+-<br>
+ int trans_pgd_idmap_page(struct trans_pgd_info *info, phys_addr_t *trans_ttbr0,<br>
+ 			 unsigned long *t0sz, void *page);<br>
+ <br>
+diff --git a/arch/arm64/mm/trans_pgd.c b/arch/arm64/mm/trans_pgd.c<br>
+index 61549451ed3a..e24a749013c1 100644<br>
+--- a/arch/arm64/mm/trans_pgd.c<br>
++++ b/arch/arm64/mm/trans_pgd.c<br>
+@@ -217,63 +217,6 @@ int trans_pgd_create_copy(struct trans_pgd_info *info, pgd_t **dst_pgdp,<br>
+ 	return rc;<br>
+ }<br>
+ <br>
+-/*<br>
+- * Add map entry to trans_pgd for a base-size page at PTE level.<br>
+- * info:	contains allocator and its argument<br>
+- * trans_pgd:	page table in which new map is added.<br>
+- * page:	page to be mapped.<br>
+- * dst_addr:	new VA address for the page<br>
+- * pgprot:	protection for the page.<br>
+- *<br>
+- * Returns 0 on success, and -ENOMEM on failure.<br>
+- */<br>
+-int trans_pgd_map_page(struct trans_pgd_info *info, pgd_t *trans_pgd,<br>
+-		       void *page, unsigned long dst_addr, pgprot_t pgprot)<br>
+-{<br>
+-	pgd_t *pgdp;<br>
+-	p4d_t *p4dp;<br>
+-	pud_t *pudp;<br>
+-	pmd_t *pmdp;<br>
+-	pte_t *ptep;<br>
+-<br>
+-	pgdp = pgd_offset_pgd(trans_pgd, dst_addr);<br>
+-	if (pgd_none(READ_ONCE(*pgdp))) {<br>
+-		p4dp = trans_alloc(info);<br>
+-		if (!pgdp)<br>
+-			return -ENOMEM;<br>
+-		pgd_populate(NULL, pgdp, p4dp);<br>
+-	}<br>
+-<br>
+-	p4dp = p4d_offset(pgdp, dst_addr);<br>
+-	if (p4d_none(READ_ONCE(*p4dp))) {<br>
+-		pudp = trans_alloc(info);<br>
+-		if (!pudp)<br>
+-			return -ENOMEM;<br>
+-		p4d_populate(NULL, p4dp, pudp);<br>
+-	}<br>
+-<br>
+-	pudp = pud_offset(p4dp, dst_addr);<br>
+-	if (pud_none(READ_ONCE(*pudp))) {<br>
+-		pmdp = trans_alloc(info);<br>
+-		if (!pmdp)<br>
+-			return -ENOMEM;<br>
+-		pud_populate(NULL, pudp, pmdp);<br>
+-	}<br>
+-<br>
+-	pmdp = pmd_offset(pudp, dst_addr);<br>
+-	if (pmd_none(READ_ONCE(*pmdp))) {<br>
+-		ptep = trans_alloc(info);<br>
+-		if (!ptep)<br>
+-			return -ENOMEM;<br>
+-		pmd_populate_kernel(NULL, pmdp, ptep);<br>
+-	}<br>
+-<br>
+-	ptep = pte_offset_kernel(pmdp, dst_addr);<br>
+-	set_pte(ptep, pfn_pte(virt_to_pfn(page), pgprot));<br>
+-<br>
+-	return 0;<br>
+-}<br>
+-<br>
+ /*<br>
+  * The page we want to idmap may be outside the range covered by VA_BITS that<br>
+  * can be built using the kernel's p?d_populate() helpers. As a one off, for a<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

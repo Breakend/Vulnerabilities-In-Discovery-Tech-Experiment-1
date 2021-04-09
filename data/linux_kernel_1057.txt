@@ -1,0 +1,364 @@
+><i> On Thu, Apr 08, 2021 at 03:30:15PM +0800, Wu, Hao wrote:</i><br>
+><i> > > > On Mon, 5 Apr 2021, Moritz Fischer wrote:</i><br>
+><i> > > ></i><br>
+><i> > > > > Hi Matthew,</i><br>
+><i> > > > ></i><br>
+><i> > > > > On Mon, Apr 05, 2021 at 04:53:00PM -0700,</i><br>
+><i> > > matthew.gerlach@xxxxxxxxxxxxxxx wrote:</i><br>
+><i> > > > > > From: Matthew Gerlach <matthew.gerlach@xxxxxxxxxxxxxxx></i><br>
+><i> > > > > ></i><br>
+><i> > > > > > This patch adds DFL bus driver for the Altera SPI Master</i><br>
+><i> > > > > > controller.  The SPI master is connected to an Intel SPI Slave to</i><br>
+><i> > > > > > Avalon Master Bridge, inside an Intel MAX10 BMC Chip.</i><br>
+><i> > > > > ></i><br>
+><i> > > > > > Signed-off-by: Matthew Gerlach <matthew.gerlach@xxxxxxxxxxxxxxx></i><br>
+><i> > > > > > ---</i><br>
+><i> > > > > >  drivers/fpga/Kconfig          |   9 ++</i><br>
+><i> > > > > >  drivers/fpga/Makefile         |   1 +</i><br>
+><i> > > > > >  drivers/fpga/dfl-spi-altera.c | 221</i><br>
+><i> > > ++++++++++++++++++++++++++++++++++++++++++</i><br>
+><i> > > > > >  3 files changed, 231 insertions(+)</i><br>
+><i> > > > > >  create mode 100644 drivers/fpga/dfl-spi-altera.c</i><br>
+><i> > > > > ></i><br>
+><i> > > > > > diff --git a/drivers/fpga/Kconfig b/drivers/fpga/Kconfig</i><br>
+><i> > > > > > index d591dd9..0a86994 100644</i><br>
+><i> > > > > > --- a/drivers/fpga/Kconfig</i><br>
+><i> > > > > > +++ b/drivers/fpga/Kconfig</i><br>
+><i> > > > > > @@ -210,6 +210,15 @@ config FPGA_DFL_NIOS_INTEL_PAC_N3000</i><br>
+><i> > > > > >    the card. It also instantiates the SPI master (spi-altera) for</i><br>
+><i> > > > > >    the card's BMC (Board Management Controller).</i><br>
+><i> > > > > ></i><br>
+><i> > > > > > +config FPGA_DFL_SPI_ALTERA</i><br>
+><i> > > > > > +tristate "FPGA DFL Altera SPI Master Driver"</i><br>
+><i> > > > > > +depends on FPGA_DFL</i><br>
+><i> > > > > > +select REGMAP</i><br>
+><i> > > > > > +help</i><br>
+><i> > > > > > +  This is a DFL bus driver for the Altera SPI master controller.</i><br>
+><i> > > > > > +  The SPI master is connected to a SPI slave to Avalon Master</i><br>
+><i> > > > > > +  bridge in a Intel MAX BMC.</i><br>
+><i> > > > > > +</i><br>
+><i> > > > > >  config FPGA_DFL_PCI</i><br>
+><i> > > > > >  tristate "FPGA DFL PCIe Device Driver"</i><br>
+><i> > > > > >  depends on PCI && FPGA_DFL</i><br>
+><i> > > > > > diff --git a/drivers/fpga/Makefile b/drivers/fpga/Makefile</i><br>
+><i> > > > > > index 18dc9885..58a42ad 100644</i><br>
+><i> > > > > > --- a/drivers/fpga/Makefile</i><br>
+><i> > > > > > +++ b/drivers/fpga/Makefile</i><br>
+><i> > > > > > @@ -45,6 +45,7 @@ dfl-afu-objs := dfl-afu-main.o dfl-afu-region.o dfl-</i><br>
+><i> > > afu-dma-region.o</i><br>
+><i> > > > > >  dfl-afu-objs += dfl-afu-error.o</i><br>
+><i> > > > > ></i><br>
+><i> > > > > >  obj-$(CONFIG_FPGA_DFL_NIOS_INTEL_PAC_N3000)+= dfl-n3000-</i><br>
+><i> > > nios.o</i><br>
+><i> > > > > > +obj-$(CONFIG_FPGA_DFL_SPI_ALTERA)+= dfl-spi-altera.o</i><br>
+><i> > > > > ></i><br>
+><i> > > > > >  # Drivers for FPGAs which implement DFL</i><br>
+><i> > > > > >  obj-$(CONFIG_FPGA_DFL_PCI)+= dfl-pci.o</i><br>
+><i> > > > > > diff --git a/drivers/fpga/dfl-spi-altera.c b/drivers/fpga/dfl-spi-altera.c</i><br>
+><i> > > > > > new file mode 100644</i><br>
+><i> > > > > > index 0000000..9bec25fd</i><br>
+><i> > > > > > --- /dev/null</i><br>
+><i> > > > > > +++ b/drivers/fpga/dfl-spi-altera.c</i><br>
+><i> > > > > > @@ -0,0 +1,221 @@</i><br>
+><i> > > > > > +// SPDX-License-Identifier: GPL-2.0</i><br>
+><i> > > > > > +/*</i><br>
+><i> > > > > > + * DFL bus driver for Altera SPI Master</i><br>
+><i> > > > > > + *</i><br>
+><i> > > > > > + * Copyright (C) 2020 Intel Corporation, Inc.</i><br>
+><i> > > > > > + *</i><br>
+><i> > > > > > + * Authors:</i><br>
+><i> > > > > > + *   Matthew Gerlach <matthew.gerlach@xxxxxxxxxxxxxxx></i><br>
+><i> > > > > > + */</i><br>
+><i> > > > > > +</i><br>
+><i> > > > > > +#include <linux/types.h></i><br>
+><i> > > > > > +#include <linux/kernel.h></i><br>
+><i> > > > > > +#include <linux/module.h></i><br>
+><i> > > > > > +#include <linux/stddef.h></i><br>
+><i> > > > > > +#include <linux/errno.h></i><br>
+><i> > > > > > +#include <linux/platform_device.h></i><br>
+><i> > > > > > +#include <linux/io.h></i><br>
+><i> > > > > > +#include <linux/bitfield.h></i><br>
+><i> > > > > > +#include <linux/io-64-nonatomic-lo-hi.h></i><br>
+><i> > > > > > +#include <linux/regmap.h></i><br>
+><i> > > > > > +#include <linux/spi/spi.h></i><br>
+><i> > > > > > +#include <linux/spi/altera.h></i><br>
+><i> > > > > > +#include <linux/dfl.h></i><br>
+><i> > > > > > +</i><br>
+><i> > > > > > +struct dfl_altera_spi {</i><br>
+><i> > > > > > +void __iomem *base;</i><br>
+><i> > > > > > +struct regmap *regmap;</i><br>
+><i> > > > > > +struct device *dev;</i><br>
+><i> > > > > > +struct platform_device *altr_spi;</i><br>
+><i> > > > > > +};</i><br>
+><i> > > > > > +</i><br>
+><i> > > > > > +#define SPI_CORE_PARAMETER      0x8</i><br>
+><i> > > > > > +#define SHIFT_MODE              BIT_ULL(1)</i><br>
+><i> > > > > > +#define SHIFT_MODE_MSB          0</i><br>
+><i> > > > > > +#define SHIFT_MODE_LSB          1</i><br>
+><i> > > > > > +#define DATA_WIDTH              GENMASK_ULL(7, 2)</i><br>
+><i> > > > > > +#define NUM_CHIPSELECT          GENMASK_ULL(13, 8)</i><br>
+><i> > > > > > +#define CLK_POLARITY            BIT_ULL(14)</i><br>
+><i> > > > > > +#define CLK_PHASE               BIT_ULL(15)</i><br>
+><i> > > > > > +#define PERIPHERAL_ID           GENMASK_ULL(47, 32)</i><br>
+><i> > > > > > +#define SPI_CLK                 GENMASK_ULL(31, 22)</i><br>
+><i> > > > > > +#define SPI_INDIRECT_ACC_OFST   0x10</i><br>
+><i> > > > > > +</i><br>
+><i> > > > > > +#define INDIRECT_ADDR           (SPI_INDIRECT_ACC_OFST+0x0)</i><br>
+><i> > > > > > +#define INDIRECT_WR             BIT_ULL(8)</i><br>
+><i> > > > > > +#define INDIRECT_RD             BIT_ULL(9)</i><br>
+><i> > > > > > +#define INDIRECT_RD_DATA        (SPI_INDIRECT_ACC_OFST+0x8)</i><br>
+><i> > > > > > +#define INDIRECT_DATA_MASK      GENMASK_ULL(31, 0)</i><br>
+><i> > > > > > +#define INDIRECT_DEBUG          BIT_ULL(32)</i><br>
+><i> > > > > > +#define INDIRECT_WR_DATA        (SPI_INDIRECT_ACC_OFST+0x10)</i><br>
+><i> > > > > > +#define INDIRECT_TIMEOUT        10000</i><br>
+><i> > > > > > +</i><br>
+><i> > > > > > +static int indirect_bus_reg_read(void *context, unsigned int reg,</i><br>
+><i> > > > > > + unsigned int *val)</i><br>
+><i> > > > > > +{</i><br>
+><i> > > > > > +struct dfl_altera_spi *aspi = context;</i><br>
+><i> > > > > > +void __iomem *base = aspi->base;</i><br>
+><i> > > > > > +int loops;</i><br>
+><i> > > > > > +u64 v;</i><br>
+><i> > > > > > +</i><br>
+><i> > > > > > +writeq((reg >> 2) | INDIRECT_RD, base + INDIRECT_ADDR);</i><br>
+><i> > > > > > +</i><br>
+><i> > > > > > +loops = 0;</i><br>
+><i> > > > > > +while ((readq(base + INDIRECT_ADDR) & INDIRECT_RD) &&</i><br>
+><i> > > > > > +       (loops++ < INDIRECT_TIMEOUT))</i><br>
+><i> > > > > > +cpu_relax();</i><br>
+><i> > > > > > +</i><br>
+><i> > > > > > +if (loops >= INDIRECT_TIMEOUT) {</i><br>
+><i> > > > > > +pr_err("%s timed out %d\n", __func__, loops);</i><br>
+><i> > > > > > +return -ETIME;</i><br>
+><i> > > > > > +}</i><br>
+><i> > > > > > +</i><br>
+><i> > > > > > +v = readq(base + INDIRECT_RD_DATA);</i><br>
+><i> > > > > > +</i><br>
+><i> > > > > > +*val = v & INDIRECT_DATA_MASK;</i><br>
+><i> > > > > > +</i><br>
+><i> > > > > > +return 0;</i><br>
+><i> > > > > > +}</i><br>
+><i> > > > > > +</i><br>
+><i> > > > > > +static int indirect_bus_reg_write(void *context, unsigned int reg,</i><br>
+><i> > > > > > +  unsigned int val)</i><br>
+><i> > > > > > +{</i><br>
+><i> > > > > > +struct dfl_altera_spi *aspi = context;</i><br>
+><i> > > > > > +void __iomem *base = aspi->base;</i><br>
+><i> > > > > > +int loops;</i><br>
+><i> > > > > > +</i><br>
+><i> > > > > > +writeq(val, base + INDIRECT_WR_DATA);</i><br>
+><i> > > > > > +writeq((reg >> 2) | INDIRECT_WR, base + INDIRECT_ADDR);</i><br>
+><i> > > > > > +</i><br>
+><i> > > > > > +loops = 0;</i><br>
+><i> > > > > > +while ((readq(base + INDIRECT_ADDR) & INDIRECT_WR) &&</i><br>
+><i> > > > > > +       (loops++ < INDIRECT_TIMEOUT))</i><br>
+><i> > > > > > +cpu_relax();</i><br>
+><i> > > > > > +</i><br>
+><i> > > > > > +if (loops >= INDIRECT_TIMEOUT) {</i><br>
+><i> > > > > > +pr_err("%s timed out %d\n", __func__, loops);</i><br>
+><i> > > > > > +return -ETIME;</i><br>
+><i> > > > > > +}</i><br>
+><i> > > > > > +return 0;</i><br>
+><i> > > > > > +}</i><br>
+><i> > > > > > +</i><br>
+><i> > > > > > +static const struct regmap_config indirect_regbus_cfg = {</i><br>
+><i> > > > > > +.reg_bits = 32,</i><br>
+><i> > > > > > +.reg_stride = 4,</i><br>
+><i> > > > > > +.val_bits = 32,</i><br>
+><i> > > > > > +.fast_io = true,</i><br>
+><i> > > > > > +</i><br>
+><i> > > > > > +.reg_write = indirect_bus_reg_write,</i><br>
+><i> > > > > > +.reg_read = indirect_bus_reg_read,</i><br>
+><i> > > > > > +};</i><br>
+><i> > > > > > +</i><br>
+><i> > > > > > +static struct spi_board_info m10_bmc_info = {</i><br>
+><i> > > > > > +.modalias = "m10-d5005",</i><br>
+><i> > > > > > +.max_speed_hz = 12500000,</i><br>
+><i> > > > > > +.bus_num = 0,</i><br>
+><i> > > > > > +.chip_select = 0,</i><br>
+><i> > > > > > +};</i><br>
+><i> > > > > > +</i><br>
+><i> > > > > > +static struct platform_device *create_cntrl(struct device *dev,</i><br>
+><i> > > > > > +    void __iomem *base,</i><br>
+><i> > > > > > +    struct spi_board_info *m10_info)</i><br>
+><i> > > > > > +{</i><br>
+><i> > > > > > +struct altera_spi_platform_data pdata;</i><br>
+><i> > > > > > +struct platform_device_info pdevinfo;</i><br>
+><i> > > > > > +u64 v;</i><br>
+><i> > > > > > +</i><br>
+><i> > > > > > +v = readq(base + SPI_CORE_PARAMETER);</i><br>
+><i> > > > > > +</i><br>
+><i> > > > > > +memset(&pdata, 0, sizeof(pdata));</i><br>
+><i> > > > > > +pdata.mode_bits = SPI_CS_HIGH;</i><br>
+><i> > > > > > +if (FIELD_GET(CLK_POLARITY, v))</i><br>
+><i> > > > > > +pdata.mode_bits |= SPI_CPOL;</i><br>
+><i> > > > > > +if (FIELD_GET(CLK_PHASE, v))</i><br>
+><i> > > > > > +pdata.mode_bits |= SPI_CPHA;</i><br>
+><i> > > > > > +</i><br>
+><i> > > > > > +pdata.num_chipselect = FIELD_GET(NUM_CHIPSELECT, v);</i><br>
+><i> > > > > > +pdata.bits_per_word_mask =</i><br>
+><i> > > > > > +SPI_BPW_RANGE_MASK(1, FIELD_GET(DATA_WIDTH, v));</i><br>
+><i> > > > > > +</i><br>
+><i> > > > > > +pdata.num_devices = 1;</i><br>
+><i> > > > > > +pdata.devices = m10_info;</i><br>
+><i> > > > > > +</i><br>
+><i> > > > > > +dev_dbg(dev, "%s cs %u bpm 0x%x mode 0x%x\n", __func__,</i><br>
+><i> > > > > > +pdata.num_chipselect, pdata.bits_per_word_mask,</i><br>
+><i> > > > > > +pdata.mode_bits);</i><br>
+><i> > > > > > +</i><br>
+><i> > > > > > +memset(&pdevinfo, 0, sizeof(pdevinfo));</i><br>
+><i> > > > > > +</i><br>
+><i> > > > > > +pdevinfo.name = "subdev_spi_altera";</i><br>
+><i> > > > > > +pdevinfo.id = PLATFORM_DEVID_AUTO;</i><br>
+><i> > > > > > +pdevinfo.parent = dev;</i><br>
+><i> > > > > > +pdevinfo.data = &pdata;</i><br>
+><i> > > > > > +pdevinfo.size_data = sizeof(pdata);</i><br>
+><i> > > > > > +</i><br>
+><i> > > > > > +return platform_device_register_full(&pdevinfo);</i><br>
+><i> > > > ></i><br>
+><i> > > > > Should this be a SPI driver? I think looking at the UIO case we had</i><br>
+><i> > > > > decided against this pattern?</i><br>
+><i> > > ></i><br>
+><i> > > > This driver is similar in function to drivers/fpga/dfl-n3000-nios.c which</i><br>
+><i> > > > uses this design pattern.  Is it okay to keep this design pattern for</i><br>
+><i> > > > consistency?</i><br>
+><i> > > ></i><br>
+><i> > > ></i><br>
+><i> > > > ></i><br>
+><i> > > > > > +}</i><br>
+><i> > > > > > +static int dfl_spi_altera_probe(struct dfl_device *dfl_dev)</i><br>
+><i> > > > > > +{</i><br>
+><i> > > > > > +struct device *dev = &dfl_dev->dev;</i><br>
+><i> > > > > > +struct dfl_altera_spi *aspi;</i><br>
+><i> > > > > > +</i><br>
+><i> > > > > > +aspi = devm_kzalloc(dev, sizeof(*aspi), GFP_KERNEL);</i><br>
+><i> > > > > > +</i><br>
+><i> > > > > > +if (!aspi)</i><br>
+><i> > > > > > +return -ENOMEM;</i><br>
+><i> > > > > > +</i><br>
+><i> > > > > > +dev_set_drvdata(dev, aspi);</i><br>
+><i> > > > > > +</i><br>
+><i> > > > > > +aspi->dev = dev;</i><br>
+><i> > > > > > +</i><br>
+><i> > > > > > +aspi->base = devm_ioremap_resource(dev, &dfl_dev->mmio_res);</i><br>
+><i> > > > > > +</i><br>
+><i> > > > > > +if (IS_ERR(aspi->base)) {</i><br>
+><i> > > > > > +dev_err(dev, "%s get mem resource fail!\n", __func__);</i><br>
+><i> > > > > > +return PTR_ERR(aspi->base);</i><br>
+><i> > > > > > +}</i><br>
+><i> > > > > > +</i><br>
+><i> > > > > > +aspi->regmap = devm_regmap_init(dev, NULL, aspi,</i><br>
+><i> > > &indirect_regbus_cfg);</i><br>
+><i> > > > > > +if (IS_ERR(aspi->regmap))</i><br>
+><i> > > > > > +return PTR_ERR(aspi->regmap);</i><br>
+><i> > > > > > +</i><br>
+><i> > > > > > +aspi->altr_spi = create_cntrl(dev, aspi->base, &m10_bmc_info);</i><br>
+><i> > > > > > +</i><br>
+><i> > > > > > +if (IS_ERR(aspi->altr_spi)) {</i><br>
+><i> > > > > > +dev_err(dev, "%s failed to create spi platform driver\n",</i><br>
+><i> > > > > > +__func__);</i><br>
+><i> > > > > > +return PTR_ERR(aspi->base);</i><br>
+><i> > > > > > +}</i><br>
+><i> > > > > > +</i><br>
+><i> > > > > > +return 0;</i><br>
+><i> > > > > > +}</i><br>
+><i> > > > > > +</i><br>
+><i> > > > > > +static void dfl_spi_altera_remove(struct dfl_device *dfl_dev)</i><br>
+><i> > > > > > +{</i><br>
+><i> > > > > > +struct dfl_altera_spi *aspi = dev_get_drvdata(&dfl_dev->dev);</i><br>
+><i> > > > > > +</i><br>
+><i> > > > > > +platform_device_unregister(aspi->altr_spi);</i><br>
+><i> > > > > > +}</i><br>
+><i> > > > > > +</i><br>
+><i> > > > > > +#define FME_FEATURE_ID_MAX10_SPI        0xe</i><br>
+><i> > > > > > +</i><br>
+><i> > > > > > +static const struct dfl_device_id dfl_spi_altera_ids[] = {</i><br>
+><i> > > > > > +{ FME_ID, FME_FEATURE_ID_MAX10_SPI },</i><br>
+><i> > > > > > +{ }</i><br>
+><i> > > > > > +};</i><br>
+><i> > > > ></i><br>
+><i> > > > > Maybe you can extend the Altera SPI driver with this part?</i><br>
+><i> > > ></i><br>
+><i> > > > The file, drivers/spi/spi-altera.c, already has platform MODULE_ related</i><br>
+><i> > > > code.  Wouldn't moving this code to that file produce conflicts?</i><br>
+><i> > ></i><br>
+><i> > > I've seen other drivers support multiple busses, so it should be</i><br>
+><i> > > possible, there might be nuances I'm missing in my brief look at this,</i><br>
+><i> > > though.</i><br>
+><i> > ></i><br>
+><i> > > I think one of them would be MODULE_DEVICE_TABLE(platform, ...)</i><br>
+><i> > > and the other one MODULE_DEVICE_TABLE(dfl, ...)</i><br>
+><i> > ></i><br>
+><i> > > See drivers/i2c/busses/i2c-designware-platdrv.c for an example (though</i><br>
+><i> > > they might be guarding against what you describe with CONFIG_OF vs</i><br>
+><i> > > CONFIG_ACPI)</i><br>
+><i> > ></i><br>
+><i> > > If that doesn't work we could split it up into</i><br>
+><i> > ></i><br>
+><i> > > altera-spi-plat.c and altera-spi-dfl.c and altera-spi-core.c</i><br>
+><i> > > or something of that sort?</i><br>
+><i> > ></i><br>
+><i> > > My point being, now that we have a bus, let's use it and develop drivers</i><br>
+><i> > > according to the Linux device model where possible :)</i><br>
+><i> ></i><br>
+><i> > Agree. This does make sense from my side too. DFL core provides the</i><br>
+><i> mechanism</i><br>
+><i> > to enumerate different IPs on FPGA, but each function driver needs to go to</i><br>
+><i> > related subsystem for review.  : )</i><br>
+><i> ></i><br>
+><i> > I understand that for FPGA case, it may have some additional logics for specific</i><br>
+><i> > purposes based on common altera spi master IP, then additional code for</i><br>
+><i> </i><br>
+><i> I'm wondering if the additional logics are extensions for common spi-altera. Like</i><br>
+><i> the</i><br>
+><i> SPI_CORE_PARAMETER register, it is not within the register space of</i><br>
+><i> spi-altera,</i><br>
+><i> </i><br>
+><i> </i><br>
+><i>   |   |      +-------------+</i><br>
+><i>   |DFL|------| +--------+  |</i><br>
+><i>   |BUS|      | |SPI CORE|  |</i><br>
+><i>   |   |      | |PARAM   |  |</i><br>
+><i>   |   |      | +--------+  |</i><br>
+><i>   |   |      |             |</i><br>
+><i>   |   |      | +--------+  |   +-------+</i><br>
+><i>              | |Indirect|  |   |spi    |</i><br>
+><i>              | |access  +--+---|altera |</i><br>
+><i>              | |master  |  |   +-------+</i><br>
+><i>              | +--------+  |</i><br>
+><i>              +-------------+</i><br>
+><i> > a specific product still can be put into altera-spi-xxxx.c or altera-spi-dfl-xxxx.c</i><br>
+><i> </i><br>
+><i> So is it proper we integrate this feature into spi-altera? Previously</i><br>
+><i> we have merged the dfl-n3000-nios, its spi part is very similar as</i><br>
+><i> this driver. The dfl-n3000-nios make the spi-altera as a sub device.</i><br>
+><i> Could we borrow the idea, or could we just integrate this driver in</i><br>
+><i> dfl-n3000-nios?</i><br>
+<br>
+Looks like those are enhancements of the IP. They can be applied even<br>
+other buses are used, not only for DFL, like PCI device or platform device,<br>
+right? then why not put related code together with the original IP?<br>
+<br>
+The reason I suggested that function drivers which use DFL bus, still need<br>
+to go to related subsystem, because we know DFL quite well but may<br>
+not be the experts for every subsystem (e.g. SPI), and every IPs (e.g. <br>
+Altera SPI Master). Altera SPI Master driver maintainer could give more<br>
+valuable suggestions on your question if this feature can be integrated<br>
+into spi-altera or not. : )<br>
+<br>
+Hao<br>
+<br>
+><i> </i><br>
+><i> Thanks,</i><br>
+><i> Yilun</i><br>
+><i> </i><br>
+><i> ></i><br>
+><i> > Thanks</i><br>
+><i> > Hao</i><br>
+><i> ></i><br>
+><i> > ></i><br>
+><i> > > Cheers,</i><br>
+><i> > > Moritz</i><br>
+<br>
+<br>
+

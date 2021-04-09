@@ -1,0 +1,44 @@
+On Thu, 2021-04-08 at 08:26 -0700, Eric Biggers wrote:<br>
+><i> On Thu, Apr 08, 2021 at 03:32:38PM +0200, Rafael J. Wysocki wrote:</i><br>
+><i> > On Thu, Apr 8, 2021 at 3:15 PM Chris von Recklinghausen</i><br>
+><i> > <crecklin@xxxxxxxxxx> wrote:</i><br>
+><i> > > Suspend fails on a system in fips mode because md5 is used for the e820</i><br>
+><i> > > integrity check and is not available. Use crc32 instead.</i><br>
+><i> > > </i><br>
+><i> > > This patch changes the integrity check algorithm from md5 to</i><br>
+><i> > > crc32. This integrity check is used only to verify accidental</i><br>
+><i> > > corruption of the hybernation data</i><br>
+><i> > </i><br>
+><i> > It isn't used for that.</i><br>
+><i> > </i><br>
+><i> > In fact, it is used to detect differences between the memory map used</i><br>
+><i> > before hibernation and the one made available by the BIOS during the</i><br>
+><i> > subsequent resume.  And the check is there, because it is generally</i><br>
+><i> > unsafe to load the hibernation image into memory if the current memory</i><br>
+><i> > map doesn't match the one used when the image was created.</i><br>
+><i> </i><br>
+><i> So what types of "differences" are you trying to detect?  If you need to detect</i><br>
+><i> differences caused by someone who maliciously made changes ("malicious" implies</i><br>
+><i> they may try to avoid detection), then you need to use a cryptographic hash</i><br>
+><i> function (or a cryptographic MAC if the hash value isn't stored separately).  If</i><br>
+><i> you only need to detect non-malicious changes (normally these would be called</i><br>
+><i> "accidental" changes, but sure, it could be changes that are "intentionally"</i><br>
+><i> made provided that the other side can be trusted to not try to avoid</i><br>
+><i> detection...), then a non-cryptographic checksum would be sufficient.</i><br>
+<br>
+Wouldn't you also need a signature with a TPM key in that case?<br>
+An attacker that can change memory maps can also change the hash on<br>
+disk ? Unless the hash is in an encrypted partition I guess...<br>
+<br>
+Simo.<br>
+<br>
+-- <br>
+Simo Sorce<br>
+RHEL Crypto Team<br>
+Red Hat, Inc<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+

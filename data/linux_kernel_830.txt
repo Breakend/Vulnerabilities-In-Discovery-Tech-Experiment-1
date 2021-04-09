@@ -1,0 +1,40 @@
+Before changing to connector B exiting from Partial<br>
+Power Down is required.<br>
+<br>
+- Added exiting from Partial Power Down mode when<br>
+  connector ID status changes to "connId B".<br>
+  Because if connector ID status changed to B connector<br>
+  while core was in partial power down mode, HANG would<br>
+  accrue from a soft reset.<br>
+<br>
+Signed-off-by: Artur Petrosyan <Arthur.Petrosyan@xxxxxxxxxxxx><br>
+Acked-by: Minas Harutyunyan <Minas.Harutyunyan@xxxxxxxxxxxx><br>
+---<br>
+ drivers/usb/dwc2/hcd.c | 9 +++++++++<br>
+ 1 file changed, 9 insertions(+)<br>
+<br>
+diff --git a/drivers/usb/dwc2/hcd.c b/drivers/usb/dwc2/hcd.c<br>
+index 7c7496719152..9529e9839961 100644<br>
+--- a/drivers/usb/dwc2/hcd.c<br>
++++ b/drivers/usb/dwc2/hcd.c<br>
+@@ -3206,6 +3206,15 @@ static void dwc2_conn_id_status_change(struct work_struct *work)<br>
+ 		if (count > 250)<br>
+ 			dev_err(hsotg->dev,<br>
+ 				"Connection id status change timed out\n");<br>
++<br>
++		/*<br>
++		 * Exit Partial Power Down without restoring registers.<br>
++		 * No need to check the return value as registers<br>
++		 * are not being restored.<br>
++		 */<br>
++		if (hsotg->in_ppd && hsotg->lx_state == DWC2_L2)<br>
++			dwc2_exit_partial_power_down(hsotg, 0, false);<br>
++<br>
+ 		hsotg->op_state = OTG_STATE_B_PERIPHERAL;<br>
+ 		dwc2_core_init(hsotg, false);<br>
+ 		dwc2_enable_global_interrupts(hsotg);<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

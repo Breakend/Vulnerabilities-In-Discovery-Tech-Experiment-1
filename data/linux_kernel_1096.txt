@@ -1,0 +1,47 @@
+
+Hello Robert<br>
+<br>
+I am sorry that I make a mistake about the compiling error of lt8912b,<br>
+<br>
+the reason is that lt8912b miss the header file <linux/gpio/consumer.h>.<br>
+<br>
+Although there are many files reference gpiod_set_value_cansleep() and<br>
+<br>
+devm_gpiod_get_optional(), they all include <linux/gpio/consumer.h><br>
+<br>
+and not occur the compiling error like lt8912b. I have send the second<br>
+<br>
+version patch, please read.<br>
+<br>
+<br>
+Best regards,<br>
+<br>
+Zhang Jianhua<br>
+<br>
+在 2021/4/7 17:50, zhangjianhua (E) 写道:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+Thanks, I will do that.<br>
+<br>
+在 2021/4/7 16:03, Robert Foss 写道:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em"><blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+Yes, you are right, there are many files reference<br>
+gpiod_set_value_cansleep() and<br>
+<br>
+devm_gpiod_get_optional(). How about add config dependencies for all<br>
+releated<br>
+</blockquote>
+I think this is the way to go and roughly half of the drm bridge<br>
+drivers seem to need this change.<br>
+<br>
+Do you mind submitting a series of patches adding this fix for all of<br>
+the relevant bridge drivers?<br>
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+configs or only add config dependencies for the top level config?<br>
+<br>
+</blockquote>
+.<br>
+</blockquote></blockquote>
+<br>
+<br>
+

@@ -1,0 +1,36 @@
+The function get_shadow_from_swap_cache() can race with swapoff, though<br>
+it's only called by do_swap_page() now.<br>
+<br>
+Fixes: aae466b0052e ("mm/swap: implement workingset detection for anonymous LRU")<br>
+Signed-off-by: Miaohe Lin <linmiaohe@xxxxxxxxxx><br>
+---<br>
+ mm/swap_state.c | 9 ++++++---<br>
+ 1 file changed, 6 insertions(+), 3 deletions(-)<br>
+<br>
+diff --git a/mm/swap_state.c b/mm/swap_state.c<br>
+index 272ea2108c9d..709c260d644a 100644<br>
+--- a/mm/swap_state.c<br>
++++ b/mm/swap_state.c<br>
+@@ -83,11 +83,14 @@ void show_swap_cache_info(void)<br>
+ <br>
+ void *get_shadow_from_swap_cache(swp_entry_t entry)<br>
+ {<br>
+-	struct address_space *address_space = swap_address_space(entry);<br>
+-	pgoff_t idx = swp_offset(entry);<br>
++	struct swap_info_struct *si;<br>
+ 	struct page *page;<br>
+ <br>
+-	page = xa_load(&address_space->i_pages, idx);<br>
++	si = get_swap_device(entry);<br>
++	if (!si)<br>
++		return NULL;<br>
++	page = xa_load(&swap_address_space(entry)->i_pages, swp_offset(entry));<br>
++	put_swap_device(si);<br>
+ 	if (xa_is_value(page))<br>
+ 		return page;<br>
+ 	return NULL;<br>
+-- <br>
+2.19.1<br>
+<br>
+<br>
+

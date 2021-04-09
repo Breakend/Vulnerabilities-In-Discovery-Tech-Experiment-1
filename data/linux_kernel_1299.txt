@@ -1,0 +1,48 @@
+From: James Morse <james.morse@xxxxxxx><br>
+<br>
+Hibernate contains a set of temporary EL2 vectors used to 'park'<br>
+EL2 somewhere safe while all the memory is thrown in the air.<br>
+Making kexec do its relocations with the MMU on means they have to<br>
+be done at EL1, so EL2 has to be parked. This means yet another<br>
+set of vectors.<br>
+<br>
+All these things do is HVC_SET_VECTORS and HVC_SOFT_RESTART, both<br>
+of which are implemented by the hyp-stub. Lets copy it instead<br>
+of re-inventing it.<br>
+<br>
+To do this the hyp-stub's entrails need to be packed neatly inside<br>
+its 2K vectors.<br>
+<br>
+Start by moving the final 2K alignment inside the end marker, and<br>
+add a build check that we didn't overflow 2K.<br>
+<br>
+Signed-off-by: James Morse <james.morse@xxxxxxx><br>
+Signed-off-by: Pavel Tatashin <pasha.tatashin@xxxxxxxxxx><br>
+---<br>
+ arch/arm64/kernel/hyp-stub.S | 6 +++++-<br>
+ 1 file changed, 5 insertions(+), 1 deletion(-)<br>
+<br>
+diff --git a/arch/arm64/kernel/hyp-stub.S b/arch/arm64/kernel/hyp-stub.S<br>
+index 5eccbd62fec8..572b28646005 100644<br>
+--- a/arch/arm64/kernel/hyp-stub.S<br>
++++ b/arch/arm64/kernel/hyp-stub.S<br>
+@@ -41,9 +41,13 @@ SYM_CODE_START(__hyp_stub_vectors)<br>
+ 	ventry	el1_irq_invalid			// IRQ 32-bit EL1<br>
+ 	ventry	el1_fiq_invalid			// FIQ 32-bit EL1<br>
+ 	ventry	el1_error_invalid		// Error 32-bit EL1<br>
++	.align 11<br>
++SYM_INNER_LABEL(__hyp_stub_vectors_end, SYM_L_LOCAL)<br>
+ SYM_CODE_END(__hyp_stub_vectors)<br>
+ <br>
+-	.align 11<br>
++# Check the __hyp_stub_vectors didn't overflow<br>
++.org . - (__hyp_stub_vectors_end - __hyp_stub_vectors) + SZ_2K<br>
++<br>
+ <br>
+ SYM_CODE_START_LOCAL(el1_sync)<br>
+ 	cmp	x0, #HVC_SET_VECTORS<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

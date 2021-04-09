@@ -1,0 +1,26 @@
+When hmm_pool_register() fails, a pairing PM usage counter<br>
+increment is needed to keep the counter balanced. It's the<br>
+same for the following error paths.<br>
+<br>
+Signed-off-by: Dinghao Liu <dinghao.liu@xxxxxxxxxx><br>
+---<br>
+ drivers/staging/media/atomisp/pci/atomisp_v4l2.c | 1 +<br>
+ 1 file changed, 1 insertion(+)<br>
+<br>
+diff --git a/drivers/staging/media/atomisp/pci/atomisp_v4l2.c b/drivers/staging/media/atomisp/pci/atomisp_v4l2.c<br>
+index 0295e2e32d79..02f774ed80c8 100644<br>
+--- a/drivers/staging/media/atomisp/pci/atomisp_v4l2.c<br>
++++ b/drivers/staging/media/atomisp/pci/atomisp_v4l2.c<br>
+@@ -1815,6 +1815,7 @@ static int atomisp_pci_probe(struct pci_dev *pdev, const struct pci_device_id *i<br>
+ 	hmm_cleanup();<br>
+ 	hmm_pool_unregister(HMM_POOL_TYPE_RESERVED);<br>
+ hmm_pool_fail:<br>
++	pm_runtime_get_noresume(&pdev->dev);<br>
+ 	destroy_workqueue(isp->wdt_work_queue);<br>
+ wdt_work_queue_fail:<br>
+ 	atomisp_acc_cleanup(isp);<br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+

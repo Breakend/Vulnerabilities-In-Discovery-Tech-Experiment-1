@@ -1,0 +1,176 @@
+Add a tracepoint to log internal failures (such as cache errors) that we<br>
+don't otherwise want to pass back to the netfs.<br>
+<br>
+Signed-off-by: David Howells <dhowells@xxxxxxxxxx><br>
+cc: Matthew Wilcox <willy@xxxxxxxxxxxxx><br>
+cc: linux-mm@xxxxxxxxx<br>
+cc: linux-cachefs@xxxxxxxxxx<br>
+cc: linux-afs@xxxxxxxxxxxxxxxxxxx<br>
+cc: linux-nfs@xxxxxxxxxxxxxxx<br>
+cc: linux-cifs@xxxxxxxxxxxxxxx<br>
+cc: ceph-devel@xxxxxxxxxxxxxxx<br>
+cc: v9fs-developer@xxxxxxxxxxxxxxxxxxxxx<br>
+cc: linux-fsdevel@xxxxxxxxxxxxxxx<br>
+ Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161781048813.463527.1557000804674707986.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161781048813.463527.1557000804674707986.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a><br>
+---<br>
+<br>
+ fs/netfs/read_helper.c       |   14 +++++++++-<br>
+ include/trace/events/netfs.h |   58 ++++++++++++++++++++++++++++++++++++++++++<br>
+ 2 files changed, 70 insertions(+), 2 deletions(-)<br>
+<br>
+diff --git a/fs/netfs/read_helper.c b/fs/netfs/read_helper.c<br>
+index cd3b61d5e192..1d3b50c5db6d 100644<br>
+--- a/fs/netfs/read_helper.c<br>
++++ b/fs/netfs/read_helper.c<br>
+@@ -271,6 +271,8 @@ static void netfs_rreq_copy_terminated(void *priv, ssize_t transferred_or_error,<br>
+ <br>
+ 	if (IS_ERR_VALUE(transferred_or_error)) {<br>
+ 		netfs_stat(&netfs_n_rh_write_failed);<br>
++		trace_netfs_failure(rreq, subreq, transferred_or_error,<br>
++				    netfs_fail_copy_to_cache);<br>
+ 	} else {<br>
+ 		netfs_stat(&netfs_n_rh_write_done);<br>
+ 	}<br>
+@@ -323,6 +325,7 @@ static void netfs_rreq_do_write_to_cache(struct netfs_read_request *rreq)<br>
+ 		ret = cres->ops->prepare_write(cres, &subreq->start, &subreq->len,<br>
+ 					       rreq->i_size);<br>
+ 		if (ret < 0) {<br>
++			trace_netfs_failure(rreq, subreq, ret, netfs_fail_prepare_write);<br>
+ 			trace_netfs_sreq(subreq, netfs_sreq_trace_write_skip);<br>
+ 			continue;<br>
+ 		}<br>
+@@ -627,6 +630,8 @@ void netfs_subreq_terminated(struct netfs_read_subrequest *subreq,<br>
+ <br>
+ 	if (IS_ERR_VALUE(transferred_or_error)) {<br>
+ 		subreq->error = transferred_or_error;<br>
++		trace_netfs_failure(rreq, subreq, transferred_or_error,<br>
++				    netfs_fail_read);<br>
+ 		goto failed;<br>
+ 	}<br>
+ <br>
+@@ -996,8 +1001,10 @@ int netfs_readpage(struct file *file,<br>
+ 	} while (test_bit(NETFS_RREQ_IN_PROGRESS, &rreq->flags));<br>
+ <br>
+ 	ret = rreq->error;<br>
+-	if (ret == 0 && rreq->submitted < rreq->len)<br>
++	if (ret == 0 && rreq->submitted < rreq->len) {<br>
++		trace_netfs_failure(rreq, NULL, ret, netfs_fail_short_readpage);<br>
+ 		ret = -EIO;<br>
++	}<br>
+ out:<br>
+ 	netfs_put_read_request(rreq, false);<br>
+ 	return ret;<br>
+@@ -1069,6 +1076,7 @@ int netfs_write_begin(struct file *file, struct address_space *mapping,<br>
+ 		/* Allow the netfs (eg. ceph) to flush conflicts. */<br>
+ 		ret = ops->check_write_begin(file, pos, len, page, _fsdata);<br>
+ 		if (ret < 0) {<br>
++			trace_netfs_failure(NULL, NULL, ret, netfs_fail_check_write_begin);<br>
+ 			if (ret == -EAGAIN)<br>
+ 				goto retry;<br>
+ 			goto error;<br>
+@@ -1145,8 +1153,10 @@ int netfs_write_begin(struct file *file, struct address_space *mapping,<br>
+ 	}<br>
+ <br>
+ 	ret = rreq->error;<br>
+-	if (ret == 0 && rreq->submitted < rreq->len)<br>
++	if (ret == 0 && rreq->submitted < rreq->len) {<br>
++		trace_netfs_failure(rreq, NULL, ret, netfs_fail_short_write_begin);<br>
+ 		ret = -EIO;<br>
++	}<br>
+ 	netfs_put_read_request(rreq, false);<br>
+ 	if (ret < 0)<br>
+ 		goto error;<br>
+diff --git a/include/trace/events/netfs.h b/include/trace/events/netfs.h<br>
+index e3ebeabd3852..de1c64635e42 100644<br>
+--- a/include/trace/events/netfs.h<br>
++++ b/include/trace/events/netfs.h<br>
+@@ -47,6 +47,15 @@ enum netfs_sreq_trace {<br>
+ 	netfs_sreq_trace_write_term,<br>
+ };<br>
+ <br>
++enum netfs_failure {<br>
++	netfs_fail_check_write_begin,<br>
++	netfs_fail_copy_to_cache,<br>
++	netfs_fail_read,<br>
++	netfs_fail_short_readpage,<br>
++	netfs_fail_short_write_begin,<br>
++	netfs_fail_prepare_write,<br>
++};<br>
++<br>
+ #endif<br>
+ <br>
+ #define netfs_read_traces					\<br>
+@@ -81,6 +90,14 @@ enum netfs_sreq_trace {<br>
+ 	EM(netfs_sreq_trace_write_skip,		"SKIP ")	\<br>
+ 	E_(netfs_sreq_trace_write_term,		"WTERM")<br>
+ <br>
++#define netfs_failures							\<br>
++	EM(netfs_fail_check_write_begin,	"check-write-begin")	\<br>
++	EM(netfs_fail_copy_to_cache,		"copy-to-cache")	\<br>
++	EM(netfs_fail_read,			"read")			\<br>
++	EM(netfs_fail_short_readpage,		"short-readpage")	\<br>
++	EM(netfs_fail_short_write_begin,	"short-write-begin")	\<br>
++	E_(netfs_fail_prepare_write,		"prep-write")<br>
++<br>
+ <br>
+ /*<br>
+  * Export enum symbols via userspace.<br>
+@@ -94,6 +111,7 @@ netfs_read_traces;<br>
+ netfs_rreq_traces;<br>
+ netfs_sreq_sources;<br>
+ netfs_sreq_traces;<br>
++netfs_failures;<br>
+ <br>
+ /*<br>
+  * Now redefine the EM() and E_() macros to map the enums to the strings that<br>
+@@ -197,6 +215,46 @@ TRACE_EVENT(netfs_sreq,<br>
+ 		      __entry->error)<br>
+ 	    );<br>
+ <br>
++TRACE_EVENT(netfs_failure,<br>
++	    TP_PROTO(struct netfs_read_request *rreq,<br>
++		     struct netfs_read_subrequest *sreq,<br>
++		     int error, enum netfs_failure what),<br>
++<br>
++	    TP_ARGS(rreq, sreq, error, what),<br>
++<br>
++	    TP_STRUCT__entry(<br>
++		    __field(unsigned int,		rreq		)<br>
++		    __field(unsigned short,		index		)<br>
++		    __field(short,			error		)<br>
++		    __field(unsigned short,		flags		)<br>
++		    __field(enum netfs_read_source,	source		)<br>
++		    __field(enum netfs_failure,		what		)<br>
++		    __field(size_t,			len		)<br>
++		    __field(size_t,			transferred	)<br>
++		    __field(loff_t,			start		)<br>
++			     ),<br>
++<br>
++	    TP_fast_assign(<br>
++		    __entry->rreq	= rreq->debug_id;<br>
++		    __entry->index	= sreq ? sreq->debug_index : 0;<br>
++		    __entry->error	= error;<br>
++		    __entry->flags	= sreq ? sreq->flags : 0;<br>
++		    __entry->source	= sreq ? sreq->source : NETFS_INVALID_READ;<br>
++		    __entry->what	= what;<br>
++		    __entry->len	= sreq ? sreq->len : 0;<br>
++		    __entry->transferred = sreq ? sreq->transferred : 0;<br>
++		    __entry->start	= sreq ? sreq->start : 0;<br>
++			   ),<br>
++<br>
++	    TP_printk("R=%08x[%u] %s f=%02x s=%llx %zx/%zx %s e=%d",<br>
++		      __entry->rreq, __entry->index,<br>
++		      __print_symbolic(__entry->source, netfs_sreq_sources),<br>
++		      __entry->flags,<br>
++		      __entry->start, __entry->transferred, __entry->len,<br>
++		      __print_symbolic(__entry->what, netfs_failures),<br>
++		      __entry->error)<br>
++	    );<br>
++<br>
+ #endif /* _TRACE_NETFS_H */<br>
+ <br>
+ /* This part must be outside protection */<br>
+<br>
+<br>
+<br>
+

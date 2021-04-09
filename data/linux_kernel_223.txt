@@ -1,0 +1,34 @@
+
+On 07/04/21 16:41, Vineeth Pillai wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
++#define VMCB_ALL_CLEAN_MASK (__CLEAN_MASK | (1U << VMCB_HV_NESTED_ENLIGHTENMENTS))<br>
++#else<br>
++#define VMCB_ALL_CLEAN_MASK __CLEAN_MASK<br>
++#endif<br>
+</blockquote>
+<br>
+I think this should depend on whether KVM is running on top of Hyper-V; 
+not on whether KVM is *compiled* with Hyper-V support.
+<br>
+<br>
+So you should turn VMCB_ALL_CLEAN_MASK into a __read_mostly variable.<br>
+<br>
+Paolo<br>
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+  /* TPR and CR2 are always written before VMRUN */<br>
+  #define VMCB_ALWAYS_DIRTY_MASK	((1U << VMCB_INTR) | (1U << VMCB_CR2))<br>
+  
+@@ -230,7 +251,7 @@ static inline void vmcb_mark_all_dirty(struct vmcb *vmcb)
+<br>  
+  static inline void vmcb_mark_all_clean(struct vmcb *vmcb)
+<br>
+  {<br>
+-	vmcb->control.clean = ((1 << VMCB_DIRTY_MAX) - 1)<br>
++	vmcb->control.clean = VMCB_ALL_CLEAN_MASK<br>
+  			       & ~VMCB_ALWAYS_DIRTY_MASK;<br>
+  }<br>
+</blockquote>
+<br>
+<br>
+

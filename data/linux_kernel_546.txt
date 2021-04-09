@@ -1,0 +1,37 @@
+module_fsl_mc_driver() makes the code simpler by eliminating<br>
+boilerplate code.<br>
+<br>
+Signed-off-by: Chen Huang <chenhuang5@xxxxxxxxxx><br>
+---<br>
+ drivers/vfio/fsl-mc/vfio_fsl_mc.c | 13 +------------<br>
+ 1 file changed, 1 insertion(+), 12 deletions(-)<br>
+<br>
+diff --git a/drivers/vfio/fsl-mc/vfio_fsl_mc.c b/drivers/vfio/fsl-mc/vfio_fsl_mc.c<br>
+index 980e59551301..b2fcc77a037f 100644<br>
+--- a/drivers/vfio/fsl-mc/vfio_fsl_mc.c<br>
++++ b/drivers/vfio/fsl-mc/vfio_fsl_mc.c<br>
+@@ -701,18 +701,7 @@ static struct fsl_mc_driver vfio_fsl_mc_driver = {<br>
+ 	},<br>
+ };<br>
+ <br>
+-static int __init vfio_fsl_mc_driver_init(void)<br>
+-{<br>
+-	return fsl_mc_driver_register(&vfio_fsl_mc_driver);<br>
+-}<br>
+-<br>
+-static void __exit vfio_fsl_mc_driver_exit(void)<br>
+-{<br>
+-	fsl_mc_driver_unregister(&vfio_fsl_mc_driver);<br>
+-}<br>
+-<br>
+-module_init(vfio_fsl_mc_driver_init);<br>
+-module_exit(vfio_fsl_mc_driver_exit);<br>
++module_fsl_mc_driver(vfio_fsl_mc_driver);<br>
+ <br>
+ MODULE_LICENSE("Dual BSD/GPL");<br>
+ MODULE_DESCRIPTION("VFIO for FSL-MC devices - User Level meta-driver");<br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+

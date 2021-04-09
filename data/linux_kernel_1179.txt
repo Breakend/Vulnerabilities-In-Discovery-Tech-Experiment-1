@@ -1,0 +1,26 @@
+The snd_soc_dai_ops structures is only stored in the ops field of a<br>
+snd_soc_dai_driver structure, so make the snd_soc_dai_ops structure<br>
+const to allow the compiler to put it in read-only memory.<br>
+<br>
+Reported-by: Hulk Robot <hulkci@xxxxxxxxxx><br>
+Signed-off-by: Ye Bin <yebin10@xxxxxxxxxx><br>
+---<br>
+ sound/soc/amd/raven/acp3x-i2s.c | 2 +-<br>
+ 1 file changed, 1 insertion(+), 1 deletion(-)<br>
+<br>
+diff --git a/sound/soc/amd/raven/acp3x-i2s.c b/sound/soc/amd/raven/acp3x-i2s.c<br>
+index 5bc028692fcf..396cb7d619e2 100644<br>
+--- a/sound/soc/amd/raven/acp3x-i2s.c<br>
++++ b/sound/soc/amd/raven/acp3x-i2s.c<br>
+@@ -249,7 +249,7 @@ static int acp3x_i2s_trigger(struct snd_pcm_substream *substream,<br>
+ 	return ret;<br>
+ }<br>
+ <br>
+-static struct snd_soc_dai_ops acp3x_i2s_dai_ops = {<br>
++static const struct snd_soc_dai_ops acp3x_i2s_dai_ops = {<br>
+ 	.hw_params = acp3x_i2s_hwparams,<br>
+ 	.trigger = acp3x_i2s_trigger,<br>
+ 	.set_fmt = acp3x_i2s_set_fmt,<br>
+<br>
+<br>
+

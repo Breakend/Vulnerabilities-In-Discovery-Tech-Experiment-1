@@ -1,0 +1,167 @@
+Today we get the following code generation for bitops like<br>
+set or clear bit:<br>
+<br>
+	c0009fe0:	39 40 08 00 	li      r10,2048<br>
+	c0009fe4:	7c e0 40 28 	lwarx   r7,0,r8<br>
+	c0009fe8:	7c e7 53 78 	or      r7,r7,r10<br>
+	c0009fec:	7c e0 41 2d 	stwcx.  r7,0,r8<br>
+<br>
+	c000c044:	39 40 20 00 	li      r10,8192<br>
+	c000c048:	7c e0 40 28 	lwarx   r7,0,r8<br>
+	c000c04c:	7c e7 50 78 	andc    r7,r7,r10<br>
+	c000c050:	7c e0 41 2d 	stwcx.  r7,0,r8<br>
+<br>
+Most set bits are constant on lower 16 bits, so it can easily<br>
+be replaced by the "immediate" version of the operation. Allow<br>
+GCC to choose between the normal or immediate form.<br>
+<br>
+For clear bits, on 32 bits 'rlwinm' can be used instead or 'andc' for<br>
+when all bits to be cleared are consecutive. For the time being only<br>
+handle the single bit case, which we detect by checking whether the<br>
+mask is a power of two. Can't use is_power_of_2() function because it<br>
+is not included yet, but it is easy to code with (mask & (mask - 1))<br>
+and even the 0 case which is not a power of two is acceptable for us.<br>
+<br>
+On 64 bits we don't have any equivalent single operation, we'd need<br>
+two 'rldicl' so it is not worth it.<br>
+<br>
+With this patch we get:<br>
+<br>
+	c0009fe0:	7d 00 50 28 	lwarx   r8,0,r10<br>
+	c0009fe4:	61 08 08 00 	ori     r8,r8,2048<br>
+	c0009fe8:	7d 00 51 2d 	stwcx.  r8,0,r10<br>
+<br>
+	c000c034:	7d 00 50 28 	lwarx   r8,0,r10<br>
+	c000c038:	55 08 04 e2 	rlwinm  r8,r8,0,19,17<br>
+	c000c03c:	7d 00 51 2d 	stwcx.  r8,0,r10<br>
+<br>
+On pmac32_defconfig, it reduces the text by approx 10 kbytes.<br>
+<br>
+Signed-off-by: Christophe Leroy <christophe.leroy@xxxxxxxxxx><br>
+---<br>
+ arch/powerpc/include/asm/bitops.h | 77 +++++++++++++++++++++++++++----<br>
+ 1 file changed, 69 insertions(+), 8 deletions(-)<br>
+<br>
+diff --git a/arch/powerpc/include/asm/bitops.h b/arch/powerpc/include/asm/bitops.h<br>
+index 299ab33505a6..0b0c6bdd9be9 100644<br>
+--- a/arch/powerpc/include/asm/bitops.h<br>
++++ b/arch/powerpc/include/asm/bitops.h<br>
+@@ -71,19 +71,49 @@ static inline void fn(unsigned long mask,	\<br>
+ 	__asm__ __volatile__ (			\<br>
+ 	prefix					\<br>
+ "1:"	PPC_LLARX(%0,0,%3,0) "\n"		\<br>
+-	stringify_in_c(op) "%0,%0,%2\n"		\<br>
++	#op "%I2 %0,%0,%2\n"			\<br>
+ 	PPC_STLCX "%0,0,%3\n"			\<br>
+ 	"bne- 1b\n"				\<br>
+ 	: "=&r" (old), "+m" (*p)		\<br>
+-	: "r" (mask), "r" (p)			\<br>
++	: "rK" (mask), "r" (p)			\<br>
+ 	: "cc", "memory");			\<br>
+ }<br>
+ <br>
+ DEFINE_BITOP(set_bits, or, "")<br>
+-DEFINE_BITOP(clear_bits, andc, "")<br>
+-DEFINE_BITOP(clear_bits_unlock, andc, PPC_RELEASE_BARRIER)<br>
+ DEFINE_BITOP(change_bits, xor, "")<br>
+ <br>
++#define DEFINE_CLROP(fn, prefix)					\<br>
++static inline void fn(unsigned long mask, volatile unsigned long *_p)	\<br>
++{									\<br>
++	unsigned long old;						\<br>
++	unsigned long *p = (unsigned long *)_p;				\<br>
++	if (IS_ENABLED(CONFIG_PPC32) &&					\<br>
++	    __builtin_constant_p(mask) && !(mask & (mask - 1))) {	\<br>
++		asm volatile (						\<br>
++			prefix						\<br>
++		"1:"	"lwarx	%0,0,%3\n"				\<br>
++			"rlwinm	%0,%0,0,%2\n"				\<br>
++			"stwcx.	%0,0,%3\n"				\<br>
++			"bne- 1b\n"					\<br>
++			: "=&r" (old), "+m" (*p)			\<br>
++			: "i" (~mask), "r" (p)				\<br>
++			: "cc", "memory");				\<br>
++	} else {							\<br>
++		asm volatile (						\<br>
++			prefix						\<br>
++		"1:"	PPC_LLARX(%0,0,%3,0) "\n"			\<br>
++			"andc %0,%0,%2\n"				\<br>
++			PPC_STLCX "%0,0,%3\n"				\<br>
++			"bne- 1b\n"					\<br>
++			: "=&r" (old), "+m" (*p)			\<br>
++			: "r" (mask), "r" (p)				\<br>
++			: "cc", "memory");				\<br>
++	}								\<br>
++}<br>
++<br>
++DEFINE_CLROP(clear_bits, "")<br>
++DEFINE_CLROP(clear_bits_unlock, PPC_RELEASE_BARRIER)<br>
++<br>
+ static inline void arch_set_bit(int nr, volatile unsigned long *addr)<br>
+ {<br>
+ 	set_bits(BIT_MASK(nr), addr + BIT_WORD(nr));<br>
+@@ -116,12 +146,12 @@ static inline unsigned long fn(			\<br>
+ 	__asm__ __volatile__ (				\<br>
+ 	prefix						\<br>
+ "1:"	PPC_LLARX(%0,0,%3,eh) "\n"			\<br>
+-	stringify_in_c(op) "%1,%0,%2\n"			\<br>
++	#op "%I2 %1,%0,%2\n"				\<br>
+ 	PPC_STLCX "%1,0,%3\n"				\<br>
+ 	"bne- 1b\n"					\<br>
+ 	postfix						\<br>
+ 	: "=&r" (old), "=&r" (t)			\<br>
+-	: "r" (mask), "r" (p)				\<br>
++	: "rK" (mask), "r" (p)				\<br>
+ 	: "cc", "memory");				\<br>
+ 	return (old & mask);				\<br>
+ }<br>
+@@ -130,11 +160,42 @@ DEFINE_TESTOP(test_and_set_bits, or, PPC_ATOMIC_ENTRY_BARRIER,<br>
+ 	      PPC_ATOMIC_EXIT_BARRIER, 0)<br>
+ DEFINE_TESTOP(test_and_set_bits_lock, or, "",<br>
+ 	      PPC_ACQUIRE_BARRIER, 1)<br>
+-DEFINE_TESTOP(test_and_clear_bits, andc, PPC_ATOMIC_ENTRY_BARRIER,<br>
+-	      PPC_ATOMIC_EXIT_BARRIER, 0)<br>
+ DEFINE_TESTOP(test_and_change_bits, xor, PPC_ATOMIC_ENTRY_BARRIER,<br>
+ 	      PPC_ATOMIC_EXIT_BARRIER, 0)<br>
+ <br>
++static inline unsigned long test_and_clear_bits(unsigned long mask, volatile unsigned long *_p)<br>
++{<br>
++	unsigned long old, t;<br>
++	unsigned long *p = (unsigned long *)_p;<br>
++<br>
++	if (IS_ENABLED(CONFIG_PPC32) &&<br>
++	    __builtin_constant_p(mask) && !(mask & (mask - 1))) {<br>
++		asm volatile (<br>
++			PPC_ATOMIC_ENTRY_BARRIER<br>
++		"1:"	PPC_LLARX(%0,0,%3,0) "\n"<br>
++			"rlwinm	%1,%0,0,%2\n"<br>
++			PPC_STLCX "%1,0,%3\n"<br>
++			"bne- 1b\n"<br>
++			PPC_ATOMIC_EXIT_BARRIER<br>
++			: "=&r" (old), "=&r" (t)<br>
++			: "i" (~mask), "r" (p)<br>
++			: "cc", "memory");<br>
++	} else {<br>
++		asm volatile (<br>
++			PPC_ATOMIC_ENTRY_BARRIER<br>
++		"1:"	PPC_LLARX(%0,0,%3,0) "\n"<br>
++			"andc	%1,%0,%2\n"<br>
++			PPC_STLCX "%1,0,%3\n"<br>
++			"bne- 1b\n"<br>
++			PPC_ATOMIC_EXIT_BARRIER<br>
++			: "=&r" (old), "=&r" (t)<br>
++			: "r" (mask), "r" (p)<br>
++			: "cc", "memory");<br>
++	}<br>
++<br>
++	return (old & mask);<br>
++}<br>
++<br>
+ static inline int arch_test_and_set_bit(unsigned long nr,<br>
+ 					volatile unsigned long *addr)<br>
+ {<br>
+-- <br>
+2.25.0<br>
+<br>
+<br>
+

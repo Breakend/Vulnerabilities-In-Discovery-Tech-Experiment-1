@@ -1,0 +1,198 @@
+On Thu, Apr 08, 2021 at 10:26:54AM -0700, Yang Shi wrote:<br>
+ <br>
+><i> Thanks, Oscar. Yes, kind of. But we have to remember to initialize</i><br>
+><i> "nr_succedded" pointer properly for every migrate_pages() callsite,</i><br>
+><i> right? And it doesn't prevent from returning wrong value if</i><br>
+><i> migrate_pages() is called multiple times by one caller although there</i><br>
+><i> might be not such case (calls migrate_pages() multiple times and care</i><br>
+><i> about nr_succeded) for now.</i><br>
+<br>
+Hi Yang,<br>
+<br>
+I might be missing something but AFAICS you only need to initialize<br>
+nr_succeded pointer where it matters.<br>
+The local nr_succeeded in migrate_pages() doesn't go, and so it gets<br>
+initialized every time you call in it to 0.<br>
+And if you pass a valid pointer, *ret_succeeded == nr_succedeed.<br>
+<br>
+I am talking about this (not even compile-tested):<br>
+<br>
+diff --git a/include/linux/migrate.h b/include/linux/migrate.h<br>
+index 3a389633b68f..fd661cb2ce13 100644<br>
+--- a/include/linux/migrate.h<br>
++++ b/include/linux/migrate.h<br>
+@@ -40,7 +40,8 @@ extern int migrate_page(struct address_space *mapping,<br>
+ 			struct page *newpage, struct page *page,<br>
+ 			enum migrate_mode mode);<br>
+ extern int migrate_pages(struct list_head *l, new_page_t new, free_page_t free,<br>
+-		unsigned long private, enum migrate_mode mode, int reason);<br>
++		unsigned long private, enum migrate_mode mode, int reason,<br>
++		unsigned int *ret_succeeded);<br>
+ extern struct page *alloc_migration_target(struct page *page, unsigned long private);<br>
+ extern int isolate_movable_page(struct page *page, isolate_mode_t mode);<br>
+ extern void putback_movable_page(struct page *page);<br>
+@@ -58,7 +59,7 @@ extern int migrate_page_move_mapping(struct address_space *mapping,<br>
+ static inline void putback_movable_pages(struct list_head *l) {}<br>
+ static inline int migrate_pages(struct list_head *l, new_page_t new,<br>
+ 		free_page_t free, unsigned long private, enum migrate_mode mode,<br>
+-		int reason)<br>
++		int reason, unsigned int *ret_succeeded)<br>
+ 	{ return -ENOSYS; }<br>
+ static inline struct page *alloc_migration_target(struct page *page,<br>
+ 		unsigned long private)<br>
+diff --git a/mm/compaction.c b/mm/compaction.c<br>
+index e04f4476e68e..7238e8faff04 100644<br>
+--- a/mm/compaction.c<br>
++++ b/mm/compaction.c<br>
+@@ -2364,7 +2364,7 @@ compact_zone(struct compact_control *cc, struct capture_control *capc)<br>
+<br>
+ 		err = migrate_pages(&cc->migratepages, compaction_alloc,<br>
+ 				compaction_free, (unsigned long)cc, cc->mode,<br>
+-				MR_COMPACTION);<br>
++				MR_COMPACTION, NULL);<br>
+<br>
+ 		trace_mm_compaction_migratepages(cc->nr_migratepages, err,<br>
+ 							&cc->migratepages);<br>
+diff --git a/mm/gup.c b/mm/gup.c<br>
+index e40579624f10..b70d463aa1fc 100644<br>
+--- a/mm/gup.c<br>
++++ b/mm/gup.c<br>
+@@ -1606,7 +1606,7 @@ static long check_and_migrate_cma_pages(struct mm_struct *mm,<br>
+ 				put_page(pages[i]);<br>
+<br>
+ 		if (migrate_pages(&cma_page_list, alloc_migration_target, NULL,<br>
+-			(unsigned long)&mtc, MIGRATE_SYNC, MR_CONTIG_RANGE)) {<br>
++			(unsigned long)&mtc, MIGRATE_SYNC, MR_CONTIG_RANGE, NULL)) {<br>
+ 			/*<br>
+ 			 * some of the pages failed migration. Do get_user_pages<br>
+ 			 * without migration.<br>
+diff --git a/mm/memory-failure.c b/mm/memory-failure.c<br>
+index 24210c9bd843..a17e0f039076 100644<br>
+--- a/mm/memory-failure.c<br>
++++ b/mm/memory-failure.c<br>
+@@ -1852,7 +1852,8 @@ static int __soft_offline_page(struct page *page)<br>
+<br>
+ 	if (isolate_page(hpage, &pagelist)) {<br>
+ 		ret = migrate_pages(&pagelist, alloc_migration_target, NULL,<br>
+-			(unsigned long)&mtc, MIGRATE_SYNC, MR_MEMORY_FAILURE);<br>
++			(unsigned long)&mtc, MIGRATE_SYNC, MR_MEMORY_FAILURE,<br>
++			NULL);<br>
+ 		if (!ret) {<br>
+ 			bool release = !huge;<br>
+<br>
+diff --git a/mm/memory_hotplug.c b/mm/memory_hotplug.c<br>
+index 0cdbbfbc5757..28496376de94 100644<br>
+--- a/mm/memory_hotplug.c<br>
++++ b/mm/memory_hotplug.c<br>
+@@ -1466,7 +1466,8 @@ do_migrate_range(unsigned long start_pfn, unsigned long end_pfn)<br>
+ 		if (nodes_empty(nmask))<br>
+ 			node_set(mtc.nid, nmask);<br>
+ 		ret = migrate_pages(&source, alloc_migration_target, NULL,<br>
+-			(unsigned long)&mtc, MIGRATE_SYNC, MR_MEMORY_HOTPLUG);<br>
++			(unsigned long)&mtc, MIGRATE_SYNC, MR_MEMORY_HOTPLUG,<br>
++			NULL);<br>
+ 		if (ret) {<br>
+ 			list_for_each_entry(page, &source, lru) {<br>
+ 				pr_warn("migrating pfn %lx failed ret:%d ",<br>
+diff --git a/mm/mempolicy.c b/mm/mempolicy.c<br>
+index ab51132547b8..df260ed12102 100644<br>
+--- a/mm/mempolicy.c<br>
++++ b/mm/mempolicy.c<br>
+@@ -1103,7 +1103,8 @@ static int migrate_to_node(struct mm_struct *mm, int source, int dest,<br>
+<br>
+ 	if (!list_empty(&pagelist)) {<br>
+ 		err = migrate_pages(&pagelist, alloc_migration_target, NULL,<br>
+-				(unsigned long)&mtc, MIGRATE_SYNC, MR_SYSCALL);<br>
++				(unsigned long)&mtc, MIGRATE_SYNC, MR_SYSCALL,<br>
++				NULL);<br>
+ 		if (err)<br>
+ 			putback_movable_pages(&pagelist);<br>
+ 	}<br>
+@@ -1355,7 +1356,8 @@ static long do_mbind(unsigned long start, unsigned long len,<br>
+ 		if (!list_empty(&pagelist)) {<br>
+ 			WARN_ON_ONCE(flags & MPOL_MF_LAZY);<br>
+ 			nr_failed = migrate_pages(&pagelist, new_page, NULL,<br>
+-				start, MIGRATE_SYNC, MR_MEMPOLICY_MBIND);<br>
++				start, MIGRATE_SYNC, MR_MEMPOLICY_MBIND,<br>
++				NULL);<br>
+ 			if (nr_failed)<br>
+ 				putback_movable_pages(&pagelist);<br>
+ 		}<br>
+diff --git a/mm/migrate.c b/mm/migrate.c<br>
+index 695a594e5860..087ed407b3ce 100644<br>
+--- a/mm/migrate.c<br>
++++ b/mm/migrate.c<br>
+@@ -1493,6 +1493,9 @@ static inline int try_split_thp(struct page *page, struct page **page2,<br>
+  * @mode:		The migration mode that specifies the constraints for<br>
+  *			page migration, if any.<br>
+  * @reason:		The reason for page migration.<br>
++ * @ret_succeeded:	A pointer to place the value of the number of pages<br>
++ *                      migrated successfully. The caller must pass a valid pointer<br>
++ *                      if they care about it.<br>
+  *<br>
+  * The function returns after 10 attempts or if no pages are movable any more<br>
+  * because the list has become empty or no retryable pages exist any more.<br>
+@@ -1503,7 +1506,7 @@ static inline int try_split_thp(struct page *page, struct page **page2,<br>
+  */<br>
+ int migrate_pages(struct list_head *from, new_page_t get_new_page,<br>
+ 		free_page_t put_new_page, unsigned long private,<br>
+-		enum migrate_mode mode, int reason)<br>
++		enum migrate_mode mode, int reason, unsigned int *ret_succeeded)<br>
+ {<br>
+ 	int retry = 1;<br>
+ 	int thp_retry = 1;<br>
+@@ -1654,6 +1657,9 @@ int migrate_pages(struct list_head *from, new_page_t get_new_page,<br>
+ 	if (!swapwrite)<br>
+ 		current->flags &= ~PF_SWAPWRITE;<br>
+<br>
++	if (ret_succeeded)<br>
++		*ret_succeeded = nr_succeeded;<br>
++<br>
+ 	return rc;<br>
+ }<br>
+<br>
+@@ -1723,7 +1729,8 @@ static int do_move_pages_to_node(struct mm_struct *mm,<br>
+ 	};<br>
+<br>
+ 	err = migrate_pages(pagelist, alloc_migration_target, NULL,<br>
+-			(unsigned long)&mtc, MIGRATE_SYNC, MR_SYSCALL);<br>
++			(unsigned long)&mtc, MIGRATE_SYNC, MR_SYSCALL,<br>
++			NULL);<br>
+ 	if (err)<br>
+ 		putback_movable_pages(pagelist);<br>
+ 	return err;<br>
+@@ -2230,7 +2237,7 @@ int migrate_misplaced_page(struct page *page, struct vm_area_struct *vma,<br>
+ 	list_add(&page->lru, &migratepages);<br>
+ 	nr_remaining = migrate_pages(&migratepages, alloc_misplaced_dst_page,<br>
+ 				     NULL, node, MIGRATE_ASYNC,<br>
+-				     MR_NUMA_MISPLACED);<br>
++				     MR_NUMA_MISPLACED, NULL);<br>
+ 	if (nr_remaining) {<br>
+ 		if (!list_empty(&migratepages)) {<br>
+ 			list_del(&page->lru);<br>
+diff --git a/mm/page_alloc.c b/mm/page_alloc.c<br>
+index 46f3d594369d..0c1bbadd5ca3 100644<br>
+--- a/mm/page_alloc.c<br>
++++ b/mm/page_alloc.c<br>
+@@ -8490,7 +8490,8 @@ static int __alloc_contig_migrate_range(struct compact_control *cc,<br>
+ 		cc->nr_migratepages -= nr_reclaimed;<br>
+<br>
+ 		ret = migrate_pages(&cc->migratepages, alloc_migration_target,<br>
+-				NULL, (unsigned long)&mtc, cc->mode, MR_CONTIG_RANGE);<br>
++				NULL, (unsigned long)&mtc, cc->mode, MR_CONTIG_RANGE,<br>
++				NULL);<br>
+ 	}<br>
+ 	if (ret < 0) {<br>
+ 		putback_movable_pages(&cc->migratepages);<br>
+<br>
+<br>
+As I said I might be missing a point here, but I cannot see the problem<br>
+you describe here.<br>
+<br>
+<br>
+-- <br>
+Oscar Salvador<br>
+SUSE L3<br>
+<br>
+<br>
+

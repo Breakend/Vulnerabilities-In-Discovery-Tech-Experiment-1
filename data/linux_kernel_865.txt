@@ -1,0 +1,19 @@
+Hi Ikjoon,<br>
+<br>
+On Thu, 2021-04-08 at 17:35 +0800, Chunfeng Yun wrote:<br>
+><i> A dedicated wakeup irq will be used to handle runtime suspend/resume,</i><br>
+><i> we use dev_pm_set_dedicated_wake_irq API to take care of requesting</i><br>
+><i> and attaching wakeup irq, then the suspend/resume framework will help</i><br>
+><i> to enable/disable wakeup irq.</i><br>
+><i> </i><br>
+><i> The runtime PM is default off since some platforms may not support it.</i><br>
+><i> users can enable it via power/control (set "auto") in sysfs.</i><br>
+><i> </i><br>
+><i> Signed-off-by: Chunfeng Yun <chunfeng.yun@xxxxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  drivers/usb/host/xhci-mtk.c | 140 +++++++++++++++++++++++++++++++-----</i><br>
+><i>  1 file changed, 124 insertions(+), 16 deletions(-)</i><br>
+<br>
+Please help to test the series on mt8192 chromebook, thanks a lot<br>
+<br>
+

@@ -1,0 +1,76 @@
+On Thu, Apr 08, 2021 at 10:22:57AM +0530, Sandeep Maheswaram wrote:<br>
+><i> </i><br>
+><i> On 3/30/2021 7:02 PM, Greg Kroah-Hartman wrote:</i><br>
+><i> > On Tue, Mar 30, 2021 at 06:18:43PM +0530, Sai Prakash Ranjan wrote:</i><br>
+><i> > > On 2021-03-30 16:46, Greg Kroah-Hartman wrote:</i><br>
+><i> > > > On Tue, Mar 30, 2021 at 03:25:58PM +0530, Sai Prakash Ranjan wrote:</i><br>
+><i> > > > > On 2021-03-30 14:37, Greg Kroah-Hartman wrote:</i><br>
+><i> > > > > > On Tue, Mar 30, 2021 at 02:12:04PM +0530, Sandeep Maheswaram wrote:</i><br>
+><i> > > > > > > On 3/26/2021 7:07 PM, Greg Kroah-Hartman wrote:</i><br>
+><i> > > > > > > > On Wed, Mar 24, 2021 at 12:57:32AM +0530, Sandeep Maheswaram wrote:</i><br>
+><i> > > > > > > > > This patch adds a shutdown callback to USB DWC core driver to ensure that</i><br>
+><i> > > > > > > > > it is properly shutdown in reboot/shutdown path. This is required</i><br>
+><i> > > > > > > > > where SMMU address translation is enabled like on SC7180</i><br>
+><i> > > > > > > > > SoC and few others. If the hardware is still accessing memory after</i><br>
+><i> > > > > > > > > SMMU translation is disabled as part of SMMU shutdown callback in</i><br>
+><i> > > > > > > > > system reboot or shutdown path, then IOVAs(I/O virtual address)</i><br>
+><i> > > > > > > > > which it was using will go on the bus as the physical addresses which</i><br>
+><i> > > > > > > > > might result in unknown crashes (NoC/interconnect errors).</i><br>
+><i> > > > > > > > > </i><br>
+><i> > > > > > > > > Previously this was added in dwc3 qcom glue driver.</i><br>
+><i> > > > > > > > > <a  rel="nofollow" href="https://patchwork.kernel.org/project/linux-arm-msm/list/?series=382449">https://patchwork.kernel.org/project/linux-arm-msm/list/?series=382449</a></i><br>
+><i> > > > > > > > > But observed kernel panic as glue driver shutdown getting called after</i><br>
+><i> > > > > > > > > iommu shutdown. As we are adding iommu nodes in dwc core node</i><br>
+><i> > > > > > > > > in device tree adding shutdown callback in core driver seems correct.</i><br>
+><i> > > > > > > > So shouldn't you also remove this from the qcom glue driver at the same</i><br>
+><i> > > > > > > > time?  Please submit both as a patch series.</i><br>
+><i> > > > > > > > </i><br>
+><i> > > > > > > > thanks,</i><br>
+><i> > > > > > > > </i><br>
+><i> > > > > > > > greg k-h</i><br>
+><i> > > > > > > Hi Greg,</i><br>
+><i> > > > > > > </i><br>
+><i> > > > > > > The qcom glue driver patch is not merged yet. I have just mentioned</i><br>
+><i> > > > > > > for it for reference.</i><br>
+><i> > > > > > You know that we can not add callbacks for no in-kernel user, so what</i><br>
+><i> > > > > > good is this patch for now?</i><br>
+><i> > > > > > </i><br>
+><i> > > > > What in-kernel user? Since when does shutdown callback need an</i><br>
+><i> > > > > in-kernel</i><br>
+><i> > > > > user? When you reboot or shutdown a system, it gets called. The reason</i><br>
+><i> > > > > why the shutdown callback is needed is provided in the commit text.</i><br>
+><i> > > > As I can't see the patch here, I have no idea...</i><br>
+><i> > > You are replying now to the same patch which adds this shutdown callback :)</i><br>
+><i> > > Anyways the qcom dwc3 driver patch which is abandoned which is also</i><br>
+><i> > > mentioned</i><br>
+><i> > > in the commit text is here [1] and the new shutdown callback patch which we</i><br>
+><i> > > are both replying to is in here [2]</i><br>
+><i> > > </i><br>
+><i> > > [1] <a  rel="nofollow" href="https://lore.kernel.org/lkml/1605162619-10064-1-git-send-email-sanm@xxxxxxxxxxxxxx/">https://lore.kernel.org/lkml/1605162619-10064-1-git-send-email-sanm@xxxxxxxxxxxxxx/</a></i><br>
+><i> > > </i><br>
+><i> > > [2] <a  rel="nofollow" href="https://lore.kernel.org/lkml/1616527652-7937-1-git-send-email-sanm@xxxxxxxxxxxxxx/">https://lore.kernel.org/lkml/1616527652-7937-1-git-send-email-sanm@xxxxxxxxxxxxxx/</a></i><br>
+><i> > Thanks, so, what am I supposed to do here?  The patch is long gone from</i><br>
+><i> > my queue...</i><br>
+><i> > </i><br>
+><i> > greg k-h</i><br>
+><i> </i><br>
+><i> Hi Greg,</i><br>
+><i> </i><br>
+><i> Should I resend this patch ? If so let me know your about opinion about</i><br>
+><i> Stephen's comment on just calling dwc3_remove in</i><br>
+><i> </i><br>
+><i> dwc3_shutdown and ignoring return value.</i><br>
+><i> </i><br>
+><i> <a  rel="nofollow" href="https://lore.kernel.org/patchwork/patch/1401242/#1599316">https://lore.kernel.org/patchwork/patch/1401242/#1599316</a></i><br>
+<br>
+Please resend as again, it's not in my queue of patches to review at<br>
+all...<br>
+<br>
+And yes, Stephen's comment does make sense, why ignore that?<br>
+<br>
+thanks,<br>
+<br>
+greg k-h<br>
+<br>
+<br>
+

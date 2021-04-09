@@ -1,0 +1,287 @@
+On Thu, 2021-04-08 at 15:03 +0100, David Howells wrote:<br>
+><i> Here's a set of patches to do two things:</i><br>
+><i> </i><br>
+><i>  (1) Add a helper library to handle the new VM readahead interface.  This</i><br>
+><i>      is intended to be used unconditionally by the filesystem (whether or</i><br>
+><i>      not caching is enabled) and provides a common framework for doing</i><br>
+><i>      caching, transparent huge pages and, in the future, possibly fscrypt</i><br>
+><i>      and read bandwidth maximisation.  It also allows the netfs and the</i><br>
+><i>      cache to align, expand and slice up a read request from the VM in</i><br>
+><i>      various ways; the netfs need only provide a function to read a stretch</i><br>
+><i>      of data to the pagecache and the helper takes care of the rest.</i><br>
+><i> </i><br>
+><i>  (2) Add an alternative fscache/cachfiles I/O API that uses the kiocb</i><br>
+><i>      facility to do async DIO to transfer data to/from the netfs's pages,</i><br>
+><i>      rather than using readpage with wait queue snooping on one side and</i><br>
+><i>      vfs_write() on the other.  It also uses less memory, since it doesn't</i><br>
+><i>      do buffered I/O on the backing file.</i><br>
+><i> </i><br>
+><i>      Note that this uses SEEK_HOLE/SEEK_DATA to locate the data available</i><br>
+><i>      to be read from the cache.  Whilst this is an improvement from the</i><br>
+><i>      bmap interface, it still has a problem with regard to a modern</i><br>
+><i>      extent-based filesystem inserting or removing bridging blocks of</i><br>
+><i>      zeros.  Fixing that requires a much greater overhaul.</i><br>
+><i> </i><br>
+><i> This is a step towards overhauling the fscache API.  The change is opt-in</i><br>
+><i> on the part of the network filesystem.  A netfs should not try to mix the</i><br>
+><i> old and the new API because of conflicting ways of handling pages and the</i><br>
+><i> PG_fscache page flag and because it would be mixing DIO with buffered I/O.</i><br>
+><i> Further, the helper library can't be used with the old API.</i><br>
+><i> </i><br>
+><i> This does not change any of the fscache cookie handling APIs or the way</i><br>
+><i> invalidation is done.</i><br>
+><i> </i><br>
+><i> In the near term, I intend to deprecate and remove the old I/O API</i><br>
+><i> (fscache_allocate_page{,s}(), fscache_read_or_alloc_page{,s}(),</i><br>
+><i> fscache_write_page() and fscache_uncache_page()) and eventually replace</i><br>
+><i> most of fscache/cachefiles with something simpler and easier to follow.</i><br>
+><i> </i><br>
+><i> The patchset contains the following parts:</i><br>
+><i> </i><br>
+><i>  (1) Some helper patches, including provision of an ITER_XARRAY iov</i><br>
+><i>      iterator and a function to do readahead expansion.</i><br>
+><i> </i><br>
+><i>  (2) Patches to add the netfs helper library.</i><br>
+><i> </i><br>
+><i>  (3) A patch to add the fscache/cachefiles kiocb API.</i><br>
+><i> </i><br>
+><i>  (4) Patches to add support in AFS for this.</i><br>
+><i> </i><br>
+><i> Jeff Layton has patches to add support in Ceph for this.</i><br>
+><i> </i><br>
+><i> With this, AFS without a cache passes all expected xfstests; with a cache,</i><br>
+><i> there's an extra failure, but that's also there before these patches.</i><br>
+><i> Fixing that probably requires a greater overhaul.  Ceph also passes the</i><br>
+><i> expected tests.</i><br>
+><i> </i><br>
+><i> The netfs lib and fscache/cachefiles patches can be found also on:</i><br>
+><i> </i><br>
+><i> 	<a  rel="nofollow" href="https://git.kernel.org/pub/scm/linux/kernel/git/dhowells/linux-fs.git/log/?h=netfs-lib">https://git.kernel.org/pub/scm/linux/kernel/git/dhowells/linux-fs.git/log/?h=netfs-lib</a></i><br>
+><i> </i><br>
+><i> The afs patches can be found on:</i><br>
+><i> </i><br>
+><i> 	<a  rel="nofollow" href="https://git.kernel.org/pub/scm/linux/kernel/git/dhowells/linux-fs.git/log/?h=afs-netfs-lib">https://git.kernel.org/pub/scm/linux/kernel/git/dhowells/linux-fs.git/log/?h=afs-netfs-lib</a></i><br>
+><i> </i><br>
+><i> </i><br>
+><i> Changes</i><br>
+><i> =======</i><br>
+><i> </i><br>
+><i> ver #6:</i><br>
+><i>       Merged in some fixes and added an additional tracepoint[8], including</i><br>
+><i>       fixing the amalgamation of contiguous subrequests that are to be</i><br>
+><i>       written to the cache.</i><br>
+><i> </i><br>
+><i>       Added/merged some patches from Matthew Wilcox to make</i><br>
+><i>       readahead_expand() appropriately adjust the trigger for the next</i><br>
+><i>       readahead[9].  Also included is a patch to kerneldocify the</i><br>
+><i>       file_ra_state struct.</i><br>
+><i> </i><br>
+><i>       Altered netfs_write_begin() to use DEFINE_READAHEAD()[10].</i><br>
+><i> </i><br>
+><i>       Split the afs patches out into their own branch.</i><br>
+><i> </i><br>
+><i> ver #5:</i><br>
+><i>       Fixed some review comments from Matthew Wilcox:</i><br>
+><i> </i><br>
+><i>       - Put a comment into netfs_readahead() to indicate why there's a loop</i><br>
+><i>         that puts, but doesn't unlock, "unconsumed" pages at the end when</i><br>
+><i>         it could just return said pages to the caller to dispose of[6].</i><br>
+><i>         (This is because where those pages are marked consumed).</i><br>
+><i> </i><br>
+><i>       - Use the page_file_mapping() and page_index() helper functions</i><br>
+><i>       	rather than accessing the page struct directly[6].</i><br>
+><i> </i><br>
+><i>       - Better names for wrangling functions for PG_private_2 and</i><br>
+><i>         PG_fscache wrangling functions[7].  Came up with</i><br>
+><i>         {set,end,wait_for}_page_private_2() and aliased these for fscache.</i><br>
+><i> </i><br>
+><i>       Moved the taking of/dropping a page ref for the PG_private_2 flag</i><br>
+><i>       into the set and end functions.</i><br>
+><i> </i><br>
+><i> ver #4:</i><br>
+><i>       Fixed some review comments from Christoph Hellwig, including dropping</i><br>
+><i>       the export of rw_verify_area()[3] and some minor stuff[4].</i><br>
+><i> </i><br>
+><i>       Moved the declaration of readahead_expand() to a better location[5].</i><br>
+><i> </i><br>
+><i>       Rebased to v5.12-rc2 and added a bunch of references into individual</i><br>
+><i>       commits.</i><br>
+><i> </i><br>
+><i>       Dropped Ceph support - that will go through the maintainer's tree.</i><br>
+><i> </i><br>
+><i>       Added interface documentation for the netfs helper library.</i><br>
+><i> </i><br>
+><i> ver #3:</i><br>
+><i>       Rolled in the bug fixes.</i><br>
+><i> </i><br>
+><i>       Adjusted the functions that unlock and wait for PG_fscache according</i><br>
+><i>       to Linus's suggestion[1].</i><br>
+><i> </i><br>
+><i>       Hold a ref on a page when PG_fscache is set as per Linus's</i><br>
+><i>       suggestion[2].</i><br>
+><i> </i><br>
+><i>       Dropped NFS support and added Ceph support.</i><br>
+><i> </i><br>
+><i> ver #2:</i><br>
+><i>       Fixed some bugs and added NFS support.</i><br>
+><i> </i><br>
+><i> Link: <a  rel="nofollow" href="https://lore.kernel.org/r/CAHk-=wh+2gbF7XEjYc=HV9w_2uVzVf7vs60BPz0gFA=+pUm3ww@xxxxxxxxxxxxxx/">https://lore.kernel.org/r/CAHk-=wh+2gbF7XEjYc=HV9w_2uVzVf7vs60BPz0gFA=+pUm3ww@xxxxxxxxxxxxxx/</a> [1]</i><br>
+><i> Link: <a  rel="nofollow" href="https://lore.kernel.org/r/CAHk-=wjgA-74ddehziVk=XAEMTKswPu1Yw4uaro1R3ibs27ztw@xxxxxxxxxxxxxx/">https://lore.kernel.org/r/CAHk-=wjgA-74ddehziVk=XAEMTKswPu1Yw4uaro1R3ibs27ztw@xxxxxxxxxxxxxx/</a> [2]</i><br>
+><i> Link: <a  rel="nofollow" href="https://lore.kernel.org/r/20210216102614.GA27555@xxxxxx/">https://lore.kernel.org/r/20210216102614.GA27555@xxxxxx/</a> [3]</i><br>
+><i> Link: <a  rel="nofollow" href="https://lore.kernel.org/r/20210216084230.GA23669@xxxxxx/">https://lore.kernel.org/r/20210216084230.GA23669@xxxxxx/</a> [4]</i><br>
+><i> Link: <a  rel="nofollow" href="https://lore.kernel.org/r/20210217161358.GM2858050@xxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/20210217161358.GM2858050@xxxxxxxxxxxxxxxxxxxx/</a> [5]</i><br>
+><i> Link: <a  rel="nofollow" href="https://lore.kernel.org/r/20210321014202.GF3420@xxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/20210321014202.GF3420@xxxxxxxxxxxxxxxxxxxx/</a> [6]</i><br>
+><i> Link: <a  rel="nofollow" href="https://lore.kernel.org/r/20210321105309.GG3420@xxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/20210321105309.GG3420@xxxxxxxxxxxxxxxxxxxx/</a> [7]</i><br>
+><i> Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161781041339.463527.18139104281901492882.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161781041339.463527.18139104281901492882.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> [8]</i><br>
+><i> Link: <a  rel="nofollow" href="https://lore.kernel.org/r/20210407201857.3582797-1-willy@xxxxxxxxxxxxx/">https://lore.kernel.org/r/20210407201857.3582797-1-willy@xxxxxxxxxxxxx/</a> [9]</i><br>
+><i> Link: <a  rel="nofollow" href="https://lore.kernel.org/r/1234933.1617886271@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/1234933.1617886271@xxxxxxxxxxxxxxxxxxxxxx/</a> [10]</i><br>
+><i> </i><br>
+><i> References</i><br>
+><i> ==========</i><br>
+><i> </i><br>
+><i> These patches have been published for review before, firstly as part of a</i><br>
+><i> larger set:</i><br>
+><i> </i><br>
+><i> Link: <a  rel="nofollow" href="https://lore.kernel.org/r/158861203563.340223.7585359869938129395.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/158861203563.340223.7585359869938129395.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a></i><br>
+><i> </i><br>
+><i> Link: <a  rel="nofollow" href="https://lore.kernel.org/r/159465766378.1376105.11619976251039287525.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/159465766378.1376105.11619976251039287525.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a></i><br>
+><i> Link: <a  rel="nofollow" href="https://lore.kernel.org/r/159465784033.1376674.18106463693989811037.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/159465784033.1376674.18106463693989811037.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a></i><br>
+><i> Link: <a  rel="nofollow" href="https://lore.kernel.org/r/159465821598.1377938.2046362270225008168.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/159465821598.1377938.2046362270225008168.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a></i><br>
+><i> </i><br>
+><i> Link: <a  rel="nofollow" href="https://lore.kernel.org/r/160588455242.3465195.3214733858273019178.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/160588455242.3465195.3214733858273019178.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a></i><br>
+><i> </i><br>
+><i> Then as a cut-down set:</i><br>
+><i> </i><br>
+><i> Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161118128472.1232039.11746799833066425131.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161118128472.1232039.11746799833066425131.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v1</i><br>
+><i> </i><br>
+><i> Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161161025063.2537118.2009249444682241405.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161161025063.2537118.2009249444682241405.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v2</i><br>
+><i> </i><br>
+><i> Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161340385320.1303470.2392622971006879777.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161340385320.1303470.2392622971006879777.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v3</i><br>
+><i> </i><br>
+><i> Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161539526152.286939.8589700175877370401.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161539526152.286939.8589700175877370401.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v4</i><br>
+><i> </i><br>
+><i> Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161653784755.2770958.11820491619308713741.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161653784755.2770958.11820491619308713741.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v5</i><br>
+><i> </i><br>
+><i> Proposals/information about the design has been published here:</i><br>
+><i> </i><br>
+><i> Link: <a  rel="nofollow" href="https://lore.kernel.org/r/24942.1573667720@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/24942.1573667720@xxxxxxxxxxxxxxxxxxxxxx/</a></i><br>
+><i> Link: <a  rel="nofollow" href="https://lore.kernel.org/r/2758811.1610621106@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/2758811.1610621106@xxxxxxxxxxxxxxxxxxxxxx/</a></i><br>
+><i> Link: <a  rel="nofollow" href="https://lore.kernel.org/r/1441311.1598547738@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/1441311.1598547738@xxxxxxxxxxxxxxxxxxxxxx/</a></i><br>
+><i> Link: <a  rel="nofollow" href="https://lore.kernel.org/r/160655.1611012999@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/160655.1611012999@xxxxxxxxxxxxxxxxxxxxxx/</a></i><br>
+><i> </i><br>
+><i> And requests for information:</i><br>
+><i> </i><br>
+><i> Link: <a  rel="nofollow" href="https://lore.kernel.org/r/3326.1579019665@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/3326.1579019665@xxxxxxxxxxxxxxxxxxxxxx/</a></i><br>
+><i> Link: <a  rel="nofollow" href="https://lore.kernel.org/r/4467.1579020509@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/4467.1579020509@xxxxxxxxxxxxxxxxxxxxxx/</a></i><br>
+><i> Link: <a  rel="nofollow" href="https://lore.kernel.org/r/3577430.1579705075@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/3577430.1579705075@xxxxxxxxxxxxxxxxxxxxxx/</a></i><br>
+><i> </i><br>
+><i> I've posted partial patches to try and help 9p and cifs along:</i><br>
+><i> </i><br>
+><i> Link: <a  rel="nofollow" href="https://lore.kernel.org/r/1514086.1605697347@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/1514086.1605697347@xxxxxxxxxxxxxxxxxxxxxx/</a></i><br>
+><i> Link: <a  rel="nofollow" href="https://lore.kernel.org/r/1794123.1605713481@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/1794123.1605713481@xxxxxxxxxxxxxxxxxxxxxx/</a></i><br>
+><i> Link: <a  rel="nofollow" href="https://lore.kernel.org/r/241017.1612263863@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/241017.1612263863@xxxxxxxxxxxxxxxxxxxxxx/</a></i><br>
+><i> Link: <a  rel="nofollow" href="https://lore.kernel.org/r/270998.1612265397@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/270998.1612265397@xxxxxxxxxxxxxxxxxxxxxx/</a></i><br>
+><i> </i><br>
+><i> David</i><br>
+><i> ---</i><br>
+><i> David Howells (28):</i><br>
+><i>       iov_iter: Add ITER_XARRAY</i><br>
+><i>       mm: Add set/end/wait functions for PG_private_2</i><br>
+><i>       mm: Implement readahead_control pageset expansion</i><br>
+><i>       netfs: Make a netfs helper module</i><br>
+><i>       netfs: Documentation for helper library</i><br>
+><i>       netfs, mm: Move PG_fscache helper funcs to linux/netfs.h</i><br>
+><i>       netfs, mm: Add set/end/wait_on_page_fscache() aliases</i><br>
+><i>       netfs: Provide readahead and readpage netfs helpers</i><br>
+><i>       netfs: Add tracepoints</i><br>
+><i>       netfs: Gather stats</i><br>
+><i>       netfs: Add write_begin helper</i><br>
+><i>       netfs: Define an interface to talk to a cache</i><br>
+><i>       netfs: Add a tracepoint to log failures that would be otherwise unseen</i><br>
+><i>       fscache, cachefiles: Add alternate API to use kiocb for read/write to cache</i><br>
+><i>       afs: Disable use of the fscache I/O routines</i><br>
+><i>       afs: Pass page into dirty region helpers to provide THP size</i><br>
+><i>       afs: Print the operation debug_id when logging an unexpected data version</i><br>
+><i>       afs: Move key to afs_read struct</i><br>
+><i>       afs: Don't truncate iter during data fetch</i><br>
+><i>       afs: Log remote unmarshalling errors</i><br>
+><i>       afs: Set up the iov_iter before calling afs_extract_data()</i><br>
+><i>       afs: Use ITER_XARRAY for writing</i><br>
+><i>       afs: Wait on PG_fscache before modifying/releasing a page</i><br>
+><i>       afs: Extract writeback extension into its own function</i><br>
+><i>       afs: Prepare for use of THPs</i><br>
+><i>       afs: Use the fs operation ops to handle FetchData completion</i><br>
+><i>       afs: Use new netfs lib read helper API</i><br>
+><i>       afs: Use the netfs_write_begin() helper</i><br>
+><i> </i><br>
+><i> Matthew Wilcox (Oracle) (2):</i><br>
+><i>       mm/filemap: Pass the file_ra_state in the ractl</i><br>
+><i>       fs: Document file_ra_state</i><br>
+><i> </i><br>
+><i> </i><br>
+><i>  Documentation/filesystems/index.rst         |    1 +</i><br>
+><i>  Documentation/filesystems/netfs_library.rst |  526 ++++++++</i><br>
+><i>  fs/Kconfig                                  |    1 +</i><br>
+><i>  fs/Makefile                                 |    1 +</i><br>
+><i>  fs/afs/Kconfig                              |    1 +</i><br>
+><i>  fs/afs/dir.c                                |  225 ++--</i><br>
+><i>  fs/afs/file.c                               |  483 ++------</i><br>
+><i>  fs/afs/fs_operation.c                       |    4 +-</i><br>
+><i>  fs/afs/fsclient.c                           |  108 +-</i><br>
+><i>  fs/afs/inode.c                              |    7 +-</i><br>
+><i>  fs/afs/internal.h                           |   59 +-</i><br>
+><i>  fs/afs/rxrpc.c                              |  150 +--</i><br>
+><i>  fs/afs/write.c                              |  657 +++++-----</i><br>
+><i>  fs/afs/yfsclient.c                          |   82 +-</i><br>
+><i>  fs/cachefiles/Makefile                      |    1 +</i><br>
+><i>  fs/cachefiles/interface.c                   |    5 +-</i><br>
+><i>  fs/cachefiles/internal.h                    |    9 +</i><br>
+><i>  fs/cachefiles/io.c                          |  420 +++++++</i><br>
+><i>  fs/ext4/verity.c                            |    2 +-</i><br>
+><i>  fs/f2fs/file.c                              |    2 +-</i><br>
+><i>  fs/f2fs/verity.c                            |    2 +-</i><br>
+><i>  fs/fscache/Kconfig                          |    1 +</i><br>
+><i>  fs/fscache/Makefile                         |    1 +</i><br>
+><i>  fs/fscache/internal.h                       |    4 +</i><br>
+><i>  fs/fscache/io.c                             |  116 ++</i><br>
+><i>  fs/fscache/page.c                           |    2 +-</i><br>
+><i>  fs/fscache/stats.c                          |    1 +</i><br>
+><i>  fs/netfs/Kconfig                            |   23 +</i><br>
+><i>  fs/netfs/Makefile                           |    5 +</i><br>
+><i>  fs/netfs/internal.h                         |   97 ++</i><br>
+><i>  fs/netfs/read_helper.c                      | 1185 +++++++++++++++++++</i><br>
+><i>  fs/netfs/stats.c                            |   59 +</i><br>
+><i>  include/linux/fs.h                          |   24 +-</i><br>
+><i>  include/linux/fscache-cache.h               |    4 +</i><br>
+><i>  include/linux/fscache.h                     |   50 +-</i><br>
+><i>  include/linux/netfs.h                       |  234 ++++</i><br>
+><i>  include/linux/pagemap.h                     |   41 +-</i><br>
+><i>  include/net/af_rxrpc.h                      |    2 +-</i><br>
+><i>  include/trace/events/afs.h                  |   74 +-</i><br>
+><i>  include/trace/events/netfs.h                |  261 ++++</i><br>
+><i>  mm/filemap.c                                |   63 +-</i><br>
+><i>  mm/internal.h                               |    7 +-</i><br>
+><i>  mm/readahead.c                              |   97 +-</i><br>
+><i>  net/rxrpc/recvmsg.c                         |    9 +-</i><br>
+><i>  44 files changed, 3998 insertions(+), 1108 deletions(-)</i><br>
+><i>  create mode 100644 Documentation/filesystems/netfs_library.rst</i><br>
+><i>  create mode 100644 fs/cachefiles/io.c</i><br>
+><i>  create mode 100644 fs/fscache/io.c</i><br>
+><i>  create mode 100644 fs/netfs/Kconfig</i><br>
+><i>  create mode 100644 fs/netfs/Makefile</i><br>
+><i>  create mode 100644 fs/netfs/internal.h</i><br>
+><i>  create mode 100644 fs/netfs/read_helper.c</i><br>
+><i>  create mode 100644 fs/netfs/stats.c</i><br>
+><i>  create mode 100644 include/linux/netfs.h</i><br>
+><i>  create mode 100644 include/trace/events/netfs.h</i><br>
+><i> </i><br>
+><i> </i><br>
+<br>
+You can add this to 1-16:<br>
+<br>
+    Tested-by: Jeff Layton <jlayton@xxxxxxxxxx><br>
+<br>
+Tested with xfstests with fscache enabled on my local machine.<br>
+<br>
+<br>
+

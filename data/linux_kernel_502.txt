@@ -1,0 +1,42 @@
+On 21/04/08 09:08AM, Miaohe Lin wrote:<br>
+><i> Hi all,</i><br>
+><i> When I was investigating the swap code, I found some possible race</i><br>
+><i> windows. This series aims to fix all these races. But using current</i><br>
+><i> get/put_swap_device() to guard against concurrent swapoff for</i><br>
+><i> swap_readpage() looks terrible because swap_readpage() may take really</i><br>
+><i> long time. And to reduce the performance overhead on the hot-path as</i><br>
+><i> much as possible, it appears we can use the percpu_ref to close this</i><br>
+><i> race window(as suggested by Huang, Ying). The patch 1 adds percpu_ref</i><br>
+><i> support for swap and the rest of the patches use this to close various</i><br>
+><i> race windows. More details can be found in the respective changelogs.</i><br>
+><i> Thanks!</i><br>
+><i></i><br>
+><i> Miaohe Lin (5):</i><br>
+><i>   mm/swapfile: add percpu_ref support for swap</i><br>
+><i>   swap: fix do_swap_page() race with swapoff</i><br>
+><i>   mm/swap_state: fix get_shadow_from_swap_cache() race with swapoff</i><br>
+><i>   mm/swap_state: fix potential faulted in race in swap_ra_info()</i><br>
+><i>   mm/swap_state: fix swap_cluster_readahead() race with swapoff</i><br>
+<br>
+Somehow I see Patch-1 and Patch-2 are missing on linux-mm[1].<br>
+Also I wanted to ask if you have a way to trigger this in a more controlled<br>
+environment (consistently)?<br>
+<br>
+[1]: <a  rel="nofollow" href="https://patchwork.kernel.org/project/linux-mm/cover/20210408130820.48233-1-linmiaohe@xxxxxxxxxx/">https://patchwork.kernel.org/project/linux-mm/cover/20210408130820.48233-1-linmiaohe@xxxxxxxxxx/</a><br>
+<br>
+-ritesh<br>
+<br>
+><i></i><br>
+><i>  include/linux/swap.h |  4 +++-</i><br>
+><i>  mm/memory.c          | 10 +++++++++</i><br>
+><i>  mm/swap_state.c      | 33 +++++++++++++++++++++--------</i><br>
+><i>  mm/swapfile.c        | 50 +++++++++++++++++++++++++++-----------------</i><br>
+><i>  4 files changed, 68 insertions(+), 29 deletions(-)</i><br>
+><i></i><br>
+><i> --</i><br>
+><i> 2.19.1</i><br>
+><i></i><br>
+><i></i><br>
+<br>
+<br>
+

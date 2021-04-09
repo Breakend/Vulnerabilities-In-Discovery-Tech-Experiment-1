@@ -1,0 +1,44 @@
+Hi,<br>
+<br>
+On 4/8/21 11:25 AM, Heikki Krogerus wrote:<br>
+><i> On Thu, Apr 08, 2021 at 11:10:38AM +0200, Hans de Goede wrote:</i><br>
+><i>> Hi,</i><br>
+><i>></i><br>
+><i>> On 4/7/21 11:15 AM, Zhen Lei wrote:</i><br>
+><i>>> Fixes the following W=1 kernel build warning:</i><br>
+><i>>></i><br>
+><i>>> drivers/usb/typec/tcpm/tcpm.c:2107:39: warning: ‘tcpm_altmode_ops’ defined but not used [-Wunused-const-variable=]</i><br>
+><i>>></i><br>
+><i>>> The reference to the variable 'tcpm_altmode_ops' is deleted by the</i><br>
+><i>>> commit a079973f462a ("usb: typec: tcpm: Remove tcpc_config configuration</i><br>
+><i>>> mechanism").</i><br>
+><i>>></i><br>
+><i>>> By the way, the static functions referenced only by the variable</i><br>
+><i>>> 'tcpm_altmode_ops' are deleted accordingly.</i><br>
+><i>>></i><br>
+><i>>> Reported-by: Hulk Robot <hulkci@xxxxxxxxxx></i><br>
+><i>>> Signed-off-by: Zhen Lei <thunder.leizhen@xxxxxxxxxx></i><br>
+><i>></i><br>
+><i>> I have a patch pending:</i><br>
+><i>></i><br>
+><i>> <a  rel="nofollow" href="https://www.spinics.net/lists/linux-usb/msg197684.html">https://www.spinics.net/lists/linux-usb/msg197684.html</a></i><br>
+><i>></i><br>
+><i>> Which actually uses this. I really need to (and plan to) brush the dust of</i><br>
+><i>> this one soon and submit a new version.</i><br>
+><i>></i><br>
+><i>> As such I would prefer for these ops to not get removed. But I guess I</i><br>
+><i>> can always include a patch in my series reverting the removal...</i><br>
+><i> </i><br>
+><i> Well, can we then just leave the ops there? If we're going to</i><br>
+><i> re-introduce them back soon in any case, then why drop them in the</i><br>
+><i> first place.</i><br>
+<br>
+Yes I'm in favor of just leaving them in place too, sorry if that was<br>
+not clear.<br>
+<br>
+Regards,<br>
+<br>
+Hans<br>
+<br>
+<br>
+

@@ -1,0 +1,40 @@
+Hello,<br>
+<br>
+Michael Walle <michael@xxxxxxxx> wrote on Thu, 08 Apr 2021 08:55:42<br>
++0200:<br>
+<br>
+><i> Hi Tudor,</i><br>
+><i> </i><br>
+><i> Am 2021-04-08 07:51, schrieb Tudor.Ambarus@xxxxxxxxxxxxx:</i><br>
+><i> > Would you please resend this patch, together with the mtd-utils</i><br>
+><i> > and the SPI NOR patch in a single patch set? You'll help us all</i><br>
+><i> > having all in a single place.  </i><br>
+><i> </i><br>
+><i> This has already been picked-up:</i><br>
+><i> <a  rel="nofollow" href="https://git.kernel.org/pub/scm/linux/kernel/git/mtd/linux.git/commit/?h=mtd/next&id=e3c1f1c92d6ede3cfa09d6a103d3d1c1ef645e35">https://git.kernel.org/pub/scm/linux/kernel/git/mtd/linux.git/commit/?h=mtd/next&id=e3c1f1c92d6ede3cfa09d6a103d3d1c1ef645e35</a></i><br>
+><i> </i><br>
+><i> Although, I didn't receive an email notice.</i><br>
+><i> </i><br>
+><i> -michael</i><br>
+<br>
+Sometimes the notifications are not triggered when there is a conflict<br>
+when applying the patch from patchwork directly. I usually answer<br>
+manually in this case but I might have forgotten.<br>
+<br>
+About the patch, I felt it was good enough for merging, and I want to<br>
+avoid applying such patches right before freezing our branches. Hence,<br>
+I tend to be more aggressive earlier in the release cycles because I<br>
+hate when my patches get delayed infinitely. The other side is a more<br>
+careful approach when -rc6 gets tagged so that I can drop anything which<br>
+would be crazily broken before our -next branches are stalled, leading<br>
+for an useless public revert. Of course, I am fully open to removing<br>
+this patch from -next if you ever feel it was too early and will<br>
+happily get rid of it for this release: we can move the patch for the<br>
+next release if you agree on this (especially since it touches the<br>
+ABI).<br>
+<br>
+Cheers,<br>
+Miquèl<br>
+<br>
+<br>
+

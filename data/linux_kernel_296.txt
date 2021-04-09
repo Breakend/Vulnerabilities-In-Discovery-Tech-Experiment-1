@@ -1,0 +1,56 @@
+<br>
+Hi Rafael,<br>
+<br>
+please consider pulling the following change for cpuidle on ARM for<br>
+v5.13-rc1<br>
+<br>
+Thanks<br>
+<br>
+  -- Daniel<br>
+<br>
+<br>
+The following changes since commit dde8740bd9b505c58ec8b2277d5d55c6951b7e42:<br>
+<br>
+  Merge branch 'acpi-processor-fixes' into linux-next (2021-04-07<br>
+19:02:56 +0200)<br>
+<br>
+are available in the Git repository at:<br>
+<br>
+  <a  rel="nofollow" href="https://git.linaro.org/people/daniel.lezcano/linux">https://git.linaro.org/people/daniel.lezcano/linux</a> tags/cpuidle-v5.13-rc1<br>
+<br>
+for you to fetch changes up to 0beffa4e524f3989ac31fe8563348d45a87f7314:<br>
+<br>
+  cpuidle: Fix ARM_QCOM_SPM_CPUIDLE configuration (2021-04-08 16:49:19<br>
++0200)<br>
+<br>
+----------------------------------------------------------------<br>
+- Fix the C7 state on the tegra114 by setting the L2-no-flush flag<br>
+  unconditionally (Dmitry Osipenko)<br>
+<br>
+- Remove the do_idle firmware call as it is not supported by the ATF<br>
+  on tegra SoC (Dmitry Osipenko)<br>
+<br>
+- Add a missing dependency on CONFIG_MMU to prevent linkage error (He<br>
+  Ying)<br>
+<br>
+----------------------------------------------------------------<br>
+Dmitry Osipenko (2):<br>
+      cpuidle: tegra: Fix C7 idling state on Tegra114<br>
+      cpuidle: tegra: Remove do_idle firmware call<br>
+<br>
+He Ying (1):<br>
+      cpuidle: Fix ARM_QCOM_SPM_CPUIDLE configuration<br>
+<br>
+ drivers/cpuidle/Kconfig.arm     |  2 +-<br>
+ drivers/cpuidle/cpuidle-tegra.c | 19 ++++---------------<br>
+ 2 files changed, 5 insertions(+), 16 deletions(-)<br>
+<br>
+-- <br>
+<<a  rel="nofollow" href="http://www.linaro.org/">http://www.linaro.org/</a>> Linaro.org │ Open source software for ARM SoCs<br>
+<br>
+Follow Linaro:  <<a  rel="nofollow" href="http://www.facebook.com/pages/Linaro">http://www.facebook.com/pages/Linaro</a>> Facebook |<br>
+<<a  rel="nofollow" href="http://twitter.com/#!/linaroorg">http://twitter.com/#!/linaroorg</a>> Twitter |<br>
+<<a  rel="nofollow" href="http://www.linaro.org/linaro-blog/">http://www.linaro.org/linaro-blog/</a>> Blog<br>
+<br>
+<br>
+

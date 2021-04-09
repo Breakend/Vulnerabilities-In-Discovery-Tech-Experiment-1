@@ -1,0 +1,127 @@
+<br>
+Hi Thomas,<br>
+<br>
+please consider these changes for v5.13<br>
+<br>
+Thanks<br>
+<br>
+  -- Daniel<br>
+<br>
+The following changes since commit d4c7c28806616809e3baa0b7cd8c665516b2726d:<br>
+<br>
+  timekeeping: Allow runtime PM from change_clocksource() (2021-03-29<br>
+16:41:59 +0200)<br>
+<br>
+are available in the Git repository at:<br>
+<br>
+  <a  rel="nofollow" href="https://git.linaro.org/people/daniel.lezcano/linux">https://git.linaro.org/people/daniel.lezcano/linux</a> tags/timers-v5.13-rc1<br>
+<br>
+for you to fetch changes up to 8120891105ba32b45bc35f7dc07e6d87a8314556:<br>
+<br>
+  dt-bindings: timer: nuvoton,npcm7xx: Add wpcm450-timer (2021-04-08<br>
+16:41:20 +0200)<br>
+<br>
+----------------------------------------------------------------<br>
+ - Add dt bindings for the wpcm450 and the timer declaration (Jonathan<br>
+   Neuschäfer)<br>
+<br>
+ - Add dt bindings for the JZ4760, the timer declaration for the<br>
+   ingenic ost and timer (Paul Cercueil)<br>
+<br>
+ - Add dt bindings for the cmt r8a779a0 (Wolfram Sang)<br>
+<br>
+ - Add dt bindings for the cmt r8a77961 (Niklas Söderlund)<br>
+<br>
+ - Add missing dt bindings for the tmu r8a7795, r8a7796, r8a77961, r8a77965,<br>
+   r8a77990 and r8a77995 (Niklas Söderlund)<br>
+<br>
+ - Check pending post before writing a new post in register for the<br>
+   timer TI dm and add the stopped callback ops to prevent any<br>
+   spurious interrupt (Tony Lindgren)<br>
+<br>
+ - Fix return value check at init when calling device_node_to_regmap()<br>
+   for the Ingenic OST timer (Wei Yongjun)<br>
+<br>
+ - Fix a trivial typo s/overflw/overflow/ for the pistachio timer (Drew<br>
+Fustini)<br>
+<br>
+ - Don't use CMTOUT_IE with R-Car Gen2/3 (Wolfram Sang)<br>
+<br>
+ - Fix rollback when the initialization fails on the dw_apb timer (Dinh<br>
+Nguyen)<br>
+<br>
+ - Switch to timer TI dm on dra7 in order to prevent using the bogus<br>
+   architected timer which fails to wrap correctly after 388 days (Tony<br>
+Lindgren)<br>
+<br>
+ - Add function annotation to optimize memory for the ARM architected<br>
+   timer (Jisheng Zhang)<br>
+<br>
+----------------------------------------------------------------<br>
+Dinh Nguyen (1):<br>
+      clocksource/drivers/dw_apb_timer_of: Add handling for potential<br>
+memory leak<br>
+<br>
+Drew Fustini (1):<br>
+      clocksource/drivers/pistachio: Fix trivial typo<br>
+<br>
+Jisheng Zhang (1):<br>
+      clocksource/drivers/arm_arch_timer: Add __ro_after_init and __init<br>
+<br>
+Jonathan Neuschäfer (2):<br>
+      clocksource/drivers/npcm: Add support for WPCM450<br>
+      dt-bindings: timer: nuvoton,npcm7xx: Add wpcm450-timer<br>
+<br>
+Niklas Söderlund (2):<br>
+      dt-bindings: timer: renesas,tmu: Document missing Gen3 SoCs<br>
+      dt-bindings: timer: renesas,cmt: Document R8A77961<br>
+<br>
+Paul Cercueil (3):<br>
+      dt-bindings: timer: ingenic: Add compatible strings for JZ4760(B)<br>
+      clocksource/drivers/ingenic: Add support for the JZ4760<br>
+      clocksource/drivers/ingenic-ost: Add support for the JZ4760B<br>
+<br>
+Tony Lindgren (4):<br>
+      clocksource/drivers/timer-ti-dm: Fix posted mode status check order<br>
+      clocksource/drivers/timer-ti-dm: Add missing set_state_oneshot_stopped<br>
+      clocksource/drivers/timer-ti-dm: Prepare to handle dra7 timer wrap<br>
+issue<br>
+      clocksource/drivers/timer-ti-dm: Handle dra7 timer wrap errata i940<br>
+<br>
+Wei Yongjun (1):<br>
+      clocksource/drivers/ingenic_ost: Fix return value check in<br>
+ingenic_ost_probe()<br>
+<br>
+Wolfram Sang (2):<br>
+      dt-bindings: timer: renesas,cmt: Add r8a779a0 CMT support<br>
+      clocksource/drivers/sh_cmt: Don't use CMTOUT_IE with R-Car Gen2/3<br>
+<br>
+ .../devicetree/bindings/timer/ingenic,tcu.yaml     |  30 ++--<br>
+ .../bindings/timer/nuvoton,npcm7xx-timer.txt       |   3 +-<br>
+ .../devicetree/bindings/timer/renesas,cmt.yaml     |   4 +<br>
+ .../devicetree/bindings/timer/renesas,tmu.yaml     |   6 +<br>
+ arch/arm/boot/dts/dra7-l4.dtsi                     |   4 +-<br>
+ arch/arm/boot/dts/dra7.dtsi                        |  20 +++<br>
+ drivers/clocksource/arm_arch_timer.c               |  23 +--<br>
+ drivers/clocksource/dw_apb_timer_of.c              |  26 +++-<br>
+ drivers/clocksource/ingenic-ost.c                  |   9 +-<br>
+ drivers/clocksource/ingenic-timer.c                |   2 +<br>
+ drivers/clocksource/sh_cmt.c                       |   5 +-<br>
+ drivers/clocksource/timer-npcm7xx.c                |   1 +<br>
+ drivers/clocksource/timer-pistachio.c              |   4 +-<br>
+ drivers/clocksource/timer-ti-dm-systimer.c         | 155<br>
++++++++++++++++++----<br>
+ include/linux/cpuhotplug.h                         |   1 +<br>
+ 15 files changed, 229 insertions(+), 64 deletions(-)<br>
+<br>
+<br>
+<br>
+-- <br>
+<<a  rel="nofollow" href="http://www.linaro.org/">http://www.linaro.org/</a>> Linaro.org │ Open source software for ARM SoCs<br>
+<br>
+Follow Linaro:  <<a  rel="nofollow" href="http://www.facebook.com/pages/Linaro">http://www.facebook.com/pages/Linaro</a>> Facebook |<br>
+<<a  rel="nofollow" href="http://twitter.com/#!/linaroorg">http://twitter.com/#!/linaroorg</a>> Twitter |<br>
+<<a  rel="nofollow" href="http://www.linaro.org/linaro-blog/">http://www.linaro.org/linaro-blog/</a>> Blog<br>
+<br>
+<br>
+

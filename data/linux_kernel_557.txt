@@ -1,0 +1,52 @@
+On 06/04/2021 15.31, Andy Shevchenko wrote:<br>
+><i> kernel.h is being used as a dump for all kinds of stuff for a long time.</i><br>
+><i> Here is the attempt to start cleaning it up by splitting out panic and</i><br>
+><i> oops helpers.</i><br>
+<br>
+Yay.<br>
+<br>
+Acked-by: Rasmus Villemoes <linux@xxxxxxxxxxxxxxxxxx><br>
+<br>
+><i> At the same time convert users in header and lib folder to use new header.</i><br>
+><i> Though for time being include new header back to kernel.h to avoid twisted</i><br>
+><i> indirected includes for existing users.</i><br>
+<br>
+I think it would be good to have some place to note that "This #include<br>
+is just for backwards compatibility, it will go away RealSoonNow, so if<br>
+you rely on something from linux/panic.h, include that explicitly<br>
+yourself TYVM. And if you're looking for a janitorial task, write a<br>
+script to check that every file that uses some identifier defined in<br>
+panic.h actually includes that file. When all offenders are found and<br>
+dealt with, remove the #include and this note.".<br>
+<br>
+><i> +</i><br>
+><i> +struct taint_flag {</i><br>
+><i> +	char c_true;	/* character printed when tainted */</i><br>
+><i> +	char c_false;	/* character printed when not tainted */</i><br>
+><i> +	bool module;	/* also show as a per-module taint flag */</i><br>
+><i> +};</i><br>
+><i> +</i><br>
+><i> +extern const struct taint_flag taint_flags[TAINT_FLAGS_COUNT];</i><br>
+<br>
+While you're doing this, nothing outside of kernel/panic.c cares about<br>
+the definition of struct taint_flag or use the taint_flags array, so<br>
+could you make the definition private to that file and make the array<br>
+static? (Another patch, of course.)<br>
+<br>
+><i> +enum lockdep_ok {</i><br>
+><i> +	LOCKDEP_STILL_OK,</i><br>
+><i> +	LOCKDEP_NOW_UNRELIABLE,</i><br>
+><i> +};</i><br>
+><i> +</i><br>
+><i> +extern const char *print_tainted(void);</i><br>
+><i> +extern void add_taint(unsigned flag, enum lockdep_ok);</i><br>
+><i> +extern int test_taint(unsigned flag);</i><br>
+><i> +extern unsigned long get_taint(void);</i><br>
+<br>
+I know you're just moving code, but it would be a nice opportunity to<br>
+drop the redundant externs.<br>
+<br>
+Rasmus<br>
+<br>
+<br>
+

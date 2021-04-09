@@ -1,0 +1,38 @@
+On Thu, Apr 08, 2021 at 12:52:07PM +0200, Peter Zijlstra wrote:<br>
+><i> > diff --git a/mm/page_alloc.c b/mm/page_alloc.c</i><br>
+><i> > index a68bacddcae0..e9e60d1a85d4 100644</i><br>
+><i> > --- a/mm/page_alloc.c</i><br>
+><i> > +++ b/mm/page_alloc.c</i><br>
+><i> > @@ -112,6 +112,13 @@ typedef int __bitwise fpi_t;</i><br>
+><i> >  static DEFINE_MUTEX(pcp_batch_high_lock);</i><br>
+><i> >  #define MIN_PERCPU_PAGELIST_FRACTION	(8)</i><br>
+><i> >  </i><br>
+><i> > +struct pagesets {</i><br>
+><i> > +	local_lock_t lock;</i><br>
+><i> > +};</i><br>
+><i> > +static DEFINE_PER_CPU(struct pagesets, pagesets) = {</i><br>
+><i> > +	.lock = INIT_LOCAL_LOCK(lock),</i><br>
+><i> > +};</i><br>
+><i> </i><br>
+><i> So why isn't the local_lock_t in struct per_cpu_pages ? That seems to be</i><br>
+><i> the actual object that is protected by it and is already per-cpu.</i><br>
+><i> </i><br>
+><i> Is that because you want to avoid the duplication across zones? Is that</i><br>
+><i> worth the effort?</i><br>
+<br>
+When I wrote the patch, the problem was that zone_pcp_reset freed the<br>
+per_cpu_pages structure and it was "protected" by local_irq_save(). If<br>
+that was converted to local_lock_irq then the structure containing the<br>
+lock is freed before it is released which is obviously bad.<br>
+<br>
+Much later when trying to make the allocator RT-safe in general, I realised<br>
+that locking was broken and fixed it in patch 3 of this series. With that,<br>
+the local_lock could potentially be embedded within per_cpu_pages safely<br>
+at the end of this series.<br>
+<br>
+-- <br>
+Mel Gorman<br>
+SUSE Labs<br>
+<br>
+<br>
+

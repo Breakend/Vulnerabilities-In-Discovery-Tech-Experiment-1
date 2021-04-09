@@ -1,0 +1,80 @@
+On Wed, Apr 07, 2021 at 06:32:44PM +0800, John Garry wrote:<br>
+><i> This series contains support to get basic metricgroups working for</i><br>
+><i> arm64 CPUs.</i><br>
+><i> </i><br>
+><i> Initial support is added for HiSilicon hip08 platform.</i><br>
+><i> </i><br>
+><i> Some sample usage on Huawei D06 board:</i><br>
+><i> </i><br>
+><i>  $ ./perf list metric    </i><br>
+><i> </i><br>
+><i> List of pre-defined events (to be used in -e): </i><br>
+><i> </i><br>
+><i> Metrics:     </i><br>
+><i> </i><br>
+><i>   bp_misp_flush</i><br>
+><i>        [BP misp flush L3 topdown metric]</i><br>
+><i>   branch_mispredicts</i><br>
+><i>        [Branch mispredicts L2 topdown metric]</i><br>
+><i>   core_bound</i><br>
+><i>        [Core bound L2 topdown metric]</i><br>
+><i>   divider</i><br>
+><i>        [Divider L3 topdown metric]</i><br>
+><i>   exe_ports_util</i><br>
+><i>        [EXE ports util L3 topdown metric]</i><br>
+><i>   fetch_bandwidth_bound</i><br>
+><i>        [Fetch bandwidth bound L2 topdown metric]</i><br>
+><i>   fetch_latency_bound</i><br>
+><i>        [Fetch latency bound L2 topdown metric]</i><br>
+><i>   fsu_stall</i><br>
+><i>        [FSU stall L3 topdown metric]</i><br>
+><i>   idle_by_icache_miss</i><br>
+><i> </i><br>
+><i> $ sudo ./perf stat -v -M core_bound sleep 1</i><br>
+><i> Using CPUID 0x00000000480fd010</i><br>
+><i> metric expr (exe_stall_cycle - (mem_stall_anyload + armv8_pmuv3_0@event\=0x7005@)) / cpu_cycles for core_bound</i><br>
+><i> found event cpu_cycles</i><br>
+><i> found event armv8_pmuv3_0/event=0x7005/</i><br>
+><i> found event exe_stall_cycle</i><br>
+><i> found event mem_stall_anyload</i><br>
+><i> adding {cpu_cycles -> armv8_pmuv3_0/event=0x7001/</i><br>
+><i> mem_stall_anyload -> armv8_pmuv3_0/event=0x7004/</i><br>
+><i> Control descriptor is not initialized</i><br>
+><i> cpu_cycles: 989433 385050 385050</i><br>
+><i> armv8_pmuv3_0/event=0x7005/: 19207 385050 385050</i><br>
+><i> exe_stall_cycle: 900825 385050 385050</i><br>
+><i> mem_stall_anyload: 253516 385050 385050</i><br>
+><i> </i><br>
+><i> Performance counter stats for 'sleep':</i><br>
+><i> </i><br>
+><i> 989,433      cpu_cycles      #     0.63 core_bound</i><br>
+><i>   19,207      armv8_pmuv3_0/event=0x7005/</i><br>
+><i>  900,825      exe_stall_cycle</i><br>
+><i>  253,516      mem_stall_anyload</i><br>
+><i> </i><br>
+><i>        0.000805809 seconds time elapsed</i><br>
+><i> </i><br>
+><i>        0.000875000 seconds user</i><br>
+><i>        0.000000000 seconds sys</i><br>
+><i>        </i><br>
+><i> perf stat --topdown is not supported, as this requires the CPU PMU to</i><br>
+><i> expose (alias) events for the TopDown L1 metrics from sysfs, which arm </i><br>
+><i> does not do. To get that to work, we probably need to make perf use the</i><br>
+><i> pmu-events cpumap to learn about those alias events.</i><br>
+><i> </i><br>
+><i> Metric reuse support is added for pmu-events parse metric testcase.</i><br>
+><i> This had been broken on power9 recently:</i><br>
+><i> <a  rel="nofollow" href="https://lore.kernel.org/lkml/20210324015418.GC8931@xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/lkml/20210324015418.GC8931@xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/</a> </i><br>
+><i> </i><br>
+><i> Differences to v2:</i><br>
+><i> - Add TB and RB tags (Thanks!)</i><br>
+><i> - Rename metricgroup__find_metric() from metricgroup_find_metric()</i><br>
+><i> - Change resolve_metric_simple() to rescan after any insert</i><br>
+<br>
+Acked-by: Jiri Olsa <jolsa@xxxxxxxxxx><br>
+<br>
+thanks,<br>
+jirka<br>
+<br>
+<br>
+

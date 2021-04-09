@@ -1,0 +1,27 @@
+pm_runtime_get_sync will increment pm usage counter even it failed.<br>
+thus a pairing decrement is needed.<br>
+Fix it by replacing it with pm_runtime_resume_and_get to keep usage<br>
+counter balanced.<br>
+<br>
+Reported-by: Hulk Robot <hulkci@xxxxxxxxxx><br>
+Signed-off-by: Bixuan Cui <cuibixuan@xxxxxxxxxx><br>
+---<br>
+ drivers/usb/musb/musb_core.c | 2 +-<br>
+ 1 file changed, 1 insertion(+), 1 deletion(-)<br>
+<br>
+diff --git a/drivers/usb/musb/musb_core.c b/drivers/usb/musb/musb_core.c<br>
+index fc0457db62e1..8f09a387b773 100644<br>
+--- a/drivers/usb/musb/musb_core.c<br>
++++ b/drivers/usb/musb/musb_core.c<br>
+@@ -2070,7 +2070,7 @@ static void musb_irq_work(struct work_struct *data)<br>
+ 	struct musb *musb = container_of(data, struct musb, irq_work.work);<br>
+ 	int error;<br>
+ <br>
+-	error = pm_runtime_get_sync(musb->controller);<br>
++	error = pm_runtime_resume_and_get(musb->controller);<br>
+ 	if (error < 0) {<br>
+ 		dev_err(musb->controller, "Could not enable: %i\n", error);<br>
+ <br>
+<br>
+<br>
+

@@ -1,0 +1,74 @@
+[OpenSIPS-Users] h264 webrtc and opensips
+Esty, Ryan ryan.esty at necect.com
+Wed Apr 4 10:00:33 EDT 2018
+
+    Previous message: [OpenSIPS-Users] h264 webrtc and opensips
+    Next message: [OpenSIPS-Users] UDP send failed
+    Messages sorted by: [ date ] [ thread ] [ subject ] [ author ]
+
+Razvan,
+
+So I'm not sure if this helps or not but we just tested Janus and I was able to connect our device using that. I must have something wrong with my webrtc gateway approach in rtpengine. We would like to use opensips as it is more versatile at least we can prove not it isn't our devices. The packetization-mode was being set to one in the Janus example also.
+
+Ryan Esty
+
+-----Original Message-----
+From: Esty, Ryan 
+Sent: Tuesday, April 3, 2018 1:28 PM
+To: users at lists.opensips.org
+Subject: RE: [OpenSIPS-Users] h264 webrtc and opensips
+
+Razvan,
+
+Thanks for getting back to me. I was afraid of this as I didn't see any options in rtpengine that supported video codecs either. We are trying to upgrade some of our devices to support packetization-mode 0 and 1.
+
+Ryan Esty
+Senior Software Engineer
+NEC Enterprise Communication Technologies (Cheshire)
+203-718-6268
+
+-----Original Message-----
+From: Users [mailto:users-bounces at lists.opensips.org] On Behalf Of Razvan Crainea
+Sent: Tuesday, April 3, 2018 1:19 PM
+To: users at lists.opensips.org
+Subject: Re: [OpenSIPS-Users] h264 webrtc and opensips
+
+Hi, Ryan!
+
+I don't have that much experience with H.264, but my first instinct was to look into the rtpengine packetization feature. But unfortunately rtpengine does not support H.264 codecs, so I doubt this can help. But perhaps you could look into different transcoding solutions that do support H.264 transcoding.
+
+Best regards,
+
+Răzvan Crainea
+OpenSIPS Core Developer
+http://www.opensips-solutions.com
+
+On 03/23/2018 05:01 PM, Esty, Ryan wrote:
+> Hi list,
+> 
+> This might not be the correct list for this but maybe someone might be 
+> able to point me in the correct direction. I’m trying to use opensips 
+> as a webrtc gateway. It mostly works I’m able to call a legacy sip 
+> phone connected to my SIP server. The reason why it only mostly works 
+> is I have a problem with the h264 codec. None of my legacy devices 
+> know what to do with packetization-mode=1, well this is my assumption.
+> Has anyone else had a similar issue and can point me to some further 
+> information? A lot of people said to just set packetization-mode to 0 
+> but I thought the webrtc video draft said this was mandatory 
+> (https://tools.ietf.org/html/rfc7742).
+> 
+> Ryan Esty
+> 
+> 
+> 
+> _______________________________________________
+> Users mailing list
+> Users at lists.opensips.org
+> http://lists.opensips.org/cgi-bin/mailman/listinfo/users
+> 
+
+_______________________________________________
+Users mailing list
+Users at lists.opensips.org
+http://lists.opensips.org/cgi-bin/mailman/listinfo/users
+

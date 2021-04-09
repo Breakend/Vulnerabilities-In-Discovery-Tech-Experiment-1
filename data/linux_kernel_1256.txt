@@ -1,0 +1,25 @@
+On 08/04/2021 14:57, syzbot wrote:<br>
+><i> Hello,</i><br>
+><i> </i><br>
+><i> syzbot has tested the proposed patch but the reproducer is still triggering an issue:</i><br>
+><i> INFO: task hung in io_ring_exit_work</i><br>
+><i> </i><br>
+><i> commit:         07c3d710 Revert "Revert "io_uring: wait potential ->releas..</i><br>
+<br>
+Err, not right commit...<br>
+<br>
+#syz test: <a  rel="nofollow" href="https://github.com/isilence/linux.git">https://github.com/isilence/linux.git</a> syz_test3<br>
+<br>
+<br>
+><i> git tree:       <a  rel="nofollow" href="https://github.com/isilence/linux.git">https://github.com/isilence/linux.git</a> syz_test2</i><br>
+><i> console output: <a  rel="nofollow" href="https://syzkaller.appspot.com/x/log.txt?x=145716fcd00000">https://syzkaller.appspot.com/x/log.txt?x=145716fcd00000</a></i><br>
+><i> kernel config:  <a  rel="nofollow" href="https://syzkaller.appspot.com/x/.config?x=86318203e865a02b">https://syzkaller.appspot.com/x/.config?x=86318203e865a02b</a></i><br>
+><i> dashboard link: <a  rel="nofollow" href="https://syzkaller.appspot.com/bug?extid=93f72b3885406bb09e0d">https://syzkaller.appspot.com/bug?extid=93f72b3885406bb09e0d</a></i><br>
+><i> compiler:       </i><br>
+><i> </i><br>
+<br>
+-- <br>
+Pavel Begunkov<br>
+<br>
+<br>
+

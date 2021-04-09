@@ -1,0 +1,42 @@
+Print the afs_operation debug_id when logging an unexpected change in the<br>
+data version.  This allows the logged message to be matched against<br>
+tracelines.<br>
+<br>
+Signed-off-by: David Howells <dhowells@xxxxxxxxxx><br>
+cc: linux-afs@xxxxxxxxxxxxxxxxxxx<br>
+cc: linux-cachefs@xxxxxxxxxx<br>
+cc: linux-fsdevel@xxxxxxxxxxxxxxx<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/160588528377.3465195.2206051235095182302.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/160588528377.3465195.2206051235095182302.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # rfc<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161118146111.1232039.11398082422487058312.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161118146111.1232039.11398082422487058312.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # rfc<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161161042180.2537118.2471333561661033316.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161161042180.2537118.2471333561661033316.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v2<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161340405772.1303470.3877167548944248214.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161340405772.1303470.3877167548944248214.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v3<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161539549628.286939.15234870409714613954.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161539549628.286939.15234870409714613954.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v4<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161653805530.2770958.15120507632529970934.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161653805530.2770958.15120507632529970934.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v5<br>
+---<br>
+<br>
+ fs/afs/inode.c |    5 +++--<br>
+ 1 file changed, 3 insertions(+), 2 deletions(-)<br>
+<br>
+diff --git a/fs/afs/inode.c b/fs/afs/inode.c<br>
+index 8de6f05987b4..a4bb3ac762be 100644<br>
+--- a/fs/afs/inode.c<br>
++++ b/fs/afs/inode.c<br>
+@@ -214,11 +214,12 @@ static void afs_apply_status(struct afs_operation *op,<br>
+ <br>
+ 	if (vp->dv_before + vp->dv_delta != status->data_version) {<br>
+ 		if (test_bit(AFS_VNODE_CB_PROMISED, &vnode->flags))<br>
+-			pr_warn("kAFS: vnode modified {%llx:%llu} %llx->%llx %s\n",<br>
++			pr_warn("kAFS: vnode modified {%llx:%llu} %llx->%llx %s (op=%x)\n",<br>
+ 				vnode->fid.vid, vnode->fid.vnode,<br>
+ 				(unsigned long long)vp->dv_before + vp->dv_delta,<br>
+ 				(unsigned long long)status->data_version,<br>
+-				op->type ? op->type->name : "???");<br>
++				op->type ? op->type->name : "???",<br>
++				op->debug_id);<br>
+ <br>
+ 		vnode->invalid_before = status->data_version;<br>
+ 		if (vnode->status.type == AFS_FTYPE_DIR) {<br>
+<br>
+<br>
+<br>
+

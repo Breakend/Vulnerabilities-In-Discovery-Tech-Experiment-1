@@ -1,0 +1,27 @@
+A subsequent patch will let IRQs end up in irq_finalize_oneshot() without<br>
+IRQD_IRQ_MASKED, but with IRQD_IRQ_FLOW_MASKED set instead. Let such IRQs<br>
+receive their final ->irq_eoi().<br>
+<br>
+Signed-off-by: Valentin Schneider <valentin.schneider@xxxxxxx><br>
+---<br>
+ kernel/irq/manage.c | 2 +-<br>
+ 1 file changed, 1 insertion(+), 1 deletion(-)<br>
+<br>
+diff --git a/kernel/irq/manage.c b/kernel/irq/manage.c<br>
+index e976c4927b25..59c8056d6714 100644<br>
+--- a/kernel/irq/manage.c<br>
++++ b/kernel/irq/manage.c<br>
+@@ -1076,7 +1076,7 @@ static void irq_finalize_oneshot(struct irq_desc *desc,<br>
+ 	desc->threads_oneshot &= ~action->thread_mask;<br>
+ <br>
+ 	if (!desc->threads_oneshot && !irqd_irq_disabled(&desc->irq_data) &&<br>
+-	    irqd_irq_masked(&desc->irq_data))<br>
++	    (irqd_irq_masked(&desc->irq_data) || irqd_irq_flow_masked(&desc->irq_data)))<br>
+ 		unmask_threaded_irq(desc);<br>
+ <br>
+ out_unlock:<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

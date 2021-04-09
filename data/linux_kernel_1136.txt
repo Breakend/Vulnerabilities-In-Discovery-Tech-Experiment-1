@@ -1,0 +1,40 @@
+On Wed, Apr 07, 2021 at 12:55:29PM -0500, Zev Weiss wrote:<br>
+><i> On Wed, Apr 07, 2021 at 12:25:09PM CDT, Greg Kroah-Hartman wrote:</i><br>
+><i> > On Wed, Apr 07, 2021 at 11:56:04AM -0500, Zev Weiss wrote:</i><br>
+><i> > > On Wed, Apr 07, 2021 at 10:18:31AM CDT, Greg Kroah-Hartman wrote:</i><br>
+><i> > > > On Fri, Apr 02, 2021 at 01:27:21PM -0500, Zev Weiss wrote:</i><br>
+><i> > > > > This property ties SIRQ polarity to SCU register bits that don't</i><br>
+><i> > > > > necessarily have any direct relationship to it; the only use of it</i><br>
+><i> > > > > was removed in commit c82bf6e133d30e0f9172a20807814fa28aef0f67.</i><br>
+><i> > > ></i><br>
+><i> > > > Please write that as:</i><br>
+><i> > > > 	c82bf6e133d3 ("ARM: aspeed: g5: Do not set sirq polarity")</i><br>
+><i> > > ></i><br>
+><i> > > </i><br>
+><i> > > Ack, will do.</i><br>
+><i> > > </i><br>
+><i> > > > > Signed-off-by: Zev Weiss <zev@xxxxxxxxxxxxxxxxx></i><br>
+><i> > > > > Reviewed-by: Joel Stanley <joel@xxxxxxxxx></i><br>
+><i> > > > > ---</i><br>
+><i> > > > >  Documentation/devicetree/bindings/serial/8250.yaml | 1 +</i><br>
+><i> > > > >  1 file changed, 1 insertion(+)</i><br>
+><i> > > ></i><br>
+><i> > > > What changed from previous versions?  That always goes below the ---</i><br>
+><i> > > > line.</i><br>
+><i> > > ></i><br>
+><i> > > </i><br>
+><i> > > I included an overview of that in the cover letter (<a  rel="nofollow" href="https://lore.kernel.org/openbmc/20210402182724.20848-1-zev@xxxxxxxxxxxxxxxxx/">https://lore.kernel.org/openbmc/20210402182724.20848-1-zev@xxxxxxxxxxxxxxxxx/</a>);</i><br>
+><i> > > is it desirable to also have that duplicated in the individual patches in</i><br>
+><i> > > the series?</i><br>
+><i> > </i><br>
+><i> > Any reason why you didn't include all of the relevant people and mailing</i><br>
+><i> > lists in that cover letter?  I've never seen it before :)</i><br>
+><i> > </i><br>
+><i> </i><br>
+><i> Ah -- is there a good rule of thumb (or git send-email trick) for that?</i><br>
+><i> Set-union of get_maintainer.pl over all the patches in the series?</i><br>
+<br>
+There might be a git send-email trick, but I don't know it :(<br>
+<br>
+<br>
+

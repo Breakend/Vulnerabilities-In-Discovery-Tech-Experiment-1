@@ -1,0 +1,30 @@
+Fix the following gcc warning:<br>
+<br>
+drivers/char/agp/via-agp.c:131:28: warning: variable ‘current_size’ set<br>
+but not used [-Wunused-but-set-variable].<br>
+<br>
+Reported-by: Abaci Robot <abaci@xxxxxxxxxxxxxxxxx><br>
+Signed-off-by: Jiapeng Chong <jiapeng.chong@xxxxxxxxxxxxxxxxx><br>
+---<br>
+ drivers/char/agp/via-agp.c | 3 ---<br>
+ 1 file changed, 3 deletions(-)<br>
+<br>
+diff --git a/drivers/char/agp/via-agp.c b/drivers/char/agp/via-agp.c<br>
+index 87a92a0..dc594f4 100644<br>
+--- a/drivers/char/agp/via-agp.c<br>
++++ b/drivers/char/agp/via-agp.c<br>
+@@ -128,9 +128,6 @@ static int via_fetch_size_agp3(void)<br>
+ static int via_configure_agp3(void)<br>
+ {<br>
+ 	u32 temp;<br>
+-	struct aper_size_info_16 *current_size;<br>
+-<br>
+-	current_size = A_SIZE_16(agp_bridge->current_size);<br>
+ <br>
+ 	/* address to map to */<br>
+ 	agp_bridge->gart_bus_addr = pci_bus_address(agp_bridge->dev,<br>
+-- <br>
+1.8.3.1<br>
+<br>
+<br>
+

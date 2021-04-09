@@ -1,0 +1,70 @@
+flush_coherent_icache() can use any valid address as mentionned<br>
+by the comment.<br>
+<br>
+Use PAGE_OFFSET as base address. This allows removing the<br>
+user access stuff.<br>
+<br>
+Signed-off-by: Christophe Leroy <christophe.leroy@xxxxxxxxxx><br>
+---<br>
+ arch/powerpc/mm/cacheflush.c | 13 +++++--------<br>
+ 1 file changed, 5 insertions(+), 8 deletions(-)<br>
+<br>
+diff --git a/arch/powerpc/mm/cacheflush.c b/arch/powerpc/mm/cacheflush.c<br>
+index 742d3e0fb12f..dc2d39da6f63 100644<br>
+--- a/arch/powerpc/mm/cacheflush.c<br>
++++ b/arch/powerpc/mm/cacheflush.c<br>
+@@ -5,10 +5,9 @@<br>
+ <br>
+ /**<br>
+  * flush_coherent_icache() - if a CPU has a coherent icache, flush it<br>
+- * @addr: The base address to use (can be any valid address, the whole cache will be flushed)<br>
+  * Return true if the cache was flushed, false otherwise<br>
+  */<br>
+-static inline bool flush_coherent_icache(unsigned long addr)<br>
++static inline bool flush_coherent_icache(void)<br>
+ {<br>
+ 	/*<br>
+ 	 * For a snooping icache, we still need a dummy icbi to purge all the<br>
+@@ -18,9 +17,7 @@ static inline bool flush_coherent_icache(unsigned long addr)<br>
+ 	 */<br>
+ 	if (cpu_has_feature(CPU_FTR_COHERENT_ICACHE)) {<br>
+ 		mb(); /* sync */<br>
+-		allow_read_from_user((const void __user *)addr, L1_CACHE_BYTES);<br>
+-		icbi((void *)addr);<br>
+-		prevent_read_from_user((const void __user *)addr, L1_CACHE_BYTES);<br>
++		icbi((void *)PAGE_OFFSET);<br>
+ 		mb(); /* sync */<br>
+ 		isync();<br>
+ 		return true;<br>
+@@ -60,7 +57,7 @@ static void invalidate_icache_range(unsigned long start, unsigned long stop)<br>
+  */<br>
+ void flush_icache_range(unsigned long start, unsigned long stop)<br>
+ {<br>
+-	if (flush_coherent_icache(start))<br>
++	if (flush_coherent_icache())<br>
+ 		return;<br>
+ <br>
+ 	clean_dcache_range(start, stop);<br>
+@@ -146,7 +143,7 @@ static void __flush_dcache_icache(void *p)<br>
+ {<br>
+ 	unsigned long addr = (unsigned long)p;<br>
+ <br>
+-	if (flush_coherent_icache(addr))<br>
++	if (flush_coherent_icache())<br>
+ 		return;<br>
+ <br>
+ 	clean_dcache_range(addr, addr + PAGE_SIZE);<br>
+@@ -200,7 +197,7 @@ void flush_dcache_icache_page(struct page *page)<br>
+ 	} else {<br>
+ 		unsigned long addr = page_to_pfn(page) << PAGE_SHIFT;<br>
+ <br>
+-		if (flush_coherent_icache(addr))<br>
++		if (flush_coherent_icache())<br>
+ 			return;<br>
+ 		flush_dcache_icache_phys(addr);<br>
+ 	}<br>
+-- <br>
+2.25.0<br>
+<br>
+<br>
+

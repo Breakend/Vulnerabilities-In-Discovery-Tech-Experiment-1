@@ -1,0 +1,60 @@
+Hi Arnd,<br>
+<br>
+First bad commit (maybe != root cause):<br>
+<br>
+tree:   <a  rel="nofollow" href="https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git">https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git</a> master<br>
+head:   454859c552da78b0f587205d308401922b56863e<br>
+commit: 17132da70eb766785b9b4677bacce18cc11ea442 ARM: samsung: move pm check code to drivers/soc<br>
+date:   8 months ago<br>
+config: arm-randconfig-r023-20210408 (attached as .config)<br>
+compiler: arm-linux-gnueabi-gcc (GCC) 9.3.0<br>
+reproduce (this is a W=1 build):<br>
+        wget <a  rel="nofollow" href="https://raw.githubusercontent.com/intel/lkp-tests/master/sbin/make.cross">https://raw.githubusercontent.com/intel/lkp-tests/master/sbin/make.cross</a> -O ~/bin/make.cross<br>
+        chmod +x ~/bin/make.cross<br>
+        # <a  rel="nofollow" href="https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=17132da70eb766785b9b4677bacce18cc11ea442">https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=17132da70eb766785b9b4677bacce18cc11ea442</a><br>
+        git remote add linus <a  rel="nofollow" href="https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git">https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git</a><br>
+        git fetch --no-tags linus master<br>
+        git checkout 17132da70eb766785b9b4677bacce18cc11ea442<br>
+        # save the attached .config to linux build tree<br>
+        COMPILER_INSTALL_PATH=$HOME/0day COMPILER=gcc-9.3.0 make.cross ARCH=arm <br>
+<br>
+If you fix the issue, kindly add following tag as appropriate<br>
+Reported-by: kernel test robot <lkp@xxxxxxxxx><br>
+<br>
+All warnings (new ones prefixed by >>):<br>
+<br>
+   drivers/soc/samsung/s3c-pm-debug.c: In function 's3c_pm_dbg':<br>
+><i>> drivers/soc/samsung/s3c-pm-debug.c:30:2: warning: function 's3c_pm_dbg' might be a candidate for 'gnu_printf' format attribute [-Wsuggest-attribute=format]</i><br>
+      30 |  vsnprintf(buff, sizeof(buff), fmt, va);<br>
+         |  ^~~~~~~~~<br>
+<br>
+<br>
+vim +30 drivers/soc/samsung/s3c-pm-debug.c<br>
+<br>
+72551f6cf13e2f arch/arm/plat-samsung/pm-debug.c Tomasz Figa 2014-03-18  23  <br>
+72551f6cf13e2f arch/arm/plat-samsung/pm-debug.c Tomasz Figa 2014-03-18  24  void s3c_pm_dbg(const char *fmt, ...)<br>
+72551f6cf13e2f arch/arm/plat-samsung/pm-debug.c Tomasz Figa 2014-03-18  25  {<br>
+72551f6cf13e2f arch/arm/plat-samsung/pm-debug.c Tomasz Figa 2014-03-18  26  	va_list va;<br>
+72551f6cf13e2f arch/arm/plat-samsung/pm-debug.c Tomasz Figa 2014-03-18  27  	char buff[256];<br>
+72551f6cf13e2f arch/arm/plat-samsung/pm-debug.c Tomasz Figa 2014-03-18  28  <br>
+72551f6cf13e2f arch/arm/plat-samsung/pm-debug.c Tomasz Figa 2014-03-18  29  	va_start(va, fmt);<br>
+72551f6cf13e2f arch/arm/plat-samsung/pm-debug.c Tomasz Figa 2014-03-18 @30  	vsnprintf(buff, sizeof(buff), fmt, va);<br>
+72551f6cf13e2f arch/arm/plat-samsung/pm-debug.c Tomasz Figa 2014-03-18  31  	va_end(va);<br>
+72551f6cf13e2f arch/arm/plat-samsung/pm-debug.c Tomasz Figa 2014-03-18  32  <br>
+72551f6cf13e2f arch/arm/plat-samsung/pm-debug.c Tomasz Figa 2014-03-18  33  	printascii(buff);<br>
+72551f6cf13e2f arch/arm/plat-samsung/pm-debug.c Tomasz Figa 2014-03-18  34  }<br>
+72551f6cf13e2f arch/arm/plat-samsung/pm-debug.c Tomasz Figa 2014-03-18  35  <br>
+<br>
+:::::: The code at line 30 was first introduced by commit<br>
+:::::: 72551f6cf13e2f3a1d273b7007b5d7d7fd69c554 ARM: SAMSUNG: Move Samsung PM debug code into separate file<br>
+<br>
+:::::: TO: Tomasz Figa <t.figa@xxxxxxxxxxx><br>
+:::::: CC: Kukjin Kim <kgene.kim@xxxxxxxxxxx><br>
+<br>
+---<br>
+0-DAY CI Kernel Test Service, Intel Corporation<br>
+<a  rel="nofollow" href="https://lists.01.org/hyperkitty/list/kbuild-all@xxxxxxxxxxxx">https://lists.01.org/hyperkitty/list/kbuild-all@xxxxxxxxxxxx</a><br>
+<p><strong>Attachment:
+<a href="00283/.config.gz" ><tt>.config.gz</tt></a></strong><br>
+<em>Description:</em> application/gzip</p>
+

@@ -1,0 +1,28 @@
+Stephen Rothwell <sfr@xxxxxxxxxxxxxxxx> writes:<br>
+<br>
+><i> Hi all,</i><br>
+><i></i><br>
+><i> In commit</i><br>
+><i></i><br>
+><i>   fa26d0c778b4 ("ACPI: processor: Fix build when CONFIG_ACPI_PROCESSOR=m")</i><br>
+><i></i><br>
+><i> Fixes tag</i><br>
+><i></i><br>
+><i>   Fixes: 8cdddd182bd7 ("CPI: processor: Fix CPU0 wakeup in acpi_idle_play_dead()")</i><br>
+<br>
+"A" in "ACPI" seems to be missing<br>
+<br>
+><i></i><br>
+><i> has these problem(s):</i><br>
+><i></i><br>
+><i>   - Subject does not match target commit subject</i><br>
+><i>     Just use</i><br>
+><i> 	git log -1 --format='Fixes: %h ("%s")'</i><br>
+<br>
+This is an extremely unlucky fix :-( <br>
+<br>
+-- <br>
+Vitaly<br>
+<br>
+<br>
+

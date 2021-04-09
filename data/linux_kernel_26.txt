@@ -1,0 +1,1863 @@
+From: Min Li <min.li.xe@xxxxxxxxxxx><br>
+<br>
+Add support for ClockMatrix(TM) and 82P33xxx families of timing<br>
+and synchronization devices. The access interface can be either<br>
+SPI or I2C. Currently, it will create 2 types of MFD devices,<br>
+which are to be used by the corresponding rsmu character device<br>
+driver and the PTP hardware clock driver, respectively.<br>
+<br>
+Signed-off-by: Min Li <min.li.xe@xxxxxxxxxxx><br>
+---<br>
+-rebase change to linux-next tree<br>
+-add log to inform driver loading success<br>
+<br>
+ drivers/mfd/Kconfig              |  28 ++<br>
+ drivers/mfd/Makefile             |   3 +<br>
+ drivers/mfd/rsmu_i2c.c           | 349 +++++++++++++++++<br>
+ drivers/mfd/rsmu_private.h       |  32 ++<br>
+ drivers/mfd/rsmu_spi.c           | 376 ++++++++++++++++++<br>
+ include/linux/mfd/idt82p33_reg.h | 116 ++++++<br>
+ include/linux/mfd/idt8a340_reg.h | 817 +++++++++++++++++++++++++++++++++++++++<br>
+ include/linux/mfd/rsmu.h         |  54 +++<br>
+ 8 files changed, 1775 insertions(+)<br>
+ create mode 100644 drivers/mfd/rsmu_i2c.c<br>
+ create mode 100644 drivers/mfd/rsmu_private.h<br>
+ create mode 100644 drivers/mfd/rsmu_spi.c<br>
+ create mode 100644 include/linux/mfd/idt82p33_reg.h<br>
+ create mode 100644 include/linux/mfd/idt8a340_reg.h<br>
+ create mode 100644 include/linux/mfd/rsmu.h<br>
+<br>
+diff --git a/drivers/mfd/Kconfig b/drivers/mfd/Kconfig<br>
+index 21a131d..63b18b3 100644<br>
+--- a/drivers/mfd/Kconfig<br>
++++ b/drivers/mfd/Kconfig<br>
+@@ -2172,5 +2172,33 @@ config MFD_INTEL_M10_BMC<br>
+ 	  additional drivers must be enabled in order to use the functionality<br>
+ 	  of the device.<br>
+ <br>
++config MFD_RSMU_I2C<br>
++	tristate "Renesas Synchronization Management Unit with I2C"<br>
++	depends on I2C && OF<br>
++	depends on MFD_RSMU_SPI=n<br>
++	select MFD_CORE<br>
++	select REGMAP_I2C<br>
++	help<br>
++	  Support for the Renesas synchronization management unit, such as<br>
++	  Clockmatrix and 82P33XXX series. This option supports I2C as<br>
++	  the control interface.<br>
++<br>
++	  This driver provides common support for accessing the device,<br>
++	  additional drivers must be enabled in order to use the functionality<br>
++	  of the device.<br>
++<br>
++config MFD_RSMU_SPI<br>
++	tristate "Renesas Synchronization Management Unit with SPI"<br>
++	depends on SPI && OF<br>
++	select MFD_CORE<br>
++	help<br>
++	  Support for the Renesas synchronization management unit, such as<br>
++	  Clockmatrix and 82P33XXX series. This option supports SPI as<br>
++	  the control interface.<br>
++<br>
++	  This driver provides common support for accessing the device,<br>
++	  additional drivers must be enabled in order to use the functionality<br>
++	  of the device.<br>
++<br>
+ endmenu<br>
+ endif<br>
+diff --git a/drivers/mfd/Makefile b/drivers/mfd/Makefile<br>
+index 4f6d2b8..4ab32ef 100644<br>
+--- a/drivers/mfd/Makefile<br>
++++ b/drivers/mfd/Makefile<br>
+@@ -271,3 +271,6 @@ obj-$(CONFIG_MFD_INTEL_M10_BMC)   += intel-m10-bmc.o<br>
+ <br>
+ obj-$(CONFIG_MFD_ATC260X)	+= atc260x-core.o<br>
+ obj-$(CONFIG_MFD_ATC260X_I2C)	+= atc260x-i2c.o<br>
++<br>
++obj-$(CONFIG_MFD_RSMU_I2C)	+= rsmu_i2c.o<br>
++obj-$(CONFIG_MFD_RSMU_SPI)	+= rsmu_spi.o<br>
+diff --git a/drivers/mfd/rsmu_i2c.c b/drivers/mfd/rsmu_i2c.c<br>
+new file mode 100644<br>
+index 0000000..2349f6d<br>
+--- /dev/null<br>
++++ b/drivers/mfd/rsmu_i2c.c<br>
+@@ -0,0 +1,349 @@<br>
++// SPDX-License-Identifier: GPL-2.0+<br>
++/*<br>
++ * Multi-function driver for the IDT ClockMatrix(TM) and 82P33xxx families of<br>
++ * timing and synchronization devices.<br>
++ *<br>
++ * Copyright (C) 2019 Integrated Device Technology, Inc., a Renesas Company.<br>
++ */<br>
++<br>
++#include <linux/kernel.h><br>
++#include <linux/module.h><br>
++#include <linux/init.h><br>
++#include <linux/slab.h><br>
++#include <linux/i2c.h><br>
++#include <linux/regmap.h><br>
++#include <linux/of.h><br>
++#include <linux/mfd/core.h><br>
++#include <linux/mfd/rsmu.h><br>
++#include "rsmu_private.h"<br>
++<br>
++/*<br>
++ * 16-bit register address: the lower 8 bits of the register address come<br>
++ * from the offset addr byte and the upper 8 bits come from the page register.<br>
++ */<br>
++#define	RSMU_CM_PAGE_ADDR		0xFD<br>
++#define	RSMU_CM_PAGE_WINDOW		256<br>
++<br>
++/*<br>
++ * 15-bit register address: the lower 7 bits of the register address come<br>
++ * from the offset addr byte and the upper 8 bits come from the page register.<br>
++ */<br>
++#define	RSMU_SABRE_PAGE_ADDR		0x7F<br>
++#define	RSMU_SABRE_PAGE_WINDOW		128<br>
++<br>
++static bool rsmu_cm_volatile_reg(struct device *dev, unsigned int reg);<br>
++static bool rsmu_sabre_volatile_reg(struct device *dev, unsigned int reg);<br>
++<br>
++/* Current mfd device index */<br>
++static atomic_t rsmu_ndevs = ATOMIC_INIT(0);<br>
++<br>
++/* Platform data */<br>
++static struct rsmu_pdata rsmu_pdata[RSMU_MAX_MFD_DEV];<br>
++<br>
++/* clockmatrix phc devices */<br>
++static struct mfd_cell rsmu_cm_pdev[RSMU_MAX_MFD_DEV] = {<br>
++	[0] = {<br>
++		.name = "idtcm-ptp0",<br>
++		.of_compatible	= "renesas,idtcm-ptp0",<br>
++	},<br>
++	[1] = {<br>
++		.name = "idtcm-ptp1",<br>
++		.of_compatible	= "renesas,idtcm-ptp1",<br>
++	},<br>
++	[2] = {<br>
++		.name = "idtcm-ptp2",<br>
++		.of_compatible	= "renesas,idtcm-ptp2",<br>
++	},<br>
++	[3] = {<br>
++		.name = "idtcm-ptp3",<br>
++		.of_compatible	= "renesas,idtcm-ptp3",<br>
++	},<br>
++};<br>
++<br>
++/* sabre phc devices */<br>
++static struct mfd_cell rsmu_sabre_pdev[RSMU_MAX_MFD_DEV] = {<br>
++	[0] = {<br>
++		.name = "idt82p33-ptp0",<br>
++		.of_compatible	= "renesas,idt82p33-ptp0",<br>
++	},<br>
++	[1] = {<br>
++		.name = "idt82p33-ptp1",<br>
++		.of_compatible	= "renesas,idt82p33-ptp1",<br>
++	},<br>
++	[2] = {<br>
++		.name = "idt82p33-ptp2",<br>
++		.of_compatible	= "renesas,idt82p33-ptp2",<br>
++	},<br>
++	[3] = {<br>
++		.name = "idt82p33-ptp3",<br>
++		.of_compatible	= "renesas,idt82p33-ptp3",<br>
++	},<br>
++};<br>
++<br>
++/* rsmu character devices */<br>
++static struct mfd_cell rsmu_cdev[RSMU_MAX_MFD_DEV] = {<br>
++	[0] = {<br>
++		.name = "rsmu-cdev0",<br>
++		.of_compatible	= "renesas,rsmu-cdev0",<br>
++	},<br>
++	[1] = {<br>
++		.name = "rsmu-cdev1",<br>
++		.of_compatible	= "renesas,rsmu-cdev1",<br>
++	},<br>
++	[2] = {<br>
++		.name = "rsmu-cdev2",<br>
++		.of_compatible	= "renesas,rsmu-cdev2",<br>
++	},<br>
++	[3] = {<br>
++		.name = "rsmu-cdev3",<br>
++		.of_compatible	= "renesas,rsmu-cdev3",<br>
++	},<br>
++};<br>
++<br>
++static const struct regmap_range_cfg rsmu_cm_range_cfg[] = {<br>
++	{<br>
++		.range_min = 0,<br>
++		.range_max = 0xD000,<br>
++		.selector_reg = RSMU_CM_PAGE_ADDR,<br>
++		.selector_mask = 0xFF,<br>
++		.selector_shift = 0,<br>
++		.window_start = 0,<br>
++		.window_len = RSMU_CM_PAGE_WINDOW,<br>
++	}<br>
++};<br>
++<br>
++static const struct regmap_range_cfg rsmu_sabre_range_cfg[] = {<br>
++	{<br>
++		.range_min = 0,<br>
++		.range_max = 0x400,<br>
++		.selector_reg = RSMU_SABRE_PAGE_ADDR,<br>
++		.selector_mask = 0xFF,<br>
++		.selector_shift = 0,<br>
++		.window_start = 0,<br>
++		.window_len = RSMU_SABRE_PAGE_WINDOW,<br>
++	}<br>
++};<br>
++<br>
++static const struct regmap_config rsmu_regmap_configs[] = {<br>
++	[RSMU_CM] = {<br>
++		.reg_bits = 8,<br>
++		.val_bits = 8,<br>
++		.max_register = 0xD000,<br>
++		.ranges = rsmu_cm_range_cfg,<br>
++		.num_ranges = ARRAY_SIZE(rsmu_cm_range_cfg),<br>
++		.volatile_reg = rsmu_cm_volatile_reg,<br>
++		.cache_type = REGCACHE_RBTREE,<br>
++		.can_multi_write = true,<br>
++	},<br>
++	[RSMU_SABRE] = {<br>
++		.reg_bits = 8,<br>
++		.val_bits = 8,<br>
++		.max_register = 0x400,<br>
++		.ranges = rsmu_sabre_range_cfg,<br>
++		.num_ranges = ARRAY_SIZE(rsmu_sabre_range_cfg),<br>
++		.volatile_reg = rsmu_sabre_volatile_reg,<br>
++		.cache_type = REGCACHE_RBTREE,<br>
++		.can_multi_write = true,<br>
++	},<br>
++};<br>
++<br>
++static bool rsmu_cm_volatile_reg(struct device *dev, unsigned int reg)<br>
++{<br>
++	switch (reg) {<br>
++	case RSMU_CM_PAGE_ADDR:<br>
++		return false;<br>
++	default:<br>
++		return true;<br>
++	}<br>
++}<br>
++<br>
++static bool rsmu_sabre_volatile_reg(struct device *dev, unsigned int reg)<br>
++{<br>
++	switch (reg) {<br>
++	case RSMU_SABRE_PAGE_ADDR:<br>
++		return false;<br>
++	default:<br>
++		return true;<br>
++	}<br>
++}<br>
++<br>
++int rsmu_read(struct device *dev, u16 reg, u8 *buf, u16 size)<br>
++{<br>
++	struct rsmu_dev *rsmu = dev_get_drvdata(dev);<br>
++<br>
++	return regmap_bulk_read(rsmu->regmap, reg, buf, size);<br>
++}<br>
++EXPORT_SYMBOL_GPL(rsmu_read);<br>
++<br>
++int rsmu_write(struct device *dev, u16 reg, u8 *buf, u16 size)<br>
++{<br>
++	struct rsmu_dev *rsmu = dev_get_drvdata(dev);<br>
++<br>
++	return regmap_bulk_write(rsmu->regmap, reg, buf, size);<br>
++}<br>
++EXPORT_SYMBOL_GPL(rsmu_write);<br>
++<br>
++static int rsmu_mfd_init(struct rsmu_dev *rsmu, struct mfd_cell *mfd,<br>
++			 struct rsmu_pdata *pdata)<br>
++{<br>
++	int ret;<br>
++<br>
++	mfd->platform_data = pdata;<br>
++	mfd->pdata_size = sizeof(struct rsmu_pdata);<br>
++<br>
++	ret = mfd_add_devices(rsmu->dev, -1, mfd, 1, NULL, 0, NULL);<br>
++	if (ret < 0) {<br>
++		dev_err(rsmu->dev, "mfd_add_devices failed with %s\n",<br>
++			mfd->name);<br>
++		return ret;<br>
++	}<br>
++<br>
++	return ret;<br>
++}<br>
++<br>
++static int rsmu_dev_init(struct rsmu_dev *rsmu)<br>
++{<br>
++	struct rsmu_pdata *pdata;<br>
++	struct mfd_cell *pmfd;<br>
++	struct mfd_cell *cmfd;<br>
++	int ret;<br>
++<br>
++	/* Initialize regmap */<br>
++	rsmu->regmap = devm_regmap_init_i2c(rsmu->client,<br>
++					    &rsmu_regmap_configs[rsmu->type]);<br>
++	if (IS_ERR(rsmu->regmap)) {<br>
++		ret = PTR_ERR(rsmu->regmap);<br>
++		dev_err(rsmu->dev, "Failed to allocate register map: %d\n",<br>
++			ret);<br>
++		return ret;<br>
++	}<br>
++<br>
++	/* Initialize device index */<br>
++	rsmu->index = atomic_read(&rsmu_ndevs);<br>
++	if (rsmu->index >= RSMU_MAX_MFD_DEV)<br>
++		return -ENODEV;<br>
++<br>
++	/* Initialize platform data */<br>
++	pdata = &rsmu_pdata[rsmu->index];<br>
++	pdata->lock = &rsmu->lock;<br>
++	pdata->type = rsmu->type;<br>
++	pdata->index = rsmu->index;<br>
++<br>
++	/* Initialize MFD devices */<br>
++	cmfd = &rsmu_cdev[rsmu->index];<br>
++	if (rsmu->type == RSMU_CM)<br>
++		pmfd = &rsmu_cm_pdev[rsmu->index];<br>
++	else if (rsmu->type == RSMU_SABRE)<br>
++		pmfd = &rsmu_sabre_pdev[rsmu->index];<br>
++	else<br>
++		return -EINVAL;<br>
++<br>
++	ret = rsmu_mfd_init(rsmu, pmfd, pdata);<br>
++	if (ret)<br>
++		return ret;<br>
++<br>
++	ret = rsmu_mfd_init(rsmu, cmfd, pdata);<br>
++	if (ret)<br>
++		return ret;<br>
++<br>
++	atomic_inc(&rsmu_ndevs);<br>
++	return 0;<br>
++}<br>
++<br>
++static int rsmu_dt_init(struct rsmu_dev *rsmu)<br>
++{<br>
++	struct device_node *np = rsmu->dev->of_node;<br>
++<br>
++	rsmu->type = RSMU_NONE;<br>
++	if (of_device_is_compatible(np, "idt,8a34000")) {<br>
++		rsmu->type = RSMU_CM;<br>
++	} else if (of_device_is_compatible(np, "idt,82p33810")) {<br>
++		rsmu->type = RSMU_SABRE;<br>
++	} else {<br>
++		dev_err(rsmu->dev, "unknown RSMU device\n");<br>
++		return -EINVAL;<br>
++	}<br>
++<br>
++	return 0;<br>
++}<br>
++<br>
++static int rsmu_probe(struct i2c_client *client, const struct i2c_device_id *id)<br>
++{<br>
++	struct rsmu_dev *rsmu;<br>
++	int ret;<br>
++<br>
++	rsmu = devm_kzalloc(&client->dev, sizeof(struct rsmu_dev),<br>
++			       GFP_KERNEL);<br>
++	if (rsmu == NULL)<br>
++		return -ENOMEM;<br>
++<br>
++	i2c_set_clientdata(client, rsmu);<br>
++	mutex_init(&rsmu->lock);<br>
++	rsmu->dev = &client->dev;<br>
++	rsmu->client = client;<br>
++<br>
++	ret = rsmu_dt_init(rsmu);<br>
++	if (ret)<br>
++		return ret;<br>
++<br>
++	mutex_lock(&rsmu->lock);<br>
++	ret = rsmu_dev_init(rsmu);<br>
++	mutex_unlock(&rsmu->lock);<br>
++<br>
++	if (ret == 0)<br>
++		dev_info(rsmu->dev, "Probe %s successful\n",<br>
++			 rsmu_name(rsmu->type));<br>
++<br>
++	return ret;<br>
++}<br>
++<br>
++static int rsmu_remove(struct i2c_client *client)<br>
++{<br>
++	struct rsmu_dev *rsmu = i2c_get_clientdata(client);<br>
++<br>
++	mfd_remove_devices(&client->dev);<br>
++	mutex_destroy(&rsmu->lock);<br>
++	atomic_dec(&rsmu_ndevs);<br>
++<br>
++	return 0;<br>
++}<br>
++<br>
++static const struct i2c_device_id rsmu_id[] = {<br>
++	{ "8a34000", 0 },<br>
++	{ "82p33810", 0 },<br>
++	{ }<br>
++};<br>
++MODULE_DEVICE_TABLE(i2c, rsmu_id);<br>
++<br>
++static const struct of_device_id rsmu_of_match[] = {<br>
++	{.compatible = "idt,8a34000", },<br>
++	{.compatible = "idt,82p33810", },<br>
++	{},<br>
++};<br>
++MODULE_DEVICE_TABLE(of, rsmu_of_match);<br>
++<br>
++static struct i2c_driver rsmu_driver = {<br>
++	.driver = {<br>
++		   .name = "rsmu-i2c",<br>
++		   .of_match_table = of_match_ptr(rsmu_of_match),<br>
++	},<br>
++	.probe = rsmu_probe,<br>
++	.remove	= rsmu_remove,<br>
++	.id_table = rsmu_id,<br>
++};<br>
++<br>
++static int __init rsmu_init(void)<br>
++{<br>
++	return i2c_add_driver(&rsmu_driver);<br>
++}<br>
++/* init early so consumer devices can complete system boot */<br>
++subsys_initcall(rsmu_init);<br>
++<br>
++static void __exit rsmu_exit(void)<br>
++{<br>
++	i2c_del_driver(&rsmu_driver);<br>
++}<br>
++module_exit(rsmu_exit);<br>
++<br>
++MODULE_DESCRIPTION("Renesas SMU I2C multi-function driver");<br>
++MODULE_LICENSE("GPL");<br>
+diff --git a/drivers/mfd/rsmu_private.h b/drivers/mfd/rsmu_private.h<br>
+new file mode 100644<br>
+index 0000000..8841a24<br>
+--- /dev/null<br>
++++ b/drivers/mfd/rsmu_private.h<br>
+@@ -0,0 +1,32 @@<br>
++/* SPDX-License-Identifier: GPL-2.0+ */<br>
++/*<br>
++ * Multi-function driver for the IDT ClockMatrix(TM) and 82p33xxx families of<br>
++ * timing and synchronization devices.<br>
++ *<br>
++ * Copyright (C) 2019 Integrated Device Technology, Inc., a Renesas Company.<br>
++ */<br>
++<br>
++#ifndef __RSMU_MFD_PRIVATE_H<br>
++#define __RSMU_MFD_PRIVATE_H<br>
++<br>
++#include <linux/mfd/rsmu.h><br>
++<br>
++/* Maximum number of mfd devices */<br>
++#define RSMU_MAX_MFD_DEV		4<br>
++<br>
++struct rsmu_dev {<br>
++	struct device *dev;<br>
++	void *client;<br>
++	struct regmap *regmap;<br>
++	struct mutex lock;<br>
++	enum rsmu_type type;<br>
++	u8 index;<br>
++	u16 page;<br>
++};<br>
++<br>
++enum rsmu_mfd_type {<br>
++	RSMU_MFD_PTP		= 0,<br>
++	RSMU_MFD_CDEV		= 1,<br>
++	RSMU_MFD_NUM		= 2,<br>
++};<br>
++#endif /*  __LINUX_MFD_RSMU_H */<br>
+diff --git a/drivers/mfd/rsmu_spi.c b/drivers/mfd/rsmu_spi.c<br>
+new file mode 100644<br>
+index 0000000..a9fbe04<br>
+--- /dev/null<br>
++++ b/drivers/mfd/rsmu_spi.c<br>
+@@ -0,0 +1,376 @@<br>
++// SPDX-License-Identifier: GPL-2.0+<br>
++/*<br>
++ * Multi-function driver for the IDT ClockMatrix(TM) and 82P33xxx families of<br>
++ * timing and synchronization devices.<br>
++ *<br>
++ * Copyright (C) 2019 Integrated Device Technology, Inc., a Renesas Company.<br>
++ */<br>
++<br>
++#include <linux/kernel.h><br>
++#include <linux/module.h><br>
++#include <linux/init.h><br>
++#include <linux/slab.h><br>
++#include <linux/spi/spi.h><br>
++#include <linux/regmap.h><br>
++#include <linux/of.h><br>
++#include <linux/mfd/core.h><br>
++#include <linux/mfd/rsmu.h><br>
++#include "rsmu_private.h"<br>
++<br>
++/*<br>
++ * 16-bit register address: the lower 7 bits of the register address come<br>
++ * from the offset addr byte and the upper 9 bits come from the page register.<br>
++ */<br>
++#define	RSMU_CM_PAGE_ADDR		0x7C<br>
++#define	RSMU_SABRE_PAGE_ADDR		0x7F<br>
++#define	RSMU_HIGHER_ADDR_MASK		0xFF80<br>
++#define	RSMU_HIGHER_ADDR_SHIFT		7<br>
++#define	RSMU_LOWER_ADDR_MASK		0x7F<br>
++<br>
++/* Current mfd device index */<br>
++static atomic_t rsmu_ndevs = ATOMIC_INIT(0);<br>
++<br>
++/* Platform data */<br>
++static struct rsmu_pdata rsmu_pdata[RSMU_MAX_MFD_DEV];<br>
++<br>
++/* clockmatrix phc devices */<br>
++static struct mfd_cell rsmu_cm_pdev[RSMU_MAX_MFD_DEV] = {<br>
++	[0] = {<br>
++		.name = "idtcm-ptp0",<br>
++		.of_compatible	= "renesas,idtcm-ptp0",<br>
++	},<br>
++	[1] = {<br>
++		.name = "idtcm-ptp1",<br>
++		.of_compatible	= "renesas,idtcm-ptp1",<br>
++	},<br>
++	[2] = {<br>
++		.name = "idtcm-ptp2",<br>
++		.of_compatible	= "renesas,idtcm-ptp2",<br>
++	},<br>
++	[3] = {<br>
++		.name = "idtcm-ptp3",<br>
++		.of_compatible	= "renesas,idtcm-ptp3",<br>
++	},<br>
++};<br>
++<br>
++/* sabre phc devices */<br>
++static struct mfd_cell rsmu_sabre_pdev[RSMU_MAX_MFD_DEV] = {<br>
++	[0] = {<br>
++		.name = "idt82p33-ptp0",<br>
++		.of_compatible	= "renesas,idt82p33-ptp0",<br>
++	},<br>
++	[1] = {<br>
++		.name = "idt82p33-ptp1",<br>
++		.of_compatible	= "renesas,idt82p33-ptp1",<br>
++	},<br>
++	[2] = {<br>
++		.name = "idt82p33-ptp2",<br>
++		.of_compatible	= "renesas,idt82p33-ptp2",<br>
++	},<br>
++	[3] = {<br>
++		.name = "idt82p33-ptp3",<br>
++		.of_compatible	= "renesas,idt82p33-ptp3",<br>
++	},<br>
++};<br>
++<br>
++/* rsmu character devices */<br>
++static struct mfd_cell rsmu_cdev[RSMU_MAX_MFD_DEV] = {<br>
++	[0] = {<br>
++		.name = "rsmu-cdev0",<br>
++		.of_compatible	= "renesas,rsmu-cdev0",<br>
++	},<br>
++	[1] = {<br>
++		.name = "rsmu-cdev1",<br>
++		.of_compatible	= "renesas,rsmu-cdev1",<br>
++	},<br>
++	[2] = {<br>
++		.name = "rsmu-cdev2",<br>
++		.of_compatible	= "renesas,rsmu-cdev2",<br>
++	},<br>
++	[3] = {<br>
++		.name = "rsmu-cdev3",<br>
++		.of_compatible	= "renesas,rsmu-cdev3",<br>
++	},<br>
++};<br>
++<br>
++static int rsmu_read_device(struct rsmu_dev *rsmu, u8 reg, u8 *buf, u16 bytes)<br>
++{<br>
++	struct spi_device *client = rsmu->client;<br>
++	struct spi_transfer xfer = {0};<br>
++	struct spi_message msg;<br>
++	u8 cmd[256] = {0};<br>
++	u8 rsp[256] = {0};<br>
++	int ret;<br>
++<br>
++	cmd[0] = reg | 0x80;<br>
++	xfer.rx_buf = rsp;<br>
++	xfer.len = bytes + 1;<br>
++	xfer.tx_buf = cmd;<br>
++	xfer.bits_per_word = client->bits_per_word;<br>
++	xfer.speed_hz = client->max_speed_hz;<br>
++<br>
++	spi_message_init(&msg);<br>
++	spi_message_add_tail(&xfer, &msg);<br>
++<br>
++	ret = spi_sync(client, &msg);<br>
++	if (ret >= 0)<br>
++		memcpy(buf, &rsp[1], xfer.len-1);<br>
++<br>
++	return ret;<br>
++}<br>
++<br>
++static int rsmu_write_device(struct rsmu_dev *rsmu, u8 reg, u8 *buf, u16 bytes)<br>
++{<br>
++	struct spi_device *client = rsmu->client;<br>
++	struct spi_transfer xfer = {0};<br>
++	struct spi_message msg;<br>
++	u8 cmd[256] = {0};<br>
++	int ret = -1;<br>
++<br>
++	cmd[0] = reg;<br>
++	memcpy(&cmd[1], buf, bytes);<br>
++<br>
++	xfer.len = bytes + 1;<br>
++	xfer.tx_buf = cmd;<br>
++	xfer.bits_per_word = client->bits_per_word;<br>
++	xfer.speed_hz = client->max_speed_hz;<br>
++	spi_message_init(&msg);<br>
++	spi_message_add_tail(&xfer, &msg);<br>
++<br>
++	ret = spi_sync(client, &msg);<br>
++	return ret;<br>
++}<br>
++<br>
++static int rsmu_write_page_register(struct rsmu_dev *rsmu, u16 reg)<br>
++{<br>
++	u8 buf[2];<br>
++	u16 bytes;<br>
++	u16 page;<br>
++	u8 preg;<br>
++	int err;<br>
++<br>
++	switch (rsmu->type) {<br>
++	case RSMU_CM:<br>
++		preg = RSMU_CM_PAGE_ADDR;<br>
++		page = reg & RSMU_HIGHER_ADDR_MASK;<br>
++		buf[0] = (u8)(page & 0xff);<br>
++		buf[1] = (u8)((page >> 8) & 0xff);<br>
++		bytes = 2;<br>
++		break;<br>
++	case RSMU_SABRE:<br>
++		preg = RSMU_SABRE_PAGE_ADDR;<br>
++		page = reg >> RSMU_HIGHER_ADDR_SHIFT;<br>
++		buf[0] = (u8)(page & 0xff);<br>
++		bytes = 1;<br>
++		break;<br>
++	default:<br>
++		return -EINVAL;<br>
++	}<br>
++<br>
++	if (rsmu->page == page)<br>
++		return 0;<br>
++<br>
++	err = rsmu_write_device(rsmu, preg, buf, bytes);<br>
++<br>
++	if (err) {<br>
++		rsmu->page = 0xffff;<br>
++		dev_err(rsmu->dev,<br>
++			"failed to set page offset 0x%x\n", page);<br>
++	} else {<br>
++		rsmu->page = page;<br>
++	}<br>
++<br>
++	return err;<br>
++}<br>
++<br>
++int rsmu_read(struct device *dev, u16 reg, u8 *buf, u16 size)<br>
++{<br>
++	struct rsmu_dev *rsmu = dev_get_drvdata(dev);<br>
++	u8 addr = (u8)(reg & RSMU_LOWER_ADDR_MASK);<br>
++	int err;<br>
++<br>
++	err = rsmu_write_page_register(rsmu, reg);<br>
++	if (err)<br>
++		return err;<br>
++<br>
++	err = rsmu_read_device(rsmu, addr, buf, size);<br>
++	if (err)<br>
++		dev_err(rsmu->dev,<br>
++			"failed to read offset address 0x%x\n", addr);<br>
++<br>
++	return err;<br>
++}<br>
++EXPORT_SYMBOL_GPL(rsmu_read);<br>
++<br>
++int rsmu_write(struct device *dev, u16 reg, u8 *buf, u16 size)<br>
++{<br>
++	struct rsmu_dev *rsmu = dev_get_drvdata(dev);<br>
++	u8 addr = (u8)(reg & RSMU_LOWER_ADDR_MASK);<br>
++	int err;<br>
++<br>
++	err = rsmu_write_page_register(rsmu, reg);<br>
++	if (err)<br>
++		return err;<br>
++<br>
++	err = rsmu_write_device(rsmu, addr, buf, size);<br>
++	if (err)<br>
++		dev_err(rsmu->dev,<br>
++			"failed to write offset address 0x%x\n", addr);<br>
++<br>
++	return err;<br>
++}<br>
++EXPORT_SYMBOL_GPL(rsmu_write);<br>
++<br>
++static int rsmu_mfd_init(struct rsmu_dev *rsmu, struct mfd_cell *mfd,<br>
++			 struct rsmu_pdata *pdata)<br>
++{<br>
++	int ret;<br>
++<br>
++	mfd->platform_data = pdata;<br>
++	mfd->pdata_size = sizeof(struct rsmu_pdata);<br>
++<br>
++	ret = mfd_add_devices(rsmu->dev, -1, mfd, 1, NULL, 0, NULL);<br>
++	if (ret < 0) {<br>
++		dev_err(rsmu->dev, "mfd_add_devices failed with %s\n",<br>
++			mfd->name);<br>
++		return ret;<br>
++	}<br>
++<br>
++	return ret;<br>
++}<br>
++<br>
++static int rsmu_dev_init(struct rsmu_dev *rsmu)<br>
++{<br>
++	struct rsmu_pdata *pdata;<br>
++	struct mfd_cell *pmfd;<br>
++	struct mfd_cell *cmfd;<br>
++	int ret;<br>
++<br>
++	/* Initialize device index */<br>
++	rsmu->index = atomic_read(&rsmu_ndevs);<br>
++	if (rsmu->index >= RSMU_MAX_MFD_DEV)<br>
++		return -ENODEV;<br>
++<br>
++	/* Initialize platform data */<br>
++	pdata = &rsmu_pdata[rsmu->index];<br>
++	pdata->lock = &rsmu->lock;<br>
++	pdata->type = rsmu->type;<br>
++	pdata->index = rsmu->index;<br>
++<br>
++	/* Initialize MFD devices */<br>
++	cmfd = &rsmu_cdev[rsmu->index];<br>
++	if (rsmu->type == RSMU_CM)<br>
++		pmfd = &rsmu_cm_pdev[rsmu->index];<br>
++	else if (rsmu->type == RSMU_SABRE)<br>
++		pmfd = &rsmu_sabre_pdev[rsmu->index];<br>
++	else<br>
++		return -EINVAL;<br>
++<br>
++	ret = rsmu_mfd_init(rsmu, pmfd, pdata);<br>
++	if (ret)<br>
++		return ret;<br>
++<br>
++	ret = rsmu_mfd_init(rsmu, cmfd, pdata);<br>
++	if (ret)<br>
++		return ret;<br>
++<br>
++	atomic_inc(&rsmu_ndevs);<br>
++	return 0;<br>
++}<br>
++<br>
++static int rsmu_dt_init(struct rsmu_dev *rsmu)<br>
++{<br>
++	struct device_node *np = rsmu->dev->of_node;<br>
++<br>
++	rsmu->type = RSMU_NONE;<br>
++	if (of_device_is_compatible(np, "idt,8a34000")) {<br>
++		rsmu->type = RSMU_CM;<br>
++	} else if (of_device_is_compatible(np, "idt,82p33810")) {<br>
++		rsmu->type = RSMU_SABRE;<br>
++	} else {<br>
++		dev_err(rsmu->dev, "unknown RSMU device\n");<br>
++		return -EINVAL;<br>
++	}<br>
++<br>
++	return 0;<br>
++}<br>
++<br>
++static int rsmu_probe(struct spi_device *client)<br>
++{<br>
++	struct rsmu_dev *rsmu;<br>
++	int ret;<br>
++<br>
++	rsmu = devm_kzalloc(&client->dev, sizeof(struct rsmu_dev), GFP_KERNEL);<br>
++	if (rsmu == NULL)<br>
++		return -ENOMEM;<br>
++<br>
++	spi_set_drvdata(client, rsmu);<br>
++	mutex_init(&rsmu->lock);<br>
++	rsmu->dev = &client->dev;<br>
++	rsmu->client = client;<br>
++<br>
++	ret = rsmu_dt_init(rsmu);<br>
++	if (ret)<br>
++		return ret;<br>
++<br>
++	mutex_lock(&rsmu->lock);<br>
++	ret = rsmu_dev_init(rsmu);<br>
++	mutex_unlock(&rsmu->lock);<br>
++<br>
++	if (ret == 0)<br>
++		dev_info(rsmu->dev, "Probe %s successful\n",<br>
++			 rsmu_name(rsmu->type));<br>
++<br>
++	return ret;<br>
++}<br>
++<br>
++static int rsmu_remove(struct spi_device *client)<br>
++{<br>
++	struct rsmu_dev *rsmu = spi_get_drvdata(client);<br>
++<br>
++	mfd_remove_devices(&client->dev);<br>
++	mutex_destroy(&rsmu->lock);<br>
++	atomic_dec(&rsmu_ndevs);<br>
++<br>
++	return 0;<br>
++}<br>
++<br>
++static const struct spi_device_id rsmu_id[] = {<br>
++	{ "8a34000", 0 },<br>
++	{ "82p33810", 0 },<br>
++	{ }<br>
++};<br>
++MODULE_DEVICE_TABLE(spi, rsmu_id);<br>
++<br>
++static const struct of_device_id rsmu_of_match[] = {<br>
++	{.compatible = "idt,8a34000", },<br>
++	{.compatible = "idt,82p33810", },<br>
++	{},<br>
++};<br>
++MODULE_DEVICE_TABLE(of, rsmu_of_match);<br>
++<br>
++static struct spi_driver rsmu_driver = {<br>
++	.driver = {<br>
++		   .name = "rsmu-spi",<br>
++		   .of_match_table = of_match_ptr(rsmu_of_match),<br>
++	},<br>
++	.probe = rsmu_probe,<br>
++	.remove	= rsmu_remove,<br>
++	.id_table = rsmu_id,<br>
++};<br>
++<br>
++static int __init rsmu_init(void)<br>
++{<br>
++	return spi_register_driver(&rsmu_driver);<br>
++}<br>
++/* init early so consumer devices can complete system boot */<br>
++subsys_initcall(rsmu_init);<br>
++<br>
++static void __exit rsmu_exit(void)<br>
++{<br>
++	spi_unregister_driver(&rsmu_driver);<br>
++}<br>
++module_exit(rsmu_exit);<br>
++<br>
++MODULE_DESCRIPTION("Renesas SMU SPI multi-function driver");<br>
++MODULE_LICENSE("GPL");<br>
+diff --git a/include/linux/mfd/idt82p33_reg.h b/include/linux/mfd/idt82p33_reg.h<br>
+new file mode 100644<br>
+index 0000000..50872b0<br>
+--- /dev/null<br>
++++ b/include/linux/mfd/idt82p33_reg.h<br>
+@@ -0,0 +1,116 @@<br>
++/* SPDX-License-Identifier: GPL-2.0+ */<br>
++/* idt82p33_reg.h<br>
++ *<br>
++ * Register Map - AN888_SMUforIEEE_SynchEther_82P33xxx_RevH.pdf<br>
++ *<br>
++ */<br>
++#ifndef HAVE_IDT82P33_REG<br>
++#define HAVE_IDT82P33_REG<br>
++<br>
++/* Register address */<br>
++#define REG_ADDR(page, offset) (((page) << 0x7) | ((offset) & 0x7f))<br>
++<br>
++#define PAGE_ADDR 0x7F<br>
++<br>
++#define DPLL1_TOD_CNFG 0x134<br>
++#define DPLL2_TOD_CNFG 0x1B4<br>
++<br>
++#define DPLL1_TOD_STS 0x10B<br>
++#define DPLL2_TOD_STS 0x18B<br>
++<br>
++#define DPLL1_TOD_TRIGGER 0x115<br>
++#define DPLL2_TOD_TRIGGER 0x195<br>
++<br>
++#define DPLL1_OPERATING_MODE_CNFG 0x120<br>
++#define DPLL2_OPERATING_MODE_CNFG 0x1A0<br>
++<br>
++#define DPLL1_HOLDOVER_FREQ_CNFG 0x12C<br>
++#define DPLL2_HOLDOVER_FREQ_CNFG 0x1AC<br>
++<br>
++#define DPLL1_PHASE_OFFSET_CNFG 0x143<br>
++#define DPLL2_PHASE_OFFSET_CNFG 0x1C3<br>
++<br>
++#define DPLL1_SYNC_EDGE_CNFG 0x140<br>
++#define DPLL2_SYNC_EDGE_CNFG 0x1C0<br>
++<br>
++#define DPLL1_INPUT_MODE_CNFG 0x116<br>
++#define DPLL2_INPUT_MODE_CNFG 0x196<br>
++<br>
++#define DPLL1_OPERATING_STS 0x102<br>
++#define DPLL2_OPERATING_STS 0x182<br>
++<br>
++#define DPLL1_CURRENT_FREQ_STS 0x103<br>
++#define DPLL2_CURRENT_FREQ_STS 0x183<br>
++<br>
++#define REG_SOFT_RESET 0X381<br>
++<br>
++#define OUT_MUX_CNFG(outn) REG_ADDR(0x6, (0xC * (outn)))<br>
++<br>
++/* Register bit definitions */<br>
++#define SYNC_TOD BIT(1)<br>
++#define PH_OFFSET_EN BIT(7)<br>
++#define SQUELCH_ENABLE BIT(5)<br>
++<br>
++/* Bit definitions for the DPLL_MODE register */<br>
++#define PLL_MODE_SHIFT		(0)<br>
++#define PLL_MODE_MASK		(0x1F)<br>
++#define COMBO_MODE_EN		BIT(5)<br>
++#define COMBO_MODE_SHIFT	(6)<br>
++#define COMBO_MODE_MASK		(0x3)<br>
++<br>
++/* Bit definitions for DPLL_OPERATING_STS register */<br>
++#define OPERATING_STS_MASK	(0x7)<br>
++#define OPERATING_STS_SHIFT	(0x0)<br>
++<br>
++/* Bit definitions for DPLL_TOD_TRIGGER register */<br>
++#define READ_TRIGGER_MASK	(0xF)<br>
++#define READ_TRIGGER_SHIFT	(0x0)<br>
++#define WRITE_TRIGGER_MASK	(0xF0)<br>
++#define WRITE_TRIGGER_SHIFT	(0x4)<br>
++<br>
++/* Bit definitions for REG_SOFT_RESET register */<br>
++#define SOFT_RESET_EN		BIT(7)<br>
++<br>
++enum pll_mode {<br>
++	PLL_MODE_MIN = 0,<br>
++	PLL_MODE_AUTOMATIC = PLL_MODE_MIN,<br>
++	PLL_MODE_FORCE_FREERUN = 1,<br>
++	PLL_MODE_FORCE_HOLDOVER = 2,<br>
++	PLL_MODE_FORCE_LOCKED = 4,<br>
++	PLL_MODE_FORCE_PRE_LOCKED2 = 5,<br>
++	PLL_MODE_FORCE_PRE_LOCKED = 6,<br>
++	PLL_MODE_FORCE_LOST_PHASE = 7,<br>
++	PLL_MODE_DCO = 10,<br>
++	PLL_MODE_WPH = 18,<br>
++	PLL_MODE_MAX = PLL_MODE_WPH,<br>
++};<br>
++<br>
++enum hw_tod_trig_sel {<br>
++	HW_TOD_TRIG_SEL_MIN = 0,<br>
++	HW_TOD_TRIG_SEL_NO_WRITE = HW_TOD_TRIG_SEL_MIN,<br>
++	HW_TOD_TRIG_SEL_NO_READ = HW_TOD_TRIG_SEL_MIN,<br>
++	HW_TOD_TRIG_SEL_SYNC_SEL = 1,<br>
++	HW_TOD_TRIG_SEL_IN12 = 2,<br>
++	HW_TOD_TRIG_SEL_IN13 = 3,<br>
++	HW_TOD_TRIG_SEL_IN14 = 4,<br>
++	HW_TOD_TRIG_SEL_TOD_PPS = 5,<br>
++	HW_TOD_TRIG_SEL_TIMER_INTERVAL = 6,<br>
++	HW_TOD_TRIG_SEL_MSB_PHASE_OFFSET_CNFG = 7,<br>
++	HW_TOD_TRIG_SEL_MSB_HOLDOVER_FREQ_CNFG = 8,<br>
++	HW_TOD_WR_TRIG_SEL_MSB_TOD_CNFG = 9,<br>
++	HW_TOD_RD_TRIG_SEL_LSB_TOD_STS = HW_TOD_WR_TRIG_SEL_MSB_TOD_CNFG,<br>
++	WR_TRIG_SEL_MAX = HW_TOD_WR_TRIG_SEL_MSB_TOD_CNFG,<br>
++};<br>
++<br>
++/** @brief Enumerated type listing DPLL operational modes */<br>
++enum dpll_state {<br>
++	DPLL_STATE_FREERUN = 1,<br>
++	DPLL_STATE_HOLDOVER = 2,<br>
++	DPLL_STATE_LOCKED = 4,<br>
++	DPLL_STATE_PRELOCKED2 = 5,<br>
++	DPLL_STATE_PRELOCKED = 6,<br>
++	DPLL_STATE_LOSTPHASE = 7,<br>
++	DPLL_STATE_MAX<br>
++};<br>
++<br>
++#endif<br>
+diff --git a/include/linux/mfd/idt8a340_reg.h b/include/linux/mfd/idt8a340_reg.h<br>
+new file mode 100644<br>
+index 0000000..e8868cd<br>
+--- /dev/null<br>
++++ b/include/linux/mfd/idt8a340_reg.h<br>
+@@ -0,0 +1,817 @@<br>
++/* SPDX-License-Identifier: GPL-2.0+ */<br>
++/* idt8a340_reg.h<br>
++ *<br>
++ * Originally generated by regen.tcl on Thu Feb 14 19:23:44 PST 2019<br>
++ * <a  rel="nofollow" href="https://github.com/richardcochran/regen">https://github.com/richardcochran/regen</a><br>
++ *<br>
++ * Hand modified to include some HW registers.<br>
++ * Based on 4.8.0, SCSR rev C commit a03c7ae5<br>
++ */<br>
++#ifndef HAVE_IDT8A340_REG<br>
++#define HAVE_IDT8A340_REG<br>
++<br>
++#define PAGE_ADDR_BASE                    0x0000<br>
++#define PAGE_ADDR                         0x00fc<br>
++<br>
++#define HW_REVISION                       0x8180<br>
++#define REV_ID                            0x007a<br>
++<br>
++#define HW_DPLL_0                         (0x8a00)<br>
++#define HW_DPLL_1                         (0x8b00)<br>
++#define HW_DPLL_2                         (0x8c00)<br>
++#define HW_DPLL_3                         (0x8d00)<br>
++#define HW_DPLL_4                         (0x8e00)<br>
++#define HW_DPLL_5                         (0x8f00)<br>
++#define HW_DPLL_6                         (0x9000)<br>
++#define HW_DPLL_7                         (0x9100)<br>
++<br>
++#define HW_DPLL_TOD_SW_TRIG_ADDR__0       (0x080)<br>
++#define HW_DPLL_TOD_CTRL_1                (0x089)<br>
++#define HW_DPLL_TOD_CTRL_2                (0x08A)<br>
++#define HW_DPLL_TOD_OVR__0                (0x098)<br>
++#define HW_DPLL_TOD_OUT_0__0              (0x0B0)<br>
++<br>
++#define HW_Q0_Q1_CH_SYNC_CTRL_0           (0xa740)<br>
++#define HW_Q0_Q1_CH_SYNC_CTRL_1           (0xa741)<br>
++#define HW_Q2_Q3_CH_SYNC_CTRL_0           (0xa742)<br>
++#define HW_Q2_Q3_CH_SYNC_CTRL_1           (0xa743)<br>
++#define HW_Q4_Q5_CH_SYNC_CTRL_0           (0xa744)<br>
++#define HW_Q4_Q5_CH_SYNC_CTRL_1           (0xa745)<br>
++#define HW_Q6_Q7_CH_SYNC_CTRL_0           (0xa746)<br>
++#define HW_Q6_Q7_CH_SYNC_CTRL_1           (0xa747)<br>
++#define HW_Q8_CH_SYNC_CTRL_0              (0xa748)<br>
++#define HW_Q8_CH_SYNC_CTRL_1              (0xa749)<br>
++#define HW_Q9_CH_SYNC_CTRL_0              (0xa74a)<br>
++#define HW_Q9_CH_SYNC_CTRL_1              (0xa74b)<br>
++#define HW_Q10_CH_SYNC_CTRL_0             (0xa74c)<br>
++#define HW_Q10_CH_SYNC_CTRL_1             (0xa74d)<br>
++#define HW_Q11_CH_SYNC_CTRL_0             (0xa74e)<br>
++#define HW_Q11_CH_SYNC_CTRL_1             (0xa74f)<br>
++<br>
++#define SYNC_SOURCE_DPLL0_TOD_PPS	0x14<br>
++#define SYNC_SOURCE_DPLL1_TOD_PPS	0x15<br>
++#define SYNC_SOURCE_DPLL2_TOD_PPS	0x16<br>
++#define SYNC_SOURCE_DPLL3_TOD_PPS	0x17<br>
++<br>
++#define SYNCTRL1_MASTER_SYNC_RST	BIT(7)<br>
++#define SYNCTRL1_MASTER_SYNC_TRIG	BIT(5)<br>
++#define SYNCTRL1_TOD_SYNC_TRIG		BIT(4)<br>
++#define SYNCTRL1_FBDIV_FRAME_SYNC_TRIG	BIT(3)<br>
++#define SYNCTRL1_FBDIV_SYNC_TRIG	BIT(2)<br>
++#define SYNCTRL1_Q1_DIV_SYNC_TRIG	BIT(1)<br>
++#define SYNCTRL1_Q0_DIV_SYNC_TRIG	BIT(0)<br>
++<br>
++#define HW_Q8_CTRL_SPARE  (0xa7d4)<br>
++#define HW_Q11_CTRL_SPARE (0xa7ec)<br>
++<br>
++/**<br>
++ * Select FOD5 as sync_trigger for Q8 divider.<br>
++ * Transition from logic zero to one<br>
++ * sets trigger to sync Q8 divider.<br>
++ *<br>
++ * Unused when FOD4 is driving Q8 divider (normal operation).<br>
++ */<br>
++#define Q9_TO_Q8_SYNC_TRIG  BIT(1)<br>
++<br>
++/**<br>
++ * Enable FOD5 as driver for clock and sync for Q8 divider.<br>
++ * Enable fanout buffer for FOD5.<br>
++ *<br>
++ * Unused when FOD4 is driving Q8 divider (normal operation).<br>
++ */<br>
++#define Q9_TO_Q8_FANOUT_AND_CLOCK_SYNC_ENABLE_MASK  (BIT(0) | BIT(2))<br>
++<br>
++/**<br>
++ * Select FOD6 as sync_trigger for Q11 divider.<br>
++ * Transition from logic zero to one<br>
++ * sets trigger to sync Q11 divider.<br>
++ *<br>
++ * Unused when FOD7 is driving Q11 divider (normal operation).<br>
++ */<br>
++#define Q10_TO_Q11_SYNC_TRIG  BIT(1)<br>
++<br>
++/**<br>
++ * Enable FOD6 as driver for clock and sync for Q11 divider.<br>
++ * Enable fanout buffer for FOD6.<br>
++ *<br>
++ * Unused when FOD7 is driving Q11 divider (normal operation).<br>
++ */<br>
++#define Q10_TO_Q11_FANOUT_AND_CLOCK_SYNC_ENABLE_MASK  (BIT(0) | BIT(2))<br>
++<br>
++#define RESET_CTRL                        0xc000<br>
++#define SM_RESET                          0x0012<br>
++#define SM_RESET_CMD                      0x5A<br>
++<br>
++#define GENERAL_STATUS                    0xc014<br>
++#define BOOT_STATUS                       0x0000<br>
++#define HW_REV_ID                         0x000A<br>
++#define BOND_ID                           0x000B<br>
++#define HW_CSR_ID                         0x000C<br>
++#define HW_IRQ_ID                         0x000E<br>
++<br>
++#define MAJ_REL                           0x0010<br>
++#define MIN_REL                           0x0011<br>
++#define HOTFIX_REL                        0x0012<br>
++<br>
++#define PIPELINE_ID                       0x0014<br>
++#define BUILD_ID                          0x0018<br>
++<br>
++#define JTAG_DEVICE_ID                    0x001c<br>
++#define PRODUCT_ID                        0x001e<br>
++<br>
++#define OTP_SCSR_CONFIG_SELECT            0x0022<br>
++<br>
++#define STATUS                            0xc03c<br>
++#define DPLL0_STATUS			  0x0018<br>
++#define DPLL1_STATUS			  0x0019<br>
++#define DPLL2_STATUS			  0x001a<br>
++#define DPLL3_STATUS			  0x001b<br>
++#define DPLL4_STATUS			  0x001c<br>
++#define DPLL5_STATUS			  0x001d<br>
++#define DPLL6_STATUS			  0x001e<br>
++#define DPLL7_STATUS			  0x001f<br>
++#define DPLL_SYS_STATUS                   0x0020<br>
++#define DPLL_SYS_APLL_STATUS              0x0021<br>
++#define DPLL0_FILTER_STATUS               0x0044<br>
++#define DPLL1_FILTER_STATUS               0x004c<br>
++#define DPLL2_FILTER_STATUS               0x0054<br>
++#define DPLL3_FILTER_STATUS               0x005c<br>
++#define DPLL4_FILTER_STATUS               0x0064<br>
++#define DPLL5_FILTER_STATUS               0x006c<br>
++#define DPLL6_FILTER_STATUS               0x0074<br>
++#define DPLL7_FILTER_STATUS               0x007c<br>
++#define DPLLSYS_FILTER_STATUS             0x0084<br>
++#define USER_GPIO0_TO_7_STATUS            0x008a<br>
++#define USER_GPIO8_TO_15_STATUS           0x008b<br>
++<br>
++#define GPIO_USER_CONTROL                 0xc160<br>
++#define GPIO0_TO_7_OUT                    0x0000<br>
++#define GPIO8_TO_15_OUT                   0x0001<br>
++<br>
++#define STICKY_STATUS_CLEAR               0xc164<br>
++<br>
++#define GPIO_TOD_NOTIFICATION_CLEAR       0xc16c<br>
++<br>
++#define ALERT_CFG                         0xc188<br>
++<br>
++#define SYS_DPLL_XO                       0xc194<br>
++<br>
++#define SYS_APLL                          0xc19c<br>
++<br>
++#define INPUT_0                           0xc1b0<br>
++<br>
++#define INPUT_1                           0xc1c0<br>
++<br>
++#define INPUT_2                           0xc1d0<br>
++<br>
++#define INPUT_3                           0xc200<br>
++<br>
++#define INPUT_4                           0xc210<br>
++<br>
++#define INPUT_5                           0xc220<br>
++<br>
++#define INPUT_6                           0xc230<br>
++<br>
++#define INPUT_7                           0xc240<br>
++<br>
++#define INPUT_8                           0xc250<br>
++<br>
++#define INPUT_9                           0xc260<br>
++<br>
++#define INPUT_10                          0xc280<br>
++<br>
++#define INPUT_11                          0xc290<br>
++<br>
++#define INPUT_12                          0xc2a0<br>
++<br>
++#define INPUT_13                          0xc2b0<br>
++<br>
++#define INPUT_14                          0xc2c0<br>
++<br>
++#define INPUT_15                          0xc2d0<br>
++<br>
++#define REF_MON_0                         0xc2e0<br>
++<br>
++#define REF_MON_1                         0xc2ec<br>
++<br>
++#define REF_MON_2                         0xc300<br>
++<br>
++#define REF_MON_3                         0xc30c<br>
++<br>
++#define REF_MON_4                         0xc318<br>
++<br>
++#define REF_MON_5                         0xc324<br>
++<br>
++#define REF_MON_6                         0xc330<br>
++<br>
++#define REF_MON_7                         0xc33c<br>
++<br>
++#define REF_MON_8                         0xc348<br>
++<br>
++#define REF_MON_9                         0xc354<br>
++<br>
++#define REF_MON_10                        0xc360<br>
++<br>
++#define REF_MON_11                        0xc36c<br>
++<br>
++#define REF_MON_12                        0xc380<br>
++<br>
++#define REF_MON_13                        0xc38c<br>
++<br>
++#define REF_MON_14                        0xc398<br>
++<br>
++#define REF_MON_15                        0xc3a4<br>
++<br>
++#define DPLL_0                            0xc3b0<br>
++#define DPLL_CTRL_REG_0                   0x0002<br>
++#define DPLL_CTRL_REG_1                   0x0003<br>
++#define DPLL_CTRL_REG_2                   0x0004<br>
++#define DPLL_TOD_SYNC_CFG                 0x0031<br>
++#define DPLL_COMBO_SLAVE_CFG_0            0x0032<br>
++#define DPLL_COMBO_SLAVE_CFG_1            0x0033<br>
++#define DPLL_SLAVE_REF_CFG                0x0034<br>
++#define DPLL_REF_MODE                     0x0035<br>
++#define DPLL_PHASE_MEASUREMENT_CFG        0x0036<br>
++#define DPLL_MODE                         0x0037<br>
++<br>
++#define DPLL_1                            0xc400<br>
++<br>
++#define DPLL_2                            0xc438<br>
++<br>
++#define DPLL_3                            0xc480<br>
++<br>
++#define DPLL_4                            0xc4b8<br>
++<br>
++#define DPLL_5                            0xc500<br>
++<br>
++#define DPLL_6                            0xc538<br>
++<br>
++#define DPLL_7                            0xc580<br>
++<br>
++#define SYS_DPLL                          0xc5b8<br>
++<br>
++#define DPLL_CTRL_0                       0xc600<br>
++#define DPLL_CTRL_DPLL_MANU_REF_CFG       0x0001<br>
++#define DPLL_CTRL_DPLL_FOD_FREQ           0x001c<br>
++#define DPLL_CTRL_COMBO_MASTER_CFG        0x003a<br>
++<br>
++#define DPLL_CTRL_1                       0xc63c<br>
++<br>
++#define DPLL_CTRL_2                       0xc680<br>
++<br>
++#define DPLL_CTRL_3                       0xc6bc<br>
++<br>
++#define DPLL_CTRL_4                       0xc700<br>
++<br>
++#define DPLL_CTRL_5                       0xc73c<br>
++<br>
++#define DPLL_CTRL_6                       0xc780<br>
++<br>
++#define DPLL_CTRL_7                       0xc7bc<br>
++<br>
++#define SYS_DPLL_CTRL                     0xc800<br>
++<br>
++#define DPLL_PHASE_0                      0xc818<br>
++<br>
++/* Signed 42-bit FFO in units of 2^(-53) */<br>
++#define DPLL_WR_PHASE                     0x0000<br>
++<br>
++#define DPLL_PHASE_1                      0xc81c<br>
++<br>
++#define DPLL_PHASE_2                      0xc820<br>
++<br>
++#define DPLL_PHASE_3                      0xc824<br>
++<br>
++#define DPLL_PHASE_4                      0xc828<br>
++<br>
++#define DPLL_PHASE_5                      0xc82c<br>
++<br>
++#define DPLL_PHASE_6                      0xc830<br>
++<br>
++#define DPLL_PHASE_7                      0xc834<br>
++<br>
++#define DPLL_FREQ_0                       0xc838<br>
++<br>
++/* Signed 42-bit FFO in units of 2^(-53) */<br>
++#define DPLL_WR_FREQ                      0x0000<br>
++<br>
++#define DPLL_FREQ_1                       0xc840<br>
++<br>
++#define DPLL_FREQ_2                       0xc848<br>
++<br>
++#define DPLL_FREQ_3                       0xc850<br>
++<br>
++#define DPLL_FREQ_4                       0xc858<br>
++<br>
++#define DPLL_FREQ_5                       0xc860<br>
++<br>
++#define DPLL_FREQ_6                       0xc868<br>
++<br>
++#define DPLL_FREQ_7                       0xc870<br>
++<br>
++#define DPLL_PHASE_PULL_IN_0              0xc880<br>
++#define PULL_IN_OFFSET                    0x0000 /* Signed 32 bit */<br>
++#define PULL_IN_SLOPE_LIMIT               0x0004 /* Unsigned 24 bit */<br>
++#define PULL_IN_CTRL                      0x0007<br>
++<br>
++#define DPLL_PHASE_PULL_IN_1              0xc888<br>
++<br>
++#define DPLL_PHASE_PULL_IN_2              0xc890<br>
++<br>
++#define DPLL_PHASE_PULL_IN_3              0xc898<br>
++<br>
++#define DPLL_PHASE_PULL_IN_4              0xc8a0<br>
++<br>
++#define DPLL_PHASE_PULL_IN_5              0xc8a8<br>
++<br>
++#define DPLL_PHASE_PULL_IN_6              0xc8b0<br>
++<br>
++#define DPLL_PHASE_PULL_IN_7              0xc8b8<br>
++<br>
++#define GPIO_CFG                          0xc8c0<br>
++#define GPIO_CFG_GBL                      0x0000<br>
++<br>
++#define GPIO_0                            0xc8c2<br>
++#define GPIO_DCO_INC_DEC                  0x0000<br>
++#define GPIO_OUT_CTRL_0                   0x0001<br>
++#define GPIO_OUT_CTRL_1                   0x0002<br>
++#define GPIO_TOD_TRIG                     0x0003<br>
++#define GPIO_DPLL_INDICATOR               0x0004<br>
++#define GPIO_LOS_INDICATOR                0x0005<br>
++#define GPIO_REF_INPUT_DSQ_0              0x0006<br>
++#define GPIO_REF_INPUT_DSQ_1              0x0007<br>
++#define GPIO_REF_INPUT_DSQ_2              0x0008<br>
++#define GPIO_REF_INPUT_DSQ_3              0x0009<br>
++#define GPIO_MAN_CLK_SEL_0                0x000a<br>
++#define GPIO_MAN_CLK_SEL_1                0x000b<br>
++#define GPIO_MAN_CLK_SEL_2                0x000c<br>
++#define GPIO_SLAVE                        0x000d<br>
++#define GPIO_ALERT_OUT_CFG                0x000e<br>
++#define GPIO_TOD_NOTIFICATION_CFG         0x000f<br>
++#define GPIO_CTRL                         0x0010<br>
++<br>
++#define GPIO_1                            0xc8d4<br>
++<br>
++#define GPIO_2                            0xc8e6<br>
++<br>
++#define GPIO_3                            0xc900<br>
++<br>
++#define GPIO_4                            0xc912<br>
++<br>
++#define GPIO_5                            0xc924<br>
++<br>
++#define GPIO_6                            0xc936<br>
++<br>
++#define GPIO_7                            0xc948<br>
++<br>
++#define GPIO_8                            0xc95a<br>
++<br>
++#define GPIO_9                            0xc980<br>
++<br>
++#define GPIO_10                           0xc992<br>
++<br>
++#define GPIO_11                           0xc9a4<br>
++<br>
++#define GPIO_12                           0xc9b6<br>
++<br>
++#define GPIO_13                           0xc9c8<br>
++<br>
++#define GPIO_14                           0xc9da<br>
++<br>
++#define GPIO_15                           0xca00<br>
++<br>
++#define OUT_DIV_MUX                       0xca12<br>
++<br>
++#define OUTPUT_0                          0xca14<br>
++/* FOD frequency output divider value */<br>
++#define OUT_DIV                           0x0000<br>
++#define OUT_DUTY_CYCLE_HIGH               0x0004<br>
++#define OUT_CTRL_0                        0x0008<br>
++#define OUT_CTRL_1                        0x0009<br>
++/* Phase adjustment in FOD cycles */<br>
++#define OUT_PHASE_ADJ                     0x000c<br>
++<br>
++#define OUTPUT_1                          0xca24<br>
++<br>
++#define OUTPUT_2                          0xca34<br>
++<br>
++#define OUTPUT_3                          0xca44<br>
++<br>
++#define OUTPUT_4                          0xca54<br>
++<br>
++#define OUTPUT_5                          0xca64<br>
++<br>
++#define OUTPUT_6                          0xca80<br>
++<br>
++#define OUTPUT_7                          0xca90<br>
++<br>
++#define OUTPUT_8                          0xcaa0<br>
++<br>
++#define OUTPUT_9                          0xcab0<br>
++<br>
++#define OUTPUT_10                         0xcac0<br>
++<br>
++#define OUTPUT_11                         0xcad0<br>
++<br>
++#define SERIAL                            0xcae0<br>
++<br>
++#define PWM_ENCODER_0                     0xcb00<br>
++<br>
++#define PWM_ENCODER_1                     0xcb08<br>
++<br>
++#define PWM_ENCODER_2                     0xcb10<br>
++<br>
++#define PWM_ENCODER_3                     0xcb18<br>
++<br>
++#define PWM_ENCODER_4                     0xcb20<br>
++<br>
++#define PWM_ENCODER_5                     0xcb28<br>
++<br>
++#define PWM_ENCODER_6                     0xcb30<br>
++<br>
++#define PWM_ENCODER_7                     0xcb38<br>
++<br>
++#define PWM_DECODER_0                     0xcb40<br>
++<br>
++#define PWM_DECODER_1                     0xcb48<br>
++<br>
++#define PWM_DECODER_2                     0xcb50<br>
++<br>
++#define PWM_DECODER_3                     0xcb58<br>
++<br>
++#define PWM_DECODER_4                     0xcb60<br>
++<br>
++#define PWM_DECODER_5                     0xcb68<br>
++<br>
++#define PWM_DECODER_6                     0xcb70<br>
++<br>
++#define PWM_DECODER_7                     0xcb80<br>
++<br>
++#define PWM_DECODER_8                     0xcb88<br>
++<br>
++#define PWM_DECODER_9                     0xcb90<br>
++<br>
++#define PWM_DECODER_10                    0xcb98<br>
++<br>
++#define PWM_DECODER_11                    0xcba0<br>
++<br>
++#define PWM_DECODER_12                    0xcba8<br>
++<br>
++#define PWM_DECODER_13                    0xcbb0<br>
++<br>
++#define PWM_DECODER_14                    0xcbb8<br>
++<br>
++#define PWM_DECODER_15                    0xcbc0<br>
++<br>
++#define PWM_USER_DATA                     0xcbc8<br>
++<br>
++#define TOD_0                             0xcbcc<br>
++<br>
++/* Enable TOD counter, output channel sync and even-PPS mode */<br>
++#define TOD_CFG                           0x0000<br>
++<br>
++#define TOD_1                             0xcbce<br>
++<br>
++#define TOD_2                             0xcbd0<br>
++<br>
++#define TOD_3                             0xcbd2<br>
++<br>
++<br>
++#define TOD_WRITE_0                       0xcc00<br>
++/* 8-bit subns, 32-bit ns, 48-bit seconds */<br>
++#define TOD_WRITE                         0x0000<br>
++/* Counter increments after TOD write is completed */<br>
++#define TOD_WRITE_COUNTER                 0x000c<br>
++/* TOD write trigger configuration */<br>
++#define TOD_WRITE_SELECT_CFG_0            0x000d<br>
++/* TOD write trigger selection */<br>
++#define TOD_WRITE_CMD                     0x000f<br>
++<br>
++#define TOD_WRITE_1                       0xcc10<br>
++<br>
++#define TOD_WRITE_2                       0xcc20<br>
++<br>
++#define TOD_WRITE_3                       0xcc30<br>
++<br>
++#define TOD_READ_PRIMARY_0                0xcc40<br>
++/* 8-bit subns, 32-bit ns, 48-bit seconds */<br>
++#define TOD_READ_PRIMARY                  0x0000<br>
++/* Counter increments after TOD write is completed */<br>
++#define TOD_READ_PRIMARY_COUNTER          0x000b<br>
++/* Read trigger configuration */<br>
++#define TOD_READ_PRIMARY_SEL_CFG_0        0x000c<br>
++/* Read trigger selection */<br>
++#define TOD_READ_PRIMARY_CMD              0x000e<br>
++<br>
++#define TOD_READ_PRIMARY_1                0xcc50<br>
++<br>
++#define TOD_READ_PRIMARY_2                0xcc60<br>
++<br>
++#define TOD_READ_PRIMARY_3                0xcc80<br>
++<br>
++#define TOD_READ_SECONDARY_0              0xcc90<br>
++<br>
++#define TOD_READ_SECONDARY_1              0xcca0<br>
++<br>
++#define TOD_READ_SECONDARY_2              0xccb0<br>
++<br>
++#define TOD_READ_SECONDARY_3              0xccc0<br>
++<br>
++#define OUTPUT_TDC_CFG                    0xccd0<br>
++<br>
++#define OUTPUT_TDC_0                      0xcd00<br>
++<br>
++#define OUTPUT_TDC_1                      0xcd08<br>
++<br>
++#define OUTPUT_TDC_2                      0xcd10<br>
++<br>
++#define OUTPUT_TDC_3                      0xcd18<br>
++<br>
++#define INPUT_TDC                         0xcd20<br>
++<br>
++#define SCRATCH                           0xcf50<br>
++<br>
++#define EEPROM                            0xcf68<br>
++<br>
++#define OTP                               0xcf70<br>
++<br>
++#define BYTE                              0xcf80<br>
++<br>
++/* Bit definitions for the MAJ_REL register */<br>
++#define MAJOR_SHIFT                       (1)<br>
++#define MAJOR_MASK                        (0x7f)<br>
++#define PR_BUILD                          BIT(0)<br>
++<br>
++/* Bit definitions for the USER_GPIO0_TO_7_STATUS register */<br>
++#define GPIO0_LEVEL                       BIT(0)<br>
++#define GPIO1_LEVEL                       BIT(1)<br>
++#define GPIO2_LEVEL                       BIT(2)<br>
++#define GPIO3_LEVEL                       BIT(3)<br>
++#define GPIO4_LEVEL                       BIT(4)<br>
++#define GPIO5_LEVEL                       BIT(5)<br>
++#define GPIO6_LEVEL                       BIT(6)<br>
++#define GPIO7_LEVEL                       BIT(7)<br>
++<br>
++/* Bit definitions for the USER_GPIO8_TO_15_STATUS register */<br>
++#define GPIO8_LEVEL                       BIT(0)<br>
++#define GPIO9_LEVEL                       BIT(1)<br>
++#define GPIO10_LEVEL                      BIT(2)<br>
++#define GPIO11_LEVEL                      BIT(3)<br>
++#define GPIO12_LEVEL                      BIT(4)<br>
++#define GPIO13_LEVEL                      BIT(5)<br>
++#define GPIO14_LEVEL                      BIT(6)<br>
++#define GPIO15_LEVEL                      BIT(7)<br>
++<br>
++/* Bit definitions for the GPIO0_TO_7_OUT register */<br>
++#define GPIO0_DRIVE_LEVEL                 BIT(0)<br>
++#define GPIO1_DRIVE_LEVEL                 BIT(1)<br>
++#define GPIO2_DRIVE_LEVEL                 BIT(2)<br>
++#define GPIO3_DRIVE_LEVEL                 BIT(3)<br>
++#define GPIO4_DRIVE_LEVEL                 BIT(4)<br>
++#define GPIO5_DRIVE_LEVEL                 BIT(5)<br>
++#define GPIO6_DRIVE_LEVEL                 BIT(6)<br>
++#define GPIO7_DRIVE_LEVEL                 BIT(7)<br>
++<br>
++/* Bit definitions for the GPIO8_TO_15_OUT register */<br>
++#define GPIO8_DRIVE_LEVEL                 BIT(0)<br>
++#define GPIO9_DRIVE_LEVEL                 BIT(1)<br>
++#define GPIO10_DRIVE_LEVEL                BIT(2)<br>
++#define GPIO11_DRIVE_LEVEL                BIT(3)<br>
++#define GPIO12_DRIVE_LEVEL                BIT(4)<br>
++#define GPIO13_DRIVE_LEVEL                BIT(5)<br>
++#define GPIO14_DRIVE_LEVEL                BIT(6)<br>
++#define GPIO15_DRIVE_LEVEL                BIT(7)<br>
++<br>
++/* Bit definitions for the DPLL_TOD_SYNC_CFG register */<br>
++#define TOD_SYNC_SOURCE_SHIFT             (1)<br>
++#define TOD_SYNC_SOURCE_MASK              (0x3)<br>
++#define TOD_SYNC_EN                       BIT(0)<br>
++<br>
++/* Bit definitions for the DPLL_MODE register */<br>
++#define WRITE_TIMER_MODE                  BIT(6)<br>
++#define PLL_MODE_SHIFT                    (3)<br>
++#define PLL_MODE_MASK                     (0x7)<br>
++#define STATE_MODE_SHIFT                  (0)<br>
++#define STATE_MODE_MASK                   (0x7)<br>
++<br>
++/* Bit definitions for the GPIO_CFG_GBL register */<br>
++#define SUPPLY_MODE_SHIFT                 (0)<br>
++#define SUPPLY_MODE_MASK                  (0x3)<br>
++<br>
++/* Bit definitions for the GPIO_DCO_INC_DEC register */<br>
++#define INCDEC_DPLL_INDEX_SHIFT           (0)<br>
++#define INCDEC_DPLL_INDEX_MASK            (0x7)<br>
++<br>
++/* Bit definitions for the GPIO_OUT_CTRL_0 register */<br>
++#define CTRL_OUT_0                        BIT(0)<br>
++#define CTRL_OUT_1                        BIT(1)<br>
++#define CTRL_OUT_2                        BIT(2)<br>
++#define CTRL_OUT_3                        BIT(3)<br>
++#define CTRL_OUT_4                        BIT(4)<br>
++#define CTRL_OUT_5                        BIT(5)<br>
++#define CTRL_OUT_6                        BIT(6)<br>
++#define CTRL_OUT_7                        BIT(7)<br>
++<br>
++/* Bit definitions for the GPIO_OUT_CTRL_1 register */<br>
++#define CTRL_OUT_8                        BIT(0)<br>
++#define CTRL_OUT_9                        BIT(1)<br>
++#define CTRL_OUT_10                       BIT(2)<br>
++#define CTRL_OUT_11                       BIT(3)<br>
++#define CTRL_OUT_12                       BIT(4)<br>
++#define CTRL_OUT_13                       BIT(5)<br>
++#define CTRL_OUT_14                       BIT(6)<br>
++#define CTRL_OUT_15                       BIT(7)<br>
++<br>
++/* Bit definitions for the GPIO_TOD_TRIG register */<br>
++#define TOD_TRIG_0                        BIT(0)<br>
++#define TOD_TRIG_1                        BIT(1)<br>
++#define TOD_TRIG_2                        BIT(2)<br>
++#define TOD_TRIG_3                        BIT(3)<br>
++<br>
++/* Bit definitions for the GPIO_DPLL_INDICATOR register */<br>
++#define IND_DPLL_INDEX_SHIFT              (0)<br>
++#define IND_DPLL_INDEX_MASK               (0x7)<br>
++<br>
++/* Bit definitions for the GPIO_LOS_INDICATOR register */<br>
++#define REFMON_INDEX_SHIFT                (0)<br>
++#define REFMON_INDEX_MASK                 (0xf)<br>
++/* Active level of LOS indicator, 0=low 1=high */<br>
++#define ACTIVE_LEVEL                      BIT(4)<br>
++<br>
++/* Bit definitions for the GPIO_REF_INPUT_DSQ_0 register */<br>
++#define DSQ_INP_0                         BIT(0)<br>
++#define DSQ_INP_1                         BIT(1)<br>
++#define DSQ_INP_2                         BIT(2)<br>
++#define DSQ_INP_3                         BIT(3)<br>
++#define DSQ_INP_4                         BIT(4)<br>
++#define DSQ_INP_5                         BIT(5)<br>
++#define DSQ_INP_6                         BIT(6)<br>
++#define DSQ_INP_7                         BIT(7)<br>
++<br>
++/* Bit definitions for the GPIO_REF_INPUT_DSQ_1 register */<br>
++#define DSQ_INP_8                         BIT(0)<br>
++#define DSQ_INP_9                         BIT(1)<br>
++#define DSQ_INP_10                        BIT(2)<br>
++#define DSQ_INP_11                        BIT(3)<br>
++#define DSQ_INP_12                        BIT(4)<br>
++#define DSQ_INP_13                        BIT(5)<br>
++#define DSQ_INP_14                        BIT(6)<br>
++#define DSQ_INP_15                        BIT(7)<br>
++<br>
++/* Bit definitions for the GPIO_REF_INPUT_DSQ_2 register */<br>
++#define DSQ_DPLL_0                        BIT(0)<br>
++#define DSQ_DPLL_1                        BIT(1)<br>
++#define DSQ_DPLL_2                        BIT(2)<br>
++#define DSQ_DPLL_3                        BIT(3)<br>
++#define DSQ_DPLL_4                        BIT(4)<br>
++#define DSQ_DPLL_5                        BIT(5)<br>
++#define DSQ_DPLL_6                        BIT(6)<br>
++#define DSQ_DPLL_7                        BIT(7)<br>
++<br>
++/* Bit definitions for the GPIO_REF_INPUT_DSQ_3 register */<br>
++#define DSQ_DPLL_SYS                      BIT(0)<br>
++#define GPIO_DSQ_LEVEL                    BIT(1)<br>
++<br>
++/* Bit definitions for the GPIO_TOD_NOTIFICATION_CFG register */<br>
++#define DPLL_TOD_SHIFT                    (0)<br>
++#define DPLL_TOD_MASK                     (0x3)<br>
++#define TOD_READ_SECONDARY                BIT(2)<br>
++#define GPIO_ASSERT_LEVEL                 BIT(3)<br>
++<br>
++/* Bit definitions for the GPIO_CTRL register */<br>
++#define GPIO_FUNCTION_EN                  BIT(0)<br>
++#define GPIO_CMOS_OD_MODE                 BIT(1)<br>
++#define GPIO_CONTROL_DIR                  BIT(2)<br>
++#define GPIO_PU_PD_MODE                   BIT(3)<br>
++#define GPIO_FUNCTION_SHIFT               (4)<br>
++#define GPIO_FUNCTION_MASK                (0xf)<br>
++<br>
++/* Bit definitions for the OUT_CTRL_1 register */<br>
++#define OUT_SYNC_DISABLE                  BIT(7)<br>
++#define SQUELCH_VALUE                     BIT(6)<br>
++#define SQUELCH_DISABLE                   BIT(5)<br>
++#define PAD_VDDO_SHIFT                    (2)<br>
++#define PAD_VDDO_MASK                     (0x7)<br>
++#define PAD_CMOSDRV_SHIFT                 (0)<br>
++#define PAD_CMOSDRV_MASK                  (0x3)<br>
++<br>
++/* Bit definitions for the TOD_CFG register */<br>
++#define TOD_EVEN_PPS_MODE                 BIT(2)<br>
++#define TOD_OUT_SYNC_ENABLE               BIT(1)<br>
++#define TOD_ENABLE                        BIT(0)<br>
++<br>
++/* Bit definitions for the TOD_WRITE_SELECT_CFG_0 register */<br>
++#define WR_PWM_DECODER_INDEX_SHIFT        (4)<br>
++#define WR_PWM_DECODER_INDEX_MASK         (0xf)<br>
++#define WR_REF_INDEX_SHIFT                (0)<br>
++#define WR_REF_INDEX_MASK                 (0xf)<br>
++<br>
++/* Bit definitions for the TOD_WRITE_CMD register */<br>
++#define TOD_WRITE_SELECTION_SHIFT         (0)<br>
++#define TOD_WRITE_SELECTION_MASK          (0xf)<br>
++/* 4.8.7 */<br>
++#define TOD_WRITE_TYPE_SHIFT              (4)<br>
++#define TOD_WRITE_TYPE_MASK               (0x3)<br>
++<br>
++/* Bit definitions for the TOD_READ_PRIMARY_SEL_CFG_0 register */<br>
++#define RD_PWM_DECODER_INDEX_SHIFT        (4)<br>
++#define RD_PWM_DECODER_INDEX_MASK         (0xf)<br>
++#define RD_REF_INDEX_SHIFT                (0)<br>
++#define RD_REF_INDEX_MASK                 (0xf)<br>
++<br>
++/* Bit definitions for the TOD_READ_PRIMARY_CMD register */<br>
++#define TOD_READ_TRIGGER_MODE             BIT(4)<br>
++#define TOD_READ_TRIGGER_SHIFT            (0)<br>
++#define TOD_READ_TRIGGER_MASK             (0xf)<br>
++<br>
++/* Bit definitions for the DPLL_CTRL_COMBO_MASTER_CFG register */<br>
++#define COMBO_MASTER_HOLD                 BIT(0)<br>
++<br>
++/* Bit definitions for DPLL_SYS_STATUS register */<br>
++#define DPLL_SYS_STATE_MASK               (0xf)<br>
++<br>
++/* Bit definitions for SYS_APLL_STATUS register */<br>
++#define SYS_APLL_LOSS_LOCK_LIVE_MASK       BIT(0)<br>
++#define SYS_APLL_LOSS_LOCK_LIVE_LOCKED     0<br>
++#define SYS_APLL_LOSS_LOCK_LIVE_UNLOCKED   1<br>
++<br>
++/* Bit definitions for the DPLL0_STATUS register */<br>
++#define DPLL_STATE_MASK                   (0xf)<br>
++#define DPLL_STATE_SHIFT                  (0x0)<br>
++<br>
++/* Values of DPLL_N.DPLL_MODE.PLL_MODE */<br>
++enum pll_mode {<br>
++	PLL_MODE_MIN = 0,<br>
++	PLL_MODE_NORMAL = PLL_MODE_MIN,<br>
++	PLL_MODE_WRITE_PHASE = 1,<br>
++	PLL_MODE_WRITE_FREQUENCY = 2,<br>
++	PLL_MODE_GPIO_INC_DEC = 3,<br>
++	PLL_MODE_SYNTHESIS = 4,<br>
++	PLL_MODE_PHASE_MEASUREMENT = 5,<br>
++	PLL_MODE_DISABLED = 6,<br>
++	PLL_MODE_MAX = PLL_MODE_DISABLED,<br>
++};<br>
++<br>
++enum hw_tod_write_trig_sel {<br>
++	HW_TOD_WR_TRIG_SEL_MIN = 0,<br>
++	HW_TOD_WR_TRIG_SEL_MSB = HW_TOD_WR_TRIG_SEL_MIN,<br>
++	HW_TOD_WR_TRIG_SEL_RESERVED = 1,<br>
++	HW_TOD_WR_TRIG_SEL_TOD_PPS = 2,<br>
++	HW_TOD_WR_TRIG_SEL_IRIGB_PPS = 3,<br>
++	HW_TOD_WR_TRIG_SEL_PWM_PPS = 4,<br>
++	HW_TOD_WR_TRIG_SEL_GPIO = 5,<br>
++	HW_TOD_WR_TRIG_SEL_FOD_SYNC = 6,<br>
++	WR_TRIG_SEL_MAX = HW_TOD_WR_TRIG_SEL_FOD_SYNC,<br>
++};<br>
++<br>
++enum scsr_read_trig_sel {<br>
++	/* CANCEL CURRENT TOD READ; MODULE BECOMES IDLE - NO TRIGGER OCCURS */<br>
++	SCSR_TOD_READ_TRIG_SEL_DISABLE = 0,<br>
++	/* TRIGGER IMMEDIATELY */<br>
++	SCSR_TOD_READ_TRIG_SEL_IMMEDIATE = 1,<br>
++	/* TRIGGER ON RISING EDGE OF INTERNAL TOD PPS SIGNAL */<br>
++	SCSR_TOD_READ_TRIG_SEL_TODPPS = 2,<br>
++	/* TRGGER ON RISING EDGE OF SELECTED REFERENCE INPUT */<br>
++	SCSR_TOD_READ_TRIG_SEL_REFCLK = 3,<br>
++	/* TRIGGER ON RISING EDGE OF SELECTED PWM DECODER 1PPS OUTPUT */<br>
++	SCSR_TOD_READ_TRIG_SEL_PWMPPS = 4,<br>
++	SCSR_TOD_READ_TRIG_SEL_RESERVED = 5,<br>
++	/* TRIGGER WHEN WRITE FREQUENCY EVENT OCCURS  */<br>
++	SCSR_TOD_READ_TRIG_SEL_WRITEFREQUENCYEVENT = 6,<br>
++	/* TRIGGER ON SELECTED GPIO */<br>
++	SCSR_TOD_READ_TRIG_SEL_GPIO = 7,<br>
++	SCSR_TOD_READ_TRIG_SEL_MAX = SCSR_TOD_READ_TRIG_SEL_GPIO,<br>
++};<br>
++<br>
++/* Values STATUS.DPLL_SYS_STATUS.DPLL_SYS_STATE */<br>
++enum dpll_state {<br>
++	DPLL_STATE_MIN = 0,<br>
++	DPLL_STATE_FREERUN = DPLL_STATE_MIN,<br>
++	DPLL_STATE_LOCKACQ = 1,<br>
++	DPLL_STATE_LOCKREC = 2,<br>
++	DPLL_STATE_LOCKED = 3,<br>
++	DPLL_STATE_HOLDOVER = 4,<br>
++	DPLL_STATE_OPEN_LOOP = 5,<br>
++	DPLL_STATE_MAX = DPLL_STATE_OPEN_LOOP,<br>
++};<br>
++<br>
++/* 4.8.7 only */<br>
++enum scsr_tod_write_trig_sel {<br>
++	SCSR_TOD_WR_TRIG_SEL_DISABLE = 0,<br>
++	SCSR_TOD_WR_TRIG_SEL_IMMEDIATE = 1,<br>
++	SCSR_TOD_WR_TRIG_SEL_REFCLK = 2,<br>
++	SCSR_TOD_WR_TRIG_SEL_PWMPPS = 3,<br>
++	SCSR_TOD_WR_TRIG_SEL_TODPPS = 4,<br>
++	SCSR_TOD_WR_TRIG_SEL_SYNCFOD = 5,<br>
++	SCSR_TOD_WR_TRIG_SEL_GPIO = 6,<br>
++	SCSR_TOD_WR_TRIG_SEL_MAX = SCSR_TOD_WR_TRIG_SEL_GPIO,<br>
++};<br>
++<br>
++/* 4.8.7 only */<br>
++enum scsr_tod_write_type_sel {<br>
++	SCSR_TOD_WR_TYPE_SEL_ABSOLUTE = 0,<br>
++	SCSR_TOD_WR_TYPE_SEL_DELTA_PLUS = 1,<br>
++	SCSR_TOD_WR_TYPE_SEL_DELTA_MINUS = 2,<br>
++	SCSR_TOD_WR_TYPE_SEL_MAX = SCSR_TOD_WR_TYPE_SEL_DELTA_MINUS,<br>
++};<br>
++#endif<br>
+diff --git a/include/linux/mfd/rsmu.h b/include/linux/mfd/rsmu.h<br>
+new file mode 100644<br>
+index 0000000..843dd6c<br>
+--- /dev/null<br>
++++ b/include/linux/mfd/rsmu.h<br>
+@@ -0,0 +1,54 @@<br>
++/* SPDX-License-Identifier: GPL-2.0+ */<br>
++/*<br>
++ * Multi-function driver for the IDT ClockMatrix(TM) and 82p33xxx families of<br>
++ * timing and synchronization devices.<br>
++ *<br>
++ * Copyright (C) 2019 Integrated Device Technology, Inc., a Renesas Company.<br>
++ */<br>
++<br>
++#ifndef __LINUX_MFD_RSMU_H<br>
++#define __LINUX_MFD_RSMU_H<br>
++<br>
++/* We only support Clockmatrix and Sabre now */<br>
++enum rsmu_type {<br>
++	RSMU_CM		= 0,<br>
++	RSMU_SABRE	= 1,<br>
++	RSMU_NONE	= 2,<br>
++};<br>
++<br>
++/**<br>
++ *<br>
++ * struct rsmu_pdata - platform data structure for MFD cell devices.<br>
++ *<br>
++ * @lock: Mutex used by cell devices to make sure a series of requests<br>
++ * are not interrupted.<br>
++ *<br>
++ * @type: RSMU device type.<br>
++ *<br>
++ * @index: Device index.<br>
++ */<br>
++struct rsmu_pdata {<br>
++	enum rsmu_type type;<br>
++	struct mutex *lock;<br>
++	u8 index;<br>
++};<br>
++<br>
++static inline char *rsmu_name(enum rsmu_type type)<br>
++{<br>
++	switch (type) {<br>
++	case RSMU_CM:<br>
++		return "ClockMatrix";<br>
++	case RSMU_SABRE:<br>
++		return "Sabre";<br>
++	default:<br>
++		return "Unknown SMU";<br>
++	}<br>
++}<br>
++<br>
++/**<br>
++ * NOTE: the functions below are not intended for use outside<br>
++ * of the IDT synchronization management unit drivers<br>
++ */<br>
++extern int rsmu_write(struct device *dev, u16 reg, u8 *buf, u16 size);<br>
++extern int rsmu_read(struct device *dev, u16 reg, u8 *buf, u16 size);<br>
++#endif /*  __LINUX_MFD_RSMU_H */<br>
+-- <br>
+2.7.4<br>
+<br>
+<br>
+

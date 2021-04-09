@@ -1,0 +1,24 @@
+On Thu, Apr 08, 2021 at 10:07:14AM +0200, Fabio M. De Francesco wrote:<br>
+><i> Remove camelcase in a symbol that is used by several files.</i><br>
+<br>
+What symbol?<br>
+<br>
+><i> --- a/drivers/staging/rtl8723bs/include/rtw_pwrctrl.h</i><br>
+><i> +++ b/drivers/staging/rtl8723bs/include/rtw_pwrctrl.h</i><br>
+><i> @@ -203,7 +203,7 @@ struct pwrctrl_priv {</i><br>
+><i>  	u8 LpsIdleCount;</i><br>
+><i>  	u8 power_mgnt;</i><br>
+><i>  	u8 org_power_mgnt;</i><br>
+><i> -	u8 bFwCurrentInPSMode;</i><br>
+><i> +	u8 b_fw_current_in_ps_mode;</i><br>
+<br>
+The "b" here means "byte" so you can drop the "b_" as that means<br>
+nothing, we do not use this type of notation in the kernel as the<br>
+compiler can check it for us.<br>
+<br>
+thanks,<br>
+<br>
+greg k-h<br>
+<br>
+<br>
+

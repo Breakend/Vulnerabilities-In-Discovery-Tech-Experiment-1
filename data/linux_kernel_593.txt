@@ -1,0 +1,68 @@
+The following commit has been merged into the x86/entry branch of tip:<br>
+<br>
+Commit-ID:     0d66ccc1627013c95f1e7ef10b95b8451cd7834e<br>
+Gitweb:        <a  rel="nofollow" href="https://git.kernel.org/tip/0d66ccc1627013c95f1e7ef10b95b8451cd7834e">https://git.kernel.org/tip/0d66ccc1627013c95f1e7ef10b95b8451cd7834e</a><br>
+Author:        Kees Cook <keescook@xxxxxxxxxxxx><br>
+AuthorDate:    Thu, 01 Apr 2021 16:23:42 -07:00<br>
+Committer:     Thomas Gleixner <tglx@xxxxxxxxxxxxx><br>
+CommitterDate: Thu, 08 Apr 2021 14:05:19 +02:00<br>
+<br>
+jump_label: Provide CONFIG-driven build state defaults<br>
+<br>
+As shown in the comment in jump_label.h, choosing the initial state of<br>
+static branches changes the assembly layout. If the condition is expected<br>
+to be likely it's inline, and if unlikely it is out of line via a jump.<br>
+<br>
+A few places in the kernel use (or could be using) a CONFIG to choose the<br>
+default state, which would give a small performance benefit to their<br>
+compile-time declared default. Provide the infrastructure to do this.<br>
+<br>
+Signed-off-by: Kees Cook <keescook@xxxxxxxxxxxx><br>
+Signed-off-by: Thomas Gleixner <tglx@xxxxxxxxxxxxx><br>
+Acked-by: Peter Zijlstra (Intel) <peterz@xxxxxxxxxxxxx><br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/20210401232347.2791257-2-keescook@xxxxxxxxxxxx">https://lore.kernel.org/r/20210401232347.2791257-2-keescook@xxxxxxxxxxxx</a><br>
+<br>
+---<br>
+ include/linux/jump_label.h | 19 +++++++++++++++++++<br>
+ 1 file changed, 19 insertions(+)<br>
+<br>
+diff --git a/include/linux/jump_label.h b/include/linux/jump_label.h<br>
+index d926912..05f5554 100644<br>
+--- a/include/linux/jump_label.h<br>
++++ b/include/linux/jump_label.h<br>
+@@ -382,6 +382,21 @@ struct static_key_false {<br>
+ 		[0 ... (count) - 1] = STATIC_KEY_FALSE_INIT,	\<br>
+ 	}<br>
+ <br>
++#define _DEFINE_STATIC_KEY_1(name)	DEFINE_STATIC_KEY_TRUE(name)<br>
++#define _DEFINE_STATIC_KEY_0(name)	DEFINE_STATIC_KEY_FALSE(name)<br>
++#define DEFINE_STATIC_KEY_MAYBE(cfg, name)			\<br>
++	__PASTE(_DEFINE_STATIC_KEY_, IS_ENABLED(cfg))(name)<br>
++<br>
++#define _DEFINE_STATIC_KEY_RO_1(name)	DEFINE_STATIC_KEY_TRUE_RO(name)<br>
++#define _DEFINE_STATIC_KEY_RO_0(name)	DEFINE_STATIC_KEY_FALSE_RO(name)<br>
++#define DEFINE_STATIC_KEY_MAYBE_RO(cfg, name)			\<br>
++	__PASTE(_DEFINE_STATIC_KEY_RO_, IS_ENABLED(cfg))(name)<br>
++<br>
++#define _DECLARE_STATIC_KEY_1(name)	DECLARE_STATIC_KEY_TRUE(name)<br>
++#define _DECLARE_STATIC_KEY_0(name)	DECLARE_STATIC_KEY_FALSE(name)<br>
++#define DECLARE_STATIC_KEY_MAYBE(cfg, name)			\<br>
++	__PASTE(_DECLARE_STATIC_KEY_, IS_ENABLED(cfg))(name)<br>
++<br>
+ extern bool ____wrong_branch_error(void);<br>
+ <br>
+ #define static_key_enabled(x)							\<br>
+@@ -482,6 +497,10 @@ extern bool ____wrong_branch_error(void);<br>
+ <br>
+ #endif /* CONFIG_JUMP_LABEL */<br>
+ <br>
++#define static_branch_maybe(config, x)					\<br>
++	(IS_ENABLED(config) ? static_branch_likely(x)			\<br>
++			    : static_branch_unlikely(x))<br>
++<br>
+ /*<br>
+  * Advanced usage; refcount, branch is enabled when: count != 0<br>
+  */<br>
+<br>
+<br>
+

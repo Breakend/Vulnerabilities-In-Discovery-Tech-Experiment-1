@@ -1,0 +1,58 @@
+Alexey Kardashevskiy <aik@xxxxxxxxx> writes:<br>
+><i> On 08/04/2021 15:37, Michael Ellerman wrote:</i><br>
+><i>> Leonardo Bras <leobras.c@xxxxxxxxx> writes:</i><br>
+><i>>> According to LoPAR, ibm,query-pe-dma-window output named "IO Page Sizes"</i><br>
+><i>>> will let the OS know all possible pagesizes that can be used for creating a</i><br>
+><i>>> new DDW.</i><br>
+><i>>></i><br>
+><i>>> Currently Linux will only try using 3 of the 8 available options:</i><br>
+><i>>> 4K, 64K and 16M. According to LoPAR, Hypervisor may also offer 32M, 64M,</i><br>
+><i>>> 128M, 256M and 16G.</i><br>
+><i>> </i><br>
+><i>> Do we know of any hardware & hypervisor combination that will actually</i><br>
+><i>> give us bigger pages?</i><br>
+><i></i><br>
+><i></i><br>
+><i> On P8 16MB host pages and 16MB hardware iommu pages worked.</i><br>
+><i></i><br>
+><i> On P9, VM's 16MB IOMMU pages worked on top of 2MB host pages + 2MB </i><br>
+><i> hardware IOMMU pages.</i><br>
+<br>
+The current code already tries 16MB though.<br>
+<br>
+I'm wondering if we're going to ask for larger sizes that have never<br>
+been tested and possibly expose bugs. But it sounds like this is mainly<br>
+targeted at future platforms.<br>
+<br>
+<br>
+><i>>> diff --git a/arch/powerpc/platforms/pseries/iommu.c b/arch/powerpc/platforms/pseries/iommu.c</i><br>
+><i>>> index 9fc5217f0c8e..6cda1c92597d 100644</i><br>
+><i>>> --- a/arch/powerpc/platforms/pseries/iommu.c</i><br>
+><i>>> +++ b/arch/powerpc/platforms/pseries/iommu.c</i><br>
+><i>>> @@ -53,6 +53,20 @@ enum {</i><br>
+><i>>>   	DDW_EXT_QUERY_OUT_SIZE = 2</i><br>
+><i>>>   };</i><br>
+><i>> </i><br>
+><i>> A comment saying where the values come from would be good.</i><br>
+><i>> </i><br>
+><i>>> +#define QUERY_DDW_PGSIZE_4K	0x01</i><br>
+><i>>> +#define QUERY_DDW_PGSIZE_64K	0x02</i><br>
+><i>>> +#define QUERY_DDW_PGSIZE_16M	0x04</i><br>
+><i>>> +#define QUERY_DDW_PGSIZE_32M	0x08</i><br>
+><i>>> +#define QUERY_DDW_PGSIZE_64M	0x10</i><br>
+><i>>> +#define QUERY_DDW_PGSIZE_128M	0x20</i><br>
+><i>>> +#define QUERY_DDW_PGSIZE_256M	0x40</i><br>
+><i>>> +#define QUERY_DDW_PGSIZE_16G	0x80</i><br>
+><i>> </i><br>
+><i>> I'm not sure the #defines really gain us much vs just putting the</i><br>
+><i>> literal values in the array below?</i><br>
+><i></i><br>
+><i> Then someone says "uuuuu magic values" :) I do not mind either way. Thanks,</i><br>
+<br>
+Yeah that's true. But #defining them doesn't make them less magic, if<br>
+you only use them in one place :)<br>
+<br>
+cheers<br>
+<br>
+<br>
+

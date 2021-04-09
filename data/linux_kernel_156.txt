@@ -1,0 +1,143 @@
+This interface is superseded by the new dma_map_sg_p2pdma() interface<br>
+which supports heterogeneous scatterlists. There are no longer<br>
+any users, so remove it.<br>
+<br>
+Signed-off-by: Logan Gunthorpe <logang@xxxxxxxxxxxx><br>
+---<br>
+ drivers/pci/p2pdma.c       | 67 --------------------------------------<br>
+ include/linux/pci-p2pdma.h | 27 ---------------<br>
+ 2 files changed, 94 deletions(-)<br>
+<br>
+diff --git a/drivers/pci/p2pdma.c b/drivers/pci/p2pdma.c<br>
+index 44ad7664e875..2f2adcccfa11 100644<br>
+--- a/drivers/pci/p2pdma.c<br>
++++ b/drivers/pci/p2pdma.c<br>
+@@ -856,73 +856,6 @@ enum pci_p2pdma_map_type pci_p2pdma_map_type(struct dev_pagemap *pgmap,<br>
+ 					     GFP_ATOMIC);<br>
+ }<br>
+ <br>
+-static int __pci_p2pdma_map_sg(struct pci_p2pdma_pagemap *p2p_pgmap,<br>
+-		struct device *dev, struct scatterlist *sg, int nents)<br>
+-{<br>
+-	struct scatterlist *s;<br>
+-	int i;<br>
+-<br>
+-	for_each_sg(sg, s, nents, i) {<br>
+-		s->dma_address = sg_phys(s) - p2p_pgmap->bus_offset;<br>
+-		sg_dma_len(s) = s->length;<br>
+-	}<br>
+-<br>
+-	return nents;<br>
+-}<br>
+-<br>
+-/**<br>
+- * pci_p2pdma_map_sg_attrs - map a PCI peer-to-peer scatterlist for DMA<br>
+- * @dev: device doing the DMA request<br>
+- * @sg: scatter list to map<br>
+- * @nents: elements in the scatterlist<br>
+- * @dir: DMA direction<br>
+- * @attrs: DMA attributes passed to dma_map_sg() (if called)<br>
+- *<br>
+- * Scatterlists mapped with this function should be unmapped using<br>
+- * pci_p2pdma_unmap_sg_attrs().<br>
+- *<br>
+- * Returns the number of SG entries mapped or 0 on error.<br>
+- */<br>
+-int pci_p2pdma_map_sg_attrs(struct device *dev, struct scatterlist *sg,<br>
+-		int nents, enum dma_data_direction dir, unsigned long attrs)<br>
+-{<br>
+-	struct pci_p2pdma_pagemap *p2p_pgmap =<br>
+-		to_p2p_pgmap(sg_page(sg)->pgmap);<br>
+-<br>
+-	switch (pci_p2pdma_map_type(sg_page(sg)->pgmap, dev,<br>
+-				    __DMA_ATTR_PCI_P2PDMA)) {<br>
+-	case PCI_P2PDMA_MAP_THRU_HOST_BRIDGE:<br>
+-		return dma_map_sg_attrs(dev, sg, nents, dir, attrs);<br>
+-	case PCI_P2PDMA_MAP_BUS_ADDR:<br>
+-		return __pci_p2pdma_map_sg(p2p_pgmap, dev, sg, nents);<br>
+-	default:<br>
+-		return 0;<br>
+-	}<br>
+-}<br>
+-EXPORT_SYMBOL_GPL(pci_p2pdma_map_sg_attrs);<br>
+-<br>
+-/**<br>
+- * pci_p2pdma_unmap_sg_attrs - unmap a PCI peer-to-peer scatterlist that was<br>
+- *	mapped with pci_p2pdma_map_sg()<br>
+- * @dev: device doing the DMA request<br>
+- * @sg: scatter list to map<br>
+- * @nents: number of elements returned by pci_p2pdma_map_sg()<br>
+- * @dir: DMA direction<br>
+- * @attrs: DMA attributes passed to dma_unmap_sg() (if called)<br>
+- */<br>
+-void pci_p2pdma_unmap_sg_attrs(struct device *dev, struct scatterlist *sg,<br>
+-		int nents, enum dma_data_direction dir, unsigned long attrs)<br>
+-{<br>
+-	enum pci_p2pdma_map_type map_type;<br>
+-<br>
+-	map_type = pci_p2pdma_map_type(sg_page(sg)->pgmap, dev,<br>
+-				       __DMA_ATTR_PCI_P2PDMA);<br>
+-<br>
+-	if (map_type == PCI_P2PDMA_MAP_THRU_HOST_BRIDGE)<br>
+-		dma_unmap_sg_attrs(dev, sg, nents, dir, attrs);<br>
+-}<br>
+-EXPORT_SYMBOL_GPL(pci_p2pdma_unmap_sg_attrs);<br>
+-<br>
+ /**<br>
+  * pci_p2pdma_map_segment - map an sg segment determining the mapping type<br>
+  * @state: State structure that should be declared on the stack outside of<br>
+diff --git a/include/linux/pci-p2pdma.h b/include/linux/pci-p2pdma.h<br>
+index 49e7679403cf..2ec9c75fa097 100644<br>
+--- a/include/linux/pci-p2pdma.h<br>
++++ b/include/linux/pci-p2pdma.h<br>
+@@ -45,10 +45,6 @@ void pci_p2pmem_free_sgl(struct pci_dev *pdev, struct scatterlist *sgl);<br>
+ void pci_p2pmem_publish(struct pci_dev *pdev, bool publish);<br>
+ enum pci_p2pdma_map_type pci_p2pdma_map_type(struct dev_pagemap *pgmap,<br>
+ 		struct device *dev, unsigned long dma_attrs);<br>
+-int pci_p2pdma_map_sg_attrs(struct device *dev, struct scatterlist *sg,<br>
+-		int nents, enum dma_data_direction dir, unsigned long attrs);<br>
+-void pci_p2pdma_unmap_sg_attrs(struct device *dev, struct scatterlist *sg,<br>
+-		int nents, enum dma_data_direction dir, unsigned long attrs);<br>
+ int pci_p2pdma_map_segment(struct pci_p2pdma_map_state *state,<br>
+ 		struct device *dev, struct scatterlist *sg,<br>
+ 		unsigned long dma_attrs);<br>
+@@ -109,17 +105,6 @@ static inline enum pci_p2pdma_map_type pci_p2pdma_map_type(<br>
+ {<br>
+ 	return PCI_P2PDMA_MAP_NOT_SUPPORTED;<br>
+ }<br>
+-static inline int pci_p2pdma_map_sg_attrs(struct device *dev,<br>
+-		struct scatterlist *sg, int nents, enum dma_data_direction dir,<br>
+-		unsigned long attrs)<br>
+-{<br>
+-	return 0;<br>
+-}<br>
+-static inline void pci_p2pdma_unmap_sg_attrs(struct device *dev,<br>
+-		struct scatterlist *sg, int nents, enum dma_data_direction dir,<br>
+-		unsigned long attrs)<br>
+-{<br>
+-}<br>
+ static inline int pci_p2pdma_map_segment(struct pci_p2pdma_map_state *state,<br>
+ 		struct device *dev, struct scatterlist *sg,<br>
+ 		unsigned long dma_attrs)<br>
+@@ -155,16 +140,4 @@ static inline struct pci_dev *pci_p2pmem_find(struct device *client)<br>
+ 	return pci_p2pmem_find_many(&client, 1);<br>
+ }<br>
+ <br>
+-static inline int pci_p2pdma_map_sg(struct device *dev, struct scatterlist *sg,<br>
+-				    int nents, enum dma_data_direction dir)<br>
+-{<br>
+-	return pci_p2pdma_map_sg_attrs(dev, sg, nents, dir, 0);<br>
+-}<br>
+-<br>
+-static inline void pci_p2pdma_unmap_sg(struct device *dev,<br>
+-		struct scatterlist *sg, int nents, enum dma_data_direction dir)<br>
+-{<br>
+-	pci_p2pdma_unmap_sg_attrs(dev, sg, nents, dir, 0);<br>
+-}<br>
+-<br>
+ #endif /* _LINUX_PCI_P2P_H */<br>
+-- <br>
+2.20.1<br>
+<br>
+<br>
+

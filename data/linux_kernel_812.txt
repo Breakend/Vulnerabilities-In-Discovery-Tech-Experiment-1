@@ -1,0 +1,48 @@
+The following commit has been merged into the x86/cleanups branch of tip:<br>
+<br>
+Commit-ID:     3e7bbe15ed84e3baa7dfab3aebed3a06fd39b806<br>
+Gitweb:        <a  rel="nofollow" href="https://git.kernel.org/tip/3e7bbe15ed84e3baa7dfab3aebed3a06fd39b806">https://git.kernel.org/tip/3e7bbe15ed84e3baa7dfab3aebed3a06fd39b806</a><br>
+Author:        Zhao Xuehui <zhaoxuehui1@xxxxxxxxxx><br>
+AuthorDate:    Thu, 08 Apr 2021 17:52:18 +08:00<br>
+Committer:     Borislav Petkov <bp@xxxxxxx><br>
+CommitterDate: Thu, 08 Apr 2021 11:57:40 +02:00<br>
+<br>
+x86/msr: Make locally used functions static<br>
+<br>
+The functions msr_read() and msr_write() are not used outside of msr.c,<br>
+make them static.<br>
+<br>
+ [ bp: Massage commit message. ]<br>
+<br>
+Signed-off-by: Zhao Xuehui <zhaoxuehui1@xxxxxxxxxx><br>
+Signed-off-by: Borislav Petkov <bp@xxxxxxx><br>
+Link: <a  rel="nofollow" href="https://lkml.kernel.org/r/20210408095218.152264-1-zhaoxuehui1@xxxxxxxxxx">https://lkml.kernel.org/r/20210408095218.152264-1-zhaoxuehui1@xxxxxxxxxx</a><br>
+---<br>
+ arch/x86/lib/msr.c | 4 ++--<br>
+ 1 file changed, 2 insertions(+), 2 deletions(-)<br>
+<br>
+diff --git a/arch/x86/lib/msr.c b/arch/x86/lib/msr.c<br>
+index 3bd905e..b09cd2a 100644<br>
+--- a/arch/x86/lib/msr.c<br>
++++ b/arch/x86/lib/msr.c<br>
+@@ -36,7 +36,7 @@ EXPORT_SYMBOL(msrs_free);<br>
+  * argument @m.<br>
+  *<br>
+  */<br>
+-int msr_read(u32 msr, struct msr *m)<br>
++static int msr_read(u32 msr, struct msr *m)<br>
+ {<br>
+ 	int err;<br>
+ 	u64 val;<br>
+@@ -54,7 +54,7 @@ int msr_read(u32 msr, struct msr *m)<br>
+  * @msr: MSR to write<br>
+  * @m: value to write<br>
+  */<br>
+-int msr_write(u32 msr, struct msr *m)<br>
++static int msr_write(u32 msr, struct msr *m)<br>
+ {<br>
+ 	return wrmsrl_safe(msr, m->q);<br>
+ }<br>
+<br>
+<br>
+

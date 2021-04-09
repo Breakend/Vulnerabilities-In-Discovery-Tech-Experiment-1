@@ -1,0 +1,31 @@
+On Thu, Apr 8, 2021 at 2:01 PM Hector Martin <marcan@xxxxxxxxx> wrote:<br>
+><i> On 08/04/2021 06.03, Will Deacon wrote:</i><br>
+><i> >> I would rewrite above as</i><br>
+><i> >></i><br>
+><i> >> void __iomem *ret;</i><br>
+><i> >></i><br>
+><i> >> ret = ioremap_np(offset, size);</i><br>
+><i> >> if (ret)</i><br>
+><i> >>    return ret;</i><br>
+><i> >></i><br>
+><i> >> return ioremap(offset, size);</i><br>
+><i> ></i><br>
+><i> > Looks like it might be one of those rare occasions where the GCC ternary if</i><br>
+><i> > extension thingy comes in handy:</i><br>
+><i> ></i><br>
+><i> >       return ioremap_np(offset, size) ?: ioremap(offset, size);</i><br>
+><i></i><br>
+><i> Today I learned that this one is kosher in kernel code. Handy! Let's go</i><br>
+><i> with that.</i><br>
+<br>
+It depends on the maintainer. Greg, for example, doesn't  like this. I<br>
+have no strong opinion (I use both variants on case-by-case basis),<br>
+though I think in headers better to spell out all conditionals<br>
+clearly.<br>
+<br>
+-- <br>
+With Best Regards,<br>
+Andy Shevchenko<br>
+<br>
+<br>
+

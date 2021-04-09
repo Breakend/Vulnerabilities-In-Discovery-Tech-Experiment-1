@@ -1,0 +1,192 @@
+From: SeongJae Park <sjpark@xxxxxxxxx><br>
+<br>
+PG_idle and PG_young allow the two PTE Accessed bit users, Idle Page<br>
+Tracking and the reclaim logic concurrently work while don't interfere<br>
+each other.  That is, when they need to clear the Accessed bit, they set<br>
+PG_young to represent the previous state of the bit, respectively.  And<br>
+when they need to read the bit, if the bit is cleared, they further read<br>
+the PG_young to know whether the other has cleared the bit meanwhile or<br>
+not.<br>
+<br>
+We could add another page flag and extend the mechanism to use the flag<br>
+if we need to add another concurrent PTE Accessed bit user subsystem.<br>
+However, the space is limited.  Meanwhile, if the new subsystem is<br>
+mutually exclusive with IDLE_PAGE_TRACKING or interfering with it is not<br>
+a real problem, it would be ok to simply reuse the PG_idle flag.<br>
+However, it's impossible because the flags are dependent on<br>
+IDLE_PAGE_TRACKING.<br>
+<br>
+To allow such reuse of the flags, this commit separates the PG_young and<br>
+PG_idle flag logic from IDLE_PAGE_TRACKING and introduces new kernel<br>
+config, 'PAGE_IDLE_FLAG'.  Hence, a new subsystem would be able to reuse<br>
+PG_idle without depending on IDLE_PAGE_TRACKING.<br>
+<br>
+In the next commit, DAMON's reference implementation of the virtual<br>
+memory address space monitoring primitives will use it.<br>
+<br>
+Signed-off-by: SeongJae Park <sjpark@xxxxxxxxx><br>
+Reviewed-by: Shakeel Butt <shakeelb@xxxxxxxxxx><br>
+---<br>
+ include/linux/page-flags.h     |  4 ++--<br>
+ include/linux/page_ext.h       |  2 +-<br>
+ include/linux/page_idle.h      |  6 +++---<br>
+ include/trace/events/mmflags.h |  2 +-<br>
+ mm/Kconfig                     |  8 ++++++++<br>
+ mm/page_ext.c                  | 12 +++++++++++-<br>
+ mm/page_idle.c                 | 10 ----------<br>
+ 7 files changed, 26 insertions(+), 18 deletions(-)<br>
+<br>
+diff --git a/include/linux/page-flags.h b/include/linux/page-flags.h<br>
+index 04a34c08e0a6..6be2c1e2fb48 100644<br>
+--- a/include/linux/page-flags.h<br>
++++ b/include/linux/page-flags.h<br>
+@@ -131,7 +131,7 @@ enum pageflags {<br>
+ #ifdef CONFIG_MEMORY_FAILURE<br>
+ 	PG_hwpoison,		/* hardware poisoned page. Don't touch */<br>
+ #endif<br>
+-#if defined(CONFIG_IDLE_PAGE_TRACKING) && defined(CONFIG_64BIT)<br>
++#if defined(CONFIG_PAGE_IDLE_FLAG) && defined(CONFIG_64BIT)<br>
+ 	PG_young,<br>
+ 	PG_idle,<br>
+ #endif<br>
+@@ -436,7 +436,7 @@ PAGEFLAG_FALSE(HWPoison)<br>
+ #define __PG_HWPOISON 0<br>
+ #endif<br>
+ <br>
+-#if defined(CONFIG_IDLE_PAGE_TRACKING) && defined(CONFIG_64BIT)<br>
++#if defined(CONFIG_PAGE_IDLE_FLAG) && defined(CONFIG_64BIT)<br>
+ TESTPAGEFLAG(Young, young, PF_ANY)<br>
+ SETPAGEFLAG(Young, young, PF_ANY)<br>
+ TESTCLEARFLAG(Young, young, PF_ANY)<br>
+diff --git a/include/linux/page_ext.h b/include/linux/page_ext.h<br>
+index aff81ba31bd8..fabb2e1e087f 100644<br>
+--- a/include/linux/page_ext.h<br>
++++ b/include/linux/page_ext.h<br>
+@@ -19,7 +19,7 @@ struct page_ext_operations {<br>
+ enum page_ext_flags {<br>
+ 	PAGE_EXT_OWNER,<br>
+ 	PAGE_EXT_OWNER_ALLOCATED,<br>
+-#if defined(CONFIG_IDLE_PAGE_TRACKING) && !defined(CONFIG_64BIT)<br>
++#if defined(CONFIG_PAGE_IDLE_FLAG) && !defined(CONFIG_64BIT)<br>
+ 	PAGE_EXT_YOUNG,<br>
+ 	PAGE_EXT_IDLE,<br>
+ #endif<br>
+diff --git a/include/linux/page_idle.h b/include/linux/page_idle.h<br>
+index 1e894d34bdce..d8a6aecf99cb 100644<br>
+--- a/include/linux/page_idle.h<br>
++++ b/include/linux/page_idle.h<br>
+@@ -6,7 +6,7 @@<br>
+ #include <linux/page-flags.h><br>
+ #include <linux/page_ext.h><br>
+ <br>
+-#ifdef CONFIG_IDLE_PAGE_TRACKING<br>
++#ifdef CONFIG_PAGE_IDLE_FLAG<br>
+ <br>
+ #ifdef CONFIG_64BIT<br>
+ static inline bool page_is_young(struct page *page)<br>
+@@ -106,7 +106,7 @@ static inline void clear_page_idle(struct page *page)<br>
+ }<br>
+ #endif /* CONFIG_64BIT */<br>
+ <br>
+-#else /* !CONFIG_IDLE_PAGE_TRACKING */<br>
++#else /* !CONFIG_PAGE_IDLE_FLAG */<br>
+ <br>
+ static inline bool page_is_young(struct page *page)<br>
+ {<br>
+@@ -135,6 +135,6 @@ static inline void clear_page_idle(struct page *page)<br>
+ {<br>
+ }<br>
+ <br>
+-#endif /* CONFIG_IDLE_PAGE_TRACKING */<br>
++#endif /* CONFIG_PAGE_IDLE_FLAG */<br>
+ <br>
+ #endif /* _LINUX_MM_PAGE_IDLE_H */<br>
+diff --git a/include/trace/events/mmflags.h b/include/trace/events/mmflags.h<br>
+index 629c7a0eaff2..ea434bbc2d2b 100644<br>
+--- a/include/trace/events/mmflags.h<br>
++++ b/include/trace/events/mmflags.h<br>
+@@ -73,7 +73,7 @@<br>
+ #define IF_HAVE_PG_HWPOISON(flag,string)<br>
+ #endif<br>
+ <br>
+-#if defined(CONFIG_IDLE_PAGE_TRACKING) && defined(CONFIG_64BIT)<br>
++#if defined(CONFIG_PAGE_IDLE_FLAG) && defined(CONFIG_64BIT)<br>
+ #define IF_HAVE_PG_IDLE(flag,string) ,{1UL << flag, string}<br>
+ #else<br>
+ #define IF_HAVE_PG_IDLE(flag,string)<br>
+diff --git a/mm/Kconfig b/mm/Kconfig<br>
+index 56bec147bdff..0616a8b1ff0b 100644<br>
+--- a/mm/Kconfig<br>
++++ b/mm/Kconfig<br>
+@@ -771,10 +771,18 @@ config DEFERRED_STRUCT_PAGE_INIT<br>
+ 	  lifetime of the system until these kthreads finish the<br>
+ 	  initialisation.<br>
+ <br>
++config PAGE_IDLE_FLAG<br>
++	bool "Add PG_idle and PG_young flags"<br>
++	help<br>
++	  This feature adds PG_idle and PG_young flags in 'struct page'.  PTE<br>
++	  Accessed bit writers can set the state of the bit in the flags to let<br>
++	  other PTE Accessed bit readers don't disturbed.<br>
++<br>
+ config IDLE_PAGE_TRACKING<br>
+ 	bool "Enable idle page tracking"<br>
+ 	depends on SYSFS && MMU<br>
+ 	select PAGE_EXTENSION if !64BIT<br>
++	select PAGE_IDLE_FLAG<br>
+ 	help<br>
+ 	  This feature allows to estimate the amount of user pages that have<br>
+ 	  not been touched during a given period of time. This information can<br>
+diff --git a/mm/page_ext.c b/mm/page_ext.c<br>
+index df6f74aac8e1..8e59da0f4367 100644<br>
+--- a/mm/page_ext.c<br>
++++ b/mm/page_ext.c<br>
+@@ -58,11 +58,21 @@<br>
+  * can utilize this callback to initialize the state of it correctly.<br>
+  */<br>
+ <br>
++#if defined(CONFIG_PAGE_IDLE_FLAG) && !defined(CONFIG_64BIT)<br>
++static bool need_page_idle(void)<br>
++{<br>
++	return true;<br>
++}<br>
++struct page_ext_operations page_idle_ops = {<br>
++	.need = need_page_idle,<br>
++};<br>
++#endif<br>
++<br>
+ static struct page_ext_operations *page_ext_ops[] = {<br>
+ #ifdef CONFIG_PAGE_OWNER<br>
+ 	&page_owner_ops,<br>
+ #endif<br>
+-#if defined(CONFIG_IDLE_PAGE_TRACKING) && !defined(CONFIG_64BIT)<br>
++#if defined(CONFIG_PAGE_IDLE_FLAG) && !defined(CONFIG_64BIT)<br>
+ 	&page_idle_ops,<br>
+ #endif<br>
+ };<br>
+diff --git a/mm/page_idle.c b/mm/page_idle.c<br>
+index 64e5344a992c..edead6a8a5f9 100644<br>
+--- a/mm/page_idle.c<br>
++++ b/mm/page_idle.c<br>
+@@ -207,16 +207,6 @@ static const struct attribute_group page_idle_attr_group = {<br>
+ 	.name = "page_idle",<br>
+ };<br>
+ <br>
+-#ifndef CONFIG_64BIT<br>
+-static bool need_page_idle(void)<br>
+-{<br>
+-	return true;<br>
+-}<br>
+-struct page_ext_operations page_idle_ops = {<br>
+-	.need = need_page_idle,<br>
+-};<br>
+-#endif<br>
+-<br>
+ static int __init page_idle_init(void)<br>
+ {<br>
+ 	int err;<br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+

@@ -1,0 +1,20 @@
+Hi, Richard,<br>
+<br>
+On Thu, 8 Apr 2021 at 12:00, Richard Weinberger<br>
+<richard.weinberger@xxxxxxxxx> wrote:<br>
+><i></i><br>
+><i> I was about to NACK this patch but by looking at the diff I realized</i><br>
+><i> that you change</i><br>
+><i> the default compressor only for the default filesystem as created by</i><br>
+><i> UBIFS itself.</i><br>
+<br>
+Yes, that was the idea. :)<br>
+<br>
+><i> Queued for the merge window. :-)</i><br>
+<br>
+Thanks a lot!<br>
+<br>
+Rui<br>
+<br>
+<br>
+

@@ -1,0 +1,32 @@
+The attributes on the heap must be initialized before use.<br>
+Neglecting that will produce an Oops in some configurations:<br>
+<br>
+  BUG: key ffff000800eba398 has not been registered!<br>
+<br>
+Initialize attribute allocated on the heap.<br>
+<br>
+Fixes: 3f0279eb9e37 ("gpio: sim: new testing module")<br>
+Reported-by: Naresh Kamboju <naresh.kamboju@xxxxxxxxxx><br>
+Tested-by: Naresh Kamboju <naresh.kamboju@xxxxxxxxxx><br>
+Signed-off-by: Andy Shevchenko <andriy.shevchenko@xxxxxxxxxxxxxxx><br>
+---<br>
+ drivers/gpio/gpio-sim.c | 1 +<br>
+ 1 file changed, 1 insertion(+)<br>
+<br>
+diff --git a/drivers/gpio/gpio-sim.c b/drivers/gpio/gpio-sim.c<br>
+index ea17289a869c..92493b98c51b 100644<br>
+--- a/drivers/gpio/gpio-sim.c<br>
++++ b/drivers/gpio/gpio-sim.c<br>
+@@ -284,6 +284,7 @@ static int gpio_sim_setup_sysfs(struct gpio_sim_chip *chip)<br>
+ 		line_attr->offset = i;<br>
+ <br>
+ 		dev_attr = &line_attr->dev_attr;<br>
++		sysfs_attr_init(&dev_attr->attr);<br>
+ <br>
+ 		dev_attr->attr.name = devm_kasprintf(dev, GFP_KERNEL,<br>
+ 						     "gpio%u", i);<br>
+-- <br>
+2.30.2<br>
+<br>
+<br>
+

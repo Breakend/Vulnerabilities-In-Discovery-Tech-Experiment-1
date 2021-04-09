@@ -1,0 +1,20 @@
+On Wed, Apr 07, 2021 at 01:03:48AM +0200, Thomas Bogendoerfer wrote:<br>
+><i> Commit 45deb5faeb9e ("MIPS: uaccess: Remove get_fs/set_fs call sites")</i><br>
+><i> caused a few new sparse warning, fix them.</i><br>
+><i> </i><br>
+><i> Signed-off-by: Thomas Bogendoerfer <tsbogend@xxxxxxxxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  arch/mips/kernel/access-helper.h | 7 ++++---</i><br>
+><i>  arch/mips/kernel/unaligned.c     | 6 +++---</i><br>
+><i>  2 files changed, 7 insertions(+), 6 deletions(-)</i><br>
+<br>
+applied to mips-next.<br>
+<br>
+Thomas.<br>
+<br>
+-- <br>
+Crap can work. Given enough thrust pigs will fly, but it's not necessarily a<br>
+good idea.                                                [ RFC1925, 2.3 ]<br>
+<br>
+<br>
+

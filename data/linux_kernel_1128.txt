@@ -1,0 +1,192 @@
+Hi Manivannan,<br>
+<br>
+I love your patch! Perhaps something to improve:<br>
+<br>
+[auto build test WARNING on linus/master]<br>
+[also build test WARNING on v5.12-rc6 next-20210407]<br>
+[If your patch is applied to the wrong git tree, kindly drop us a note.<br>
+And when submitting patch, we suggest to use '--base' as documented in<br>
+<a  rel="nofollow" href="https://git-scm.com/docs/git-format-patch">https://git-scm.com/docs/git-format-patch</a>]<br>
+<br>
+url:    <a  rel="nofollow" href="https://github.com/0day-ci/linux/commits/Manivannan-Sadhasivam/bus-mhi-core-Fix-shadow-declarations/20210408-144747">https://github.com/0day-ci/linux/commits/Manivannan-Sadhasivam/bus-mhi-core-Fix-shadow-declarations/20210408-144747</a><br>
+base:   <a  rel="nofollow" href="https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git">https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git</a> 454859c552da78b0f587205d308401922b56863e<br>
+config: i386-randconfig-s032-20210407 (attached as .config)<br>
+compiler: gcc-9 (Debian 9.3.0-22) 9.3.0<br>
+reproduce:<br>
+        # apt-get install sparse<br>
+        # sparse version: v0.6.3-279-g6d5d9b42-dirty<br>
+        # <a  rel="nofollow" href="https://github.com/0day-ci/linux/commit/cca6579a65f1295cba8d8e7f12162b6270f71449">https://github.com/0day-ci/linux/commit/cca6579a65f1295cba8d8e7f12162b6270f71449</a><br>
+        git remote add linux-review <a  rel="nofollow" href="https://github.com/0day-ci/linux">https://github.com/0day-ci/linux</a><br>
+        git fetch --no-tags linux-review Manivannan-Sadhasivam/bus-mhi-core-Fix-shadow-declarations/20210408-144747<br>
+        git checkout cca6579a65f1295cba8d8e7f12162b6270f71449<br>
+        # save the attached .config to linux build tree<br>
+        make W=1 C=1 CF='-fdiagnostic-prefix -D__CHECK_ENDIAN__' ARCH=i386 <br>
+<br>
+If you fix the issue, kindly add following tag as appropriate<br>
+Reported-by: kernel test robot <lkp@xxxxxxxxx><br>
+<br>
+<br>
+sparse warnings: (new ones prefixed by >>)<br>
+><i>> drivers/bus/mhi/core/main.c:774:64: sparse: sparse: mixing different enum types:</i><br>
+><i>> drivers/bus/mhi/core/main.c:774:64: sparse:    unsigned int enum mhi_pm_state</i><br>
+><i>> drivers/bus/mhi/core/main.c:774:64: sparse:    unsigned int enum mhi_state</i><br>
+<br>
+vim +774 drivers/bus/mhi/core/main.c<br>
+<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  707  <br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  708  int mhi_process_ctrl_ev_ring(struct mhi_controller *mhi_cntrl,<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  709  			     struct mhi_event *mhi_event,<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  710  			     u32 event_quota)<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  711  {<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  712  	struct mhi_tre *dev_rp, *local_rp;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  713  	struct mhi_ring *ev_ring = &mhi_event->ring;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  714  	struct mhi_event_ctxt *er_ctxt =<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  715  		&mhi_cntrl->mhi_ctxt->er_ctxt[mhi_event->er_index];<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  716  	struct mhi_chan *mhi_chan;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  717  	struct device *dev = &mhi_cntrl->mhi_dev->dev;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  718  	u32 chan;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  719  	int count = 0;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  720  <br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  721  	/*<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  722  	 * This is a quick check to avoid unnecessary event processing<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  723  	 * in case MHI is already in error state, but it's still possible<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  724  	 * to transition to error state while processing events<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  725  	 */<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  726  	if (unlikely(MHI_EVENT_ACCESS_INVALID(mhi_cntrl->pm_state)))<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  727  		return -EIO;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  728  <br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  729  	dev_rp = mhi_to_virtual(ev_ring, er_ctxt->rp);<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  730  	local_rp = ev_ring->rp;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  731  <br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  732  	while (dev_rp != local_rp) {<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  733  		enum mhi_pkt_type type = MHI_TRE_GET_EV_TYPE(local_rp);<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  734  <br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  735  		switch (type) {<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  736  		case MHI_PKT_TYPE_BW_REQ_EVENT:<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  737  		{<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  738  			struct mhi_link_info *link_info;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  739  <br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  740  			link_info = &mhi_cntrl->mhi_link_info;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  741  			write_lock_irq(&mhi_cntrl->pm_lock);<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  742  			link_info->target_link_speed =<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  743  				MHI_TRE_GET_EV_LINKSPEED(local_rp);<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  744  			link_info->target_link_width =<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  745  				MHI_TRE_GET_EV_LINKWIDTH(local_rp);<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  746  			write_unlock_irq(&mhi_cntrl->pm_lock);<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  747  			dev_dbg(dev, "Received BW_REQ event\n");<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  748  			mhi_cntrl->status_cb(mhi_cntrl, MHI_CB_BW_REQ);<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  749  			break;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  750  		}<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  751  		case MHI_PKT_TYPE_STATE_CHANGE_EVENT:<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  752  		{<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  753  			enum mhi_state new_state;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  754  <br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  755  			new_state = MHI_TRE_GET_EV_STATE(local_rp);<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  756  <br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  757  			dev_dbg(dev, "State change event to state: %s\n",<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  758  				TO_MHI_STATE_STR(new_state));<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  759  <br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  760  			switch (new_state) {<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  761  			case MHI_STATE_M0:<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  762  				mhi_pm_m0_transition(mhi_cntrl);<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  763  				break;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  764  			case MHI_STATE_M1:<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  765  				mhi_pm_m1_transition(mhi_cntrl);<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  766  				break;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  767  			case MHI_STATE_M3:<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  768  				mhi_pm_m3_transition(mhi_cntrl);<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  769  				break;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  770  			case MHI_STATE_SYS_ERR:<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  771  			{<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  772  				dev_dbg(dev, "System error detected\n");<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  773  				write_lock_irq(&mhi_cntrl->pm_lock);<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20 @774  				new_state = mhi_tryset_pm_state(mhi_cntrl,<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  775  							MHI_PM_SYS_ERR_DETECT);<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  776  				write_unlock_irq(&mhi_cntrl->pm_lock);<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  777  				if (new_state == MHI_PM_SYS_ERR_DETECT)<br>
+bc7ccce5a5192c Hemant Kumar          2020-05-21  778  					mhi_pm_sys_err_handler(mhi_cntrl);<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  779  				break;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  780  			}<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  781  			default:<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  782  				dev_err(dev, "Invalid state: %s\n",<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  783  					TO_MHI_STATE_STR(new_state));<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  784  			}<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  785  <br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  786  			break;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  787  		}<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  788  		case MHI_PKT_TYPE_CMD_COMPLETION_EVENT:<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  789  			mhi_process_cmd_completion(mhi_cntrl, local_rp);<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  790  			break;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  791  		case MHI_PKT_TYPE_EE_EVENT:<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  792  		{<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  793  			enum dev_st_transition st = DEV_ST_TRANSITION_MAX;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  794  			enum mhi_ee_type event = MHI_TRE_GET_EV_EXECENV(local_rp);<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  795  <br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  796  			dev_dbg(dev, "Received EE event: %s\n",<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  797  				TO_MHI_EXEC_STR(event));<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  798  			switch (event) {<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  799  			case MHI_EE_SBL:<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  800  				st = DEV_ST_TRANSITION_SBL;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  801  				break;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  802  			case MHI_EE_WFW:<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  803  			case MHI_EE_AMSS:<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  804  				st = DEV_ST_TRANSITION_MISSION_MODE;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  805  				break;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  806  			case MHI_EE_RDDM:<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  807  				mhi_cntrl->status_cb(mhi_cntrl, MHI_CB_EE_RDDM);<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  808  				write_lock_irq(&mhi_cntrl->pm_lock);<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  809  				mhi_cntrl->ee = event;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  810  				write_unlock_irq(&mhi_cntrl->pm_lock);<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  811  				wake_up_all(&mhi_cntrl->state_event);<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  812  				break;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  813  			default:<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  814  				dev_err(dev,<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  815  					"Unhandled EE event: 0x%x\n", type);<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  816  			}<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  817  			if (st != DEV_ST_TRANSITION_MAX)<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  818  				mhi_queue_state_transition(mhi_cntrl, st);<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  819  <br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  820  			break;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  821  		}<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  822  		case MHI_PKT_TYPE_TX_EVENT:<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  823  			chan = MHI_TRE_GET_EV_CHID(local_rp);<br>
+020960685041fc Hemant Kumar          2020-05-21  824  <br>
+020960685041fc Hemant Kumar          2020-05-21  825  			WARN_ON(chan >= mhi_cntrl->max_chan);<br>
+020960685041fc Hemant Kumar          2020-05-21  826  <br>
+020960685041fc Hemant Kumar          2020-05-21  827  			/*<br>
+020960685041fc Hemant Kumar          2020-05-21  828  			 * Only process the event ring elements whose channel<br>
+020960685041fc Hemant Kumar          2020-05-21  829  			 * ID is within the maximum supported range.<br>
+020960685041fc Hemant Kumar          2020-05-21  830  			 */<br>
+020960685041fc Hemant Kumar          2020-05-21  831  			if (chan < mhi_cntrl->max_chan) {<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  832  				mhi_chan = &mhi_cntrl->mhi_chan[chan];<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  833  				parse_xfer_event(mhi_cntrl, local_rp, mhi_chan);<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  834  				event_quota--;<br>
+020960685041fc Hemant Kumar          2020-05-21  835  			}<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  836  			break;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  837  		default:<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  838  			dev_err(dev, "Unhandled event type: %d\n", type);<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  839  			break;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  840  		}<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  841  <br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  842  		mhi_recycle_ev_ring_element(mhi_cntrl, ev_ring);<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  843  		local_rp = ev_ring->rp;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  844  		dev_rp = mhi_to_virtual(ev_ring, er_ctxt->rp);<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  845  		count++;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  846  	}<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  847  <br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  848  	read_lock_bh(&mhi_cntrl->pm_lock);<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  849  	if (likely(MHI_DB_ACCESS_VALID(mhi_cntrl)))<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  850  		mhi_ring_er_db(mhi_event);<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  851  	read_unlock_bh(&mhi_cntrl->pm_lock);<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  852  <br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  853  	return count;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  854  }<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  855  <br>
+<br>
+---<br>
+0-DAY CI Kernel Test Service, Intel Corporation<br>
+<a  rel="nofollow" href="https://lists.01.org/hyperkitty/list/kbuild-all@xxxxxxxxxxxx">https://lists.01.org/hyperkitty/list/kbuild-all@xxxxxxxxxxxx</a><br>
+<p><strong>Attachment:
+<a href="00180/.config.gz" ><tt>.config.gz</tt></a></strong><br>
+<em>Description:</em> application/gzip</p>
+

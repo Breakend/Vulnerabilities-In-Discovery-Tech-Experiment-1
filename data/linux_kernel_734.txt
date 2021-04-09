@@ -1,0 +1,22 @@
+
+On 08/04/2021 06.09, Will Deacon wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+Couple of stale comment nits:<br>
+</blockquote>
+<br>
+[...]<br>
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+But with that:<br>
+<br>
+Acked-by: Will Deacon <will@xxxxxxxxxx><br>
+</blockquote>
+<br>
+Fixed those for the PR, thanks!<br>
+<br>
+--<br>
+Hector Martin (marcan@xxxxxxxxx)<br>
+Public Key: <a  rel="nofollow" href="https://mrcn.st/pub">https://mrcn.st/pub</a><br>
+<br>
+<br>
+

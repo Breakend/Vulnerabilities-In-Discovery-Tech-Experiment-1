@@ -1,0 +1,15 @@
+The pull request you sent on Thu, 8 Apr 2021 02:07:33 +0000:<br>
+<br>
+><i> git://git.kernel.org/pub/scm/linux/kernel/git/viro/vfs.git fixes</i><br>
+<br>
+has been merged into torvalds/linux.git:<br>
+<a  rel="nofollow" href="https://git.kernel.org/torvalds/c/035d80695fae55ed3e788cd8a62525657a43b924">https://git.kernel.org/torvalds/c/035d80695fae55ed3e788cd8a62525657a43b924</a><br>
+<br>
+Thank you!<br>
+<br>
+-- <br>
+Deet-doot-dot, I am a bot.<br>
+<a  rel="nofollow" href="https://korg.docs.kernel.org/prtracker.html">https://korg.docs.kernel.org/prtracker.html</a><br>
+<br>
+<br>
+

@@ -1,0 +1,64 @@
+Some types of EHCI controllers do not have SBRN registers.<br>
+By comparing the white list, the operation of reading the SBRN<br>
+registers is skipped.<br>
+<br>
+Subsequent EHCI controller types without SBRN registers can be<br>
+directly added to the white list.<br>
+<br>
+The current patch does not affect the drive function.<br>
+<br>
+Signed-off-by: Longfang Liu <liulongfang@xxxxxxxxxx><br>
+---<br>
+ drivers/usb/host/ehci-pci.c | 27 +++++++++++++++++++++++----<br>
+ 1 file changed, 23 insertions(+), 4 deletions(-)<br>
+<br>
+diff --git a/drivers/usb/host/ehci-pci.c b/drivers/usb/host/ehci-pci.c<br>
+index 3c3820a..6a30afa 100644<br>
+--- a/drivers/usb/host/ehci-pci.c<br>
++++ b/drivers/usb/host/ehci-pci.c<br>
+@@ -47,6 +47,28 @@ static inline bool is_bypassed_id(struct pci_dev *pdev)<br>
+ 	return !!pci_match_id(bypass_pci_id_table, pdev);<br>
+ }<br>
+ <br>
++static const struct usb_nosbrn_whitelist_entry {<br>
++	unsigned short vendor;<br>
++	unsigned short device;<br>
++} usb_nosbrn_whitelist[] = {<br>
++	/* STMICRO ConneXT has no sbrn register */<br>
++	{PCI_VENDOR_ID_STMICRO, PCI_DEVICE_ID_STMICRO_USB_HOST},<br>
++	{}<br>
++};<br>
++<br>
++static bool usb_nosbrn_whitelist_check(struct pci_dev *pdev)<br>
++{<br>
++	const struct usb_nosbrn_whitelist_entry *entry;<br>
++<br>
++	for (entry = usb_nosbrn_whitelist; entry->vendor; entry++) {<br>
++		if (pdev->vendor == entry->vendor &&<br>
++		    pdev->device == entry->device)<br>
++			return true;<br>
++	}<br>
++<br>
++	return false;<br>
++}<br>
++<br>
+ /*<br>
+  * 0x84 is the offset of in/out threshold register,<br>
+  * and it is the same offset as the register of 'hostpc'.<br>
+@@ -288,10 +310,7 @@ static int ehci_pci_setup(struct usb_hcd *hcd)<br>
+ 	}<br>
+ <br>
+ 	/* Serial Bus Release Number is at PCI 0x60 offset */<br>
+-	if (pdev->vendor == PCI_VENDOR_ID_STMICRO<br>
+-	    && pdev->device == PCI_DEVICE_ID_STMICRO_USB_HOST)<br>
+-		;	/* ConneXT has no sbrn register */<br>
+-	else<br>
++	if (!usb_nosbrn_whitelist_check(pdev))<br>
+ 		pci_read_config_byte(pdev, 0x60, &ehci->sbrn);<br>
+ <br>
+ 	/* Keep this around for a while just in case some EHCI<br>
+-- <br>
+2.8.1<br>
+<br>
+<br>
+

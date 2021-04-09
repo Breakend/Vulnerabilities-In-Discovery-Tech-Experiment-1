@@ -1,0 +1,206 @@
+Adds bit perf_event_attr::sigtrap, which can be set to cause events to<br>
+send SIGTRAP (with si_code TRAP_PERF) to the task where the event<br>
+occurred. The primary motivation is to support synchronous signals on<br>
+perf events in the task where an event (such as breakpoints) triggered.<br>
+<br>
+To distinguish perf events based on the event type, the type is set in<br>
+si_errno. For events that are associated with an address, si_addr is<br>
+copied from perf_sample_data.<br>
+<br>
+The new field perf_event_attr::sig_data is copied to si_perf, which<br>
+allows user space to disambiguate which event (of the same type)<br>
+triggered the signal. For example, user space could encode the relevant<br>
+information it cares about in sig_data.<br>
+<br>
+We note that the choice of an opaque u64 provides the simplest and most<br>
+flexible option. Alternatives where a reference to some user space data<br>
+is passed back suffer from the problem that modification of referenced<br>
+data (be it the event fd, or the perf_event_attr) can race with the<br>
+signal being delivered (of course, the same caveat applies if user space<br>
+decides to store a pointer in sig_data, but the ABI explicitly avoids<br>
+prescribing such a design).<br>
+<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/lkml/YBv3rAT566k+6zjg@xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/lkml/YBv3rAT566k+6zjg@xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/</a><br>
+Suggested-by: Peter Zijlstra <peterz@xxxxxxxxxxxxx><br>
+Acked-by: Dmitry Vyukov <dvyukov@xxxxxxxxxx><br>
+Signed-off-by: Marco Elver <elver@xxxxxxxxxx><br>
+---<br>
+v4:<br>
+* Generalize setting si_perf and si_addr independent of event type;<br>
+  introduces perf_event_attr::sig_data, which can be set by user space to<br>
+  be propagated to si_perf.<br>
+* Fix race between irq_work running and task's sighand being released by<br>
+  release_task().<br>
+* Warning in perf_sigtrap() if ctx->task and current mismatch; we expect<br>
+  this on architectures that do not properly implement<br>
+  arch_irq_work_raise().<br>
+* Require events that want sigtrap to be associated with a task.<br>
+<br>
+v2:<br>
+* Use atomic_set(&event_count, 1), since it must always be 0 in<br>
+  perf_pending_event_disable().<br>
+* Implicitly restrict inheriting events if sigtrap, but the child was<br>
+  cloned with CLONE_CLEAR_SIGHAND, because it is not generally safe if<br>
+  the child cleared all signal handlers to continue sending SIGTRAP.<br>
+---<br>
+ include/linux/perf_event.h      |  3 ++<br>
+ include/uapi/linux/perf_event.h | 10 ++++++-<br>
+ kernel/events/core.c            | 49 ++++++++++++++++++++++++++++++++-<br>
+ 3 files changed, 60 insertions(+), 2 deletions(-)<br>
+<br>
+diff --git a/include/linux/perf_event.h b/include/linux/perf_event.h<br>
+index 1660039199b2..18ba1282c5c7 100644<br>
+--- a/include/linux/perf_event.h<br>
++++ b/include/linux/perf_event.h<br>
+@@ -778,6 +778,9 @@ struct perf_event {<br>
+ 	void *security;<br>
+ #endif<br>
+ 	struct list_head		sb_list;<br>
++<br>
++	/* Address associated with event, which can be passed to siginfo_t. */<br>
++	u64				sig_addr;<br>
+ #endif /* CONFIG_PERF_EVENTS */<br>
+ };<br>
+ <br>
+diff --git a/include/uapi/linux/perf_event.h b/include/uapi/linux/perf_event.h<br>
+index 8c5b9f5ad63f..31b00e3b69c9 100644<br>
+--- a/include/uapi/linux/perf_event.h<br>
++++ b/include/uapi/linux/perf_event.h<br>
+@@ -311,6 +311,7 @@ enum perf_event_read_format {<br>
+ #define PERF_ATTR_SIZE_VER4	104	/* add: sample_regs_intr */<br>
+ #define PERF_ATTR_SIZE_VER5	112	/* add: aux_watermark */<br>
+ #define PERF_ATTR_SIZE_VER6	120	/* add: aux_sample_size */<br>
++#define PERF_ATTR_SIZE_VER7	128	/* add: sig_data */<br>
+ <br>
+ /*<br>
+  * Hardware event_id to monitor via a performance monitoring event:<br>
+@@ -391,7 +392,8 @@ struct perf_event_attr {<br>
+ 				build_id       :  1, /* use build id in mmap2 events */<br>
+ 				inherit_thread :  1, /* children only inherit if cloned with CLONE_THREAD */<br>
+ 				remove_on_exec :  1, /* event is removed from task on exec */<br>
+-				__reserved_1   : 27;<br>
++				sigtrap        :  1, /* send synchronous SIGTRAP on event */<br>
++				__reserved_1   : 26;<br>
+ <br>
+ 	union {<br>
+ 		__u32		wakeup_events;	  /* wakeup every n events */<br>
+@@ -443,6 +445,12 @@ struct perf_event_attr {<br>
+ 	__u16	__reserved_2;<br>
+ 	__u32	aux_sample_size;<br>
+ 	__u32	__reserved_3;<br>
++<br>
++	/*<br>
++	 * User provided data if sigtrap=1, passed back to user via<br>
++	 * siginfo_t::si_perf, e.g. to permit user to identify the event.<br>
++	 */<br>
++	__u64	sig_data;<br>
+ };<br>
+ <br>
+ /*<br>
+diff --git a/kernel/events/core.c b/kernel/events/core.c<br>
+index 19c045ff2b9c..1d2077389c0c 100644<br>
+--- a/kernel/events/core.c<br>
++++ b/kernel/events/core.c<br>
+@@ -6391,6 +6391,33 @@ void perf_event_wakeup(struct perf_event *event)<br>
+ 	}<br>
+ }<br>
+ <br>
++static void perf_sigtrap(struct perf_event *event)<br>
++{<br>
++	struct kernel_siginfo info;<br>
++<br>
++	/*<br>
++	 * We'd expect this to only occur if the irq_work is delayed and either<br>
++	 * ctx->task or current has changed in the meantime. This can be the<br>
++	 * case on architectures that do not implement arch_irq_work_raise().<br>
++	 */<br>
++	if (WARN_ON_ONCE(event->ctx->task != current))<br>
++		return;<br>
++<br>
++	/*<br>
++	 * perf_pending_event() can race with the task exiting.<br>
++	 */<br>
++	if (current->flags & PF_EXITING)<br>
++		return;<br>
++<br>
++	clear_siginfo(&info);<br>
++	info.si_signo = SIGTRAP;<br>
++	info.si_code = TRAP_PERF;<br>
++	info.si_errno = event->attr.type;<br>
++	info.si_perf = event->attr.sig_data;<br>
++	info.si_addr = (void *)event->sig_addr;<br>
++	force_sig_info(&info);<br>
++}<br>
++<br>
+ static void perf_pending_event_disable(struct perf_event *event)<br>
+ {<br>
+ 	int cpu = READ_ONCE(event->pending_disable);<br>
+@@ -6400,6 +6427,13 @@ static void perf_pending_event_disable(struct perf_event *event)<br>
+ <br>
+ 	if (cpu == smp_processor_id()) {<br>
+ 		WRITE_ONCE(event->pending_disable, -1);<br>
++<br>
++		if (event->attr.sigtrap) {<br>
++			perf_sigtrap(event);<br>
++			atomic_set_release(&event->event_limit, 1); /* rearm event */<br>
++			return;<br>
++		}<br>
++<br>
+ 		perf_event_disable_local(event);<br>
+ 		return;<br>
+ 	}<br>
+@@ -9102,6 +9136,7 @@ static int __perf_event_overflow(struct perf_event *event,<br>
+ 	if (events && atomic_dec_and_test(&event->event_limit)) {<br>
+ 		ret = 1;<br>
+ 		event->pending_kill = POLL_HUP;<br>
++		event->sig_addr = data->addr;<br>
+ <br>
+ 		perf_event_disable_inatomic(event);<br>
+ 	}<br>
+@@ -11382,6 +11417,10 @@ perf_event_alloc(struct perf_event_attr *attr, int cpu,<br>
+ 		if (!task || cpu != -1)<br>
+ 			return ERR_PTR(-EINVAL);<br>
+ 	}<br>
++	if (attr->sigtrap && !task) {<br>
++		/* Requires a task: avoid signalling random tasks. */<br>
++		return ERR_PTR(-EINVAL);<br>
++	}<br>
+ <br>
+ 	event = kzalloc(sizeof(*event), GFP_KERNEL);<br>
+ 	if (!event)<br>
+@@ -11428,6 +11467,9 @@ perf_event_alloc(struct perf_event_attr *attr, int cpu,<br>
+ <br>
+ 	event->state		= PERF_EVENT_STATE_INACTIVE;<br>
+ <br>
++	if (event->attr.sigtrap)<br>
++		atomic_set(&event->event_limit, 1);<br>
++<br>
+ 	if (task) {<br>
+ 		event->attach_state = PERF_ATTACH_TASK;<br>
+ 		/*<br>
+@@ -11706,6 +11748,9 @@ static int perf_copy_attr(struct perf_event_attr __user *uattr,<br>
+ 	if (attr->remove_on_exec && attr->enable_on_exec)<br>
+ 		return -EINVAL;<br>
+ <br>
++	if (attr->sigtrap && !attr->remove_on_exec)<br>
++		return -EINVAL;<br>
++<br>
+ out:<br>
+ 	return ret;<br>
+ <br>
+@@ -12932,7 +12977,9 @@ inherit_task_group(struct perf_event *event, struct task_struct *parent,<br>
+ 	struct perf_event_context *child_ctx;<br>
+ <br>
+ 	if (!event->attr.inherit ||<br>
+-	    (event->attr.inherit_thread && !(clone_flags & CLONE_THREAD))) {<br>
++	    (event->attr.inherit_thread && !(clone_flags & CLONE_THREAD)) ||<br>
++	    /* Do not inherit if sigtrap and signal handlers were cleared. */<br>
++	    (event->attr.sigtrap && (clone_flags & CLONE_CLEAR_SIGHAND))) {<br>
+ 		*inherited_all = 0;<br>
+ 		return 0;<br>
+ 	}<br>
+-- <br>
+2.31.0.208.g409f899ff0-goog<br>
+<br>
+<br>
+

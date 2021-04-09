@@ -1,0 +1,42 @@
+Josh, thank you for taking the time to review the patches.<br>
+<br>
+On 4/7/2021 5:39 PM, Josh Poimboeuf wrote:<br>
+><i> On Tue, Apr 06, 2021 at 10:49:59AM -0500, Ramakrishna Saripalli wrote:</i><br>
+><i>> Because PSF speculation is limited to the current program context,</i><br>
+><i>> the impact of bad PSF speculation is very similar to that of</i><br>
+><i>> Speculative Store Bypass (Spectre v4)</i><br>
+><i>></i><br>
+><i>> Predictive Store Forwarding controls:</i><br>
+><i>> There are two hardware control bits which influence the PSF feature:</i><br>
+><i>> - MSR 48h bit 2 – Speculative Store Bypass (SSBD)</i><br>
+><i>> - MSR 48h bit 7 – Predictive Store Forwarding Disable (PSFD)</i><br>
+><i>></i><br>
+><i>> The PSF feature is disabled if either of these bits are set.  These bits</i><br>
+><i>> are controllable on a per-thread basis in an SMT system. By default, both</i><br>
+><i>> SSBD and PSFD are 0 meaning that the speculation features are enabled.</i><br>
+><i>></i><br>
+><i>> While the SSBD bit disables PSF and speculative store bypass, PSFD only</i><br>
+><i>> disables PSF.</i><br>
+><i>></i><br>
+><i>> PSFD may be desirable for software which is concerned with the</i><br>
+><i>> speculative behavior of PSF but desires a smaller performance impact than</i><br>
+><i>> setting SSBD.</i><br>
+><i> </i><br>
+><i> Hi Ramakrishna,</i><br>
+><i> </i><br>
+><i> Is there a realistic scenario where an application would want to disable</i><br>
+><i> PSF, but not disable SSB?</i><br>
+<br>
+It is possible most applications have been reviewed and scrubbed for SSB-type attacks but PSF-type issues may not have been looked at yet.<br>
+This may be one of the cases where SSB is enabled but PSF is disabled until the application(s) are scrubbed for the same.<br>
+<br>
+In certain cases, disabling PSF may have less impact performance-wise than disabling SSB.<br>
+<br>
+<br>
+><i> </i><br>
+><i> Maybe I'm missing something, but I'd presume an application would either</i><br>
+><i> care about this class of attacks, or not.</i><br>
+><i> </i><br>
+<br>
+<br>
+

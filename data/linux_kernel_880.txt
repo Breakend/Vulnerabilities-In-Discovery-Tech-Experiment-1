@@ -1,0 +1,247 @@
+[Bug][DP501]<br>
+If ASPEED P2A (PCI to AHB) bridge is disabled and disallowed for<br>
+CVE_2019_6260 item3, and then the monitor's EDID is unable read through<br>
+Parade DP501.<br>
+The reason is the DP501's FW is mapped to BMC addressing space rather<br>
+than Host addressing space.<br>
+The resolution is that using "pci_iomap_range()" maps to DP501's FW that<br>
+stored on the end of FB (Frame Buffer).<br>
+In this case, FrameBuffer reserves the last 2MB used for the image of<br>
+DP501.<br>
+<br>
+Signed-off-by: KuoHsiang Chou <kuohsiang_chou@xxxxxxxxxxxxxx><br>
+Reported-by: kernel test robot <lkp@xxxxxxxxx><br>
+---<br>
+ drivers/gpu/drm/ast/ast_dp501.c | 139 +++++++++++++++++++++++---------<br>
+ drivers/gpu/drm/ast/ast_drv.h   |  12 +++<br>
+ drivers/gpu/drm/ast/ast_main.c  |   8 ++<br>
+ 3 files changed, 123 insertions(+), 36 deletions(-)<br>
+<br>
+diff --git a/drivers/gpu/drm/ast/ast_dp501.c b/drivers/gpu/drm/ast/ast_dp501.c<br>
+index 88121c0e0..cd93c44f2 100644<br>
+--- a/drivers/gpu/drm/ast/ast_dp501.c<br>
++++ b/drivers/gpu/drm/ast/ast_dp501.c<br>
+@@ -189,6 +189,9 @@ bool ast_backup_fw(struct drm_device *dev, u8 *addr, u32 size)<br>
+ 	u32 i, data;<br>
+ 	u32 boot_address;<br>
+<br>
++	if (ast->config_mode != ast_use_p2a)<br>
++		return false;<br>
++<br>
+ 	data = ast_mindwm(ast, 0x1e6e2100) & 0x01;<br>
+ 	if (data) {<br>
+ 		boot_address = get_fw_base(ast);<br>
+@@ -207,6 +210,9 @@ static bool ast_launch_m68k(struct drm_device *dev)<br>
+ 	u8 *fw_addr = NULL;<br>
+ 	u8 jreg;<br>
+<br>
++	if (ast->config_mode != ast_use_p2a)<br>
++		return false;<br>
++<br>
+ 	data = ast_mindwm(ast, 0x1e6e2100) & 0x01;<br>
+ 	if (!data) {<br>
+<br>
+@@ -271,25 +277,55 @@ u8 ast_get_dp501_max_clk(struct drm_device *dev)<br>
+ 	struct ast_private *ast = to_ast_private(dev);<br>
+ 	u32 boot_address, offset, data;<br>
+ 	u8 linkcap[4], linkrate, linklanes, maxclk = 0xff;<br>
++	u32 *plinkcap;<br>
+<br>
+-	boot_address = get_fw_base(ast);<br>
+-<br>
+-	/* validate FW version */<br>
+-	offset = 0xf000;<br>
+-	data = ast_mindwm(ast, boot_address + offset);<br>
+-	if ((data & 0xf0) != 0x10) /* version: 1x */<br>
+-		return maxclk;<br>
+-<br>
+-	/* Read Link Capability */<br>
+-	offset  = 0xf014;<br>
+-	*(u32 *)linkcap = ast_mindwm(ast, boot_address + offset);<br>
+-	if (linkcap[2] == 0) {<br>
+-		linkrate = linkcap[0];<br>
+-		linklanes = linkcap[1];<br>
+-		data = (linkrate == 0x0a) ? (90 * linklanes) : (54 * linklanes);<br>
+-		if (data > 0xff)<br>
+-			data = 0xff;<br>
+-		maxclk = (u8)data;<br>
++	if (ast->config_mode == ast_use_p2a) {<br>
++		boot_address = get_fw_base(ast);<br>
++<br>
++		/* validate FW version */<br>
++		offset = AST_DP501_GBL_VERSION;<br>
++		data = ast_mindwm(ast, boot_address + offset);<br>
++		if ((data & AST_DP501_FW_VERSION_MASK) != AST_DP501_FW_VERSION_1) /* version: 1x */<br>
++			return maxclk;<br>
++<br>
++		/* Read Link Capability */<br>
++		offset  = AST_DP501_LINKRATE;<br>
++		plinkcap = (u32 *)linkcap;<br>
++		*plinkcap  = ast_mindwm(ast, boot_address + offset);<br>
++		if (linkcap[2] == 0) {<br>
++			linkrate = linkcap[0];<br>
++			linklanes = linkcap[1];<br>
++			data = (linkrate == 0x0a) ? (90 * linklanes) : (54 * linklanes);<br>
++			if (data > 0xff)<br>
++				data = 0xff;<br>
++			maxclk = (u8)data;<br>
++		}<br>
++	} else {<br>
++		if (!ast->dp501_fw_buf)<br>
++			return AST_DP501_DEFAULT_DCLK;	/* 1024x768 as default */<br>
++<br>
++		/* dummy read */<br>
++		offset = 0x0000;<br>
++		data = readl(ast->dp501_fw_buf + offset);<br>
++<br>
++		/* validate FW version */<br>
++		offset = AST_DP501_GBL_VERSION;<br>
++		data = readl(ast->dp501_fw_buf + offset);<br>
++		if ((data & AST_DP501_FW_VERSION_MASK) != AST_DP501_FW_VERSION_1) /* version: 1x */<br>
++			return maxclk;<br>
++<br>
++		/* Read Link Capability */<br>
++		offset = AST_DP501_LINKRATE;<br>
++		plinkcap = (u32 *)linkcap;<br>
++		*plinkcap = readl(ast->dp501_fw_buf + offset);<br>
++		if (linkcap[2] == 0) {<br>
++			linkrate = linkcap[0];<br>
++			linklanes = linkcap[1];<br>
++			data = (linkrate == 0x0a) ? (90 * linklanes) : (54 * linklanes);<br>
++			if (data > 0xff)<br>
++				data = 0xff;<br>
++			maxclk = (u8)data;<br>
++		}<br>
+ 	}<br>
+ 	return maxclk;<br>
+ }<br>
+@@ -298,26 +334,57 @@ bool ast_dp501_read_edid(struct drm_device *dev, u8 *ediddata)<br>
+ {<br>
+ 	struct ast_private *ast = to_ast_private(dev);<br>
+ 	u32 i, boot_address, offset, data;<br>
++	u32 *pEDIDidx;<br>
+<br>
+-	boot_address = get_fw_base(ast);<br>
+-<br>
+-	/* validate FW version */<br>
+-	offset = 0xf000;<br>
+-	data = ast_mindwm(ast, boot_address + offset);<br>
+-	if ((data & 0xf0) != 0x10)<br>
+-		return false;<br>
+-<br>
+-	/* validate PnP Monitor */<br>
+-	offset = 0xf010;<br>
+-	data = ast_mindwm(ast, boot_address + offset);<br>
+-	if (!(data & 0x01))<br>
+-		return false;<br>
++	if (ast->config_mode == ast_use_p2a) {<br>
++		boot_address = get_fw_base(ast);<br>
+<br>
+-	/* Read EDID */<br>
+-	offset = 0xf020;<br>
+-	for (i = 0; i < 128; i += 4) {<br>
+-		data = ast_mindwm(ast, boot_address + offset + i);<br>
+-		*(u32 *)(ediddata + i) = data;<br>
++		/* validate FW version */<br>
++		offset = AST_DP501_GBL_VERSION;<br>
++		data = ast_mindwm(ast, boot_address + offset);<br>
++		if ((data & AST_DP501_FW_VERSION_MASK) != AST_DP501_FW_VERSION_1)<br>
++			return false;<br>
++<br>
++		/* validate PnP Monitor */<br>
++		offset = AST_DP501_PNPMONITOR;<br>
++		data = ast_mindwm(ast, boot_address + offset);<br>
++		if (!(data & AST_DP501_PNP_CONNECTED))<br>
++			return false;<br>
++<br>
++		/* Read EDID */<br>
++		offset = AST_DP501_EDID_DATA;<br>
++		for (i = 0; i < 128; i += 4) {<br>
++			data = ast_mindwm(ast, boot_address + offset + i);<br>
++			pEDIDidx = (u32 *)(ediddata + i);<br>
++			*pEDIDidx = data;<br>
++		}<br>
++	} else {<br>
++		if (!ast->dp501_fw_buf)<br>
++			return false;<br>
++<br>
++		/* dummy read */<br>
++		offset = 0x0000;<br>
++		data = readl(ast->dp501_fw_buf + offset);<br>
++<br>
++		/* validate FW version */<br>
++		offset = AST_DP501_GBL_VERSION;<br>
++		data = readl(ast->dp501_fw_buf + offset);<br>
++		if ((data & AST_DP501_FW_VERSION_MASK) != AST_DP501_FW_VERSION_1)<br>
++			return false;<br>
++<br>
++		/* validate PnP Monitor */<br>
++		offset = AST_DP501_PNPMONITOR;<br>
++		data = readl(ast->dp501_fw_buf + offset);<br>
++		if (!(data & AST_DP501_PNP_CONNECTED))<br>
++			return false;<br>
++<br>
++		/* Read EDID */<br>
++		offset = AST_DP501_EDID_DATA;<br>
++		for (i = 0; i < 128; i += 4) {<br>
++			data = readl(ast->dp501_fw_buf + offset + i);<br>
++			pEDIDidx = (u32 *)(ediddata + i);<br>
++			*pEDIDidx = data;<br>
++		}<br>
+ 	}<br>
+<br>
+ 	return true;<br>
+diff --git a/drivers/gpu/drm/ast/ast_drv.h b/drivers/gpu/drm/ast/ast_drv.h<br>
+index e82ab8628..911f9f414 100644<br>
+--- a/drivers/gpu/drm/ast/ast_drv.h<br>
++++ b/drivers/gpu/drm/ast/ast_drv.h<br>
+@@ -150,6 +150,7 @@ struct ast_private {<br>
+<br>
+ 	void __iomem *regs;<br>
+ 	void __iomem *ioregs;<br>
++	void __iomem *dp501_fw_buf;<br>
+<br>
+ 	enum ast_chip chip;<br>
+ 	bool vga2_clone;<br>
+@@ -325,6 +326,17 @@ int ast_mode_config_init(struct ast_private *ast);<br>
+ #define AST_MM_ALIGN_SHIFT 4<br>
+ #define AST_MM_ALIGN_MASK ((1 << AST_MM_ALIGN_SHIFT) - 1)<br>
+<br>
++#define AST_DP501_FW_VERSION_MASK	GENMASK(7, 4)<br>
++#define AST_DP501_FW_VERSION_1		BIT(4)<br>
++#define AST_DP501_PNP_CONNECTED		BIT(1)<br>
++<br>
++#define AST_DP501_DEFAULT_DCLK	65<br>
++<br>
++#define AST_DP501_GBL_VERSION	0xf000<br>
++#define AST_DP501_PNPMONITOR	0xf010<br>
++#define AST_DP501_LINKRATE	0xf014<br>
++#define AST_DP501_EDID_DATA	0xf020<br>
++<br>
+ int ast_mm_init(struct ast_private *ast);<br>
+<br>
+ /* ast post */<br>
+diff --git a/drivers/gpu/drm/ast/ast_main.c b/drivers/gpu/drm/ast/ast_main.c<br>
+index 0ac3c2039..dbf5224ab 100644<br>
+--- a/drivers/gpu/drm/ast/ast_main.c<br>
++++ b/drivers/gpu/drm/ast/ast_main.c<br>
+@@ -450,6 +450,14 @@ struct ast_private *ast_device_create(const struct drm_driver *drv,<br>
+ 	if (ret)<br>
+ 		return ERR_PTR(ret);<br>
+<br>
++	/* map reserved buffer */<br>
++	ast->dp501_fw_buf = NULL;<br>
++	if (dev->vram_mm->vram_size < pci_resource_len(dev->pdev, 0)) {<br>
++		ast->dp501_fw_buf = pci_iomap_range(dev->pdev, 0, dev->vram_mm->vram_size, 0);<br>
++		if (!ast->dp501_fw_buf)<br>
++			drm_info(dev, "failed to map reserved buffer!\n");<br>
++	}<br>
++<br>
+ 	ret = ast_mode_config_init(ast);<br>
+ 	if (ret)<br>
+ 		return ERR_PTR(ret);<br>
+--<br>
+2.18.4<br>
+<br>
+<br>
+

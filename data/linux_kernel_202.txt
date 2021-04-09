@@ -1,0 +1,28 @@
+On Thu, Apr 08, 2021 at 11:20:16AM -0500, Rob Herring wrote:<br>
+><i> On Tue, Apr 06, 2021 at 02:25:49PM -0400, Jim Quinlan wrote:</i><br>
+><i> > On Tue, Apr 6, 2021 at 1:32 PM Mark Brown <broonie@xxxxxxxxxx> wrote:</i><br>
+<br>
+><i> > > > On Tue, Apr 6, 2021 at 12:47 PM Mark Brown <broonie@xxxxxxxxxx> wrote:</i><br>
+<br>
+><i> > > > > No great problem with having these in the controller node (assming it</i><br>
+><i> > > > > accurately describes the hardware) but I do think we ought to also be</i><br>
+><i> > > > > able to describe these per slot.</i><br>
+<br>
+><i> PCIe is effectively point to point, so there's only 1 slot unless </i><br>
+><i> there's a PCIe switch in the middle. If that's the case, then it's all </i><br>
+><i> more complicated.</i><br>
+<br>
+So even for PCIe that case exists, and it's not entirely clear to me<br>
+that this is all definitively PCIe specific.<br>
+<br>
+><i> > o After some deliberation, RobH preferred that the voltage regulators</i><br>
+><i> > should go into the PCIe subnode device's DT node.</i><br>
+<br>
+><i> IIRC, that's because you said there isn't a standard slot.</i><br>
+<br>
+I recall some message in the thread that said both cases exist even with<br>
+this specific system.<br>
+<p><strong>Attachment:
+<a href="01013/signature.asc" ><tt>signature.asc</tt></a></strong><br>
+<em>Description:</em> PGP signature</p>
+

@@ -1,0 +1,77 @@
+Hi Liu,<br>
+Thanks for your patch.<br>
+<br>
+On Thu, Apr 08, 2021 at 05:08:27PM +0800, Dinghao Liu wrote:<br>
+><i> When v4l2_subdev_call() fails, a pairing PM usage counter</i><br>
+><i> decrement is needed to keep the counter balanced. It's the</i><br>
+><i> same for the following error paths in case 'enable' is on.</i><br>
+><i> </i><br>
+><i> Signed-off-by: Dinghao Liu <dinghao.liu@xxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  drivers/staging/media/imx/imx7-mipi-csis.c | 9 +++++++--</i><br>
+><i>  1 file changed, 7 insertions(+), 2 deletions(-)</i><br>
+><i> </i><br>
+><i> diff --git a/drivers/staging/media/imx/imx7-mipi-csis.c b/drivers/staging/media/imx/imx7-mipi-csis.c</i><br>
+><i> index a01a7364b4b9..2a3fff231a40 100644</i><br>
+><i> --- a/drivers/staging/media/imx/imx7-mipi-csis.c</i><br>
+><i> +++ b/drivers/staging/media/imx/imx7-mipi-csis.c</i><br>
+><i> @@ -627,21 +627,26 @@ static int mipi_csis_s_stream(struct v4l2_subdev *mipi_sd, int enable)</i><br>
+><i>  			return ret;</i><br>
+><i>  		}</i><br>
+><i>  		ret = v4l2_subdev_call(state->src_sd, core, s_power, 1);</i><br>
+><i> -		if (ret < 0)</i><br>
+><i> +		if (ret < 0) {</i><br>
+><i> +			pm_runtime_put_noidle(&state->pdev->dev);</i><br>
+<br>
+I think here we should go completely pm_runtime_put to call the<br>
+mipi_csis_pm_suspend down the line, right?<br>
+<br>
+><i>  			return ret;</i><br>
+><i> +		}</i><br>
+><i>  	}</i><br>
+><i>  </i><br>
+><i>  	mutex_lock(&state->lock);</i><br>
+><i>  	if (enable) {</i><br>
+><i>  		if (state->flags & ST_SUSPENDED) {</i><br>
+><i>  			ret = -EBUSY;</i><br>
+><i> +			pm_runtime_put_noidle(&state->pdev->dev);</i><br>
+<br>
+since we are in ST_SUSPENDED state, for sure the pm counter was<br>
+already 0.<br>
+<br>
+><i>  			goto unlock;</i><br>
+><i>  		}</i><br>
+><i>  </i><br>
+><i>  		mipi_csis_start_stream(state);</i><br>
+><i>  		ret = v4l2_subdev_call(state->src_sd, video, s_stream, 1);</i><br>
+><i> -		if (ret < 0)</i><br>
+><i> +		if (ret < 0) {</i><br>
+><i> +			pm_runtime_put_noidle(&state->pdev->dev);</i><br>
+<br>
+here also we need the pm_runtime_put, maybe just changing the unlock<br>
+tag bellow from:<br>
+    if (!enable)<br>
+        pm_runtime_put(&state->pdev->dev);<br>
+<br>
+to <br>
+    if (!enable || (ret < 0))<br>
+        pm_runtime_put(&state->pdev->dev);<br>
+<br>
+will not hurt the first case and will complete the suspend routine<br>
+afterward in the second case.<br>
+<br>
+------<br>
+Cheers,<br>
+     Rui<br>
+><i>  			goto unlock;</i><br>
+><i> +		}</i><br>
+><i>  </i><br>
+><i>  		mipi_csis_log_counters(state, true);</i><br>
+><i>  </i><br>
+><i> -- </i><br>
+><i> 2.17.1</i><br>
+><i> </i><br>
+><i> </i><br>
+<br>
+<br>
+

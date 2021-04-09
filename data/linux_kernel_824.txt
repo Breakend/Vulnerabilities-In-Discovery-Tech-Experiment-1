@@ -1,0 +1,42 @@
+On 4/8/2021 1:45 PM, Artur Petrosyan wrote:<br>
+><i> When core is in partial power down state and an external</i><br>
+><i> hub is connected, upper layer sends URB enqueue request,</i><br>
+><i> which results in port reset issue.</i><br>
+><i> </i><br>
+><i> Added exit from partial power down state to avoid port</i><br>
+><i> reset issue and process upper layer request correctly.</i><br>
+><i> </i><br>
+><i> Signed-off-by: Artur Petrosyan <Arthur.Petrosyan@xxxxxxxxxxxx></i><br>
+<br>
+Acked-by: Minas Harutyunyan <Minas.Harutyunyan@xxxxxxxxxxxx><br>
+<br>
+><i> ---</i><br>
+><i>   Changes in v3:</i><br>
+><i>   - None</i><br>
+><i>   Changes in v2:</i><br>
+><i>   - None</i><br>
+><i> </i><br>
+><i>   drivers/usb/dwc2/hcd.c | 7 +++++++</i><br>
+><i>   1 file changed, 7 insertions(+)</i><br>
+><i> </i><br>
+><i> diff --git a/drivers/usb/dwc2/hcd.c b/drivers/usb/dwc2/hcd.c</i><br>
+><i> index 9529e9839961..cb52bc41bfb8 100644</i><br>
+><i> --- a/drivers/usb/dwc2/hcd.c</i><br>
+><i> +++ b/drivers/usb/dwc2/hcd.c</i><br>
+><i> @@ -4633,6 +4633,13 @@ static int _dwc2_hcd_urb_enqueue(struct usb_hcd *hcd, struct urb *urb,</i><br>
+><i>   		dwc2_dump_urb_info(hcd, urb, "urb_enqueue");</i><br>
+><i>   	}</i><br>
+><i>   </i><br>
+><i> +	if (hsotg->in_ppd) {</i><br>
+><i> +		retval = dwc2_exit_partial_power_down(hsotg, 0, true);</i><br>
+><i> +		if (retval)</i><br>
+><i> +			dev_err(hsotg->dev,</i><br>
+><i> +				"exit partial_power_down failed\n");</i><br>
+><i> +	}</i><br>
+><i> +</i><br>
+><i>   	if (!ep)</i><br>
+><i>   		return -EINVAL;</i><br>
+><i>   </i><br>
+><i> </i><br>
+<br>
+

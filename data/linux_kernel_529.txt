@@ -1,0 +1,137 @@
+Remove users of tty_debug() and replace them with calls to dev_dbg()<br>
+which provides more information about the tty that has the error and<br>
+uses the standard formatting logic.<br>
+<br>
+Cc: Tetsuo Handa <penguin-kernel@xxxxxxxxxxxxxxxxxxx><br>
+Cc: Jiri Slaby <jirislaby@xxxxxxxxxx><br>
+Signed-off-by: Greg Kroah-Hartman <gregkh@xxxxxxxxxxxxxxxxxxx><br>
+---<br>
+ drivers/tty/pty.c         |  2 +-<br>
+ drivers/tty/tty.h         |  5 -----<br>
+ drivers/tty/tty_io.c      | 14 +++++++-------<br>
+ drivers/tty/tty_ioctl.c   |  2 +-<br>
+ drivers/tty/tty_jobctrl.c |  4 ++--<br>
+ drivers/tty/tty_ldisc.c   |  2 +-<br>
+ 6 files changed, 12 insertions(+), 17 deletions(-)<br>
+<br>
+diff --git a/drivers/tty/pty.c b/drivers/tty/pty.c<br>
+index 6c90d3fd2d51..5695c78fbe55 100644<br>
+--- a/drivers/tty/pty.c<br>
++++ b/drivers/tty/pty.c<br>
+@@ -33,7 +33,7 @@<br>
+ <br>
+ #undef TTY_DEBUG_HANGUP<br>
+ #ifdef TTY_DEBUG_HANGUP<br>
+-# define tty_debug_hangup(tty, f, args...)	tty_debug(tty, f, ##args)<br>
++# define tty_debug_hangup(tty, f, args...)	dev_dbg(tty->dev, f, ##args)<br>
+ #else<br>
+ # define tty_debug_hangup(tty, f, args...)	do {} while (0)<br>
+ #endif<br>
+diff --git a/drivers/tty/tty.h b/drivers/tty/tty.h<br>
+index a2084b58d4f3..e9cb918348cf 100644<br>
+--- a/drivers/tty/tty.h<br>
++++ b/drivers/tty/tty.h<br>
+@@ -6,9 +6,4 @@<br>
+ #ifndef _TTY_INTERNAL_H<br>
+ #define _TTY_INTERNAL_H<br>
+ <br>
+-#define tty_msg(fn, tty, f, ...) \<br>
+-	fn("%s %s: " f, tty_driver_name(tty), tty_name(tty), ##__VA_ARGS__)<br>
+-<br>
+-#define tty_debug(tty, f, ...)	tty_msg(pr_debug, tty, f, ##__VA_ARGS__)<br>
+-<br>
+ #endif<br>
+diff --git a/drivers/tty/tty_io.c b/drivers/tty/tty_io.c<br>
+index 91062fcc6667..1c480c04374c 100644<br>
+--- a/drivers/tty/tty_io.c<br>
++++ b/drivers/tty/tty_io.c<br>
+@@ -112,7 +112,7 @@<br>
+ <br>
+ #undef TTY_DEBUG_HANGUP<br>
+ #ifdef TTY_DEBUG_HANGUP<br>
+-# define tty_debug_hangup(tty, f, args...)	tty_debug(tty, f, ##args)<br>
++# define tty_debug_hangup(tty, f, args...)	dev_dbg(tty->dev, f, ##args)<br>
+ #else<br>
+ # define tty_debug_hangup(tty, f, args...)	do { } while (0)<br>
+ #endif<br>
+@@ -1639,7 +1639,7 @@ static int tty_release_checks(struct tty_struct *tty, int idx)<br>
+ {<br>
+ #ifdef TTY_PARANOIA_CHECK<br>
+ 	if (idx < 0 || idx >= tty->driver->num) {<br>
+-		tty_debug(tty, "bad idx %d\n", idx);<br>
++		dev_dbg(tty->dev, "bad idx %d\n", idx);<br>
+ 		return -1;<br>
+ 	}<br>
+ <br>
+@@ -1648,20 +1648,20 @@ static int tty_release_checks(struct tty_struct *tty, int idx)<br>
+ 		return 0;<br>
+ <br>
+ 	if (tty != tty->driver->ttys[idx]) {<br>
+-		tty_debug(tty, "bad driver table[%d] = %p\n",<br>
+-			  idx, tty->driver->ttys[idx]);<br>
++		dev_dbg(tty->dev, "bad driver table[%d] = %p\n",<br>
++			idx, tty->driver->ttys[idx]);<br>
+ 		return -1;<br>
+ 	}<br>
+ 	if (tty->driver->other) {<br>
+ 		struct tty_struct *o_tty = tty->link;<br>
+ <br>
+ 		if (o_tty != tty->driver->other->ttys[idx]) {<br>
+-			tty_debug(tty, "bad other table[%d] = %p\n",<br>
+-				  idx, tty->driver->other->ttys[idx]);<br>
++			dev_dbg(tty->dev, "bad other table[%d] = %p\n",<br>
++				idx, tty->driver->other->ttys[idx]);<br>
+ 			return -1;<br>
+ 		}<br>
+ 		if (o_tty->link != tty) {<br>
+-			tty_debug(tty, "bad link = %p\n", o_tty->link);<br>
++			dev_dbg(tty->dev, "bad link = %p\n", o_tty->link);<br>
+ 			return -1;<br>
+ 		}<br>
+ 	}<br>
+diff --git a/drivers/tty/tty_ioctl.c b/drivers/tty/tty_ioctl.c<br>
+index 4de1c6ddb8ff..053290ab5cb8 100644<br>
+--- a/drivers/tty/tty_ioctl.c<br>
++++ b/drivers/tty/tty_ioctl.c<br>
+@@ -28,7 +28,7 @@<br>
+ #undef TTY_DEBUG_WAIT_UNTIL_SENT<br>
+ <br>
+ #ifdef TTY_DEBUG_WAIT_UNTIL_SENT<br>
+-# define tty_debug_wait_until_sent(tty, f, args...)    tty_debug(tty, f, ##args)<br>
++# define tty_debug_wait_until_sent(tty, f, args...)    dev_dbg(tty->dev, f, ##args)<br>
+ #else<br>
+ # define tty_debug_wait_until_sent(tty, f, args...)    do {} while (0)<br>
+ #endif<br>
+diff --git a/drivers/tty/tty_jobctrl.c b/drivers/tty/tty_jobctrl.c<br>
+index 19ec43a6ef76..bbc404255291 100644<br>
+--- a/drivers/tty/tty_jobctrl.c<br>
++++ b/drivers/tty/tty_jobctrl.c<br>
+@@ -109,8 +109,8 @@ static void __proc_set_tty(struct tty_struct *tty)<br>
+ 	tty->session = get_pid(task_session(current));<br>
+ 	spin_unlock_irqrestore(&tty->ctrl_lock, flags);<br>
+ 	if (current->signal->tty) {<br>
+-		tty_debug(tty, "current tty %s not NULL!!\n",<br>
+-			  current->signal->tty->name);<br>
++		dev_dbg(tty->dev, "current tty %s not NULL!!\n",<br>
++			current->signal->tty->name);<br>
+ 		tty_kref_put(current->signal->tty);<br>
+ 	}<br>
+ 	put_pid(current->signal->tty_old_pgrp);<br>
+diff --git a/drivers/tty/tty_ldisc.c b/drivers/tty/tty_ldisc.c<br>
+index 2e8da820c303..b2e821e14a13 100644<br>
+--- a/drivers/tty/tty_ldisc.c<br>
++++ b/drivers/tty/tty_ldisc.c<br>
+@@ -24,7 +24,7 @@<br>
+ #undef LDISC_DEBUG_HANGUP<br>
+ <br>
+ #ifdef LDISC_DEBUG_HANGUP<br>
+-#define tty_ldisc_debug(tty, f, args...)	tty_debug(tty, f, ##args)<br>
++#define tty_ldisc_debug(tty, f, args...)	dev_dbg(tty->dev, f, ##args)<br>
+ #else<br>
+ #define tty_ldisc_debug(tty, f, args...)<br>
+ #endif<br>
+-- <br>
+2.31.1<br>
+<br>
+<br>
+

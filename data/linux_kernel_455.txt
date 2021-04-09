@@ -1,0 +1,638 @@
+From: SeongJae Park <sjpark@xxxxxxxxx><br>
+<br>
+DAMON is a data access monitoring framework for the Linux kernel.  The<br>
+core mechanisms of DAMON make it<br>
+<br>
+ - accurate (the monitoring output is useful enough for DRAM level<br>
+   performance-centric memory management; It might be inappropriate for<br>
+   CPU cache levels, though),<br>
+ - light-weight (the monitoring overhead is normally low enough to be<br>
+   applied online), and<br>
+ - scalable (the upper-bound of the overhead is in constant range<br>
+   regardless of the size of target workloads).<br>
+<br>
+Using this framework, hence, we can easily write efficient kernel space<br>
+data access monitoring applications.  For example, the kernel's memory<br>
+management mechanisms can make advanced decisions using this.<br>
+Experimental data access aware optimization works that incurring high<br>
+access monitoring overhead could again be implemented on top of this.<br>
+<br>
+Due to its simple and flexible interface, providing user space interface<br>
+would be also easy.  Then, user space users who have some special<br>
+workloads can write personalized applications for better understanding<br>
+and optimizations of their workloads and systems.<br>
+<br>
+===<br>
+<br>
+Nevertheless, this commit is defining and implementing only basic access<br>
+check part without the overhead-accuracy handling core logic.  The basic<br>
+access check is as below.<br>
+<br>
+The output of DAMON says what memory regions are how frequently accessed<br>
+for a given duration.  The resolution of the access frequency is<br>
+controlled by setting ``sampling interval`` and ``aggregation<br>
+interval``.  In detail, DAMON checks access to each page per ``sampling<br>
+interval`` and aggregates the results.  In other words, counts the<br>
+number of the accesses to each region.  After each ``aggregation<br>
+interval`` passes, DAMON calls callback functions that previously<br>
+registered by users so that users can read the aggregated results and<br>
+then clears the results.  This can be described in below simple<br>
+pseudo-code::<br>
+<br>
+    init()<br>
+    while monitoring_on:<br>
+        for page in monitoring_target:<br>
+            if accessed(page):<br>
+                nr_accesses[page] += 1<br>
+        if time() % aggregation_interval == 0:<br>
+            for callback in user_registered_callbacks:<br>
+                callback(monitoring_target, nr_accesses)<br>
+            for page in monitoring_target:<br>
+                nr_accesses[page] = 0<br>
+        if time() % update_interval == 0:<br>
+            update()<br>
+        sleep(sampling interval)<br>
+<br>
+The target regions constructed at the beginning of the monitoring and<br>
+updated after each ``regions_update_interval``, because the target<br>
+regions could be dynamically changed (e.g., mmap() or memory hotplug).<br>
+The monitoring overhead of this mechanism will arbitrarily increase as<br>
+the size of the target workload grows.<br>
+<br>
+The basic monitoring primitives for actual access check and dynamic<br>
+target regions construction aren't in the core part of DAMON.  Instead,<br>
+it allows users to implement their own primitives that are optimized for<br>
+their use case and configure DAMON to use those.  In other words, users<br>
+cannot use current version of DAMON without some additional works.<br>
+<br>
+Following commits will implement the core mechanisms for the<br>
+overhead-accuracy control and default primitives implementations.<br>
+<br>
+Signed-off-by: SeongJae Park <sjpark@xxxxxxxxx><br>
+Reviewed-by: Leonard Foerster <foersleo@xxxxxxxxx><br>
+---<br>
+ include/linux/damon.h | 167 ++++++++++++++++++++++<br>
+ mm/Kconfig            |   3 +<br>
+ mm/Makefile           |   1 +<br>
+ mm/damon/Kconfig      |  15 ++<br>
+ mm/damon/Makefile     |   3 +<br>
+ mm/damon/core.c       | 318 ++++++++++++++++++++++++++++++++++++++++++<br>
+ 6 files changed, 507 insertions(+)<br>
+ create mode 100644 include/linux/damon.h<br>
+ create mode 100644 mm/damon/Kconfig<br>
+ create mode 100644 mm/damon/Makefile<br>
+ create mode 100644 mm/damon/core.c<br>
+<br>
+diff --git a/include/linux/damon.h b/include/linux/damon.h<br>
+new file mode 100644<br>
+index 000000000000..2f652602b1ea<br>
+--- /dev/null<br>
++++ b/include/linux/damon.h<br>
+@@ -0,0 +1,167 @@<br>
++/* SPDX-License-Identifier: GPL-2.0 */<br>
++/*<br>
++ * DAMON api<br>
++ *<br>
++ * Author: SeongJae Park <sjpark@xxxxxxxxx><br>
++ */<br>
++<br>
++#ifndef _DAMON_H_<br>
++#define _DAMON_H_<br>
++<br>
++#include <linux/mutex.h><br>
++#include <linux/time64.h><br>
++#include <linux/types.h><br>
++<br>
++struct damon_ctx;<br>
++<br>
++/**<br>
++ * struct damon_primitive	Monitoring primitives for given use cases.<br>
++ *<br>
++ * @init:			Initialize primitive-internal data structures.<br>
++ * @update:			Update primitive-internal data structures.<br>
++ * @prepare_access_checks:	Prepare next access check of target regions.<br>
++ * @check_accesses:		Check the accesses to target regions.<br>
++ * @reset_aggregated:		Reset aggregated accesses monitoring results.<br>
++ * @target_valid:		Determine if the target is valid.<br>
++ * @cleanup:			Clean up the context.<br>
++ *<br>
++ * DAMON can be extended for various address spaces and usages.  For this,<br>
++ * users should register the low level primitives for their target address<br>
++ * space and usecase via the &damon_ctx.primitive.  Then, the monitoring thread<br>
++ * (&damon_ctx.kdamond) calls @init and @prepare_access_checks before starting<br>
++ * the monitoring, @update after each &damon_ctx.primitive_update_interval, and<br>
++ * @check_accesses, @target_valid and @prepare_access_checks after each<br>
++ * &damon_ctx.sample_interval.  Finally, @reset_aggregated is called after each<br>
++ * &damon_ctx.aggr_interval.<br>
++ *<br>
++ * @init should initialize primitive-internal data structures.  For example,<br>
++ * this could be used to construct proper monitoring target regions and link<br>
++ * those to @damon_ctx.target.<br>
++ * @update should update the primitive-internal data structures.  For example,<br>
++ * this could be used to update monitoring target regions for current status.<br>
++ * @prepare_access_checks should manipulate the monitoring regions to be<br>
++ * prepared for the next access check.<br>
++ * @check_accesses should check the accesses to each region that made after the<br>
++ * last preparation and update the number of observed accesses of each region.<br>
++ * @reset_aggregated should reset the access monitoring results that aggregated<br>
++ * by @check_accesses.<br>
++ * @target_valid should check whether the target is still valid for the<br>
++ * monitoring.<br>
++ * @cleanup is called from @kdamond just before its termination.<br>
++ */<br>
++struct damon_primitive {<br>
++	void (*init)(struct damon_ctx *context);<br>
++	void (*update)(struct damon_ctx *context);<br>
++	void (*prepare_access_checks)(struct damon_ctx *context);<br>
++	void (*check_accesses)(struct damon_ctx *context);<br>
++	void (*reset_aggregated)(struct damon_ctx *context);<br>
++	bool (*target_valid)(void *target);<br>
++	void (*cleanup)(struct damon_ctx *context);<br>
++};<br>
++<br>
++/*<br>
++ * struct damon_callback	Monitoring events notification callbacks.<br>
++ *<br>
++ * @before_start:	Called before starting the monitoring.<br>
++ * @after_sampling:	Called after each sampling.<br>
++ * @after_aggregation:	Called after each aggregation.<br>
++ * @before_terminate:	Called before terminating the monitoring.<br>
++ * @private:		User private data.<br>
++ *<br>
++ * The monitoring thread (&damon_ctx.kdamond) calls @before_start and<br>
++ * @before_terminate just before starting and finishing the monitoring,<br>
++ * respectively.  Therefore, those are good places for installing and cleaning<br>
++ * @private.<br>
++ *<br>
++ * The monitoring thread calls @after_sampling and @after_aggregation for each<br>
++ * of the sampling intervals and aggregation intervals, respectively.<br>
++ * Therefore, users can safely access the monitoring results without additional<br>
++ * protection.  For the reason, users are recommended to use these callback for<br>
++ * the accesses to the results.<br>
++ *<br>
++ * If any callback returns non-zero, monitoring stops.<br>
++ */<br>
++struct damon_callback {<br>
++	void *private;<br>
++<br>
++	int (*before_start)(struct damon_ctx *context);<br>
++	int (*after_sampling)(struct damon_ctx *context);<br>
++	int (*after_aggregation)(struct damon_ctx *context);<br>
++	int (*before_terminate)(struct damon_ctx *context);<br>
++};<br>
++<br>
++/**<br>
++ * struct damon_ctx - Represents a context for each monitoring.  This is the<br>
++ * main interface that allows users to set the attributes and get the results<br>
++ * of the monitoring.<br>
++ *<br>
++ * @sample_interval:		The time between access samplings.<br>
++ * @aggr_interval:		The time between monitor results aggregations.<br>
++ * @primitive_update_interval:	The time between monitoring primitive updates.<br>
++ *<br>
++ * For each @sample_interval, DAMON checks whether each region is accessed or<br>
++ * not.  It aggregates and keeps the access information (number of accesses to<br>
++ * each region) for @aggr_interval time.  DAMON also checks whether the target<br>
++ * memory regions need update (e.g., by ``mmap()`` calls from the application,<br>
++ * in case of virtual memory monitoring) and applies the changes for each<br>
++ * @primitive_update_interval.  All time intervals are in micro-seconds.<br>
++ * Please refer to &struct damon_primitive and &struct damon_callback for more<br>
++ * detail.<br>
++ *<br>
++ * @kdamond:		Kernel thread who does the monitoring.<br>
++ * @kdamond_stop:	Notifies whether kdamond should stop.<br>
++ * @kdamond_lock:	Mutex for the synchronizations with @kdamond.<br>
++ *<br>
++ * For each monitoring context, one kernel thread for the monitoring is<br>
++ * created.  The pointer to the thread is stored in @kdamond.<br>
++ *<br>
++ * Once started, the monitoring thread runs until explicitly required to be<br>
++ * terminated or every monitoring target is invalid.  The validity of the<br>
++ * targets is checked via the &damon_primitive.target_valid of @primitive.  The<br>
++ * termination can also be explicitly requested by writing non-zero to<br>
++ * @kdamond_stop.  The thread sets @kdamond to NULL when it terminates.<br>
++ * Therefore, users can know whether the monitoring is ongoing or terminated by<br>
++ * reading @kdamond.  Reads and writes to @kdamond and @kdamond_stop from<br>
++ * outside of the monitoring thread must be protected by @kdamond_lock.<br>
++ *<br>
++ * Note that the monitoring thread protects only @kdamond and @kdamond_stop via<br>
++ * @kdamond_lock.  Accesses to other fields must be protected by themselves.<br>
++ *<br>
++ * @primitive:	Set of monitoring primitives for given use cases.<br>
++ * @callback:	Set of callbacks for monitoring events notifications.<br>
++ *<br>
++ * @target:	Pointer to the user-defined monitoring target.<br>
++ */<br>
++struct damon_ctx {<br>
++	unsigned long sample_interval;<br>
++	unsigned long aggr_interval;<br>
++	unsigned long primitive_update_interval;<br>
++<br>
++/* private: internal use only */<br>
++	struct timespec64 last_aggregation;<br>
++	struct timespec64 last_primitive_update;<br>
++<br>
++/* public: */<br>
++	struct task_struct *kdamond;<br>
++	bool kdamond_stop;<br>
++	struct mutex kdamond_lock;<br>
++<br>
++	struct damon_primitive primitive;<br>
++	struct damon_callback callback;<br>
++<br>
++	void *target;<br>
++};<br>
++<br>
++#ifdef CONFIG_DAMON<br>
++<br>
++struct damon_ctx *damon_new_ctx(void);<br>
++void damon_destroy_ctx(struct damon_ctx *ctx);<br>
++int damon_set_attrs(struct damon_ctx *ctx, unsigned long sample_int,<br>
++		unsigned long aggr_int, unsigned long primitive_upd_int);<br>
++<br>
++int damon_start(struct damon_ctx **ctxs, int nr_ctxs);<br>
++int damon_stop(struct damon_ctx **ctxs, int nr_ctxs);<br>
++<br>
++#endif	/* CONFIG_DAMON */<br>
++<br>
++#endif	/* _DAMON_H */<br>
+diff --git a/mm/Kconfig b/mm/Kconfig<br>
+index c2607a1a1259..56bec147bdff 100644<br>
+--- a/mm/Kconfig<br>
++++ b/mm/Kconfig<br>
+@@ -905,4 +905,7 @@ config SECRETMEM<br>
+ # struct io_mapping based helper.  Selected by drivers that need them<br>
+ config IO_MAPPING<br>
+ 	bool<br>
++<br>
++source "mm/damon/Kconfig"<br>
++<br>
+ endmenu<br>
+diff --git a/mm/Makefile b/mm/Makefile<br>
+index a9ad6122d468..e73edb328ef8 100644<br>
+--- a/mm/Makefile<br>
++++ b/mm/Makefile<br>
+@@ -126,3 +126,4 @@ obj-$(CONFIG_MAPPING_DIRTY_HELPERS) += mapping_dirty_helpers.o<br>
+ obj-$(CONFIG_PTDUMP_CORE) += ptdump.o<br>
+ obj-$(CONFIG_PAGE_REPORTING) += page_reporting.o<br>
+ obj-$(CONFIG_IO_MAPPING) += io-mapping.o<br>
++obj-$(CONFIG_DAMON) += damon/<br>
+diff --git a/mm/damon/Kconfig b/mm/damon/Kconfig<br>
+new file mode 100644<br>
+index 000000000000..d00e99ac1a15<br>
+--- /dev/null<br>
++++ b/mm/damon/Kconfig<br>
+@@ -0,0 +1,15 @@<br>
++# SPDX-License-Identifier: GPL-2.0-only<br>
++<br>
++menu "Data Access Monitoring"<br>
++<br>
++config DAMON<br>
++	bool "DAMON: Data Access Monitoring Framework"<br>
++	help<br>
++	  This builds a framework that allows kernel subsystems to monitor<br>
++	  access frequency of each memory region. The information can be useful<br>
++	  for performance-centric DRAM level memory management.<br>
++<br>
++	  See <a  rel="nofollow" href="https://damonitor.github.io/doc/html/latest-damon/index.html">https://damonitor.github.io/doc/html/latest-damon/index.html</a> for<br>
++	  more information.<br>
++<br>
++endmenu<br>
+diff --git a/mm/damon/Makefile b/mm/damon/Makefile<br>
+new file mode 100644<br>
+index 000000000000..4fd2edb4becf<br>
+--- /dev/null<br>
++++ b/mm/damon/Makefile<br>
+@@ -0,0 +1,3 @@<br>
++# SPDX-License-Identifier: GPL-2.0<br>
++<br>
++obj-$(CONFIG_DAMON)		:= core.o<br>
+diff --git a/mm/damon/core.c b/mm/damon/core.c<br>
+new file mode 100644<br>
+index 000000000000..693e51ebc05a<br>
+--- /dev/null<br>
++++ b/mm/damon/core.c<br>
+@@ -0,0 +1,318 @@<br>
++// SPDX-License-Identifier: GPL-2.0<br>
++/*<br>
++ * Data Access Monitor<br>
++ *<br>
++ * Author: SeongJae Park <sjpark@xxxxxxxxx><br>
++ */<br>
++<br>
++#define pr_fmt(fmt) "damon: " fmt<br>
++<br>
++#include <linux/damon.h><br>
++#include <linux/delay.h><br>
++#include <linux/kthread.h><br>
++#include <linux/slab.h><br>
++<br>
++static DEFINE_MUTEX(damon_lock);<br>
++static int nr_running_ctxs;<br>
++<br>
++struct damon_ctx *damon_new_ctx(void)<br>
++{<br>
++	struct damon_ctx *ctx;<br>
++<br>
++	ctx = kzalloc(sizeof(*ctx), GFP_KERNEL);<br>
++	if (!ctx)<br>
++		return NULL;<br>
++<br>
++	ctx->sample_interval = 5 * 1000;<br>
++	ctx->aggr_interval = 100 * 1000;<br>
++	ctx->primitive_update_interval = 1000 * 1000;<br>
++<br>
++	ktime_get_coarse_ts64(&ctx->last_aggregation);<br>
++	ctx->last_primitive_update = ctx->last_aggregation;<br>
++<br>
++	mutex_init(&ctx->kdamond_lock);<br>
++<br>
++	ctx->target = NULL;<br>
++<br>
++	return ctx;<br>
++}<br>
++<br>
++void damon_destroy_ctx(struct damon_ctx *ctx)<br>
++{<br>
++	if (ctx->primitive.cleanup)<br>
++		ctx->primitive.cleanup(ctx);<br>
++	kfree(ctx);<br>
++}<br>
++<br>
++/**<br>
++ * damon_set_attrs() - Set attributes for the monitoring.<br>
++ * @ctx:		monitoring context<br>
++ * @sample_int:		time interval between samplings<br>
++ * @aggr_int:		time interval between aggregations<br>
++ * @primitive_upd_int:	time interval between monitoring primitive updates<br>
++ *<br>
++ * This function should not be called while the kdamond is running.<br>
++ * Every time interval is in micro-seconds.<br>
++ *<br>
++ * Return: 0 on success, negative error code otherwise.<br>
++ */<br>
++int damon_set_attrs(struct damon_ctx *ctx, unsigned long sample_int,<br>
++		    unsigned long aggr_int, unsigned long primitive_upd_int)<br>
++{<br>
++	ctx->sample_interval = sample_int;<br>
++	ctx->aggr_interval = aggr_int;<br>
++	ctx->primitive_update_interval = primitive_upd_int;<br>
++<br>
++	return 0;<br>
++}<br>
++<br>
++static bool damon_kdamond_running(struct damon_ctx *ctx)<br>
++{<br>
++	bool running;<br>
++<br>
++	mutex_lock(&ctx->kdamond_lock);<br>
++	running = ctx->kdamond != NULL;<br>
++	mutex_unlock(&ctx->kdamond_lock);<br>
++<br>
++	return running;<br>
++}<br>
++<br>
++static int kdamond_fn(void *data);<br>
++<br>
++/*<br>
++ * __damon_start() - Starts monitoring with given context.<br>
++ * @ctx:	monitoring context<br>
++ *<br>
++ * This function should be called while damon_lock is hold.<br>
++ *<br>
++ * Return: 0 on success, negative error code otherwise.<br>
++ */<br>
++static int __damon_start(struct damon_ctx *ctx)<br>
++{<br>
++	int err = -EBUSY;<br>
++<br>
++	mutex_lock(&ctx->kdamond_lock);<br>
++	if (!ctx->kdamond) {<br>
++		err = 0;<br>
++		ctx->kdamond_stop = false;<br>
++		ctx->kdamond = kthread_create(kdamond_fn, ctx, "kdamond.%d",<br>
++				nr_running_ctxs);<br>
++		if (IS_ERR(ctx->kdamond))<br>
++			err = PTR_ERR(ctx->kdamond);<br>
++		else<br>
++			wake_up_process(ctx->kdamond);<br>
++	}<br>
++	mutex_unlock(&ctx->kdamond_lock);<br>
++<br>
++	return err;<br>
++}<br>
++<br>
++/**<br>
++ * damon_start() - Starts the monitorings for a given group of contexts.<br>
++ * @ctxs:	an array of the pointers for contexts to start monitoring<br>
++ * @nr_ctxs:	size of @ctxs<br>
++ *<br>
++ * This function starts a group of monitoring threads for a group of monitoring<br>
++ * contexts.  One thread per each context is created and run in parallel.  The<br>
++ * caller should handle synchronization between the threads by itself.  If a<br>
++ * group of threads that created by other 'damon_start()' call is currently<br>
++ * running, this function does nothing but returns -EBUSY.<br>
++ *<br>
++ * Return: 0 on success, negative error code otherwise.<br>
++ */<br>
++int damon_start(struct damon_ctx **ctxs, int nr_ctxs)<br>
++{<br>
++	int i;<br>
++	int err = 0;<br>
++<br>
++	mutex_lock(&damon_lock);<br>
++	if (nr_running_ctxs) {<br>
++		mutex_unlock(&damon_lock);<br>
++		return -EBUSY;<br>
++	}<br>
++<br>
++	for (i = 0; i < nr_ctxs; i++) {<br>
++		err = __damon_start(ctxs[i]);<br>
++		if (err)<br>
++			break;<br>
++		nr_running_ctxs++;<br>
++	}<br>
++	mutex_unlock(&damon_lock);<br>
++<br>
++	return err;<br>
++}<br>
++<br>
++/*<br>
++ * __damon_stop() - Stops monitoring of given context.<br>
++ * @ctx:	monitoring context<br>
++ *<br>
++ * Return: 0 on success, negative error code otherwise.<br>
++ */<br>
++static int __damon_stop(struct damon_ctx *ctx)<br>
++{<br>
++	mutex_lock(&ctx->kdamond_lock);<br>
++	if (ctx->kdamond) {<br>
++		ctx->kdamond_stop = true;<br>
++		mutex_unlock(&ctx->kdamond_lock);<br>
++		while (damon_kdamond_running(ctx))<br>
++			usleep_range(ctx->sample_interval,<br>
++					ctx->sample_interval * 2);<br>
++		return 0;<br>
++	}<br>
++	mutex_unlock(&ctx->kdamond_lock);<br>
++<br>
++	return -EPERM;<br>
++}<br>
++<br>
++/**<br>
++ * damon_stop() - Stops the monitorings for a given group of contexts.<br>
++ * @ctxs:	an array of the pointers for contexts to stop monitoring<br>
++ * @nr_ctxs:	size of @ctxs<br>
++ *<br>
++ * Return: 0 on success, negative error code otherwise.<br>
++ */<br>
++int damon_stop(struct damon_ctx **ctxs, int nr_ctxs)<br>
++{<br>
++	int i, err = 0;<br>
++<br>
++	for (i = 0; i < nr_ctxs; i++) {<br>
++		/* nr_running_ctxs is decremented in kdamond_fn */<br>
++		err = __damon_stop(ctxs[i]);<br>
++		if (err)<br>
++			return err;<br>
++	}<br>
++<br>
++	return err;<br>
++}<br>
++<br>
++/*<br>
++ * damon_check_reset_time_interval() - Check if a time interval is elapsed.<br>
++ * @baseline:	the time to check whether the interval has elapsed since<br>
++ * @interval:	the time interval (microseconds)<br>
++ *<br>
++ * See whether the given time interval has passed since the given baseline<br>
++ * time.  If so, it also updates the baseline to current time for next check.<br>
++ *<br>
++ * Return:	true if the time interval has passed, or false otherwise.<br>
++ */<br>
++static bool damon_check_reset_time_interval(struct timespec64 *baseline,<br>
++		unsigned long interval)<br>
++{<br>
++	struct timespec64 now;<br>
++<br>
++	ktime_get_coarse_ts64(&now);<br>
++	if ((timespec64_to_ns(&now) - timespec64_to_ns(baseline)) <<br>
++			interval * 1000)<br>
++		return false;<br>
++	*baseline = now;<br>
++	return true;<br>
++}<br>
++<br>
++/*<br>
++ * Check whether it is time to flush the aggregated information<br>
++ */<br>
++static bool kdamond_aggregate_interval_passed(struct damon_ctx *ctx)<br>
++{<br>
++	return damon_check_reset_time_interval(&ctx->last_aggregation,<br>
++			ctx->aggr_interval);<br>
++}<br>
++<br>
++/*<br>
++ * Check whether it is time to check and apply the target monitoring regions<br>
++ *<br>
++ * Returns true if it is.<br>
++ */<br>
++static bool kdamond_need_update_primitive(struct damon_ctx *ctx)<br>
++{<br>
++	return damon_check_reset_time_interval(&ctx->last_primitive_update,<br>
++			ctx->primitive_update_interval);<br>
++}<br>
++<br>
++/*<br>
++ * Check whether current monitoring should be stopped<br>
++ *<br>
++ * The monitoring is stopped when either the user requested to stop, or all<br>
++ * monitoring targets are invalid.<br>
++ *<br>
++ * Returns true if need to stop current monitoring.<br>
++ */<br>
++static bool kdamond_need_stop(struct damon_ctx *ctx)<br>
++{<br>
++	bool stop;<br>
++<br>
++	mutex_lock(&ctx->kdamond_lock);<br>
++	stop = ctx->kdamond_stop;<br>
++	mutex_unlock(&ctx->kdamond_lock);<br>
++	if (stop)<br>
++		return true;<br>
++<br>
++	if (!ctx->primitive.target_valid)<br>
++		return false;<br>
++<br>
++	return !ctx->primitive.target_valid(ctx->target);<br>
++}<br>
++<br>
++static void set_kdamond_stop(struct damon_ctx *ctx)<br>
++{<br>
++	mutex_lock(&ctx->kdamond_lock);<br>
++	ctx->kdamond_stop = true;<br>
++	mutex_unlock(&ctx->kdamond_lock);<br>
++}<br>
++<br>
++/*<br>
++ * The monitoring daemon that runs as a kernel thread<br>
++ */<br>
++static int kdamond_fn(void *data)<br>
++{<br>
++	struct damon_ctx *ctx = (struct damon_ctx *)data;<br>
++<br>
++	pr_info("kdamond (%d) starts\n", ctx->kdamond->pid);<br>
++<br>
++	if (ctx->primitive.init)<br>
++		ctx->primitive.init(ctx);<br>
++	if (ctx->callback.before_start && ctx->callback.before_start(ctx))<br>
++		set_kdamond_stop(ctx);<br>
++<br>
++	while (!kdamond_need_stop(ctx)) {<br>
++		if (ctx->primitive.prepare_access_checks)<br>
++			ctx->primitive.prepare_access_checks(ctx);<br>
++		if (ctx->callback.after_sampling &&<br>
++				ctx->callback.after_sampling(ctx))<br>
++			set_kdamond_stop(ctx);<br>
++<br>
++		usleep_range(ctx->sample_interval, ctx->sample_interval + 1);<br>
++<br>
++		if (ctx->primitive.check_accesses)<br>
++			ctx->primitive.check_accesses(ctx);<br>
++<br>
++		if (kdamond_aggregate_interval_passed(ctx)) {<br>
++			if (ctx->callback.after_aggregation &&<br>
++					ctx->callback.after_aggregation(ctx))<br>
++				set_kdamond_stop(ctx);<br>
++			if (ctx->primitive.reset_aggregated)<br>
++				ctx->primitive.reset_aggregated(ctx);<br>
++		}<br>
++<br>
++		if (kdamond_need_update_primitive(ctx)) {<br>
++			if (ctx->primitive.update)<br>
++				ctx->primitive.update(ctx);<br>
++		}<br>
++	}<br>
++<br>
++	if (ctx->callback.before_terminate &&<br>
++			ctx->callback.before_terminate(ctx))<br>
++		set_kdamond_stop(ctx);<br>
++	if (ctx->primitive.cleanup)<br>
++		ctx->primitive.cleanup(ctx);<br>
++<br>
++	pr_debug("kdamond (%d) finishes\n", ctx->kdamond->pid);<br>
++	mutex_lock(&ctx->kdamond_lock);<br>
++	ctx->kdamond = NULL;<br>
++	mutex_unlock(&ctx->kdamond_lock);<br>
++<br>
++	mutex_lock(&damon_lock);<br>
++	nr_running_ctxs--;<br>
++	mutex_unlock(&damon_lock);<br>
++<br>
++	do_exit(0);<br>
++}<br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+

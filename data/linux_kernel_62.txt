@@ -1,0 +1,98 @@
+With CONFIG_CFI_CLANG, the compiler replaces a function address taken<br>
+in C code with the address of a local jump table entry, which passes<br>
+runtime indirect call checks. However, the compiler won't replace<br>
+addresses taken in assembly code, which will result in a CFI failure<br>
+if we later jump to such an address in instrumented C code. The code<br>
+generated for the non-canonical jump table looks this:<br>
+<br>
+  <noncanonical.cfi_jt>: /* In C, &noncanonical points here */<br>
+	jmp noncanonical<br>
+  ...<br>
+  <noncanonical>:        /* function body */<br>
+	...<br>
+<br>
+This change adds the __cficanonical attribute, which tells the<br>
+compiler to use a canonical jump table for the function instead. This<br>
+means the compiler will rename the actual function to <function>.cfi<br>
+and points the original symbol to the jump table entry instead:<br>
+<br>
+  <canonical>:           /* jump table entry */<br>
+	jmp canonical.cfi<br>
+  ...<br>
+  <canonical.cfi>:       /* function body */<br>
+	...<br>
+<br>
+As a result, the address taken in assembly, or other non-instrumented<br>
+code always points to the jump table and therefore, can be used for<br>
+indirect calls in instrumented code without tripping CFI checks.<br>
+<br>
+Signed-off-by: Sami Tolvanen <samitolvanen@xxxxxxxxxx><br>
+Reviewed-by: Kees Cook <keescook@xxxxxxxxxxxx><br>
+Acked-by: Bjorn Helgaas <bhelgaas@xxxxxxxxxx>   # pci.h<br>
+Tested-by: Nathan Chancellor <nathan@xxxxxxxxxx><br>
+---<br>
+ include/linux/compiler-clang.h | 1 +<br>
+ include/linux/compiler_types.h | 4 ++++<br>
+ include/linux/init.h           | 4 ++--<br>
+ include/linux/pci.h            | 4 ++--<br>
+ 4 files changed, 9 insertions(+), 4 deletions(-)<br>
+<br>
+diff --git a/include/linux/compiler-clang.h b/include/linux/compiler-clang.h<br>
+index 6de9d0c9377e..adbe76b203e2 100644<br>
+--- a/include/linux/compiler-clang.h<br>
++++ b/include/linux/compiler-clang.h<br>
+@@ -63,3 +63,4 @@<br>
+ #endif<br>
+ <br>
+ #define __nocfi		__attribute__((__no_sanitize__("cfi")))<br>
++#define __cficanonical	__attribute__((__cfi_canonical_jump_table__))<br>
+diff --git a/include/linux/compiler_types.h b/include/linux/compiler_types.h<br>
+index 796935a37e37..d29bda7f6ebd 100644<br>
+--- a/include/linux/compiler_types.h<br>
++++ b/include/linux/compiler_types.h<br>
+@@ -246,6 +246,10 @@ struct ftrace_likely_data {<br>
+ # define __nocfi<br>
+ #endif<br>
+ <br>
++#ifndef __cficanonical<br>
++# define __cficanonical<br>
++#endif<br>
++<br>
+ #ifndef asm_volatile_goto<br>
+ #define asm_volatile_goto(x...) asm goto(x)<br>
+ #endif<br>
+diff --git a/include/linux/init.h b/include/linux/init.h<br>
+index b3ea15348fbd..045ad1650ed1 100644<br>
+--- a/include/linux/init.h<br>
++++ b/include/linux/init.h<br>
+@@ -220,8 +220,8 @@ extern bool initcall_debug;<br>
+ 	__initcall_name(initstub, __iid, id)<br>
+ <br>
+ #define __define_initcall_stub(__stub, fn)			\<br>
+-	int __init __stub(void);				\<br>
+-	int __init __stub(void)					\<br>
++	int __init __cficanonical __stub(void);			\<br>
++	int __init __cficanonical __stub(void)			\<br>
+ 	{ 							\<br>
+ 		return fn();					\<br>
+ 	}							\<br>
+diff --git a/include/linux/pci.h b/include/linux/pci.h<br>
+index 86c799c97b77..39684b72db91 100644<br>
+--- a/include/linux/pci.h<br>
++++ b/include/linux/pci.h<br>
+@@ -1944,8 +1944,8 @@ enum pci_fixup_pass {<br>
+ #ifdef CONFIG_LTO_CLANG<br>
+ #define __DECLARE_PCI_FIXUP_SECTION(sec, name, vendor, device, class,	\<br>
+ 				  class_shift, hook, stub)		\<br>
+-	void stub(struct pci_dev *dev);					\<br>
+-	void stub(struct pci_dev *dev)					\<br>
++	void __cficanonical stub(struct pci_dev *dev);			\<br>
++	void __cficanonical stub(struct pci_dev *dev)			\<br>
+ 	{ 								\<br>
+ 		hook(dev); 						\<br>
+ 	}								\<br>
+-- <br>
+2.31.1.295.g9ea45b61b8-goog<br>
+<br>
+<br>
+

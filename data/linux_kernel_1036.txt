@@ -1,0 +1,51 @@
+
+<br>
+<br>
+On 2021/4/7 19:16, Greg Kroah-Hartman wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+I'm announcing the release of the 4.19.185 kernel.<br>
+<br>
+All users of the 4.19 kernel series must upgrade.<br>
+<br>
+The updated 4.19.y git tree can be found at:<br>
+	git://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git linux-4.19.y<br>
+and can be browsed at the normal kernel.org git web browser:<br>
+	<a  rel="nofollow" href="https://git.kernel.org/?p=linux/kernel/git/stable/linux-stable.git;a=summary">https://git.kernel.org/?p=linux/kernel/git/stable/linux-stable.git;a=summary</a><br>
+<br>
+thanks,<br>
+<br>
+greg k-h<br>
+<br>
+</blockquote>
+<br>
+Tested on arm64 and x86 for 4.19.185,<br>
+<br>
+Kernel repo:<br>
+<a  rel="nofollow" href="https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable-rc.git">https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable-rc.git</a><br>
+Branch: linux-4.19.y<br>
+Version: 4.19.185<br>
+Commit: b4454811f122c6a0a330ced6b854e6ef32c37857<br>
+Compiler: gcc version 7.3.0 (GCC)<br>
+<br>
+arm64:<br>
+--------------------------------------------------------------------<br>
+Testcase Result Summary:<br>
+total: 4679<br>
+passed: 4679<br>
+failed: 0<br>
+timeout: 0<br>
+--------------------------------------------------------------------<br>
+<br>
+x86:<br>
+--------------------------------------------------------------------<br>
+Testcase Result Summary:<br>
+total: 4679<br>
+passed: 4679<br>
+failed: 0<br>
+timeout: 0<br>
+--------------------------------------------------------------------<br>
+<br>
+Tested-by: Hulk Robot <hulkrobot@xxxxxxxxxx><br>
+<br>
+<br>
+

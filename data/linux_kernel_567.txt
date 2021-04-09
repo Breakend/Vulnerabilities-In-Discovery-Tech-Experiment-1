@@ -1,0 +1,31 @@
+Hi,<br>
+<br>
+On Wed, Apr 07, 2021 at 01:15:11PM +0200, Krzysztof Kozlowski wrote:<br>
+><i> On 07/04/2021 11:19, Yang Yingliang wrote:</i><br>
+><i> > This driver's remove path calls cancel_delayed_work(). However, that</i><br>
+><i> > function does not wait until the work function finishes. This means</i><br>
+><i> > that the callback function may still be running after the driver's</i><br>
+><i> > remove function has finished, which would result in a use-after-free.</i><br>
+><i> > </i><br>
+><i> > Fix by calling cancel_delayed_work_sync(), which ensures that</i><br>
+><i> > the work is properly cancelled, no longer running, and unable</i><br>
+><i> > to re-schedule itself.</i><br>
+><i> > </i><br>
+><i> > Reported-by: Hulk Robot <hulkci@xxxxxxxxxx></i><br>
+><i> > Signed-off-by: Yang Yingliang <yangyingliang@xxxxxxxxxx></i><br>
+><i> > ---</i><br>
+><i> >  drivers/power/supply/s3c_adc_battery.c | 2 +-</i><br>
+><i> >  1 file changed, 1 insertion(+), 1 deletion(-)</i><br>
+><i> > </i><br>
+><i> </i><br>
+><i> Reviewed-by: Krzysztof Kozlowski <krzysztof.kozlowski@xxxxxxxxxxxxx></i><br>
+<br>
+Thanks,<br>
+<br>
+queued.<br>
+<br>
+-- Sebastian<br>
+<p><strong>Attachment:
+<a href="00573/signature.asc" ><tt>signature.asc</tt></a></strong><br>
+<em>Description:</em> PGP signature</p>
+

@@ -1,0 +1,32 @@
+><i> -----Original Message-----</i><br>
+><i> From: Intel-wired-lan <intel-wired-lan-bounces@xxxxxxxxxx> On Behalf Of</i><br>
+><i> Colin King</i><br>
+><i> Sent: Wednesday, March 31, 2021 7:46 AM</i><br>
+><i> To: Brandeburg, Jesse <jesse.brandeburg@xxxxxxxxx>; Nguyen, Anthony L</i><br>
+><i> <anthony.l.nguyen@xxxxxxxxx>; David S . Miller <davem@xxxxxxxxxxxxx>;</i><br>
+><i> Jakub Kicinski <kuba@xxxxxxxxxx>; Cao, Chinh T <chinh.t.cao@xxxxxxxxx>;</i><br>
+><i> intel-wired-lan@xxxxxxxxxxxxxxxx; netdev@xxxxxxxxxxxxxxx</i><br>
+><i> Cc: kernel-janitors@xxxxxxxxxxxxxxx; linux-kernel@xxxxxxxxxxxxxxx</i><br>
+><i> Subject: [Intel-wired-lan] [PATCH][next] ice: Fix potential infinite loop when</i><br>
+><i> using u8 loop counter</i><br>
+><i> </i><br>
+><i> From: Colin Ian King <colin.king@xxxxxxxxxxxxx></i><br>
+><i> </i><br>
+><i> A for-loop is using a u8 loop counter that is being compared to a u32</i><br>
+><i> cmp_dcbcfg->numapp to check for the end of the loop. If cmp_dcbcfg-</i><br>
+><i> >numapp is larger than 255 then the counter j will wrap around to zero and</i><br>
+><i> hence an infinite loop occurs. Fix this by making counter j the same type as</i><br>
+><i> cmp_dcbcfg->numapp.</i><br>
+><i> </i><br>
+><i> Addresses-Coverity: ("Infinite loop")</i><br>
+><i> Fixes: aeac8ce864d9 ("ice: Recognize 860 as iSCSI port in CEE mode")</i><br>
+><i> Signed-off-by: Colin Ian King <colin.king@xxxxxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  drivers/net/ethernet/intel/ice/ice_dcb.c | 4 ++--</i><br>
+><i>  1 file changed, 2 insertions(+), 2 deletions(-)</i><br>
+<br>
+Tested-by: Tony Brelinski <tonyx.brelinski@xxxxxxxxx> A Contingent Worker at Intel<br>
+<br>
+<br>
+<br>
+

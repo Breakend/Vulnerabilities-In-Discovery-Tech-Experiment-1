@@ -1,0 +1,48 @@
+On Thu, Apr 08, 2021 at 05:56:00PM +0300, Andy Shevchenko wrote:<br>
+><i> It seems that Xilinx GPIO driver operates with bit arrays longer than 32 and</i><br>
+><i> thus can leverage bitmap APIs for that. It makes code better to understand.</i><br>
+><i> </i><br>
+><i> The ->probe() function is modified to try read properties for both channels</i><br>
+><i> since is_dual check makes only sense for the amount of pins used for the second</i><br>
+><i> channel. On top of that kzalloc() guarantees zero initial values for the fields</i><br>
+><i> in the private data structure, hence drop unneeded conditionals and assignments.</i><br>
+><i> </i><br>
+><i> The change is inspired by Syed Nayyar Waris' ideas about bitmap API extension.</i><br>
+<br>
+As I was afraid in the cover letter, I found some mistakes already.<br>
+In any case, I'll wait for the comments and test of other patches if possible.<br>
+<br>
+Out of curiosity, below I point out the issues.<br>
+<br>
+...<br>
+<br>
+><i> +	return bitmap_bitremap(gpio, chip->sw_map, chip->hw_map, chip->gc.ngpio);</i><br>
+<br>
+Seems we have to use 64 instead of ngpio here.<br>
+<br>
+...<br>
+<br>
+><i> +	bitmap_replace(state, chip->state, hw_bits, hw_mask, gc->ngpio);</i><br>
+<br>
+Ditto.<br>
+<br>
+...<br>
+<br>
+><i> +	bitmap_copy(chip->state, state, gc->ngpio);</i><br>
+<br>
+Ditto.<br>
+<br>
+...<br>
+<br>
+><i> +	for_each_set_bit(bit, all, 64)</i><br>
+><i> +		generic_handle_irq(irq_find_mapping(gc->irq.domain, bit));</i><br>
+<br>
+Here should be used gpio actually and ngpio IIUC.<br>
+<br>
+-- <br>
+With Best Regards,<br>
+Andy Shevchenko<br>
+<br>
+<br>
+<br>
+

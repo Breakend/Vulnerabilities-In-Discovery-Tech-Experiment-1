@@ -1,0 +1,24 @@
+syzbot suspects this issue was fixed by commit:<br>
+<br>
+commit f4e61f0c9add3b00bd5f2df3c814d688849b8707<br>
+Author: Wanpeng Li <wanpengli@xxxxxxxxxxx><br>
+Date:   Mon Mar 15 06:55:28 2021 +0000<br>
+<br>
+    x86/kvm: Fix broken irq restoration in kvm_wait<br>
+<br>
+bisection log:  <a  rel="nofollow" href="https://syzkaller.appspot.com/x/bisect.txt?x=1022d7aad00000">https://syzkaller.appspot.com/x/bisect.txt?x=1022d7aad00000</a><br>
+start commit:   144c79ef Merge tag 'perf-tools-fixes-for-v5.12-2020-03-07'..<br>
+git tree:       upstream<br>
+kernel config:  <a  rel="nofollow" href="https://syzkaller.appspot.com/x/.config?x=db9c6adb4986f2f2">https://syzkaller.appspot.com/x/.config?x=db9c6adb4986f2f2</a><br>
+dashboard link: <a  rel="nofollow" href="https://syzkaller.appspot.com/bug?extid=ac39856cb1b332dbbdda">https://syzkaller.appspot.com/bug?extid=ac39856cb1b332dbbdda</a><br>
+syz repro:      <a  rel="nofollow" href="https://syzkaller.appspot.com/x/repro.syz?x=167574dad00000">https://syzkaller.appspot.com/x/repro.syz?x=167574dad00000</a><br>
+C reproducer:   <a  rel="nofollow" href="https://syzkaller.appspot.com/x/repro.c?x=12c8f566d00000">https://syzkaller.appspot.com/x/repro.c?x=12c8f566d00000</a><br>
+<br>
+If the result looks correct, please mark the issue as fixed by replying with:<br>
+<br>
+#syz fix: x86/kvm: Fix broken irq restoration in kvm_wait<br>
+<br>
+For information about bisection process see: <a  rel="nofollow" href="https://goo.gl/tpsmEJ#bisection">https://goo.gl/tpsmEJ#bisection</a><br>
+<br>
+<br>
+

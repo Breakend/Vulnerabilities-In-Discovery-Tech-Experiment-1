@@ -1,0 +1,34 @@
+As reported by sparse:<br>
+<br>
+	drivers/media/platform/qcom/venus/core.c:227:41: warning: Using plain integer as NULL pointer<br>
+	drivers/media/platform/qcom/venus/core.c:228:34: warning: Using plain integer as NULL pointer<br>
+<br>
+Two vars are using zero instead of NULL for pointers. Not really<br>
+an issue, but using NULL makes it clearer that the init data is<br>
+expecting a pointer.<br>
+<br>
+Signed-off-by: Mauro Carvalho Chehab <mchehab+huawei@xxxxxxxxxx><br>
+---<br>
+ drivers/media/platform/qcom/venus/core.c | 4 ++--<br>
+ 1 file changed, 2 insertions(+), 2 deletions(-)<br>
+<br>
+diff --git a/drivers/media/platform/qcom/venus/core.c b/drivers/media/platform/qcom/venus/core.c<br>
+index f5b88b96f5f7..4451e3c11bc0 100644<br>
+--- a/drivers/media/platform/qcom/venus/core.c<br>
++++ b/drivers/media/platform/qcom/venus/core.c<br>
+@@ -224,8 +224,8 @@ static void venus_assign_register_offsets(struct venus_core *core)<br>
+ 		core->cpu_cs_base = core->base + CPU_CS_BASE;<br>
+ 		core->cpu_ic_base = core->base + CPU_IC_BASE;<br>
+ 		core->wrapper_base = core->base + WRAPPER_BASE;<br>
+-		core->wrapper_tz_base = 0;<br>
+-		core->aon_base = 0;<br>
++		core->wrapper_tz_base = NULL;<br>
++		core->aon_base = NULL;<br>
+ 	}<br>
+ }<br>
+ <br>
+-- <br>
+2.30.2<br>
+<br>
+<br>
+

@@ -1,0 +1,162 @@
+From: wengjianfeng <wengjianfeng@xxxxxxxxxx><br>
+<br>
+change 'purpous' to 'purpose'.<br>
+change 'frequecy' to 'frequency'.<br>
+remove redundant words struct and enum.<br>
+<br>
+Signed-off-by: wengjianfeng <wengjianfeng@xxxxxxxxxx><br>
+---<br>
+ drivers/media/dvb-frontends/drx39xyj/drxj.h | 35 +++++++++++++++--------------<br>
+ 1 file changed, 18 insertions(+), 17 deletions(-)<br>
+<br>
+diff --git a/drivers/media/dvb-frontends/drx39xyj/drxj.h b/drivers/media/dvb-frontends/drx39xyj/drxj.h<br>
+index d62412f..232b3b0 100644<br>
+--- a/drivers/media/dvb-frontends/drx39xyj/drxj.h<br>
++++ b/drivers/media/dvb-frontends/drx39xyj/drxj.h<br>
+@@ -75,9 +75,9 @@<br>
+ 		u16 result_len;<br>
+ 			/*< result length in byte */<br>
+ 		u16 *parameter;<br>
+-			/*< General purpous param */<br>
++			/*< General purpose param */<br>
+ 		u16 *result;<br>
+-			/*< General purpous param */};<br>
++			/*< General purpose param */};<br>
+ <br>
+ /*============================================================================*/<br>
+ /*============================================================================*/<br>
+@@ -131,7 +131,7 @@<br>
+ 		DRXJ_CFG_MAX	/* dummy, never to be used */};<br>
+ <br>
+ /*<br>
+-* /struct enum drxj_cfg_smart_ant_io * smart antenna i/o.<br>
++* /enum drxj_cfg_smart_ant_io * smart antenna i/o.<br>
+ */<br>
+ enum drxj_cfg_smart_ant_io {<br>
+ 	DRXJ_SMT_ANT_OUTPUT = 0,<br>
+@@ -139,7 +139,7 @@ enum drxj_cfg_smart_ant_io {<br>
+ };<br>
+ <br>
+ /*<br>
+-* /struct struct drxj_cfg_smart_ant * Set smart antenna.<br>
++* /struct drxj_cfg_smart_ant * Set smart antenna.<br>
+ */<br>
+ 	struct drxj_cfg_smart_ant {<br>
+ 		enum drxj_cfg_smart_ant_io io;<br>
+@@ -159,7 +159,7 @@ struct drxj_agc_status {<br>
+ /* DRXJ_CFG_AGC_RF, DRXJ_CFG_AGC_IF */<br>
+ <br>
+ /*<br>
+-* /struct enum drxj_agc_ctrl_mode * Available AGCs modes in the DRXJ.<br>
++* /enum drxj_agc_ctrl_mode * Available AGCs modes in the DRXJ.<br>
+ */<br>
+ 	enum drxj_agc_ctrl_mode {<br>
+ 		DRX_AGC_CTRL_AUTO = 0,<br>
+@@ -167,7 +167,7 @@ struct drxj_agc_status {<br>
+ 		DRX_AGC_CTRL_OFF};<br>
+ <br>
+ /*<br>
+-* /struct struct drxj_cfg_agc * Generic interface for all AGCs present on the DRXJ.<br>
++* /struct drxj_cfg_agc * Generic interface for all AGCs present on the DRXJ.<br>
+ */<br>
+ 	struct drxj_cfg_agc {<br>
+ 		enum drx_standard standard;	/* standard for which these settings apply */<br>
+@@ -183,7 +183,7 @@ struct drxj_agc_status {<br>
+ /* DRXJ_CFG_PRE_SAW */<br>
+ <br>
+ /*<br>
+-* /struct struct drxj_cfg_pre_saw * Interface to configure pre SAW sense.<br>
++* /struct drxj_cfg_pre_saw * Interface to configure pre SAW sense.<br>
+ */<br>
+ 	struct drxj_cfg_pre_saw {<br>
+ 		enum drx_standard standard;	/* standard to which these settings apply */<br>
+@@ -193,7 +193,7 @@ struct drxj_agc_status {<br>
+ /* DRXJ_CFG_AFE_GAIN */<br>
+ <br>
+ /*<br>
+-* /struct struct drxj_cfg_afe_gain * Interface to configure gain of AFE (LNA + PGA).<br>
++* /struct drxj_cfg_afe_gain * Interface to configure gain of AFE (LNA + PGA).<br>
+ */<br>
+ 	struct drxj_cfg_afe_gain {<br>
+ 		enum drx_standard standard;	/* standard to which these settings apply */<br>
+@@ -220,14 +220,14 @@ struct drxj_agc_status {<br>
+ 	};<br>
+ <br>
+ /*<br>
+-* /struct struct drxj_cfg_vsb_misc * symbol error rate<br>
++* /struct drxj_cfg_vsb_misc * symbol error rate<br>
+ */<br>
+ 	struct drxj_cfg_vsb_misc {<br>
+ 		u32 symb_error;<br>
+ 			      /*< symbol error rate sps */};<br>
+ <br>
+ /*<br>
+-* /enum enum drxj_mpeg_output_clock_rate * Mpeg output clock rate.<br>
++* /enum drxj_mpeg_output_clock_rate * Mpeg output clock rate.<br>
+ *<br>
+ */<br>
+ 	enum drxj_mpeg_start_width {<br>
+@@ -235,7 +235,7 @@ struct drxj_agc_status {<br>
+ 		DRXJ_MPEG_START_WIDTH_8CLKCYC};<br>
+ <br>
+ /*<br>
+-* /enum enum drxj_mpeg_output_clock_rate * Mpeg output clock rate.<br>
++* /enum drxj_mpeg_output_clock_rate * Mpeg output clock rate.<br>
+ *<br>
+ */<br>
+ 	enum drxj_mpeg_output_clock_rate {<br>
+@@ -261,7 +261,7 @@ struct drxj_agc_status {<br>
+ 		enum drxj_mpeg_start_width mpeg_start_width;  /*< set MPEG output start width */};<br>
+ <br>
+ /*<br>
+-* /enum enum drxj_xtal_freq * Supported external crystal reference frequency.<br>
++* /enum drxj_xtal_freq * Supported external crystal reference frequency.<br>
+ */<br>
+ 	enum drxj_xtal_freq {<br>
+ 		DRXJ_XTAL_FREQ_RSVD,<br>
+@@ -270,14 +270,15 @@ struct drxj_agc_status {<br>
+ 		DRXJ_XTAL_FREQ_4MHZ};<br>
+ <br>
+ /*<br>
+-* /enum enum drxj_xtal_freq * Supported external crystal reference frequency.<br>
++* /enum drxj_xtal_freq * Supported external crystal reference frequency.<br>
+ */<br>
+ 	enum drxji2c_speed {<br>
+ 		DRXJ_I2C_SPEED_400KBPS,<br>
+ 		DRXJ_I2C_SPEED_100KBPS};<br>
+ <br>
+ /*<br>
+-* /struct struct drxj_cfg_hw_cfg * Get hw configuration, such as crystal reference frequency, I2C speed, etc...<br>
++* /struct drxj_cfg_hw_cfg * Get hw configuration, such as crystal<br>
++*  reference frequency, I2C speed, etc...<br>
+ */<br>
+ 	struct drxj_cfg_hw_cfg {<br>
+ 		enum drxj_xtal_freq xtal_freq;<br>
+@@ -364,7 +365,7 @@ struct drxj_cfg_oob_misc {<br>
+ 		DRXJ_SIF_ATTENUATION_9DB};<br>
+ <br>
+ /*<br>
+-* /struct struct drxj_cfg_atv_output * SIF attenuation setting.<br>
++* /struct drxj_cfg_atv_output * SIF attenuation setting.<br>
+ *<br>
+ */<br>
+ struct drxj_cfg_atv_output {<br>
+@@ -453,10 +454,10 @@ struct drxj_cfg_atv_output {<br>
+ 		enum drxuio_mode uio_gpio_mode; /*< current mode of ASEL pin                         */<br>
+ 		enum drxuio_mode uio_irqn_mode; /*< current mode of IRQN pin                         */<br>
+ <br>
+-		/* IQM fs frequecy shift and inversion */<br>
++		/* IQM fs frequency shift and inversion */<br>
+ 		u32 iqm_fs_rate_ofs;	   /*< frequency shifter setting after setchannel      */<br>
+ 		bool pos_image;	   /*< True: positive image                            */<br>
+-		/* IQM RC frequecy shift */<br>
++		/* IQM RC frequency shift */<br>
+ 		u32 iqm_rc_rate_ofs;	   /*< frequency shifter setting after setchannel      */<br>
+ <br>
+ 		/* ATV configuration */<br>
+-- <br>
+1.9.1<br>
+<br>
+<br>
+<br>
+

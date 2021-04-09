@@ -1,0 +1,46 @@
+On Wed, Apr 07, 2021 at 09:24:14PM +0100, Mel Gorman wrote:<br>
+><i> There is a lack of clarity of what exactly local_irq_save/local_irq_restore</i><br>
+><i> protects in page_alloc.c . It conflates the protection of per-cpu page</i><br>
+><i> allocation structures with per-cpu vmstat deltas.</i><br>
+><i> </i><br>
+><i> This patch protects the PCP structure using local_lock which for most</i><br>
+><i> configurations is identical to IRQ enabling/disabling.  The scope of the</i><br>
+><i> lock is still wider than it should be but this is decreased laster.</i><br>
+<br>
+><i> diff --git a/include/linux/mmzone.h b/include/linux/mmzone.h</i><br>
+><i> index a4393ac27336..106da8fbc72a 100644</i><br>
+><i> --- a/include/linux/mmzone.h</i><br>
+><i> +++ b/include/linux/mmzone.h</i><br>
+<br>
+><i> @@ -337,6 +338,7 @@ enum zone_watermarks {</i><br>
+><i>  #define high_wmark_pages(z) (z->_watermark[WMARK_HIGH] + z->watermark_boost)</i><br>
+><i>  #define wmark_pages(z, i) (z->_watermark[i] + z->watermark_boost)</i><br>
+><i>  </i><br>
+><i> +/* Fields and list protected by pagesets local_lock in page_alloc.c */</i><br>
+><i>  struct per_cpu_pages {</i><br>
+><i>  	int count;		/* number of pages in the list */</i><br>
+><i>  	int high;		/* high watermark, emptying needed */</i><br>
+<br>
+><i> diff --git a/mm/page_alloc.c b/mm/page_alloc.c</i><br>
+><i> index a68bacddcae0..e9e60d1a85d4 100644</i><br>
+><i> --- a/mm/page_alloc.c</i><br>
+><i> +++ b/mm/page_alloc.c</i><br>
+><i> @@ -112,6 +112,13 @@ typedef int __bitwise fpi_t;</i><br>
+><i>  static DEFINE_MUTEX(pcp_batch_high_lock);</i><br>
+><i>  #define MIN_PERCPU_PAGELIST_FRACTION	(8)</i><br>
+><i>  </i><br>
+><i> +struct pagesets {</i><br>
+><i> +	local_lock_t lock;</i><br>
+><i> +};</i><br>
+><i> +static DEFINE_PER_CPU(struct pagesets, pagesets) = {</i><br>
+><i> +	.lock = INIT_LOCAL_LOCK(lock),</i><br>
+><i> +};</i><br>
+<br>
+So why isn't the local_lock_t in struct per_cpu_pages ? That seems to be<br>
+the actual object that is protected by it and is already per-cpu.<br>
+<br>
+Is that because you want to avoid the duplication across zones? Is that<br>
+worth the effort?<br>
+<br>
+<br>
+

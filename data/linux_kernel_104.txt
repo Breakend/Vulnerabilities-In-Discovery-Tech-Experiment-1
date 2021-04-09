@@ -1,0 +1,27 @@
+Hi George,<br>
+<br>
+On Thu, Apr 8, 2021 at 1:36 PM George McCollister<br>
+<george.mccollister@xxxxxxxxx> wrote:<br>
+><i></i><br>
+><i> Can you explain the difference in behavior with what I was observing</i><br>
+><i> on the LAN7431?</i><br>
+<br>
+I'm not using DSA in my application, so I cannot test or replicate<br>
+what you were observing. It would be great if we could work together<br>
+and settle on a solution that is acceptable to both of us.<br>
+<br>
+><i> I'll retest but if this is reverted I'm going to start</i><br>
+><i> seeing 2 extra bytes on the end of frames and it's going to break DSA</i><br>
+><i> with the LAN7431 again.</i><br>
+><i></i><br>
+<br>
+Seen from my point of view, your patch is a regression. But perhaps my<br>
+patch set is a regression for you? Catch 22...<br>
+<br>
+Would you be able to identify which patch broke your DSA behaviour?<br>
+Was it one of mine? Perhaps we can start from there.<br>
+<br>
+Sven<br>
+<br>
+<br>
+

@@ -1,0 +1,36 @@
+On Thu, Apr 08, 2021, Tom Lendacky wrote:<br>
+><i> </i><br>
+><i> </i><br>
+><i> On 4/8/21 12:37 PM, Sean Christopherson wrote:</i><br>
+><i> > On Thu, Apr 08, 2021, Tom Lendacky wrote:</i><br>
+><i> >> On 4/8/21 12:10 PM, Sean Christopherson wrote:</i><br>
+><i> >>> On Thu, Apr 08, 2021, Tom Lendacky wrote:</i><br>
+><i> >>>> diff --git a/arch/x86/kvm/svm/sev.c b/arch/x86/kvm/svm/sev.c</i><br>
+><i> >>>> index 83e00e524513..7ac67615c070 100644</i><br>
+><i> >>>> --- a/arch/x86/kvm/svm/sev.c</i><br>
+><i> >>>> +++ b/arch/x86/kvm/svm/sev.c</i><br>
+><i> >>>> @@ -2105,5 +2105,8 @@ void sev_vcpu_deliver_sipi_vector(struct kvm_vcpu *vcpu, u8 vector)</i><br>
+><i> >>>>  	 * the guest will set the CS and RIP. Set SW_EXIT_INFO_2 to a</i><br>
+><i> >>>>  	 * non-zero value.</i><br>
+><i> >>>>  	 */</i><br>
+><i> >>>> +	if (WARN_ON_ONCE(!svm->ghcb))</i><br>
+><i> >>></i><br>
+><i> >>> Isn't this guest triggerable?  I.e. send a SIPI without doing the reset hold?</i><br>
+><i> >>> If so, this should not WARN.</i><br>
+><i> >></i><br>
+><i> >> Yes, it is a guest triggerable event. But a guest shouldn't be doing that,</i><br>
+><i> >> so I thought adding the WARN_ON_ONCE() just to detect it wasn't bad.</i><br>
+><i> >> Definitely wouldn't want a WARN_ON().</i><br>
+><i> > </i><br>
+><i> > WARNs are intended only for host issues, e.g. a malicious guest shouldn't be</i><br>
+><i> > able to crash the host when running with panic_on_warn.</i><br>
+><i> > </i><br>
+><i> </i><br>
+><i> Ah, yeah, forgot about panic_on_warn. I can go back to the original patch</i><br>
+><i> or do a pr_warn_once(), any pref?</i><br>
+<br>
+No strong preference.  If you think the print would be helpful for ongoing<br>
+development, then it's probably worth adding.<br>
+<br>
+<br>
+

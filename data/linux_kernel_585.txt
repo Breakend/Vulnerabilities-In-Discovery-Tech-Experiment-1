@@ -1,0 +1,88 @@
+This is a preparatory patch that introduces two new functions:<br>
+memory_block_online() and memory_block_offline().<br>
+<br>
+For now, these functions will only call online_pages() and offline_pages()<br>
+respectively, but they will be later in charge of preparing the vmemmap<br>
+pages, carrying out the initialization and proper accounting of such<br>
+pages.<br>
+<br>
+Since memory_block struct contains all the information, pass this struct<br>
+down the chain till the end functions.<br>
+<br>
+Signed-off-by: Oscar Salvador <osalvador@xxxxxxx><br>
+Reviewed-by: David Hildenbrand <david@xxxxxxxxxx><br>
+---<br>
+ drivers/base/memory.c | 33 +++++++++++++++++++++------------<br>
+ 1 file changed, 21 insertions(+), 12 deletions(-)<br>
+<br>
+diff --git a/drivers/base/memory.c b/drivers/base/memory.c<br>
+index f35298425575..f209925a5d4e 100644<br>
+--- a/drivers/base/memory.c<br>
++++ b/drivers/base/memory.c<br>
+@@ -169,30 +169,41 @@ int memory_notify(unsigned long val, void *v)<br>
+ 	return blocking_notifier_call_chain(&memory_chain, val, v);<br>
+ }<br>
+ <br>
++static int memory_block_online(struct memory_block *mem)<br>
++{<br>
++	unsigned long start_pfn = section_nr_to_pfn(mem->start_section_nr);<br>
++	unsigned long nr_pages = PAGES_PER_SECTION * sections_per_block;<br>
++<br>
++	return online_pages(start_pfn, nr_pages, mem->online_type, mem->nid);<br>
++}<br>
++<br>
++static int memory_block_offline(struct memory_block *mem)<br>
++{<br>
++	unsigned long start_pfn = section_nr_to_pfn(mem->start_section_nr);<br>
++	unsigned long nr_pages = PAGES_PER_SECTION * sections_per_block;<br>
++<br>
++	return offline_pages(start_pfn, nr_pages);<br>
++}<br>
++<br>
+ /*<br>
+  * MEMORY_HOTPLUG depends on SPARSEMEM in mm/Kconfig, so it is<br>
+  * OK to have direct references to sparsemem variables in here.<br>
+  */<br>
+ static int<br>
+-memory_block_action(unsigned long start_section_nr, unsigned long action,<br>
+-		    int online_type, int nid)<br>
++memory_block_action(struct memory_block *mem, unsigned long action)<br>
+ {<br>
+-	unsigned long start_pfn;<br>
+-	unsigned long nr_pages = PAGES_PER_SECTION * sections_per_block;<br>
+ 	int ret;<br>
+ <br>
+-	start_pfn = section_nr_to_pfn(start_section_nr);<br>
+-<br>
+ 	switch (action) {<br>
+ 	case MEM_ONLINE:<br>
+-		ret = online_pages(start_pfn, nr_pages, online_type, nid);<br>
++		ret = memory_block_online(mem);<br>
+ 		break;<br>
+ 	case MEM_OFFLINE:<br>
+-		ret = offline_pages(start_pfn, nr_pages);<br>
++		ret = memory_block_offline(mem);<br>
+ 		break;<br>
+ 	default:<br>
+ 		WARN(1, KERN_WARNING "%s(%ld, %ld) unknown action: "<br>
+-		     "%ld\n", __func__, start_section_nr, action, action);<br>
++		     "%ld\n", __func__, mem->start_section_nr, action, action);<br>
+ 		ret = -EINVAL;<br>
+ 	}<br>
+ <br>
+@@ -210,9 +221,7 @@ static int memory_block_change_state(struct memory_block *mem,<br>
+ 	if (to_state == MEM_OFFLINE)<br>
+ 		mem->state = MEM_GOING_OFFLINE;<br>
+ <br>
+-	ret = memory_block_action(mem->start_section_nr, to_state,<br>
+-				  mem->online_type, mem->nid);<br>
+-<br>
++	ret = memory_block_action(mem, to_state);<br>
+ 	mem->state = ret ? from_state_req : to_state;<br>
+ <br>
+ 	return ret;<br>
+-- <br>
+2.16.3<br>
+<br>
+<br>
+

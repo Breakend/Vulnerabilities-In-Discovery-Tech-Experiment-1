@@ -1,0 +1,95 @@
+
+On 4/8/21 11:30 AM, Eric Biggers wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+On Thu, Apr 08, 2021 at 09:15:06AM -0400, Chris von Recklinghausen wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+Suspend fails on a system in fips mode because md5 is used for the e820<br>
+integrity check and is not available. Use crc32 instead.<br>
+<br>
+This patch changes the integrity check algorithm from md5 to<br>
+crc32. This integrity check is used only to verify accidental<br>
+corruption of the hybernation data and is not intended as a<br>
+cryptographic integrity check.<br>
+Md5 is overkill in this case and also disabled in FIPS mode because it<br>
+is known to be broken for cryptographic purposes.<br>
+<br>
+Fixes: 62a03defeabd ("PM / hibernate: Verify the consistent of e820 memory map<br>
+        by md5 digest")<br>
+<br>
+Tested-by: Dexuan Cui <decui@xxxxxxxxxxxxx><br>
+Reviewed-by: Dexuan Cui <decui@xxxxxxxxxxxxx><br>
+Signed-off-by: Chris von Recklinghausen <crecklin@xxxxxxxxxx><br>
+---<br>
+v1 -> v2<br>
+    bump up RESTORE_MAGIC<br>
+v2 -> v3<br>
+    move embelishment from cover letter to commit comments (no code change)<br>
+v3 -> v4<br>
+    add note to comments that md5 isn't used for encryption here.<br>
+v4 -> v5<br>
+    reword comment per Simo's suggestion<br>
+<br>
+  arch/x86/power/hibernate.c | 35 +++++++++++++++++++----------------<br>
+  1 file changed, 19 insertions(+), 16 deletions(-)<br>
+<br>
+diff --git a/arch/x86/power/hibernate.c b/arch/x86/power/hibernate.c<br>
+index cd3914fc9f3d..b56172553275 100644<br>
+--- a/arch/x86/power/hibernate.c<br>
++++ b/arch/x86/power/hibernate.c<br>
+@@ -55,31 +55,31 @@ int pfn_is_nosave(unsigned long pfn)<br>
+  }<br>
+  
+  
+-#define MD5_DIGEST_SIZE 16
+<br>
++#define CRC32_DIGEST_SIZE 16<br>
+  
+  struct restore_data_record {
+<br>
+  	unsigned long jump_address;<br>
+  	unsigned long jump_address_phys;<br>
+  	unsigned long cr3;<br>
+  	unsigned long magic;<br>
+-	u8 e820_digest[MD5_DIGEST_SIZE];<br>
++	u8 e820_digest[CRC32_DIGEST_SIZE];<br>
+  };<br>
+  
+-#if IS_BUILTIN(CONFIG_CRYPTO_MD5)
+<br>
++#if IS_BUILTIN(CONFIG_CRYPTO_CRC32)<br>
+</blockquote>
+Should CONFIG_CRYPTO_CRC32 be getting selected from somewhere?<br>
+</blockquote>
+<br>
+<br>
+Yes, presumably from the same source that sets CONFIG_CRYPTO_MD5. Also 
+presumably there's value to not forcing the check if the config value is 
+not set.
+<br>
+<br>
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+<br>
+If that is too hard because it would pull in too much of the crypto API, maybe<br>
+using the library interface to CRC-32 (lib/crc32.c) would be a better fit?<br>
+</blockquote>
+<br>
+<br>
+Based on my statement above, the intent is to provide a simple drop in 
+replacement for md5 so that users of FIPS mode can suspend/resume 
+without any errors.
+<br>
+<br>
+Thanks,<br>
+<br>
+Chris<br>
+<br>
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+<br>
+- Eric<br>
+<br>
+</blockquote>
+<br>
+<br>
+

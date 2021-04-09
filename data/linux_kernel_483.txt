@@ -1,0 +1,28 @@
+Am Donnerstag, den 08.04.2021, 15:16 +0200 schrieb Johan Hovold:<br>
+><i> This reverts commit b401f8c4f492cbf74f3f59c9141e5be3071071bb.</i><br>
+><i> </i><br>
+><i> The offending commit claimed that trying to set the values reported back</i><br>
+><i> by TIOCGSERIAL as a regular user could result in an -EPERM error when HZ</i><br>
+><i> is 250, but that was never the case.</i><br>
+><i> </i><br>
+><i> With HZ=250, the default 0.5 second value of close_delay is converted to</i><br>
+><i> 125 jiffies when set and is converted back to 50 centiseconds by</i><br>
+><i> TIOCGSERIAL as expected (not 12 cs as was claimed, even if that was the</i><br>
+><i> case before an earlier fix).</i><br>
+><i> </i><br>
+><i> Comparing the internal current and new jiffies values is just fine to</i><br>
+><i> determine if the value is about to change so drop the bogus workaround</i><br>
+><i> (which was also backported to stable).</i><br>
+><i> </i><br>
+><i> For completeness: With different default values for these parameters or</i><br>
+><i> with a HZ value not divisible by two, the lack of rounding when setting</i><br>
+><i> the default values in tty_port_init() could result in an -EPERM being</i><br>
+><i> returned, but this is hardly something we need to worry about.</i><br>
+><i> </i><br>
+><i> Cc: Anthony Mallet <anthony.mallet@xxxxxxx></i><br>
+><i> Cc: stable@xxxxxxxxxxxxxxx</i><br>
+><i> Signed-off-by: Johan Hovold <johan@xxxxxxxxxx></i><br>
+Acked-by: Oliver Neukum <oneukum@xxxxxxxx><br>
+<br>
+<br>
+

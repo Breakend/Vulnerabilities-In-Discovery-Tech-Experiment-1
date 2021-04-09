@@ -1,0 +1,276 @@
+tree:   <a  rel="nofollow" href="https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git">https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git</a> master<br>
+head:   454859c552da78b0f587205d308401922b56863e<br>
+commit: e5fc436f06eef54ef512ea55a9db8eb9f2e76959 sparse: use static inline for __chk_{user,io}_ptr()<br>
+date:   7 months ago<br>
+config: sh-randconfig-s031-20210408 (attached as .config)<br>
+compiler: sh4-linux-gcc (GCC) 9.3.0<br>
+reproduce:<br>
+        wget <a  rel="nofollow" href="https://raw.githubusercontent.com/intel/lkp-tests/master/sbin/make.cross">https://raw.githubusercontent.com/intel/lkp-tests/master/sbin/make.cross</a> -O ~/bin/make.cross<br>
+        chmod +x ~/bin/make.cross<br>
+        # apt-get install sparse<br>
+        # sparse version: v0.6.3-279-g6d5d9b42-dirty<br>
+        # <a  rel="nofollow" href="https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=e5fc436f06eef54ef512ea55a9db8eb9f2e76959">https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=e5fc436f06eef54ef512ea55a9db8eb9f2e76959</a><br>
+        git remote add linus <a  rel="nofollow" href="https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git">https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git</a><br>
+        git fetch --no-tags linus master<br>
+        git checkout e5fc436f06eef54ef512ea55a9db8eb9f2e76959<br>
+        # save the attached .config to linux build tree<br>
+        COMPILER_INSTALL_PATH=$HOME/0day COMPILER=gcc-9.3.0 make.cross C=1 CF='-fdiagnostic-prefix -D__CHECK_ENDIAN__' ARCH=sh <br>
+<br>
+If you fix the issue, kindly add following tag as appropriate<br>
+Reported-by: kernel test robot <lkp@xxxxxxxxx><br>
+<br>
+<br>
+sparse warnings: (new ones prefixed by >>)<br>
+><i>> arch/sh/kernel/process_32.c:42:9: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned int @@</i><br>
+   arch/sh/kernel/process_32.c:42:9: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/kernel/process_32.c:42:9: sparse:     got unsigned int<br>
+--<br>
+><i>> arch/sh/kernel/ftrace.c:50:9: sparse: sparse: incorrect type in argument 1 (different address spaces) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned char * @@</i><br>
+   arch/sh/kernel/ftrace.c:50:9: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/kernel/ftrace.c:50:9: sparse:     got unsigned char *<br>
+   arch/sh/kernel/ftrace.c:57:9: sparse: sparse: incorrect type in argument 1 (different address spaces) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned char * @@<br>
+   arch/sh/kernel/ftrace.c:57:9: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/kernel/ftrace.c:57:9: sparse:     got unsigned char *<br>
+--<br>
+><i>> arch/sh/mm/tlb-sh3.c:41:9: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned int @@</i><br>
+   arch/sh/mm/tlb-sh3.c:41:9: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/mm/tlb-sh3.c:41:9: sparse:     got unsigned int<br>
+   arch/sh/mm/tlb-sh3.c:48:9: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned int @@<br>
+   arch/sh/mm/tlb-sh3.c:48:9: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/mm/tlb-sh3.c:48:9: sparse:     got unsigned int<br>
+><i>> arch/sh/mm/tlb-sh3.c:75:17: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned long @@</i><br>
+   arch/sh/mm/tlb-sh3.c:75:17: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/mm/tlb-sh3.c:75:17: sparse:     got unsigned long<br>
+   arch/sh/mm/tlb-sh3.c:90:18: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned int @@<br>
+   arch/sh/mm/tlb-sh3.c:90:18: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/mm/tlb-sh3.c:90:18: sparse:     got unsigned int<br>
+   arch/sh/mm/tlb-sh3.c:92:9: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned int @@<br>
+   arch/sh/mm/tlb-sh3.c:92:9: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/mm/tlb-sh3.c:92:9: sparse:     got unsigned int<br>
+--<br>
+><i>> arch/sh/mm/tlbflush_32.c:134:9: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned int @@</i><br>
+   arch/sh/mm/tlbflush_32.c:134:9: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/mm/tlbflush_32.c:134:9: sparse:     got unsigned int<br>
+><i>> arch/sh/mm/tlbflush_32.c:134:9: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned int @@</i><br>
+   arch/sh/mm/tlbflush_32.c:134:9: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/mm/tlbflush_32.c:134:9: sparse:     got unsigned int<br>
+--<br>
+   arch/sh/mm/init.c: note: in included file (through arch/sh/include/asm/mmu_context.h):<br>
+><i>> arch/sh/include/asm/mmu_context_32.h:53:9: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned int @@</i><br>
+   arch/sh/include/asm/mmu_context_32.h:53:9: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/include/asm/mmu_context_32.h:53:9: sparse:     got unsigned int<br>
+--<br>
+><i>> arch/sh/boards/board-magicpanelr2.c:39:13: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned long @@</i><br>
+   arch/sh/boards/board-magicpanelr2.c:39:13: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/boards/board-magicpanelr2.c:39:13: sparse:     got unsigned long<br>
+   arch/sh/boards/board-magicpanelr2.c:44:21: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned long @@<br>
+   arch/sh/boards/board-magicpanelr2.c:44:21: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/boards/board-magicpanelr2.c:44:21: sparse:     got unsigned long<br>
+   arch/sh/boards/board-magicpanelr2.c:54:9: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned long @@<br>
+   arch/sh/boards/board-magicpanelr2.c:54:9: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/boards/board-magicpanelr2.c:54:9: sparse:     got unsigned long<br>
+   arch/sh/boards/board-magicpanelr2.c:54:9: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned long @@<br>
+   arch/sh/boards/board-magicpanelr2.c:54:9: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/boards/board-magicpanelr2.c:54:9: sparse:     got unsigned long<br>
+   arch/sh/boards/board-magicpanelr2.c:59:9: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned long @@<br>
+   arch/sh/boards/board-magicpanelr2.c:59:9: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/boards/board-magicpanelr2.c:59:9: sparse:     got unsigned long<br>
+   arch/sh/boards/board-magicpanelr2.c:59:9: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned long @@<br>
+   arch/sh/boards/board-magicpanelr2.c:59:9: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/boards/board-magicpanelr2.c:59:9: sparse:     got unsigned long<br>
+   arch/sh/boards/board-magicpanelr2.c:66:9: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned long @@<br>
+   arch/sh/boards/board-magicpanelr2.c:66:9: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/boards/board-magicpanelr2.c:66:9: sparse:     got unsigned long<br>
+   arch/sh/boards/board-magicpanelr2.c:68:9: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned long @@<br>
+   arch/sh/boards/board-magicpanelr2.c:68:9: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/boards/board-magicpanelr2.c:68:9: sparse:     got unsigned long<br>
+   arch/sh/boards/board-magicpanelr2.c:72:9: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned long @@<br>
+   arch/sh/boards/board-magicpanelr2.c:72:9: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/boards/board-magicpanelr2.c:72:9: sparse:     got unsigned long<br>
+   arch/sh/boards/board-magicpanelr2.c:74:9: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned long @@<br>
+   arch/sh/boards/board-magicpanelr2.c:74:9: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/boards/board-magicpanelr2.c:74:9: sparse:     got unsigned long<br>
+   arch/sh/boards/board-magicpanelr2.c:78:9: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned long @@<br>
+   arch/sh/boards/board-magicpanelr2.c:78:9: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/boards/board-magicpanelr2.c:78:9: sparse:     got unsigned long<br>
+   arch/sh/boards/board-magicpanelr2.c:80:9: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned long @@<br>
+   arch/sh/boards/board-magicpanelr2.c:80:9: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/boards/board-magicpanelr2.c:80:9: sparse:     got unsigned long<br>
+   arch/sh/boards/board-magicpanelr2.c:84:9: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned long @@<br>
+   arch/sh/boards/board-magicpanelr2.c:84:9: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/boards/board-magicpanelr2.c:84:9: sparse:     got unsigned long<br>
+   arch/sh/boards/board-magicpanelr2.c:86:9: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned long @@<br>
+   arch/sh/boards/board-magicpanelr2.c:86:9: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/boards/board-magicpanelr2.c:86:9: sparse:     got unsigned long<br>
+   arch/sh/boards/board-magicpanelr2.c:90:9: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned long @@<br>
+   arch/sh/boards/board-magicpanelr2.c:90:9: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/boards/board-magicpanelr2.c:90:9: sparse:     got unsigned long<br>
+   arch/sh/boards/board-magicpanelr2.c:92:9: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned long @@<br>
+   arch/sh/boards/board-magicpanelr2.c:92:9: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/boards/board-magicpanelr2.c:92:9: sparse:     got unsigned long<br>
+   arch/sh/boards/board-magicpanelr2.c:100:9: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned long @@<br>
+   arch/sh/boards/board-magicpanelr2.c:100:9: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/boards/board-magicpanelr2.c:100:9: sparse:     got unsigned long<br>
+   arch/sh/boards/board-magicpanelr2.c:105:9: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned long @@<br>
+   arch/sh/boards/board-magicpanelr2.c:105:9: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/boards/board-magicpanelr2.c:105:9: sparse:     got unsigned long<br>
+   arch/sh/boards/board-magicpanelr2.c:110:9: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned long @@<br>
+   arch/sh/boards/board-magicpanelr2.c:110:9: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/boards/board-magicpanelr2.c:110:9: sparse:     got unsigned long<br>
+   arch/sh/boards/board-magicpanelr2.c:115:9: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned long @@<br>
+   arch/sh/boards/board-magicpanelr2.c:115:9: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/boards/board-magicpanelr2.c:115:9: sparse:     got unsigned long<br>
+   arch/sh/boards/board-magicpanelr2.c:120:9: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned long @@<br>
+   arch/sh/boards/board-magicpanelr2.c:120:9: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/boards/board-magicpanelr2.c:120:9: sparse:     got unsigned long<br>
+   arch/sh/boards/board-magicpanelr2.c:125:9: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned long @@<br>
+   arch/sh/boards/board-magicpanelr2.c:125:9: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/boards/board-magicpanelr2.c:125:9: sparse:     got unsigned long<br>
+   arch/sh/boards/board-magicpanelr2.c:130:9: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned long @@<br>
+   arch/sh/boards/board-magicpanelr2.c:130:9: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/boards/board-magicpanelr2.c:130:9: sparse:     got unsigned long<br>
+   arch/sh/boards/board-magicpanelr2.c:135:9: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned long @@<br>
+   arch/sh/boards/board-magicpanelr2.c:135:9: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/boards/board-magicpanelr2.c:135:9: sparse:     got unsigned long<br>
+   arch/sh/boards/board-magicpanelr2.c:140:9: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned long @@<br>
+   arch/sh/boards/board-magicpanelr2.c:140:9: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/boards/board-magicpanelr2.c:140:9: sparse:     got unsigned long<br>
+   arch/sh/boards/board-magicpanelr2.c:145:9: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned long @@<br>
+   arch/sh/boards/board-magicpanelr2.c:145:9: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/boards/board-magicpanelr2.c:145:9: sparse:     got unsigned long<br>
+   arch/sh/boards/board-magicpanelr2.c:150:9: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned long @@<br>
+   arch/sh/boards/board-magicpanelr2.c:150:9: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/boards/board-magicpanelr2.c:150:9: sparse:     got unsigned long<br>
+   arch/sh/boards/board-magicpanelr2.c:156:9: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned long @@<br>
+   arch/sh/boards/board-magicpanelr2.c:156:9: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/boards/board-magicpanelr2.c:156:9: sparse:     got unsigned long<br>
+   arch/sh/boards/board-magicpanelr2.c:164:9: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned long @@<br>
+   arch/sh/boards/board-magicpanelr2.c:164:9: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/boards/board-magicpanelr2.c:164:9: sparse:     got unsigned long<br>
+   arch/sh/boards/board-magicpanelr2.c:173:9: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned long @@<br>
+   arch/sh/boards/board-magicpanelr2.c:173:9: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/boards/board-magicpanelr2.c:173:9: sparse:     got unsigned long<br>
+   arch/sh/boards/board-magicpanelr2.c:174:9: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned long @@<br>
+   arch/sh/boards/board-magicpanelr2.c:174:9: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/boards/board-magicpanelr2.c:174:9: sparse:     got unsigned long<br>
+   arch/sh/boards/board-magicpanelr2.c:191:9: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned long @@<br>
+   arch/sh/boards/board-magicpanelr2.c:191:9: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/boards/board-magicpanelr2.c:191:9: sparse:     got unsigned long<br>
+   arch/sh/boards/board-magicpanelr2.c:196:9: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned long @@<br>
+   arch/sh/boards/board-magicpanelr2.c:196:9: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/boards/board-magicpanelr2.c:196:9: sparse:     got unsigned long<br>
+   arch/sh/boards/board-magicpanelr2.c:201:9: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned long @@<br>
+   arch/sh/boards/board-magicpanelr2.c:201:9: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+--<br>
+   fs/exec.c:418:13: sparse: sparse: incorrect type in initializer (different address spaces) @@     expected char const [noderef] __user *const *__gu_addr @@     got char const [noderef] __user *const [noderef] __user * @@<br>
+   fs/exec.c:418:13: sparse:     expected char const [noderef] __user *const *__gu_addr<br>
+   fs/exec.c:418:13: sparse:     got char const [noderef] __user *const [noderef] __user *<br>
+   fs/exec.c:418:13: sparse: sparse: incorrect type in argument 1 (different address spaces) @@     expected void const volatile [noderef] __user *ptr @@     got char const [noderef] __user *const *__gu_addr @@<br>
+   fs/exec.c:418:13: sparse:     expected void const volatile [noderef] __user *ptr<br>
+   fs/exec.c:418:13: sparse:     got char const [noderef] __user *const *__gu_addr<br>
+   fs/exec.c:419:31: sparse: sparse: incorrect type in return expression (different address spaces) @@     expected char const [noderef] __user * @@     got void * @@<br>
+   fs/exec.c:419:31: sparse:     expected char const [noderef] __user *<br>
+   fs/exec.c:419:31: sparse:     got void *<br>
+   fs/exec.c:1156:48: sparse: sparse: incorrect type in initializer (different address spaces) @@     expected struct sighand_struct *oldsighand @@     got struct sighand_struct [noderef] __rcu *sighand @@<br>
+   fs/exec.c:1156:48: sparse:     expected struct sighand_struct *oldsighand<br>
+   fs/exec.c:1156:48: sparse:     got struct sighand_struct [noderef] __rcu *sighand<br>
+   fs/exec.c:1263:56: sparse: sparse: incorrect type in argument 2 (different address spaces) @@     expected struct task_struct *parent @@     got struct task_struct [noderef] __rcu *parent @@<br>
+   fs/exec.c:1263:56: sparse:     expected struct task_struct *parent<br>
+   fs/exec.c:1263:56: sparse:     got struct task_struct [noderef] __rcu *parent<br>
+   fs/exec.c:1298:47: sparse: sparse: incorrect type in initializer (different address spaces) @@     expected struct sighand_struct *oldsighand @@     got struct sighand_struct [noderef] __rcu *sighand @@<br>
+   fs/exec.c:1298:47: sparse:     expected struct sighand_struct *oldsighand<br>
+   fs/exec.c:1298:47: sparse:     got struct sighand_struct [noderef] __rcu *sighand<br>
+   fs/exec.c:1851:70: sparse: sparse: incorrect type in argument 1 (different address spaces) @@     expected struct task_struct *tsk @@     got struct task_struct [noderef] __rcu *parent @@<br>
+   fs/exec.c:1851:70: sparse:     expected struct task_struct *tsk<br>
+   fs/exec.c:1851:70: sparse:     got struct task_struct [noderef] __rcu *parent<br>
+   fs/exec.c: note: in included file (through arch/sh/include/asm/mmu_context.h):<br>
+><i>> arch/sh/include/asm/mmu_context_32.h:53:9: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned int @@</i><br>
+   arch/sh/include/asm/mmu_context_32.h:53:9: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/include/asm/mmu_context_32.h:53:9: sparse:     got unsigned int<br>
+--<br>
+><i>> arch/sh/kernel/cpu/sh3/serial-sh7720.c:16:32: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned long @@</i><br>
+   arch/sh/kernel/cpu/sh3/serial-sh7720.c:16:32: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/kernel/cpu/sh3/serial-sh7720.c:16:32: sparse:     got unsigned long<br>
+   arch/sh/kernel/cpu/sh3/serial-sh7720.c:17:25: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned long @@<br>
+   arch/sh/kernel/cpu/sh3/serial-sh7720.c:17:25: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/kernel/cpu/sh3/serial-sh7720.c:17:25: sparse:     got unsigned long<br>
+   arch/sh/kernel/cpu/sh3/serial-sh7720.c:20:32: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned long @@<br>
+   arch/sh/kernel/cpu/sh3/serial-sh7720.c:20:32: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/kernel/cpu/sh3/serial-sh7720.c:20:32: sparse:     got unsigned long<br>
+   arch/sh/kernel/cpu/sh3/serial-sh7720.c:21:25: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned long @@<br>
+   arch/sh/kernel/cpu/sh3/serial-sh7720.c:21:25: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/kernel/cpu/sh3/serial-sh7720.c:21:25: sparse:     got unsigned long<br>
+   arch/sh/kernel/cpu/sh3/serial-sh7720.c:26:32: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned long @@<br>
+   arch/sh/kernel/cpu/sh3/serial-sh7720.c:26:32: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/kernel/cpu/sh3/serial-sh7720.c:26:32: sparse:     got unsigned long<br>
+   arch/sh/kernel/cpu/sh3/serial-sh7720.c:27:25: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned long @@<br>
+   arch/sh/kernel/cpu/sh3/serial-sh7720.c:27:25: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/kernel/cpu/sh3/serial-sh7720.c:27:25: sparse:     got unsigned long<br>
+   arch/sh/kernel/cpu/sh3/serial-sh7720.c:30:32: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned long @@<br>
+   arch/sh/kernel/cpu/sh3/serial-sh7720.c:30:32: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/kernel/cpu/sh3/serial-sh7720.c:30:32: sparse:     got unsigned long<br>
+   arch/sh/kernel/cpu/sh3/serial-sh7720.c:31:25: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned long @@<br>
+   arch/sh/kernel/cpu/sh3/serial-sh7720.c:31:25: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/kernel/cpu/sh3/serial-sh7720.c:31:25: sparse:     got unsigned long<br>
+--<br>
+><i>> arch/sh/kernel/cpu/sh3/clock-sh7710.c:26:31: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned int @@</i><br>
+   arch/sh/kernel/cpu/sh3/clock-sh7710.c:26:31: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/kernel/cpu/sh3/clock-sh7710.c:26:31: sparse:     got unsigned int<br>
+   arch/sh/kernel/cpu/sh3/clock-sh7710.c:35:20: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned int @@<br>
+   arch/sh/kernel/cpu/sh3/clock-sh7710.c:35:20: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/kernel/cpu/sh3/clock-sh7710.c:35:20: sparse:     got unsigned int<br>
+   arch/sh/kernel/cpu/sh3/clock-sh7710.c:45:20: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned int @@<br>
+   arch/sh/kernel/cpu/sh3/clock-sh7710.c:45:20: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/kernel/cpu/sh3/clock-sh7710.c:45:20: sparse:     got unsigned int<br>
+   arch/sh/kernel/cpu/sh3/clock-sh7710.c:55:20: sparse: sparse: incorrect type in argument 1 (different base types) @@     expected void const volatile [noderef] __iomem *ptr @@     got unsigned int @@<br>
+   arch/sh/kernel/cpu/sh3/clock-sh7710.c:55:20: sparse:     expected void const volatile [noderef] __iomem *ptr<br>
+   arch/sh/kernel/cpu/sh3/clock-sh7710.c:55:20: sparse:     got unsigned int<br>
+<br>
+vim +42 arch/sh/kernel/process_32.c<br>
+<br>
+^1da177e4c3f41 arch/sh/kernel/process.c    Linus Torvalds     2005-04-16  30  <br>
+^1da177e4c3f41 arch/sh/kernel/process.c    Linus Torvalds     2005-04-16  31  void show_regs(struct pt_regs * regs)<br>
+^1da177e4c3f41 arch/sh/kernel/process.c    Linus Torvalds     2005-04-16  32  {<br>
+21afcacb0348ed arch/sh/kernel/process_32.c Geert Uytterhoeven 2020-06-17  33  	pr_info("\n");<br>
+a43cb95d547a06 arch/sh/kernel/process_32.c Tejun Heo          2013-04-30  34  	show_regs_print_info(KERN_DEFAULT);<br>
+7d96169cb769f4 arch/sh/kernel/process_32.c Paul Mundt         2008-08-08  35  <br>
+21afcacb0348ed arch/sh/kernel/process_32.c Geert Uytterhoeven 2020-06-17  36  	pr_info("PC is at %pS\n", (void *)instruction_pointer(regs));<br>
+21afcacb0348ed arch/sh/kernel/process_32.c Geert Uytterhoeven 2020-06-17  37  	pr_info("PR is at %pS\n", (void *)regs->pr);<br>
+7d96169cb769f4 arch/sh/kernel/process_32.c Paul Mundt         2008-08-08  38  <br>
+21afcacb0348ed arch/sh/kernel/process_32.c Geert Uytterhoeven 2020-06-17  39  	pr_info("PC  : %08lx SP  : %08lx SR  : %08lx ", regs->pc,<br>
+21afcacb0348ed arch/sh/kernel/process_32.c Geert Uytterhoeven 2020-06-17  40  		regs->regs[15], regs->sr);<br>
+^1da177e4c3f41 arch/sh/kernel/process.c    Linus Torvalds     2005-04-16  41  #ifdef CONFIG_MMU<br>
+21afcacb0348ed arch/sh/kernel/process_32.c Geert Uytterhoeven 2020-06-17 @42  	pr_cont("TEA : %08x\n", __raw_readl(MMU_TEA));<br>
+^1da177e4c3f41 arch/sh/kernel/process.c    Linus Torvalds     2005-04-16  43  #else<br>
+21afcacb0348ed arch/sh/kernel/process_32.c Geert Uytterhoeven 2020-06-17  44  	pr_cont("\n");<br>
+^1da177e4c3f41 arch/sh/kernel/process.c    Linus Torvalds     2005-04-16  45  #endif<br>
+^1da177e4c3f41 arch/sh/kernel/process.c    Linus Torvalds     2005-04-16  46  <br>
+21afcacb0348ed arch/sh/kernel/process_32.c Geert Uytterhoeven 2020-06-17  47  	pr_info("R0  : %08lx R1  : %08lx R2  : %08lx R3  : %08lx\n",<br>
+21afcacb0348ed arch/sh/kernel/process_32.c Geert Uytterhoeven 2020-06-17  48  		regs->regs[0], regs->regs[1], regs->regs[2], regs->regs[3]);<br>
+21afcacb0348ed arch/sh/kernel/process_32.c Geert Uytterhoeven 2020-06-17  49  	pr_info("R4  : %08lx R5  : %08lx R6  : %08lx R7  : %08lx\n",<br>
+21afcacb0348ed arch/sh/kernel/process_32.c Geert Uytterhoeven 2020-06-17  50  		regs->regs[4], regs->regs[5], regs->regs[6], regs->regs[7]);<br>
+21afcacb0348ed arch/sh/kernel/process_32.c Geert Uytterhoeven 2020-06-17  51  	pr_info("R8  : %08lx R9  : %08lx R10 : %08lx R11 : %08lx\n",<br>
+21afcacb0348ed arch/sh/kernel/process_32.c Geert Uytterhoeven 2020-06-17  52  		regs->regs[8], regs->regs[9], regs->regs[10], regs->regs[11]);<br>
+21afcacb0348ed arch/sh/kernel/process_32.c Geert Uytterhoeven 2020-06-17  53  	pr_info("R12 : %08lx R13 : %08lx R14 : %08lx\n",<br>
+21afcacb0348ed arch/sh/kernel/process_32.c Geert Uytterhoeven 2020-06-17  54  		regs->regs[12], regs->regs[13], regs->regs[14]);<br>
+21afcacb0348ed arch/sh/kernel/process_32.c Geert Uytterhoeven 2020-06-17  55  	pr_info("MACH: %08lx MACL: %08lx GBR : %08lx PR  : %08lx\n",<br>
+^1da177e4c3f41 arch/sh/kernel/process.c    Linus Torvalds     2005-04-16  56  		regs->mach, regs->macl, regs->gbr, regs->pr);<br>
+^1da177e4c3f41 arch/sh/kernel/process.c    Linus Torvalds     2005-04-16  57  <br>
+539e786cc37ee5 arch/sh/kernel/process_32.c Dmitry Safonov     2020-06-08  58  	show_trace(NULL, (unsigned long *)regs->regs[15], regs, KERN_DEFAULT);<br>
+9cfc9a9b6fff9e arch/sh/kernel/process_32.c Paul Mundt         2008-11-26  59  	show_code(regs);<br>
+^1da177e4c3f41 arch/sh/kernel/process.c    Linus Torvalds     2005-04-16  60  }<br>
+^1da177e4c3f41 arch/sh/kernel/process.c    Linus Torvalds     2005-04-16  61  <br>
+<br>
+:::::: The code at line 42 was first introduced by commit<br>
+:::::: 21afcacb0348edf8f5d4e6115b5eb0b58f9a049b sh: process: Fix broken lines in register dumps<br>
+<br>
+:::::: TO: Geert Uytterhoeven <geert+renesas@xxxxxxxxx><br>
+:::::: CC: Rich Felker <dalias@xxxxxxxx><br>
+<br>
+---<br>
+0-DAY CI Kernel Test Service, Intel Corporation<br>
+<a  rel="nofollow" href="https://lists.01.org/hyperkitty/list/kbuild-all@xxxxxxxxxxxx">https://lists.01.org/hyperkitty/list/kbuild-all@xxxxxxxxxxxx</a><br>
+<p><strong>Attachment:
+<a href="00797/.config.gz" ><tt>.config.gz</tt></a></strong><br>
+<em>Description:</em> application/gzip</p>
+

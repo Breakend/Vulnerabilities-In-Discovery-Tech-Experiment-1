@@ -1,0 +1,70 @@
+On Thu, Apr 8, 2021 at 12:29 PM David Hildenbrand <david@xxxxxxxxxx> wrote:<br>
+><i> On 08.04.21 12:20, Arnd Bergmann wrote:</i><br>
+><i> > On Thu, Apr 8, 2021 at 11:22 AM David Hildenbrand <david@xxxxxxxxxx> wrote:</i><br>
+><i> >></i><br>
+><i> >> Random drivers should not override a user configuration of core knobs</i><br>
+><i> >> (e.g., CONFIG_DMA_CMA=n). Use "imply" instead, to still respect</i><br>
+><i> >> dependencies and manual overrides.</i><br>
+><i> >></i><br>
+><i> >> "This is similar to "select" as it enforces a lower limit on another</i><br>
+><i> >>   symbol except that the "implied" symbol's value may still be set to n</i><br>
+><i> >>   from a direct dependency or with a visible prompt."</i><br>
+><i> >></i><br>
+><i> >> Implying DRM_CMA should be sufficient, as that depends on CMA.</i><br>
+><i> >></i><br>
+><i> >> Note: If this is a real dependency, we should use "depends on DMA_CMA"</i><br>
+><i> >> instead -  but I assume the driver can work without CMA just fine --</i><br>
+><i> >> esp. when we wouldn't have HAVE_DMA_CONTIGUOUS right now.</i><br>
+><i> ></i><br>
+><i> > 'imply' is almost never the right solution, and it tends to cause more</i><br>
+><i> > problems than it solves.</i><br>
+><i></i><br>
+><i> I thought that was the case with "select" :)</i><br>
+<br>
+Yes, but that's a different set of problems<br>
+<br>
+><i> ></i><br>
+><i> > In particular, it does not prevent a configuration with 'DRM_CMA=m'</i><br>
+><i></i><br>
+><i> I assume you meant "DRM_CMA=n" ? DRM_CMA cannot be built as a module.</i><br>
+<br>
+Ok, at least that makes it easier.<br>
+<br>
+><i> > and 'DRMA_ASPEED_GFX=y', or any build failures from such</i><br>
+><i> > a configuration.</i><br>
+><i></i><br>
+><i> I don't follow. "DRM_CMA=n" and 'DRMA_ASPEED_GFX=y' is supposed to work</i><br>
+><i> just fine (e.g., without HAVE_DMA_CONTIGUOUS) or what am I missing?</i><br>
+<br>
+I thought you were trying to solve the problem where DRMA_ASPEED_GFX<br>
+can optionally link against CMA but would fail to build when the CMA code<br>
+is in a loadable module.<br>
+<br>
+If the problem you are trying to solve is a different one, you need a different<br>
+solution, not what I posted above.<br>
+<br>
+><i> > If you want this kind of soft dependency, you need</i><br>
+><i> > 'depends on DRM_CMA || !DRM_CMA'.</i><br>
+><i></i><br>
+><i> Seriously? I think the point of imply is "please enable if possible and</i><br>
+><i> not prevented by someone else".</i><br>
+<br>
+That used to be the meaning, but it changed a few years ago. Now<br>
+it means "when a used manually turns on this symbol, turn on the<br>
+implied one as well, but let them turn it off again if they choose".<br>
+<br>
+This is pretty much a NOP.<br>
+<br>
+><i> Your example looks more like a NOP - no?</i><br>
+><i> Or will it have the same effect?</i><br>
+<br>
+The example I gave is only meaningful if both are tristate, which is<br>
+not the case here as you explain.<br>
+<br>
+It is a somewhat awkward way to say "prevent this symbol from<br>
+being =y if the dependency is =m".<br>
+<br>
+      Arnd<br>
+<br>
+<br>
+

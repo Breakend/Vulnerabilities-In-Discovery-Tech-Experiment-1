@@ -1,0 +1,45 @@
+With CONFIG_CFI_CLANG, the compiler replaces function addresses in<br>
+instrumented C code with jump table addresses. This change implements<br>
+the function_nocfi() macro, which returns the actual function address<br>
+instead.<br>
+<br>
+Signed-off-by: Sami Tolvanen <samitolvanen@xxxxxxxxxx><br>
+Reviewed-by: Kees Cook <keescook@xxxxxxxxxxxx><br>
+Acked-by: Mark Rutland <mark.rutland@xxxxxxx><br>
+Tested-by: Nathan Chancellor <nathan@xxxxxxxxxx><br>
+---<br>
+ arch/arm64/include/asm/memory.h | 16 ++++++++++++++++<br>
+ 1 file changed, 16 insertions(+)<br>
+<br>
+diff --git a/arch/arm64/include/asm/memory.h b/arch/arm64/include/asm/memory.h<br>
+index 0aabc3be9a75..3a6f9df63606 100644<br>
+--- a/arch/arm64/include/asm/memory.h<br>
++++ b/arch/arm64/include/asm/memory.h<br>
+@@ -321,6 +321,22 @@ static inline void *phys_to_virt(phys_addr_t x)<br>
+ #define virt_to_pfn(x)		__phys_to_pfn(__virt_to_phys((unsigned long)(x)))<br>
+ #define sym_to_pfn(x)		__phys_to_pfn(__pa_symbol(x))<br>
+ <br>
++#ifdef CONFIG_CFI_CLANG<br>
++/*<br>
++ * With CONFIG_CFI_CLANG, the compiler replaces function address<br>
++ * references with the address of the function's CFI jump table<br>
++ * entry. The function_nocfi macro always returns the address of the<br>
++ * actual function instead.<br>
++ */<br>
++#define function_nocfi(x) ({						\<br>
++	void *addr;							\<br>
++	asm("adrp %0, " __stringify(x) "\n\t"				\<br>
++	    "add  %0, %0, :lo12:" __stringify(x)			\<br>
++	    : "=r" (addr));						\<br>
++	addr;								\<br>
++})<br>
++#endif<br>
++<br>
+ /*<br>
+  *  virt_to_page(x)	convert a _valid_ virtual address to struct page *<br>
+  *  virt_addr_valid(x)	indicates whether a virtual address is valid<br>
+-- <br>
+2.31.1.295.g9ea45b61b8-goog<br>
+<br>
+<br>
+

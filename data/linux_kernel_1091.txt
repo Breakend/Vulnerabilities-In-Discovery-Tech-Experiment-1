@@ -1,0 +1,25 @@
+Hi Nadav,<br>
+<br>
+On Wed, Apr 07, 2021 at 05:57:31PM +0000, Nadav Amit wrote:<br>
+><i> I tested it on real bare-metal hardware. I ran some basic I/O workloads</i><br>
+><i> with the IOMMU enabled, checkers enabled/disabled, and so on.</i><br>
+><i> </i><br>
+><i> However, I only tested the IOMMU-flushes and I did not test that the</i><br>
+><i> device-IOTLB flush work, since I did not have the hardware for that.</i><br>
+><i> </i><br>
+><i> If you can refer me to the old patches, I will have a look and see</i><br>
+><i> whether I can see a difference in the logic or test them. If you want</i><br>
+><i> me to run different tests - let me know. If you want me to remove</i><br>
+><i> the device-IOTLB invalidations logic - that is also fine with me.</i><br>
+<br>
+Here is the patch-set, it is from 2010 and against a very old version of<br>
+the AMD IOMMU driver:<br>
+<br>
+	<a  rel="nofollow" href="https://lore.kernel.org/lkml/1265898797-32183-1-git-send-email-joerg.roedel@xxxxxxx/">https://lore.kernel.org/lkml/1265898797-32183-1-git-send-email-joerg.roedel@xxxxxxx/</a><br>
+<br>
+Regards,<br>
+<br>
+	Joerg<br>
+<br>
+<br>
+

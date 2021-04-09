@@ -1,0 +1,36 @@
+A reply to v1 cause v2 code need to be modified, so please ignore this, 
+and directly check v3 later.
+<br>
+<br>
+<br>
+Thanks<br>
+<br>
+Jiaxing<br>
+<br>
+On 2021/4/7 18:07, Luo Jiaxing wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+Several error is reported by checkpatch.pl, here are two patches to clean<br>
+them up.<br>
+<br>
+---<br>
+    v1->v2:<br>
+           1. modify AAP1_MEMMAP() to inline function<br>
+           2. set flash_command_table and flash_error_table as const<br>
+---<br>
+<br>
+Luo Jiaxing (2):<br>
+   scsi: pm8001: clean up for white space<br>
+   scsi: pm8001: clean up for open brace<br>
+<br>
+  drivers/scsi/pm8001/pm8001_ctl.c | 26 +++++++++++---------------<br>
+  drivers/scsi/pm8001/pm8001_ctl.h |  5 +++++<br>
+  drivers/scsi/pm8001/pm8001_hwi.c | 14 +++++++-------<br>
+  drivers/scsi/pm8001/pm8001_sas.c | 20 ++++++++++----------<br>
+  drivers/scsi/pm8001/pm8001_sas.h |  2 +-<br>
+  drivers/scsi/pm8001/pm80xx_hwi.c | 14 +++++++-------<br>
+  6 files changed, 41 insertions(+), 40 deletions(-)<br>
+<br>
+</blockquote>
+<br>
+<br>
+

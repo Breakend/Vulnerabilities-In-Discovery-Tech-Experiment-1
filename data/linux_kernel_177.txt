@@ -1,0 +1,67 @@
+
+<br>
+<br>
+On 4/8/2021 1:00 PM, Peter Zijlstra wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+On Mon, Apr 05, 2021 at 08:10:46AM -0700, kan.liang@xxxxxxxxxxxxxxx wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
++#define is_hybrid()			(!!x86_pmu.num_hybrid_pmus)<br>
+</blockquote>
+<br>
+Given this is sprinkled all over the place, can you make this a<br>
+static_key_false + static_branch_unlikely() such that the hybrid case is<br>
+out-of-line?<br>
+<br>
+</blockquote>
+<br>
+Sure, I will add a new static_key_false "perf_is_hybrid" to indicate a 
+hybrid system as below (not test yet).
+<br>
+<br>
+diff --git a/arch/x86/events/core.c b/arch/x86/events/core.c<br>
+index f8d1222..bd6412e 100644<br>
+--- a/arch/x86/events/core.c<br>
++++ b/arch/x86/events/core.c<br>
+@@ -54,6 +54,7 @@ DEFINE_PER_CPU(struct cpu_hw_events, cpu_hw_events) = {<br>
+<br>
+ DEFINE_STATIC_KEY_FALSE(rdpmc_never_available_key);<br>
+ DEFINE_STATIC_KEY_FALSE(rdpmc_always_available_key);<br>
++DEFINE_STATIC_KEY_FALSE(perf_is_hybrid);<br>
+<br>
+ /*<br>
+  * This here uses DEFINE_STATIC_CALL_NULL() to get a static_call defined<br>
+diff --git a/arch/x86/events/intel/core.c b/arch/x86/events/intel/core.c<br>
+index 2b553d9..7cef3cd 100644<br>
+--- a/arch/x86/events/intel/core.c<br>
++++ b/arch/x86/events/intel/core.c<br>
+@@ -6119,6 +6119,7 @@ __init int intel_pmu_init(void)<br>
+ 					     GFP_KERNEL);<br>
+ 		if (!x86_pmu.hybrid_pmu)<br>
+ 			return -ENOMEM;<br>
++		static_branch_enable(&perf_is_hybrid);<br>
+ 		x86_pmu.num_hybrid_pmus = X86_HYBRID_NUM_PMUS;<br>
+<br>
+ 		x86_pmu.late_ack = true;<br>
+diff --git a/arch/x86/events/perf_event.h b/arch/x86/events/perf_event.h<br>
+index bfbecde..d6383d1 100644<br>
+--- a/arch/x86/events/perf_event.h<br>
++++ b/arch/x86/events/perf_event.h<br>
+@@ -663,8 +663,8 @@ static __always_inline struct x86_hybrid_pmu 
+*hybrid_pmu(struct pmu *pmu)
+<br>
+ 	return container_of(pmu, struct x86_hybrid_pmu, pmu);<br>
+ }<br>
+<br>
+-/* The number of hybrid PMUs implies whether it's a hybrid system */<br>
+-#define is_hybrid()			(!!x86_pmu.num_hybrid_pmus)<br>
++extern struct static_key_false perf_is_hybrid;<br>
++#define is_hybrid()		static_branch_unlikely(&perf_is_hybrid)<br>
+<br>
+ #define hybrid(_pmu, _field)				\<br>
+ ({							\<br>
+<br>
+Thanks,<br>
+Kan<br>
+<br>
+<br>
+

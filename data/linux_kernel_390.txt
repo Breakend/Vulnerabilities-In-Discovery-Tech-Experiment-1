@@ -1,0 +1,26 @@
+Aligns line break with the remaining function arguments<br>
+to the open parenthesis. Issue found by checkpatch.<br>
+<br>
+Signed-off-by: Aline Santana Cordeiro <alinesantanacordeiro@xxxxxxxxx><br>
+---<br>
+ drivers/staging/media/hantro/hantro_hw.h | 2 +-<br>
+ 1 file changed, 1 insertion(+), 1 deletion(-)<br>
+<br>
+diff --git a/drivers/staging/media/hantro/hantro_hw.h b/drivers/staging/media/hantro/hantro_hw.h<br>
+index 34c9e46..a650b9c 100644<br>
+--- a/drivers/staging/media/hantro/hantro_hw.h<br>
++++ b/drivers/staging/media/hantro/hantro_hw.h<br>
+@@ -207,7 +207,7 @@ hantro_h264_mv_size(unsigned int width, unsigned int height)<br>
+ void hantro_g1_mpeg2_dec_run(struct hantro_ctx *ctx);<br>
+ void rk3399_vpu_mpeg2_dec_run(struct hantro_ctx *ctx);<br>
+ void hantro_mpeg2_dec_copy_qtable(u8 *qtable,<br>
+-	const struct v4l2_ctrl_mpeg2_quantization *ctrl);<br>
++				  const struct v4l2_ctrl_mpeg2_quantization *ctrl);<br>
+ int hantro_mpeg2_dec_init(struct hantro_ctx *ctx);<br>
+ void hantro_mpeg2_dec_exit(struct hantro_ctx *ctx);<br>
+ <br>
+-- <br>
+2.7.4<br>
+<br>
+<br>
+

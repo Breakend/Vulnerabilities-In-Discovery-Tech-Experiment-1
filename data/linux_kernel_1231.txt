@@ -1,0 +1,86 @@
+Hi Leonardo,<br>
+<br>
+Thank you for the patch! Yet something to improve:<br>
+<br>
+[auto build test ERROR on powerpc/next]<br>
+[also build test ERROR on v5.12-rc6 next-20210407]<br>
+[If your patch is applied to the wrong git tree, kindly drop us a note.<br>
+And when submitting patch, we suggest to use '--base' as documented in<br>
+<a  rel="nofollow" href="https://git-scm.com/docs/git-format-patch">https://git-scm.com/docs/git-format-patch</a>]<br>
+<br>
+url:    <a  rel="nofollow" href="https://github.com/0day-ci/linux/commits/Leonardo-Bras/powerpc-iommu-Enable-remaining-IOMMU-Pagesizes-present-in-LoPAR/20210408-035800">https://github.com/0day-ci/linux/commits/Leonardo-Bras/powerpc-iommu-Enable-remaining-IOMMU-Pagesizes-present-in-LoPAR/20210408-035800</a><br>
+base:   <a  rel="nofollow" href="https://git.kernel.org/pub/scm/linux/kernel/git/powerpc/linux.git">https://git.kernel.org/pub/scm/linux/kernel/git/powerpc/linux.git</a> next<br>
+config: powerpc-randconfig-r016-20210407 (attached as .config)<br>
+compiler: powerpc64-linux-gcc (GCC) 9.3.0<br>
+reproduce (this is a W=1 build):<br>
+        wget <a  rel="nofollow" href="https://raw.githubusercontent.com/intel/lkp-tests/master/sbin/make.cross">https://raw.githubusercontent.com/intel/lkp-tests/master/sbin/make.cross</a> -O ~/bin/make.cross<br>
+        chmod +x ~/bin/make.cross<br>
+        # <a  rel="nofollow" href="https://github.com/0day-ci/linux/commit/faa8b10e5b9652dbd56ed8e759a1cc09b95805be">https://github.com/0day-ci/linux/commit/faa8b10e5b9652dbd56ed8e759a1cc09b95805be</a><br>
+        git remote add linux-review <a  rel="nofollow" href="https://github.com/0day-ci/linux">https://github.com/0day-ci/linux</a><br>
+        git fetch --no-tags linux-review Leonardo-Bras/powerpc-iommu-Enable-remaining-IOMMU-Pagesizes-present-in-LoPAR/20210408-035800<br>
+        git checkout faa8b10e5b9652dbd56ed8e759a1cc09b95805be<br>
+        # save the attached .config to linux build tree<br>
+        COMPILER_INSTALL_PATH=$HOME/0day COMPILER=gcc-9.3.0 make.cross ARCH=powerpc <br>
+<br>
+If you fix the issue, kindly add following tag as appropriate<br>
+Reported-by: kernel test robot <lkp@xxxxxxxxx><br>
+<br>
+All errors (new ones prefixed by >>):<br>
+<br>
+   In file included from include/vdso/const.h:5,<br>
+                    from include/linux/const.h:4,<br>
+                    from include/linux/bits.h:5,<br>
+                    from include/linux/bitops.h:6,<br>
+                    from include/linux/kernel.h:11,<br>
+                    from include/asm-generic/bug.h:20,<br>
+                    from arch/powerpc/include/asm/bug.h:109,<br>
+                    from include/linux/bug.h:5,<br>
+                    from include/linux/mmdebug.h:5,<br>
+                    from include/linux/gfp.h:5,<br>
+                    from include/linux/slab.h:15,<br>
+                    from arch/powerpc/platforms/pseries/iommu.c:15:<br>
+   arch/powerpc/platforms/pseries/iommu.c: In function 'iommu_get_page_shift':<br>
+><i>> include/uapi/linux/const.h:20:19: error: conversion from 'long long unsigned int' to 'unsigned int' changes value from '17179869184' to '0' [-Werror=overflow]</i><br>
+      20 | #define __AC(X,Y) (X##Y)<br>
+         |                   ^~~~~~<br>
+   include/uapi/linux/const.h:21:18: note: in expansion of macro '__AC'<br>
+      21 | #define _AC(X,Y) __AC(X,Y)<br>
+         |                  ^~~~<br>
+   include/linux/sizes.h:48:19: note: in expansion of macro '_AC'<br>
+      48 | #define SZ_16G    _AC(0x400000000, ULL)<br>
+         |                   ^~~<br>
+   arch/powerpc/platforms/pseries/iommu.c:1120:42: note: in expansion of macro 'SZ_16G'<br>
+    1120 |   { QUERY_DDW_PGSIZE_16G,  __builtin_ctz(SZ_16G)  },<br>
+         |                                          ^~~~~~<br>
+   cc1: all warnings being treated as errors<br>
+<br>
+<br>
+vim +20 include/uapi/linux/const.h<br>
+<br>
+9d291e787b2b71 include/asm-x86_64/const.h Vivek Goyal         2007-05-02   6  <br>
+9d291e787b2b71 include/asm-x86_64/const.h Vivek Goyal         2007-05-02   7  /* Some constant macros are used in both assembler and<br>
+9d291e787b2b71 include/asm-x86_64/const.h Vivek Goyal         2007-05-02   8   * C code.  Therefore we cannot annotate them always with<br>
+6df95fd7ad9a84 include/linux/const.h      Randy Dunlap        2007-05-08   9   * 'UL' and other type specifiers unilaterally.  We<br>
+9d291e787b2b71 include/asm-x86_64/const.h Vivek Goyal         2007-05-02  10   * use the following macros to deal with this.<br>
+74ef649fe847fd include/linux/const.h      Jeremy Fitzhardinge 2008-01-30  11   *<br>
+74ef649fe847fd include/linux/const.h      Jeremy Fitzhardinge 2008-01-30  12   * Similarly, _AT() will cast an expression with a type in C, but<br>
+74ef649fe847fd include/linux/const.h      Jeremy Fitzhardinge 2008-01-30  13   * leave it unchanged in asm.<br>
+9d291e787b2b71 include/asm-x86_64/const.h Vivek Goyal         2007-05-02  14   */<br>
+9d291e787b2b71 include/asm-x86_64/const.h Vivek Goyal         2007-05-02  15  <br>
+9d291e787b2b71 include/asm-x86_64/const.h Vivek Goyal         2007-05-02  16  #ifdef __ASSEMBLY__<br>
+9d291e787b2b71 include/asm-x86_64/const.h Vivek Goyal         2007-05-02  17  #define _AC(X,Y)	X<br>
+74ef649fe847fd include/linux/const.h      Jeremy Fitzhardinge 2008-01-30  18  #define _AT(T,X)	X<br>
+9d291e787b2b71 include/asm-x86_64/const.h Vivek Goyal         2007-05-02  19  #else<br>
+9d291e787b2b71 include/asm-x86_64/const.h Vivek Goyal         2007-05-02 @20  #define __AC(X,Y)	(X##Y)<br>
+9d291e787b2b71 include/asm-x86_64/const.h Vivek Goyal         2007-05-02  21  #define _AC(X,Y)	__AC(X,Y)<br>
+74ef649fe847fd include/linux/const.h      Jeremy Fitzhardinge 2008-01-30  22  #define _AT(T,X)	((T)(X))<br>
+9d291e787b2b71 include/asm-x86_64/const.h Vivek Goyal         2007-05-02  23  #endif<br>
+9d291e787b2b71 include/asm-x86_64/const.h Vivek Goyal         2007-05-02  24  <br>
+<br>
+---<br>
+0-DAY CI Kernel Test Service, Intel Corporation<br>
+<a  rel="nofollow" href="https://lists.01.org/hyperkitty/list/kbuild-all@xxxxxxxxxxxx">https://lists.01.org/hyperkitty/list/kbuild-all@xxxxxxxxxxxx</a><br>
+<p><strong>Attachment:
+<a href="00181/.config.gz" ><tt>.config.gz</tt></a></strong><br>
+<em>Description:</em> application/gzip</p>
+

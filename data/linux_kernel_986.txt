@@ -1,0 +1,40 @@
+From: Xuezhi Zhang <zhangxuezhi1@xxxxxxxxxx><br>
+<br>
+Fix the following coccicheck warning:<br>
+drivers/gpu/drm//panel/panel-tpo-td043mtea1.c:217:8-16: <br>
+WARNING: use scnprintf or sprintf<br>
+drivers/gpu/drm//panel/panel-tpo-td043mtea1.c:189:8-16: <br>
+WARNING: use scnprintf or sprintf<br>
+<br>
+Signed-off-by: Xuezhi Zhang <zhangxuezhi1@xxxxxxxxxx><br>
+---<br>
+ drivers/gpu/drm/panel/panel-tpo-td043mtea1.c | 4 ++--<br>
+ 1 file changed, 2 insertions(+), 2 deletions(-)<br>
+<br>
+diff --git a/drivers/gpu/drm/panel/panel-tpo-td043mtea1.c b/drivers/gpu/drm/panel/panel-tpo-td043mtea1.c<br>
+index 49e6c9386258..bacaf1b7fb70 100644<br>
+--- a/drivers/gpu/drm/panel/panel-tpo-td043mtea1.c<br>
++++ b/drivers/gpu/drm/panel/panel-tpo-td043mtea1.c<br>
+@@ -186,7 +186,7 @@ static ssize_t vmirror_show(struct device *dev, struct device_attribute *attr,<br>
+ {<br>
+ 	struct td043mtea1_panel *lcd = dev_get_drvdata(dev);<br>
+ <br>
+-	return snprintf(buf, PAGE_SIZE, "%d\n", lcd->vmirror);<br>
++	return sysfs_emit(buf, "%d\n", lcd->vmirror);<br>
+ }<br>
+ <br>
+ static ssize_t vmirror_store(struct device *dev, struct device_attribute *attr,<br>
+@@ -214,7 +214,7 @@ static ssize_t mode_show(struct device *dev, struct device_attribute *attr,<br>
+ {<br>
+ 	struct td043mtea1_panel *lcd = dev_get_drvdata(dev);<br>
+ <br>
+-	return snprintf(buf, PAGE_SIZE, "%d\n", lcd->mode);<br>
++	return sysfs_emit(buf, "%d\n", lcd->mode);<br>
+ }<br>
+ <br>
+ static ssize_t mode_store(struct device *dev, struct device_attribute *attr,<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

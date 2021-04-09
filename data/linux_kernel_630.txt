@@ -1,0 +1,172 @@
+In the case where the iomap is a write operation and iomap is not equal<br>
+to srcmap after iomap_begin, we consider it is a CoW operation.<br>
+<br>
+The destance extent which iomap indicated is new allocated extent.<br>
+So, it is needed to copy the data from srcmap to new allocated extent.<br>
+In theory, it is better to copy the head and tail ranges which is<br>
+outside of the non-aligned area instead of copying the whole aligned<br>
+range. But in dax page fault, it will always be an aligned range.  So,<br>
+we have to copy the whole range in this case.<br>
+<br>
+Signed-off-by: Shiyang Ruan <ruansy.fnst@xxxxxxxxxxx><br>
+Reviewed-by: Christoph Hellwig <hch@xxxxxx><br>
+---<br>
+ fs/dax.c | 82 ++++++++++++++++++++++++++++++++++++++++++++++++++++----<br>
+ 1 file changed, 77 insertions(+), 5 deletions(-)<br>
+<br>
+diff --git a/fs/dax.c b/fs/dax.c<br>
+index 8d7e4e2cc0fb..b4fd3813457a 100644<br>
+--- a/fs/dax.c<br>
++++ b/fs/dax.c<br>
+@@ -1038,6 +1038,61 @@ static int dax_iomap_direct_access(struct iomap *iomap, loff_t pos, size_t size,<br>
+ 	return rc;<br>
+ }<br>
+ <br>
++/**<br>
++ * dax_iomap_cow_copy(): Copy the data from source to destination before write.<br>
++ * @pos:	address to do copy from.<br>
++ * @length:	size of copy operation.<br>
++ * @align_size:	aligned w.r.t align_size (either PMD_SIZE or PAGE_SIZE)<br>
++ * @srcmap:	iomap srcmap<br>
++ * @daddr:	destination address to copy to.<br>
++ *<br>
++ * This can be called from two places. Either during DAX write fault, to copy<br>
++ * the length size data to daddr. Or, while doing normal DAX write operation,<br>
++ * dax_iomap_actor() might call this to do the copy of either start or end<br>
++ * unaligned address. In this case the rest of the copy of aligned ranges is<br>
++ * taken care by dax_iomap_actor() itself.<br>
++ * Also, note DAX fault will always result in aligned pos and pos + length.<br>
++ */<br>
++static int dax_iomap_cow_copy(loff_t pos, loff_t length, size_t align_size,<br>
++		struct iomap *srcmap, void *daddr)<br>
++{<br>
++	loff_t head_off = pos & (align_size - 1);<br>
++	size_t size = ALIGN(head_off + length, align_size);<br>
++	loff_t end = pos + length;<br>
++	loff_t pg_end = round_up(end, align_size);<br>
++	bool copy_all = head_off == 0 && end == pg_end;<br>
++	void *saddr = 0;<br>
++	int ret = 0;<br>
++<br>
++	ret = dax_iomap_direct_access(srcmap, pos, size, &saddr, NULL);<br>
++	if (ret)<br>
++		return ret;<br>
++<br>
++	if (copy_all) {<br>
++		ret = copy_mc_to_kernel(daddr, saddr, length);<br>
++		return ret ? -EIO : 0;<br>
++	}<br>
++<br>
++	/* Copy the head part of the range.  Note: we pass offset as length. */<br>
++	if (head_off) {<br>
++		ret = copy_mc_to_kernel(daddr, saddr, head_off);<br>
++		if (ret)<br>
++			return -EIO;<br>
++	}<br>
++<br>
++	/* Copy the tail part of the range */<br>
++	if (end < pg_end) {<br>
++		loff_t tail_off = head_off + length;<br>
++		loff_t tail_len = pg_end - end;<br>
++<br>
++		ret = copy_mc_to_kernel(daddr + tail_off, saddr + tail_off,<br>
++					tail_len);<br>
++		if (ret)<br>
++			return -EIO;<br>
++	}<br>
++	return 0;<br>
++}<br>
++<br>
+ /*<br>
+  * The user has performed a load from a hole in the file.  Allocating a new<br>
+  * page in the file would cause excessive storage usage for workloads with<br>
+@@ -1167,11 +1222,12 @@ dax_iomap_actor(struct inode *inode, loff_t pos, loff_t length, void *data,<br>
+ 	struct dax_device *dax_dev = iomap->dax_dev;<br>
+ 	struct iov_iter *iter = data;<br>
+ 	loff_t end = pos + length, done = 0;<br>
++	bool write = iov_iter_rw(iter) == WRITE;<br>
+ 	ssize_t ret = 0;<br>
+ 	size_t xfer;<br>
+ 	int id;<br>
+ <br>
+-	if (iov_iter_rw(iter) == READ) {<br>
++	if (!write) {<br>
+ 		end = min(end, i_size_read(inode));<br>
+ 		if (pos >= end)<br>
+ 			return 0;<br>
+@@ -1180,7 +1236,8 @@ dax_iomap_actor(struct inode *inode, loff_t pos, loff_t length, void *data,<br>
+ 			return iov_iter_zero(min(length, end - pos), iter);<br>
+ 	}<br>
+ <br>
+-	if (WARN_ON_ONCE(iomap->type != IOMAP_MAPPED))<br>
++	if (WARN_ON_ONCE(iomap->type != IOMAP_MAPPED &&<br>
++			!(iomap->flags & IOMAP_F_SHARED)))<br>
+ 		return -EIO;<br>
+ <br>
+ 	/*<br>
+@@ -1219,6 +1276,13 @@ dax_iomap_actor(struct inode *inode, loff_t pos, loff_t length, void *data,<br>
+ 			break;<br>
+ 		}<br>
+ <br>
++		if (write && srcmap->addr != iomap->addr) {<br>
++			ret = dax_iomap_cow_copy(pos, length, PAGE_SIZE, srcmap,<br>
++						 kaddr);<br>
++			if (ret)<br>
++				break;<br>
++		}<br>
++<br>
+ 		map_len = PFN_PHYS(map_len);<br>
+ 		kaddr += offset;<br>
+ 		map_len -= offset;<br>
+@@ -1230,7 +1294,7 @@ dax_iomap_actor(struct inode *inode, loff_t pos, loff_t length, void *data,<br>
+ 		 * validated via access_ok() in either vfs_read() or<br>
+ 		 * vfs_write(), depending on which operation we are doing.<br>
+ 		 */<br>
+-		if (iov_iter_rw(iter) == WRITE)<br>
++		if (write)<br>
+ 			xfer = dax_copy_from_iter(dax_dev, pgoff, kaddr,<br>
+ 					map_len, iter);<br>
+ 		else<br>
+@@ -1382,6 +1446,7 @@ static vm_fault_t dax_fault_actor(struct vm_fault *vmf, pfn_t *pfnp,<br>
+ 	unsigned long entry_flags = pmd ? DAX_PMD : 0;<br>
+ 	int err = 0;<br>
+ 	pfn_t pfn;<br>
++	void *kaddr;<br>
+ <br>
+ 	/* if we are reading UNWRITTEN and HOLE, return a hole. */<br>
+ 	if (!write &&<br>
+@@ -1392,18 +1457,25 @@ static vm_fault_t dax_fault_actor(struct vm_fault *vmf, pfn_t *pfnp,<br>
+ 			return dax_pmd_load_hole(xas, vmf, iomap, entry);<br>
+ 	}<br>
+ <br>
+-	if (iomap->type != IOMAP_MAPPED) {<br>
++	if (iomap->type != IOMAP_MAPPED && !(iomap->flags & IOMAP_F_SHARED)) {<br>
+ 		WARN_ON_ONCE(1);<br>
+ 		return pmd ? VM_FAULT_FALLBACK : VM_FAULT_SIGBUS;<br>
+ 	}<br>
+ <br>
+-	err = dax_iomap_direct_access(iomap, pos, size, NULL, &pfn);<br>
++	err = dax_iomap_direct_access(iomap, pos, size, &kaddr, &pfn);<br>
+ 	if (err)<br>
+ 		return pmd ? VM_FAULT_FALLBACK : dax_fault_return(err);<br>
+ <br>
+ 	*entry = dax_insert_entry(xas, mapping, vmf, *entry, pfn, entry_flags,<br>
+ 				  write && !sync);<br>
+ <br>
++	if (write &&<br>
++	    srcmap->addr != IOMAP_HOLE && srcmap->addr != iomap->addr) {<br>
++		err = dax_iomap_cow_copy(pos, size, size, srcmap, kaddr);<br>
++		if (err)<br>
++			return dax_fault_return(err);<br>
++	}<br>
++<br>
+ 	if (sync)<br>
+ 		return dax_fault_synchronous_pfnp(pfnp, pfn);<br>
+ <br>
+-- <br>
+2.31.0<br>
+<br>
+<br>
+<br>
+<br>
+

@@ -1,0 +1,19 @@
+
+On 08/04/21 18:05, Sean Christopherson wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+   Add compile-time assertions in vmcs_check32() to disallow accesses to<br>
+   64-bit and 64-bit high fields via vmcs_{read,write}32().  Upper level<br>
+   KVM code should never do partial accesses to VMCS fields.  KVM handles<br>
+   the split accesses automatically in vmcs_{read,write}64() when running<br>
+   as a 32-bit kernel.<br>
+</blockquote>
+<br>
+KVM also uses raw vmread/vmwrite (__vmcs_readl/__vmcs_writel) when 
+copying to and from the shadow VMCS, so that path will not go through 
+vmcs_check32 either.
+<br>
+<br>
+Paolo<br>
+<br>
+<br>
+

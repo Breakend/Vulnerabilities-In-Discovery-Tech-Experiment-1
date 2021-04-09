@@ -1,0 +1,83 @@
+Vineeth Pillai <viremana@xxxxxxxxxxxxxxxxxxx> writes:<br>
+<br>
+><i> Enlightened MSR-Bitmap as per TLFS:</i><br>
+><i></i><br>
+><i>  "The L1 hypervisor may collaborate with the L0 hypervisor to make MSR</i><br>
+><i>   accesses more efficient. It can enable enlightened MSR bitmaps by setting</i><br>
+><i>   the corresponding field in the enlightened VMCS to 1. When enabled, L0</i><br>
+><i>   hypervisor does not monitor the MSR bitmaps for changes. Instead, the L1</i><br>
+><i>   hypervisor must invalidate the corresponding clean field after making</i><br>
+><i>   changes to one of the MSR bitmaps."</i><br>
+><i></i><br>
+><i> Enable this for SVM.</i><br>
+><i></i><br>
+><i> Related VMX changes:</i><br>
+><i> commit ceef7d10dfb6 ("KVM: x86: VMX: hyper-v: Enlightened MSR-Bitmap support")</i><br>
+><i></i><br>
+><i> Signed-off-by: Vineeth Pillai <viremana@xxxxxxxxxxxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  arch/x86/kvm/svm/svm.c | 27 +++++++++++++++++++++++++++</i><br>
+><i>  1 file changed, 27 insertions(+)</i><br>
+><i></i><br>
+><i> diff --git a/arch/x86/kvm/svm/svm.c b/arch/x86/kvm/svm/svm.c</i><br>
+><i> index 6287cab61f15..3562a247b7e8 100644</i><br>
+><i> --- a/arch/x86/kvm/svm/svm.c</i><br>
+><i> +++ b/arch/x86/kvm/svm/svm.c</i><br>
+><i> @@ -646,6 +646,27 @@ static bool msr_write_intercepted(struct kvm_vcpu *vcpu, u32 msr)</i><br>
+><i>  	return !!test_bit(bit_write,  &tmp);</i><br>
+><i>  }</i><br>
+><i>  </i><br>
+><i> +#if IS_ENABLED(CONFIG_HYPERV)</i><br>
+><i> +static inline void hv_vmcb_dirty_nested_enlightenments(struct kvm_vcpu *vcpu)</i><br>
+><i> +{</i><br>
+><i> +	struct vmcb *vmcb = to_svm(vcpu)->vmcb;</i><br>
+><i> +</i><br>
+><i> +	/*</i><br>
+><i> +	 * vmcb can be NULL if called during early vcpu init.</i><br>
+><i> +	 * And its okay not to mark vmcb dirty during vcpu init</i><br>
+><i> +	 * as we mark it dirty unconditionally towards end of vcpu</i><br>
+><i> +	 * init phase.</i><br>
+><i> +	 */</i><br>
+><i> +	if (vmcb && vmcb_is_clean(vmcb, VMCB_HV_NESTED_ENLIGHTENMENTS) &&</i><br>
+><i> +	    vmcb->hv_enlightenments.hv_enlightenments_control.msr_bitmap)</i><br>
+><i> +		vmcb_mark_dirty(vmcb, VMCB_HV_NESTED_ENLIGHTENMENTS);</i><br>
+<br>
+vmcb_is_clean() check seems to be superfluous, vmcb_mark_dirty() does no<br>
+harm if the bit was already cleared.<br>
+<br>
+><i> +}</i><br>
+><i> +#else</i><br>
+><i> +static inline void hv_vmcb_dirty_nested_enlightenments(struct kvm_vcpu *vcpu)</i><br>
+><i> +{</i><br>
+><i> +}</i><br>
+><i> +#endif</i><br>
+><i> +</i><br>
+><i>  static void set_msr_interception_bitmap(struct kvm_vcpu *vcpu, u32 *msrpm,</i><br>
+><i>  					u32 msr, int read, int write)</i><br>
+><i>  {</i><br>
+><i> @@ -677,6 +698,9 @@ static void set_msr_interception_bitmap(struct kvm_vcpu *vcpu, u32 *msrpm,</i><br>
+><i>  	write ? clear_bit(bit_write, &tmp) : set_bit(bit_write, &tmp);</i><br>
+><i>  </i><br>
+><i>  	msrpm[offset] = tmp;</i><br>
+><i> +</i><br>
+><i> +	hv_vmcb_dirty_nested_enlightenments(vcpu);</i><br>
+><i> +</i><br>
+><i>  }</i><br>
+><i>  </i><br>
+><i>  void set_msr_interception(struct kvm_vcpu *vcpu, u32 *msrpm, u32 msr,</i><br>
+><i> @@ -1135,6 +1159,9 @@ static void hv_init_vmcb(struct vmcb *vmcb)</i><br>
+><i>  	if (npt_enabled &&</i><br>
+><i>  	    ms_hyperv.nested_features & HV_X64_NESTED_ENLIGHTENED_TLB)</i><br>
+><i>  		hve->hv_enlightenments_control.enlightened_npt_tlb = 1;</i><br>
+><i> +</i><br>
+><i> +	if (ms_hyperv.nested_features & HV_X64_NESTED_MSR_BITMAP)</i><br>
+><i> +		hve->hv_enlightenments_control.msr_bitmap = 1;</i><br>
+><i>  }</i><br>
+><i>  #else</i><br>
+><i>  static inline void hv_init_vmcb(struct vmcb *vmcb)</i><br>
+<br>
+-- <br>
+Vitaly<br>
+<br>
+<br>
+

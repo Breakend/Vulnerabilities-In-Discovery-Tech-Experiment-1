@@ -1,0 +1,55 @@
+
+On 3/31/21 5:23 AM, Muhammad Usama Anjum wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+On Fri, 2021-03-26 at 14:24 -0600, Shuah Khan wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+On 3/25/21 5:46 AM, Muhammad Usama Anjum wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+The driver was assuming that all the parameters would be valid. But it<br>
+is possible that parameters are sent from userspace. For those cases,<br>
+appropriate error checks have been added.<br>
+<br>
+</blockquote>
+<br>
+Are you sure this change is necessary for vhci_hcd? Is there a<br>
+scenario where vhci_hcd will receive these values from userspace?<br>
+</blockquote>
+I'm not sure if these changes are necessary for vhci_hcd. I'd sent<br>
+this patch following the motivation of a patch (c318840fb2) from<br>
+dummy_hcd to handle some cases. Yeah, there is scenario where vhci_hcd<br>
+will receive these values from userspace. For example, typReq =<br>
+SetPortFeature and wValue = USB_PORT_FEAT_C_CONNECTION can be received<br>
+from userspace. As USB_PORT_FEAT_C_CONNECTION case isn't being<br>
+handled, default case will is executed for it. So I'm assuming<br>
+USB_PORT_FEAT_C_CONNECTION isn't supported and default case shouldn't<br>
+be executed.<br>
+<br>
+</blockquote>
+<br>
+The way dummy_hcd handles USB_PORT_FEAT_C_CONNECTION isn't applicable<br>
+to vhci_hcd.<br>
+<br>
+rh_port_connect() and  rh_port_disconnect() set the 
+USB_PORT_FEAT_C_CONNECTION this flag to initiate port status polling.
+<br>
+This flag is set by the driver as a result of attach/deatch request<br>
+from the user-space. Current handling of this flag is correct.<br>
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em"><blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+Is there a way to reproduce the problem?<br>
+</blockquote>
+I'm not able to reproduce any problem. But typReq = SetPortFeature and<br>
+wValue = USB_PORT_FEAT_C_CONNECTION may trigger some behavior which<br>
+isn't intended as USB_PORT_FEAT_C_CONNECTION may not be supported for<br>
+vhci_hcd.<br>
+<br>
+</blockquote>
+<br>
+If you reproduce the problem and it impacts attach/detach and device<br>
+remote device access, we can to look into this further.<br>
+<br>
+thanks,<br>
+-- Shuah<br>
+<br>
+<br>
+

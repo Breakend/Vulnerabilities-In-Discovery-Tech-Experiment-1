@@ -1,0 +1,37 @@
+<br>
+<br>
+On 4/8/21 5:14 PM, Pavel Tikhomirov wrote:<br>
+><i> Reproduce:</i><br>
+><i> </i><br>
+><i>   modprobe sch_teql</i><br>
+><i>   tc qdisc add dev teql0 root teql0</i><br>
+><i> </i><br>
+><i> This leads to (for instance in Centos 7 VM) OOPS:</i><br>
+><i> </i><br>
+><i></i><br>
+><i> </i><br>
+><i> Null pointer dereference happens on master->slaves dereference in</i><br>
+><i> teql_destroy() as master is null-pointer.</i><br>
+><i> </i><br>
+><i> When qdisc_create() calls teql_qdisc_init() it imediately fails after</i><br>
+><i> check "if (m->dev == dev)" because both devices are teql0, and it does</i><br>
+><i> not set qdisc_priv(sch)->m leaving it zero on error path, then</i><br>
+><i> qdisc_create() imediately calls teql_destroy() which does not expect</i><br>
+><i> zero master pointer and we get OOPS.</i><br>
+><i> </i><br>
+><i> Signed-off-by: Pavel Tikhomirov <ptikhomirov@xxxxxxxxxxxxx></i><br>
+><i> ---</i><br>
+<br>
+This makes sense, thanks !<br>
+<br>
+Reviewed-by: Eric Dumazet <edumazet@xxxxxxxxxx><br>
+<br>
+I would think bug origin is <br>
+<br>
+Fixes: 87b60cfacf9f ("net_sched: fix error recovery at qdisc creation")<br>
+<br>
+Can you confirm you have this backported to 3.10.0-1062.7.1.el7.x86_64 ?<br>
+<br>
+<br>
+<br>
+

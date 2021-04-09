@@ -1,0 +1,135 @@
+Linus Torvalds <torvalds@xxxxxxxxxxxxxxxxxxxx> writes:<br>
+<br>
+><i> On Thu, Apr 8, 2021 at 1:32 AM kernel test robot <oliver.sang@xxxxxxxxx> wrote:</i><br>
+><i>></i><br>
+><i>> FYI, we noticed a -41.9% regression of stress-ng.sigsegv.ops_per_sec due to commit</i><br>
+><i>> 08ed4efad684 ("[PATCH v10 6/9] Reimplement RLIMIT_SIGPENDING on top of ucounts")</i><br>
+><i></i><br>
+><i> Ouch.</i><br>
+<br>
+We were cautiously optimistic when no test problems showed up from<br>
+the last posting that there was nothing to look at here.<br>
+<br>
+Unfortunately it looks like the bots just missed the last posting. <br>
+<br>
+So it seems we are finally pretty much at correct code in need<br>
+of performance tuning.<br>
+<br>
+><i> I *think* this test may be testing "send so many signals that it</i><br>
+><i> triggers the signal queue overflow case".</i><br>
+><i></i><br>
+><i> And I *think* that the performance degradation may be due to lots of</i><br>
+><i> unnecessary allocations, because ity looks like that commit changes</i><br>
+><i> __sigqueue_alloc() to do</i><br>
+><i></i><br>
+><i>         struct sigqueue *q = kmem_cache_alloc(sigqueue_cachep, flags);</i><br>
+><i></i><br>
+><i> *before* checking the signal limit, and then if the signal limit was</i><br>
+><i> exceeded, it will just be free'd instead.</i><br>
+><i></i><br>
+><i> The old code would check the signal count against RLIMIT_SIGPENDING</i><br>
+><i> *first*, and if there were m ore pending signals then it wouldn't do</i><br>
+><i> anything at all (including not incrementing that expensive atomic</i><br>
+><i> count).</i><br>
+<br>
+This is an interesting test in a lot of ways as it is testing the<br>
+synchronous signal delivery path caused by an exception.  The test<br>
+is either executing *ptr = 0 (where ptr points to a read-only page)<br>
+or it executes an x86 instruction that is excessively long.<br>
+<br>
+I have found the code but I haven't figured out how it is being<br>
+called yet.  The core loop is just:<br>
+	for(;;) {<br>
+		sigaction(SIGSEGV, &action, NULL);<br>
+		sigaction(SIGILL, &action, NULL);<br>
+		sigaction(SIGBUS, &action, NULL);<br>
+<br>
+		ret = sigsetjmp(jmp_env, 1);<br>
+		if (done())<br>
+                	break;<br>
+		if (ret) {<br>
+                	/* verify signal */<br>
+                } else {<br>
+                	*ptr = 0;<br>
+                }<br>
+	}<br>
+<br>
+Code like that fundamentally can not be multi-threaded.  So the only way<br>
+the sigpending limit is being hit is if there are more processes running<br>
+that code simultaneously than the size of the limit.<br>
+<br>
+Further it looks like stress-ng pushes RLIMIT_SIGPENDING as high as it<br>
+will go before the test starts.<br>
+<br>
+<br>
+><i> Also, the old code was very careful to only do the "get_user()" for</i><br>
+><i> the *first* signal it added to the queue, and do the "put_user()" for</i><br>
+><i> when removing the last signal. Exactly because those atomics are very</i><br>
+><i> expensive.</i><br>
+><i></i><br>
+><i> The new code just does a lot of these atomics unconditionally.</i><br>
+<br>
+Yes. That seems a likely culprit.<br>
+<br>
+><i> I dunno. The profile data in there is a bit hard to read, but there's</i><br>
+><i> a lot more cachee misses, and a *lot* of node crossers:</i><br>
+><i></i><br>
+><i>>    5961544          +190.4%   17314361        perf-stat.i.cache-misses</i><br>
+><i>>   22107466          +119.2%   48457656        perf-stat.i.cache-references</i><br>
+><i>>     163292 ą  3%   +4582.0%    7645410        perf-stat.i.node-load-misses</i><br>
+><i>>     227388 ą  2%   +3708.8%    8660824        perf-stat.i.node-loads</i><br>
+><i></i><br>
+><i> and (probably as a result) average instruction costs have gone up enormously:</i><br>
+><i></i><br>
+><i>>       3.47           +66.8%       5.79        perf-stat.overall.cpi</i><br>
+><i>>      22849           -65.6%       7866        perf-stat.overall.cycles-between-cache-misses</i><br>
+><i></i><br>
+><i> and it does seem to be at least partly about "put_ucounts()":</i><br>
+><i></i><br>
+><i>>       0.00            +4.5        4.46        perf-profile.calltrace.cycles-pp.put_ucounts.__sigqueue_free.get_signal.arch_do_signal_or_restart.exit_to_user_mode_prepare</i><br>
+><i></i><br>
+><i> and a lot of "get_ucounts()".</i><br>
+><i></i><br>
+><i> But it may also be that the new "get sigpending" is just *so* much</i><br>
+><i> more expensive than it used to be.</i><br>
+<br>
+That too is possible.<br>
+<br>
+That node-load-misses number does look like something is bouncing back<br>
+and forth between the nodes a lot more.  So I suspect stress-ng is<br>
+running multiple copies of the sigsegv test in different processes at<br>
+once.<br>
+<br>
+<br>
+<br>
+That really suggests cache line ping pong from get_ucounts and<br>
+incrementing sigpending.<br>
+<br>
+It surprises me that obtaining the cache lines exclusively is<br>
+the dominant cost on this code path but obtaining two cache lines<br>
+exclusively instead of one cache cache line exclusively is consistent<br>
+with a causing the exception delivery to take nearly twice as long.<br>
+<br>
+For the optimization we only care about the leaf count so with a little<br>
+care we can restore the optimization.  So that is probably the thing<br>
+to do here.  The fewer changes to worry about the less likely to find<br>
+surprises.<br>
+<br>
+<br>
+<br>
+That said for this specific case there is a lot of potential room for<br>
+improvement.  As this is a per thread signal the code update sigpending<br>
+in commit_cred and never worry about needing to pin the struct<br>
+user_struct or struct ucounts.  As this is a synchronous signal we could<br>
+skip the sigpending increment, skip the signal queue entirely, and<br>
+deliver the signal to user-space immediately.  The removal of all cache<br>
+ping pongs might make it worth it.<br>
+<br>
+There is also Thomas Gleixner's recent optimization to cache one<br>
+sigqueue entry per task to give more predictable behavior.  That<br>
+would remove the cost of the allocation.<br>
+<br>
+Eric<br>
+<br>
+<br>
+

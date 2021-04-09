@@ -1,0 +1,88 @@
+Quoting Petr Mladek (2021-04-07 10:03:28)<br>
+><i> On Tue 2021-03-30 20:05:20, Stephen Boyd wrote:</i><br>
+><i> > We can use the vmlinux_build_id array here now instead of open coding</i><br>
+><i> > it. This mostly consolidates code.</i><br>
+><i> > </i><br>
+><i> > Cc: Jiri Olsa <jolsa@xxxxxxxxxx></i><br>
+><i> > Cc: Alexei Starovoitov <ast@xxxxxxxxxx></i><br>
+><i> > Cc: Jessica Yu <jeyu@xxxxxxxxxx></i><br>
+><i> > Cc: Evan Green <evgreen@xxxxxxxxxxxx></i><br>
+><i> > Cc: Hsin-Yi Wang <hsinyi@xxxxxxxxxxxx></i><br>
+><i> > Cc: Dave Young <dyoung@xxxxxxxxxx></i><br>
+><i> > Cc: Baoquan He <bhe@xxxxxxxxxx></i><br>
+><i> > Cc: Vivek Goyal <vgoyal@xxxxxxxxxx></i><br>
+><i> > Cc: <kexec@xxxxxxxxxxxxxxxxxxx></i><br>
+><i> > Signed-off-by: Stephen Boyd <swboyd@xxxxxxxxxxxx></i><br>
+><i> > ---</i><br>
+><i> >  include/linux/crash_core.h |  6 +-----</i><br>
+><i> >  kernel/crash_core.c        | 41 ++------------------------------------</i><br>
+><i> >  2 files changed, 3 insertions(+), 44 deletions(-)</i><br>
+><i> > </i><br>
+><i> > diff --git a/include/linux/crash_core.h b/include/linux/crash_core.h</i><br>
+><i> > index 206bde8308b2..fb8ab99bb2ee 100644</i><br>
+><i> > --- a/include/linux/crash_core.h</i><br>
+><i> > +++ b/include/linux/crash_core.h</i><br>
+><i> > @@ -39,7 +39,7 @@ phys_addr_t paddr_vmcoreinfo_note(void);</i><br>
+><i> >  #define VMCOREINFO_OSRELEASE(value) \</i><br>
+><i> >       vmcoreinfo_append_str("OSRELEASE=%s\n", value)</i><br>
+><i> >  #define VMCOREINFO_BUILD_ID(value) \</i><br>
+><i> > -     vmcoreinfo_append_str("BUILD-ID=%s\n", value)</i><br>
+><i> > +     vmcoreinfo_append_str("BUILD-ID=%20phN\n", value)</i><br>
+><i> </i><br>
+><i> Please, add also build check that BUILD_ID_MAX == 20.</i><br>
+><i> </i><br>
+<br>
+I added a BUILD_BUG_ON() in kernel/crash_core.c. I tried static_assert()<br>
+here but got mixed ISO errors from gcc-10, although it feels like it<br>
+should work.<br>
+<br>
+In file included from ./arch/arm64/include/asm/cmpxchg.h:10,<br>
+                 from ./arch/arm64/include/asm/atomic.h:16,<br>
+                 from ./include/linux/atomic.h:7,<br>
+                 from ./include/linux/mm_types_task.h:13,<br>
+                 from ./include/linux/mm_types.h:5,<br>
+                 from ./include/linux/buildid.h:5,<br>
+                 from kernel/crash_core.c:7:<br>
+kernel/crash_core.c: In function 'crash_save_vmcoreinfo_init':<br>
+./include/linux/build_bug.h:78:41: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]<br>
+   78 | #define __static_assert(expr, msg, ...) _Static_assert(expr, msg)<br>
+      |                                         ^~~~~~~~~~~~~~<br>
+./include/linux/build_bug.h:77:34: note: in expansion of macro '__static_assert'<br>
+   77 | #define static_assert(expr, ...) __static_assert(expr, ##__VA_ARGS__, #expr)<br>
+      |                                  ^~~~~~~~~~~~~~~<br>
+./include/linux/crash_core.h:42:2: note: in expansion of macro 'static_assert'<br>
+   42 |  static_assert(ARRAY_SIZE(value) == BUILD_ID_SIZE_MAX); \<br>
+      |  ^~~~~~~~~~~~~<br>
+kernel/crash_core.c:401:2: note: in expansion of macro 'VMCOREINFO_BUILD_ID'<br>
+  401 |  VMCOREINFO_BUILD_ID(vmlinux_build_id);<br>
+<br>
+><i> </i><br>
+><i> The function add_build_id_vmcoreinfo() is used in</i><br>
+><i> crash_save_vmcoreinfo_init() in this context:</i><br>
+><i> </i><br>
+><i> </i><br>
+><i>         VMCOREINFO_OSRELEASE(init_uts_ns.name.release);</i><br>
+><i>         add_build_id_vmcoreinfo();</i><br>
+><i>         VMCOREINFO_PAGESIZE(PAGE_SIZE);</i><br>
+><i> </i><br>
+><i>         VMCOREINFO_SYMBOL(init_uts_ns);</i><br>
+><i>         VMCOREINFO_OFFSET(uts_namespace, name);</i><br>
+><i>         VMCOREINFO_SYMBOL(node_online_map);</i><br>
+><i> </i><br>
+><i> The function is not longer need. VMCOREINFO_BUILD_ID()</i><br>
+><i> can be used directly:</i><br>
+><i> </i><br>
+><i>         VMCOREINFO_OSRELEASE(init_uts_ns.name.release);</i><br>
+><i>         VMCOREINFO_BUILD_ID(vmlinux_build_id);</i><br>
+><i>         VMCOREINFO_PAGESIZE(PAGE_SIZE);</i><br>
+><i> </i><br>
+><i>         VMCOREINFO_SYMBOL(init_uts_ns);</i><br>
+><i>         VMCOREINFO_OFFSET(uts_namespace, name);</i><br>
+><i>         VMCOREINFO_SYMBOL(node_online_map);</i><br>
+><i> </i><br>
+><i> </i><br>
+<br>
+Thanks. Makes sense. I've rolled that in.<br>
+<br>
+<br>
+

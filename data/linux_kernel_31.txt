@@ -1,0 +1,34 @@
+Lets make sure we don't use pud hugepage helpers on architectures<br>
+which do not support it. This fixes the code on arm64.<br>
+<br>
+Signed-off-by: Zack Rusin <zackr@xxxxxxxxxx><br>
+Cc: Andrew Morton <akpm@xxxxxxxxxxxxxxxxxxxx><br>
+Cc: Thomas Hellström (Intel) <thomas_os@xxxxxxxxxxxx><br>
+Cc: linux-mm@xxxxxxxxx<br>
+Cc: linux-kernel@xxxxxxxxxxxxxxx<br>
+---<br>
+ mm/mapping_dirty_helpers.c | 2 ++<br>
+ 1 file changed, 2 insertions(+)<br>
+<br>
+diff --git a/mm/mapping_dirty_helpers.c b/mm/mapping_dirty_helpers.c<br>
+index b59054ef2e10..b890854ec761 100644<br>
+--- a/mm/mapping_dirty_helpers.c<br>
++++ b/mm/mapping_dirty_helpers.c<br>
+@@ -165,10 +165,12 @@ static int wp_clean_pud_entry(pud_t *pud, unsigned long addr, unsigned long end,<br>
+ 		return 0;<br>
+ 	}<br>
+ <br>
++#ifdef CONFIG_HAVE_ARCH_TRANSPARENT_HUGEPAGE_PUD<br>
+ 	/* Huge pud */<br>
+ 	walk->action = ACTION_CONTINUE;<br>
+ 	if (pud_trans_huge(pudval) || pud_devmap(pudval))<br>
+ 		WARN_ON(pud_write(pudval) || pud_dirty(pudval));<br>
++#endif<br>
+ <br>
+ 	return 0;<br>
+ }<br>
+-- <br>
+2.27.0<br>
+<br>
+<br>
+

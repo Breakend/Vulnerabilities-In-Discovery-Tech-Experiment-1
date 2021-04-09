@@ -1,0 +1,87 @@
+<br>
+<br>
+><i> -----Original Message-----</i><br>
+><i> From: Stephen Hemminger <stephen@xxxxxxxxxxxxxxxxxx></i><br>
+><i> Sent: Thursday, April 8, 2021 12:52 PM</i><br>
+><i> To: Randy Dunlap <rdunlap@xxxxxxxxxxxxx></i><br>
+><i> Cc: Dexuan Cui <decui@xxxxxxxxxxxxx>; davem@xxxxxxxxxxxxx;</i><br>
+><i> kuba@xxxxxxxxxx; KY Srinivasan <kys@xxxxxxxxxxxxx>; Haiyang Zhang</i><br>
+><i> <haiyangz@xxxxxxxxxxxxx>; Stephen Hemminger</i><br>
+><i> <sthemmin@xxxxxxxxxxxxx>; wei.liu@xxxxxxxxxx; Wei Liu</i><br>
+><i> <liuwe@xxxxxxxxxxxxx>; netdev@xxxxxxxxxxxxxxx; leon@xxxxxxxxxx;</i><br>
+><i> andrew@xxxxxxx; bernd@xxxxxxxxxxxxxxxxxxx; linux-kernel@xxxxxxxxxxxxxxx;</i><br>
+><i> linux-hyperv@xxxxxxxxxxxxxxx</i><br>
+><i> Subject: Re: [PATCH v2 net-next] net: mana: Add a driver for Microsoft Azure</i><br>
+><i> Network Adapter (MANA)</i><br>
+><i> </i><br>
+><i> On Thu, 8 Apr 2021 09:22:57 -0700</i><br>
+><i> Randy Dunlap <rdunlap@xxxxxxxxxxxxx> wrote:</i><br>
+><i> </i><br>
+><i> > On 4/8/21 2:15 AM, Dexuan Cui wrote:</i><br>
+><i> > > diff --git a/drivers/net/ethernet/microsoft/Kconfig</i><br>
+><i> > > b/drivers/net/ethernet/microsoft/Kconfig</i><br>
+><i> > > new file mode 100644</i><br>
+><i> > > index 000000000000..12ef6b581566</i><br>
+><i> > > --- /dev/null</i><br>
+><i> > > +++ b/drivers/net/ethernet/microsoft/Kconfig</i><br>
+><i> > > @@ -0,0 +1,30 @@</i><br>
+><i> > > +#</i><br>
+><i> > > +# Microsoft Azure network device configuration #</i><br>
+><i> > > +</i><br>
+><i> > > +config NET_VENDOR_MICROSOFT</i><br>
+><i> > > +	bool "Microsoft Azure Network Device"</i><br>
+><i> ></i><br>
+><i> > Seems to me that should be generalized, more like:</i><br>
+><i> ></i><br>
+><i> > 	bool "Microsoft Network Devices"</i><br>
+><i> </i><br>
+><i> Yes, that is what it should be at this level.</i><br>
+><i> </i><br>
+><i> ></i><br>
+><i> ></i><br>
+><i> > > +	default y</i><br>
+><i> </i><br>
+><i> This follows the existing policy for network vendor level</i><br>
+><i> </i><br>
+><i> > > +	help</i><br>
+><i> > > +	  If you have a network (Ethernet) device belonging to this class, say Y.</i><br>
+><i> > > +</i><br>
+><i> > > +	  Note that the answer to this question doesn't directly affect the</i><br>
+><i> > > +	  kernel: saying N will just cause the configurator to skip the</i><br>
+><i> > > +	  question about Microsoft Azure network device. If you say Y, you</i><br>
+><i> ></i><br>
+><i> > 	           about Microsoft networking devices.</i><br>
+><i> ></i><br>
+><i> > > +	  will be asked for your specific device in the following question.</i><br>
+><i> > > +</i><br>
+><i> > > +if NET_VENDOR_MICROSOFT</i><br>
+><i> > > +</i><br>
+><i> > > +config MICROSOFT_MANA</i><br>
+><i> > > +	tristate "Microsoft Azure Network Adapter (MANA) support"</i><br>
+><i> > > +	default m</i><br>
+><i> ></i><br>
+><i> > Please drop the default m. We don't randomly add drivers to be built.</i><br>
+><i> </i><br>
+><i> Yes, it should be no (or no default which is the default for default)</i><br>
+><i> </i><br>
+><i> > Or leave this as is and change NET_VENDOR_MICROSOFT to be default n.</i><br>
+><i> ></i><br>
+><i> ></i><br>
+><i> > > +	depends on PCI_MSI && X86_64</i><br>
+><i> > > +	select PCI_HYPERV</i><br>
+><i> > > +	help</i><br>
+><i> > > +	  This driver supports Microsoft Azure Network Adapter (MANA).</i><br>
+><i> > > +	  So far, the driver is only validated on X86_64.</i><br>
+><i> ></i><br>
+><i> > validated how?</i><br>
+><i> </i><br>
+><i> Maybe change validated to supported?</i><br>
+<br>
+Sounds better. We will change it to "supported".<br>
+Also other suggested changes.<br>
+<br>
+Thanks,<br>
+- Haiyang<br>
+<br>
+<br>
+

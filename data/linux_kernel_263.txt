@@ -1,0 +1,87 @@
+On 08/04/2021 17:24:39+0200, Nicolas Ferre wrote:<br>
+><i> On 01/04/2021 at 12:24, Claudiu Beznea - M18063 wrote:</i><br>
+><i> > On 01.04.2021 12:38, Claudiu Beznea - M18063 wrote:</i><br>
+><i> > > On 31.03.2021 19:01, Alexandre Belloni wrote:</i><br>
+><i> > > > EXTERNAL EMAIL: Do not click links or open attachments unless you know the content is safe</i><br>
+><i> > > > </i><br>
+><i> > > > On 31/03/2021 13:59:06+0300, Claudiu Beznea wrote:</i><br>
+><i> > > > > From: Eugen Hristev <eugen.hristev@xxxxxxxxxxxxx></i><br>
+><i> > > > > </i><br>
+><i> > > > > Introduce new family of SoCs, sama7, and first SoC, sama7g5.</i><br>
+><i> > > > > </i><br>
+><i> > > > > Signed-off-by: Eugen Hristev <eugen.hristev@xxxxxxxxxxxxx></i><br>
+><i> > > > > Signed-off-by: Claudiu Beznea <claudiu.beznea@xxxxxxxxxxxxx></i><br>
+><i> > > > > ---</i><br>
+><i> > > > >   arch/arm/mach-at91/Makefile |  1 +</i><br>
+><i> > > > >   arch/arm/mach-at91/sama7.c  | 48 +++++++++++++++++++++++++++++++++++++</i><br>
+><i> > > > >   2 files changed, 49 insertions(+)</i><br>
+><i> > > > >   create mode 100644 arch/arm/mach-at91/sama7.c</i><br>
+><i> > > > > </i><br>
+><i> > > > > diff --git a/arch/arm/mach-at91/Makefile b/arch/arm/mach-at91/Makefile</i><br>
+><i> > > > > index f565490f1b70..6cc6624cddac 100644</i><br>
+><i> > > > > --- a/arch/arm/mach-at91/Makefile</i><br>
+><i> > > > > +++ b/arch/arm/mach-at91/Makefile</i><br>
+><i> > > > > @@ -9,6 +9,7 @@ obj-$(CONFIG_SOC_AT91SAM9)    += at91sam9.o</i><br>
+><i> > > > >   obj-$(CONFIG_SOC_SAM9X60)    += sam9x60.o</i><br>
+><i> > > > >   obj-$(CONFIG_SOC_SAMA5)              += sama5.o</i><br>
+><i> > > > >   obj-$(CONFIG_SOC_SAMV7)              += samv7.o</i><br>
+><i> > > > > +obj-$(CONFIG_SOC_SAMA7)              += sama7.o</i><br>
+><i> > > > > </i><br>
+><i> > > > >   # Power Management</i><br>
+><i> > > > >   obj-$(CONFIG_ATMEL_PM)               += pm.o pm_suspend.o</i><br>
+><i> > > > > diff --git a/arch/arm/mach-at91/sama7.c b/arch/arm/mach-at91/sama7.c</i><br>
+><i> > > > > new file mode 100644</i><br>
+><i> > > > > index 000000000000..e04cadb569ad</i><br>
+><i> > > > > --- /dev/null</i><br>
+><i> > > > > +++ b/arch/arm/mach-at91/sama7.c</i><br>
+><i> > > > > @@ -0,0 +1,48 @@</i><br>
+><i> > > > > +// SPDX-License-Identifier: GPL-2.0-or-later</i><br>
+><i> > > > > +/*</i><br>
+><i> > > > > + * Setup code for SAMA7</i><br>
+><i> > > > > + *</i><br>
+><i> > > > > + * Copyright (C) 2021 Microchip Technology, Inc. and its subsidiaries</i><br>
+><i> > > > > + *</i><br>
+><i> > > > > + */</i><br>
+><i> > > > > +</i><br>
+><i> > > > > +#include <linux/of.h></i><br>
+><i> > > > > +#include <linux/of_platform.h></i><br>
+><i> > > > > +</i><br>
+><i> > > > > +#include <asm/mach/arch.h></i><br>
+><i> > > > > +#include <asm/system_misc.h></i><br>
+><i> > > > > +</i><br>
+><i> > > > > +#include "generic.h"</i><br>
+><i> > > > > +</i><br>
+><i> > > > > +static void __init sama7_common_init(void)</i><br>
+><i> > > > > +{</i><br>
+><i> > > > > +     of_platform_default_populate(NULL, NULL, NULL);</i><br>
+><i> > > > </i><br>
+><i> > > > Is this necessary? This is left as a workaround for the old SoCs using</i><br>
+><i> > > > pinctrl-at91. I guess this will be using pio4 so this has to be removed.</i><br>
+><i> > > </i><br>
+><i> > > OK, I'll have a look. BTW, SAMA5D2 which is also using PIO4 calls</i><br>
+><i> > > of_platform_default_populate(NULL, NULL, NULL);</i><br>
+><i> > </i><br>
+><i> > Without this call the PM code (arch/arm/mach-at/pm.c) is not able to locate</i><br>
+><i> > proper DT nodes:</i><br>
+><i> > </i><br>
+><i> > [    0.194615] at91_pm_backup_init: failed to find securam device!</i><br>
+><i> > [    0.201393] at91_pm_sram_init: failed to find sram device!</i><br>
+><i> > [    0.207449] AT91: PM not supported, due to no SRAM allocated</i><br>
+><i> </i><br>
+><i> Okay, so we can't afford removing these calls to sama5d2 and upcoming</i><br>
+><i> sama7g5 right now.</i><br>
+><i> </i><br>
+><i> Is it a common pattern to have to reach DT content in the early stages that</i><br>
+><i> explicit call to of_platform_default_populate() tries to solve?</i><br>
+><i> </i><br>
+<br>
+That's fine, I didn't remember about that one, we can keep the call.<br>
+<br>
+<br>
+-- <br>
+Alexandre Belloni, co-owner and COO, Bootlin<br>
+Embedded Linux and Kernel engineering<br>
+<a  rel="nofollow" href="https://bootlin.com">https://bootlin.com</a><br>
+<br>
+<br>
+

@@ -1,0 +1,56 @@
+
+On 06/04/21 21:07, Sean Christopherson wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+Use GFP_KERNEL_ACCOUNT when allocating vCPUs to make it more obvious that<br>
+that the allocations are accounted, to make it easier to audit KVM's<br>
+allocations in the future, and to be consistent with other cache usage in<br>
+KVM.<br>
+<br>
+When using SLAB/SLUB, this is a nop as the cache itself is created with<br>
+SLAB_ACCOUNT.<br>
+<br>
+When using SLOB, there are caveats within caveats.  SLOB doesn't honor<br>
+SLAB_ACCOUNT, so passing GFP_KERNEL_ACCOUNT will result in vCPU<br>
+allocations now being accounted.   But, even that depends on internal<br>
+SLOB details as SLOB will only go to the page allocator when its cache is<br>
+depleted.  That just happens to be extremely likely for vCPUs because the<br>
+size of kvm_vcpu is larger than the a page for almost all combinations of<br>
+architecture and page size.  Whether or not the SLOB behavior is by<br>
+design is unknown; it's just as likely that no SLOB users care about<br>
+accounding and so no one has bothered to implemented support in SLOB.<br>
+Regardless, accounting vCPU allocations will not break SLOB+KVM+cgroup<br>
+users, if any exist.<br>
+<br>
+Cc: Wanpeng Li <kernellwp@xxxxxxxxx><br>
+Signed-off-by: Sean Christopherson <seanjc@xxxxxxxxxx><br>
+---<br>
+<br>
+v2: Drop the Fixes tag and rewrite the changelog since this is a nop when<br>
+     using SLUB or SLAB. [Wanpeng]<br>
+<br>
+  virt/kvm/kvm_main.c | 2 +-<br>
+  1 file changed, 1 insertion(+), 1 deletion(-)<br>
+<br>
+diff --git a/virt/kvm/kvm_main.c b/virt/kvm/kvm_main.c<br>
+index 0a481e7780f0..580f98386b42 100644<br>
+--- a/virt/kvm/kvm_main.c<br>
++++ b/virt/kvm/kvm_main.c<br>
+@@ -3192,7 +3192,7 @@ static int kvm_vm_ioctl_create_vcpu(struct kvm *kvm, u32 id)<br>
+  	if (r)<br>
+  		goto vcpu_decrement;<br>
+  
+-	vcpu = kmem_cache_zalloc(kvm_vcpu_cache, GFP_KERNEL);
+<br>
++	vcpu = kmem_cache_zalloc(kvm_vcpu_cache, GFP_KERNEL_ACCOUNT);<br>
+  	if (!vcpu) {<br>
+  		r = -ENOMEM;<br>
+  		goto vcpu_decrement;<br>
+<br>
+</blockquote>
+<br>
+Queued, thanks.<br>
+<br>
+Paolo<br>
+<br>
+<br>
+

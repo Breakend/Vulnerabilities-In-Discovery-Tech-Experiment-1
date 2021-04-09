@@ -1,0 +1,43 @@
+Am Donnerstag, den 08.04.2021, 11:42 +0200 schrieb Johan Hovold:<br>
+><i> On Thu, Apr 08, 2021 at 09:48:38AM +0200, Oliver Neukum wrote:</i><br>
+><i> > Am Mittwoch, den 07.04.2021, 12:28 +0200 schrieb Johan Hovold:</i><br>
+><i> > > TIOCSSERIAL is a horrid, underspecified, legacy interface which for most</i><br>
+><i> > > serial devices is only useful for setting the close_delay and</i><br>
+><i> > > closing_wait parameters.</i><br>
+><i> > > </i><br>
+><i> > > A non-privileged user has only ever been able to set the since long</i><br>
+><i> > > deprecated ASYNC_SPD flags and trying to change any other *supported*</i><br>
+><i> > > feature should result in -EPERM being returned. Setting the current</i><br>
+><i> > > values for any supported features should return success.</i><br>
+><i> > > </i><br>
+><i> > > Fix the cdc-acm implementation which instead indicated that the</i><br>
+><i> > > TIOCSSERIAL ioctl was not even implemented when a non-privileged user</i><br>
+><i> > > set the current values.</i><br>
+><i> > </i><br>
+><i> > Hi,</i><br>
+><i> > </i><br>
+><i> > the idea here was that you are setting something else, if you are</i><br>
+><i> > not changing a parameter that can be changed. That conclusion is</i><br>
+><i> > dubious, but at the same time, this implementation can change</i><br>
+><i> > only these two parameters. So can the test really be dropped</i><br>
+><i> > as opposed to be modified?</i><br>
+><i> </i><br>
+><i> The de-facto standard for how to handle change requests for</i><br>
+><i> non-supported features (e.g. changing the I/O port or IRQ) is to simply</i><br>
+><i> ignore them and return 0.</i><br>
+><i> </i><br>
+><i> For most (non-legacy) serial devices the only relevant parameters are</i><br>
+><i> close_delay and closing_wait. And as we need to return -EPERM when a</i><br>
+><i> non-privileged user tries to change these, we cannot drop the test.</i><br>
+><i> </i><br>
+><i> (And returning -EOPNOTSUPP was never correct as the ioctl is indeed</i><br>
+><i> supported.)</i><br>
+<br>
+OK, thanks for clarification. Yes the fix makes sense.<br>
+<br>
+	Regards<br>
+		Oliver<br>
+<br>
+<br>
+<br>
+

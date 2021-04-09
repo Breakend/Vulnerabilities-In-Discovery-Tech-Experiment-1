@@ -1,0 +1,19 @@
+(1) Add a whitelist for EHCI devices without SBRN registers.<br>
+(2) Add Kunpeng920's EHCI device to the whitelist.<br>
+<br>
+Changes in v2:<br>
+	- Fix some code style issues.<br>
+	- Update function name.<br>
+<br>
+Longfang Liu (2):<br>
+  USB:ehci:Add a whitelist for EHCI controllers<br>
+  USB:ehci:fix Kunpeng920 ehci hardware problem<br>
+<br>
+ drivers/usb/host/ehci-pci.c | 30 ++++++++++++++++++++++++++----<br>
+ 1 file changed, 26 insertions(+), 4 deletions(-)<br>
+<br>
+-- <br>
+2.8.1<br>
+<br>
+<br>
+

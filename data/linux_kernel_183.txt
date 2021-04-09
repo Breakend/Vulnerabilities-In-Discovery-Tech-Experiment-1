@@ -1,0 +1,34 @@
+On Tue, Apr 06, 2021 at 04:17:51PM -0700, Ricardo Neri wrote:<br>
+><i> On Tue, Apr 06, 2021 at 01:18:09PM +0200, Peter Zijlstra wrote:</i><br>
+><i> > On Mon, Apr 05, 2021 at 09:11:07PM -0700, Ricardo Neri wrote:</i><br>
+><i> > > +static bool cpu_group_is_smt(int cpu, struct sched_group *sg)</i><br>
+><i> > > +{</i><br>
+><i> > > +#ifdef CONFIG_SCHED_SMT</i><br>
+><i> > > +	if (!static_branch_likely(&sched_smt_present))</i><br>
+><i> > > +		return false;</i><br>
+><i> > > +</i><br>
+><i> > > +	if (sg->group_weight == 1)</i><br>
+><i> > > +		return false;</i><br>
+><i> > > +</i><br>
+><i> > > +	if (cpumask_weight(cpu_smt_mask(cpu)) == 1)</i><br>
+><i> > > +		return false;</i><br>
+><i> > </i><br>
+><i> > Please explain this condition. Why is it required?</i><br>
+><i> </i><br>
+><i> Thank you for your quick review Peter!</i><br>
+><i> </i><br>
+><i> Probably this is not required since the previous check verifies the</i><br>
+><i> group weight, and the subsequent check makes sure that @sg matches the</i><br>
+><i> SMT siblings of @cpu.</i><br>
+<br>
+So the thing is that cpumask_weight() can be fairly expensive, depending<br>
+on how large the machine is.<br>
+<br>
+Now I suppose this mixing of SMT and !SMT cores is typical for 'small'<br>
+machines (for now), but this is enabled for everything with ITMT on,<br>
+which might very well include large systems.<br>
+<br>
+So yes, if it can go away, that'd be good.<br>
+<br>
+<br>
+

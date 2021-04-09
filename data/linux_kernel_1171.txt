@@ -1,0 +1,35 @@
+On Thu, 8 Apr 2021 14:26:56 +0800, Ye Bin wrote:<br>
+><i> The snd_soc_dai_ops structures is only stored in the ops field of a</i><br>
+><i> snd_soc_dai_driver structure, so make the snd_soc_dai_ops structure</i><br>
+><i> const to allow the compiler to put it in read-only memory.</i><br>
+<br>
+Applied to<br>
+<br>
+   <a  rel="nofollow" href="https://git.kernel.org/pub/scm/linux/kernel/git/broonie/sound.git">https://git.kernel.org/pub/scm/linux/kernel/git/broonie/sound.git</a> for-next<br>
+<br>
+Thanks!<br>
+<br>
+[1/1] ASoC: cx2072x: constify static struct snd_soc_dai_ops<br>
+      commit: e9a216d8f14ac4d926078885e7e772db08e6aad9<br>
+<br>
+All being well this means that it will be integrated into the linux-next<br>
+tree (usually sometime in the next 24 hours) and sent to Linus during<br>
+the next merge window (or sooner if it is a bug fix), however if<br>
+problems are discovered then the patch may be dropped or reverted.<br>
+<br>
+You may get further e-mails resulting from automated or manual testing<br>
+and review of the tree, please engage with people reporting problems and<br>
+send followup patches addressing any issues that are reported if needed.<br>
+<br>
+If any updates are required or you are submitting further changes they<br>
+should be sent as incremental updates against current git, existing<br>
+patches will not be replaced.<br>
+<br>
+Please add any relevant lists and maintainers to the CCs when replying<br>
+to this mail.<br>
+<br>
+Thanks,<br>
+Mark<br>
+<br>
+<br>
+

@@ -1,0 +1,64 @@
+Some I2C drivers like Designware and HiSilicon will print the<br>
+bus frequency mode information, so add a public one that everyone<br>
+can make use of.<br>
+<br>
+Tested-by: Jarkko Nikula <jarkko.nikula@xxxxxxxxxxxxxxx><br>
+Reviewed-by: Jarkko Nikula <jarkko.nikula@xxxxxxxxxxxxxxx><br>
+Reviewed-by: Andy Shevchenko <andriy.shevchenko@xxxxxxxxxxxxxxx><br>
+Signed-off-by: Yicong Yang <yangyicong@xxxxxxxxxxxxx><br>
+---<br>
+ drivers/i2c/i2c-core-base.c | 21 +++++++++++++++++++++<br>
+ include/linux/i2c.h         |  3 +++<br>
+ 2 files changed, 24 insertions(+)<br>
+<br>
+diff --git a/drivers/i2c/i2c-core-base.c b/drivers/i2c/i2c-core-base.c<br>
+index de9402c..775b8cc 100644<br>
+--- a/drivers/i2c/i2c-core-base.c<br>
++++ b/drivers/i2c/i2c-core-base.c<br>
+@@ -76,6 +76,27 @@ void i2c_transfer_trace_unreg(void)<br>
+ 	static_branch_dec(&i2c_trace_msg_key);<br>
+ }<br>
+ <br>
++const char *i2c_freq_mode_string(u32 bus_freq_hz)<br>
++{<br>
++	switch (bus_freq_hz) {<br>
++	case I2C_MAX_STANDARD_MODE_FREQ:<br>
++		return "Standard Mode (100 kHz)";<br>
++	case I2C_MAX_FAST_MODE_FREQ:<br>
++		return "Fast Mode (400 kHz)";<br>
++	case I2C_MAX_FAST_MODE_PLUS_FREQ:<br>
++		return "Fast Mode Plus (1.0 MHz)";<br>
++	case I2C_MAX_TURBO_MODE_FREQ:<br>
++		return "Turbo Mode (1.4 MHz)";<br>
++	case I2C_MAX_HIGH_SPEED_MODE_FREQ:<br>
++		return "High Speed Mode (3.4 MHz)";<br>
++	case I2C_MAX_ULTRA_FAST_MODE_FREQ:<br>
++		return "Ultra Fast Mode (5.0 MHz)";<br>
++	default:<br>
++		return "Unknown Mode";<br>
++	}<br>
++}<br>
++EXPORT_SYMBOL_GPL(i2c_freq_mode_string);<br>
++<br>
+ const struct i2c_device_id *i2c_match_id(const struct i2c_device_id *id,<br>
+ 						const struct i2c_client *client)<br>
+ {<br>
+diff --git a/include/linux/i2c.h b/include/linux/i2c.h<br>
+index 10bd0b0..0813be1 100644<br>
+--- a/include/linux/i2c.h<br>
++++ b/include/linux/i2c.h<br>
+@@ -51,6 +51,9 @@ struct module;<br>
+ struct property_entry;<br>
+ <br>
+ #if IS_ENABLED(CONFIG_I2C)<br>
++/* Return the Frequency mode string based on the bus frequency */<br>
++const char *i2c_freq_mode_string(u32 bus_freq_hz);<br>
++<br>
+ /*<br>
+  * The master routines are the ones normally used to transmit data to devices<br>
+  * on a bus (or read from them). Apart from two basic transfer functions to<br>
+-- <br>
+2.8.1<br>
+<br>
+<br>
+

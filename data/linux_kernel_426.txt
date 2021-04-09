@@ -1,0 +1,18 @@
+Matthew Wilcox <willy@xxxxxxxxxxxxx> wrote:<br>
+<br>
+><i> > +void end_page_private_2(struct page *page)</i><br>
+><i> > +{</i><br>
+><i> > +	page = compound_head(page);</i><br>
+><i> > +	VM_BUG_ON_PAGE(!PagePrivate2(page), page);</i><br>
+><i> > +	clear_bit_unlock(PG_private_2, &page->flags);</i><br>
+><i> > +	wake_up_page_bit(page, PG_private_2);</i><br>
+><i> </i><br>
+><i> ... but when we try to end on a tail, we actually wake up the head ...</i><br>
+<br>
+Question is, should I remove compound_head() here or add it into the other<br>
+functions?<br>
+<br>
+David<br>
+<br>
+<br>
+

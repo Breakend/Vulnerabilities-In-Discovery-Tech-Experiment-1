@@ -1,0 +1,307 @@
+On Wed, 7 Apr 2021 15:26:25 -0700<br>
+Ben Widawsky <ben.widawsky@xxxxxxxxx> wrote:<br>
+<br>
+><i> An HDM decoder is defined in the CXL 2.0 specification as a mechanism</i><br>
+><i> that allow devices and upstream ports to claim memory address ranges and</i><br>
+><i> participate in interleave sets. HDM decoder registers are within the</i><br>
+><i> component register block defined in CXL 2.0 8.2.3 CXL 2.0 Component</i><br>
+><i> Registers as part of the CXL.cache and CXL.mem subregion.</i><br>
+><i> </i><br>
+><i> The Component Register Block is found via the Register Locator DVSEC</i><br>
+><i> in a similar fashion to how the CXL Device Register Block is found. The</i><br>
+><i> primary difference is the capability id size of the Component Register</i><br>
+><i> Block is a single DWORD instead of 4 DWORDS.</i><br>
+><i> </i><br>
+><i> It's now possible to configure a CXL type 3 device's HDM decoder. Such</i><br>
+><i> programming is expected for CXL devices with persistent memory, and hot</i><br>
+><i> plugged CXL devices that participate in CXL.mem with volatile memory.</i><br>
+><i> </i><br>
+><i> Signed-off-by: Ben Widawsky <ben.widawsky@xxxxxxxxx></i><br>
+Some register field naming suggestions. Otherwise looks fine to me.<br>
+<br>
+><i> ---</i><br>
+><i>  drivers/cxl/core.c | 73 ++++++++++++++++++++++++++++++++++++++++++++++</i><br>
+><i>  drivers/cxl/cxl.h  | 48 ++++++++++++++++++++++++++++++</i><br>
+><i>  drivers/cxl/mem.c  | 37 ++++++++++++++++++++---</i><br>
+><i>  drivers/cxl/pci.h  |  1 +</i><br>
+><i>  4 files changed, 155 insertions(+), 4 deletions(-)</i><br>
+><i> </i><br>
+><i> diff --git a/drivers/cxl/core.c b/drivers/cxl/core.c</i><br>
+><i> index 65cd704581bc..db6a83eed0a2 100644</i><br>
+><i> --- a/drivers/cxl/core.c</i><br>
+><i> +++ b/drivers/cxl/core.c</i><br>
+><i> @@ -479,6 +479,79 @@ struct cxl_port *devm_cxl_add_port(struct device *host,</i><br>
+><i>  }</i><br>
+><i>  EXPORT_SYMBOL_GPL(devm_cxl_add_port);</i><br>
+><i>  </i><br>
+><i> +void cxl_setup_component_regs(struct device *dev, void __iomem *base,</i><br>
+><i> +			      struct cxl_component_regs *regs)</i><br>
+><i> +{</i><br>
+><i> +	int cap, cap_count;</i><br>
+><i> +	u64 cap_array;</i><br>
+><i> +</i><br>
+><i> +	*regs = (struct cxl_component_regs) { 0 };</i><br>
+><i> +</i><br>
+><i> +	/*</i><br>
+><i> +	 * CXL.cache and CXL.mem registers are at offset 0x1000 as defined in</i><br>
+><i> +	 * CXL 2.0 8.2.4 Table 141.</i><br>
+><i> +	 *</i><br>
+><i> +	 * TODO: Map other registers as needed.</i><br>
+><i> +	 */</i><br>
+><i> +	base += CXL_CM_OFFSET;</i><br>
+><i> +</i><br>
+><i> +	cap_array = readq(base + CXL_CM_CAP_HDR_OFFSET);</i><br>
+><i> +</i><br>
+><i> +	if (FIELD_GET(CXL_CM_CAP_HDR_ID_MASK, cap_array) != CM_CAP_HDR_CAP_ID) {</i><br>
+><i> +		dev_err(dev,</i><br>
+><i> +			"Couldn't locate the CXL.cache and CXL.mem capability array header./n");</i><br>
+><i> +		return;</i><br>
+><i> +	}</i><br>
+><i> +</i><br>
+><i> +	/* It's assumed that future versions will be backward compatible */</i><br>
+><i> +#define CAPID_VERSION_CHECK(data, mask, expected, capability_msg)              \</i><br>
+><i> +	do {                                                                   \</i><br>
+><i> +		if (FIELD_GET(mask, data) < expected) {                        \</i><br>
+><i> +			dev_err(dev,                                           \</i><br>
+><i> +				capability_msg                                 \</i><br>
+><i> +				" version %ld is below expected %d",           \</i><br>
+<br>
+/n<br>
+<br>
+><i> +				FIELD_GET(mask, data), expected);              \</i><br>
+><i> +			return;                                                \</i><br>
+><i> +		}                                                              \</i><br>
+><i> +	} while (0)</i><br>
+><i> +</i><br>
+><i> +	CAPID_VERSION_CHECK(cap_array, CXL_CM_CAP_HDR_VERSION_MASK,</i><br>
+><i> +			    CM_CAP_HDR_CAP_VERSION, "Capability array header");</i><br>
+><i> +	CAPID_VERSION_CHECK(cap_array, CXL_CM_CAP_HDR_CACHE_MEM_VERSION_MASK,</i><br>
+><i> +			    CM_CAP_HDR_CACHE_MEM_VERSION,</i><br>
+><i> +			    "Capability array header CXL.cache CXL.mem");</i><br>
+<br>
+Is that macro worth bothering with?  Particularly as it will make the string<br>
+harder to grep for.<br>
+<br>
+	ver = FIELD_GET(CXL_CM_CAP_HDR_VERSION_MASK, cap_array);<br>
+	if (ver < CM_CAP_HDR_CAP_VERSION)) {<br>
+		dev_err(dev, "Capability array header version %ld is below expected %d./n",<br>
+			ver, CM_CAP_HDER_CAP_VERSION); 	<br>
+<br>
+etc seems better to me given we only have two instances.<br>
+<br>
+><i> +</i><br>
+><i> +	cap_count = FIELD_GET(CXL_CM_CAP_HDR_ARRAY_SIZE_MASK, cap_array);</i><br>
+><i> +</i><br>
+><i> +	for (cap = 1; cap <= cap_count; cap++) {</i><br>
+><i> +		void __iomem *register_block;</i><br>
+><i> +		u32 hdr;</i><br>
+><i> +		u16 cap_id, offset;</i><br>
+><i> +</i><br>
+><i> +		hdr = readl(base + cap * 0x4);</i><br>
+><i> +</i><br>
+><i> +		cap_id = FIELD_GET(CXL_CM_CAP_HDR_ID_MASK, hdr);</i><br>
+See below, but I'd suggest some name changes for defines.  Whilst<br>
+it's the same value, this is in a different type of entry to where<br>
+you use CXL_CM_CAP_HDR_ID_MASK above.  Confused me so may confuse<br>
+others :)<br>
+<br>
+><i> +		offset = FIELD_GET(CXL_CM_CAP_PTR_MASK, hdr);</i><br>
+><i> +		register_block = base + offset;</i><br>
+><i> +</i><br>
+><i> +		switch (cap_id) {</i><br>
+><i> +		case CXL_CM_CAP_CAP_ID_HDM:</i><br>
+><i> +			CAPID_VERSION_CHECK(hdr, CXL_CM_CAP_HDR_VERSION_MASK,</i><br>
+><i> +					    CXL_CM_CAP_CAP_HDM_VERSION,</i><br>
+><i> +					    "HDM decoder capability");</i><br>
+><i> +			dev_dbg(dev, "found HDM decoder capability (0x%x)\n",</i><br>
+><i> +				offset);</i><br>
+><i> +			regs->hdm_decoder = register_block;</i><br>
+><i> +			break;</i><br>
+><i> +		default:</i><br>
+><i> +			dev_dbg(dev, "Unknown CM cap ID: %d (0x%x)\n", cap_id,</i><br>
+><i> +				offset);</i><br>
+><i> +			break;</i><br>
+><i> +		}</i><br>
+><i> +	}</i><br>
+><i> +}</i><br>
+><i> +EXPORT_SYMBOL_GPL(cxl_setup_component_regs);</i><br>
+><i> +</i><br>
+><i>  /*</i><br>
+><i>   * cxl_setup_device_regs() - Detect CXL Device register blocks</i><br>
+><i>   * @dev: Host device of the @base mapping</i><br>
+><i> diff --git a/drivers/cxl/cxl.h b/drivers/cxl/cxl.h</i><br>
+><i> index 0211f44c95a2..a4ad1176dc5a 100644</i><br>
+><i> --- a/drivers/cxl/cxl.h</i><br>
+><i> +++ b/drivers/cxl/cxl.h</i><br>
+><i> @@ -8,6 +8,31 @@</i><br>
+><i>  #include <linux/bitops.h></i><br>
+><i>  #include <linux/io.h></i><br>
+><i>  </i><br>
+><i> +/* CXL 2.0 8.2.5 CXL.cache and CXL.mem Registers*/</i><br>
+><i> +#define CXL_CM_OFFSET 0x1000</i><br>
+><i> +#define CXL_CM_CAP_HDR_OFFSET 0x0</i><br>
+><i> +#define   CXL_CM_CAP_HDR_ID_MASK GENMASK(15, 0)</i><br>
+><i> +#define     CM_CAP_HDR_CAP_ID 1</i><br>
+><i> +#define   CXL_CM_CAP_HDR_VERSION_MASK GENMASK(19, 16)</i><br>
+><i> +#define     CM_CAP_HDR_CAP_VERSION 1</i><br>
+><i> +#define   CXL_CM_CAP_HDR_CACHE_MEM_VERSION_MASK GENMASK(23, 20)</i><br>
+><i> +#define     CM_CAP_HDR_CACHE_MEM_VERSION 1</i><br>
+><i> +#define   CXL_CM_CAP_HDR_ARRAY_SIZE_MASK GENMASK(31, 24)</i><br>
+><i> +#define CXL_CM_CAP_PTR_MASK GENMASK(31, 20)</i><br>
+<br>
+I'd separate the field naming for those in CXL Capability Header Register<br>
+and those for the individual headers. Naming tricky though.<br>
+If you don't do that it looks like you have overlapping fields because<br>
+of the reuse above..<br>
+ <br>
+e.g also have<br>
+#define CXL_CM_CAP_X_HDR_ID_MASK GENMASK(15, 0)<br>
+#define CXL_CM_CAP_X_HDR_CAP_MASK GENMASK(19, 16)<br>
+and rename to<br>
+#define CXL_CM_CAP_X_HDR_POINTER_MASK  GENMASK(31, 20)<br>
+><i> +</i><br>
+><i> +#define   CXL_CM_CAP_CAP_ID_HDM 0x5</i><br>
+><i> +#define   CXL_CM_CAP_CAP_HDM_VERSION 1</i><br>
+><i> +</i><br>
+><i> +/* HDM decoders CXL 2.0 8.2.5.12 CXL HDM Decoder Capability Structure */</i><br>
+><i> +#define CXL_HDM_DECODER_CAP_OFFSET 0x0</i><br>
+><i> +#define   CXL_HDM_DECODER_COUNT_MASK GENMASK(3, 0)</i><br>
+><i> +#define   CXL_HDM_DECODER_TARGET_COUNT_MASK GENMASK(7, 4)</i><br>
+><i> +#define CXL_HDM_DECODER0_BASE_LOW_OFFSET 0x10</i><br>
+><i> +#define CXL_HDM_DECODER0_BASE_HIGH_OFFSET 0x14</i><br>
+><i> +#define CXL_HDM_DECODER0_SIZE_LOW_OFFSET 0x18</i><br>
+><i> +#define CXL_HDM_DECODER0_SIZE_HIGH_OFFSET 0x1c</i><br>
+><i> +#define CXL_HDM_DECODER0_CTRL_OFFSET 0x20</i><br>
+><i> +</i><br>
+><i>  /* CXL 2.0 8.2.8.1 Device Capabilities Array Register */</i><br>
+><i>  #define CXLDEV_CAP_ARRAY_OFFSET 0x0</i><br>
+><i>  #define   CXLDEV_CAP_ARRAY_CAP_ID 0</i><br>
+><i> @@ -35,11 +60,26 @@</i><br>
+><i>  #define CXLDEV_MBOX_PAYLOAD_OFFSET 0x20</i><br>
+><i>  </i><br>
+><i>  /* See note for 'struct cxl_regs' for the rationale of this organization */</i><br>
+><i> +#define CXL_COMPONENT_REGS() \</i><br>
+><i> +	void __iomem *hdm_decoder</i><br>
+><i> +</i><br>
+><i>  #define CXL_DEVICE_REGS() \</i><br>
+><i>  	void __iomem *status; \</i><br>
+><i>  	void __iomem *mbox; \</i><br>
+><i>  	void __iomem *memdev</i><br>
+><i>  </i><br>
+><i> +/**</i><br>
+><i> + * struct cxl_component_regs - Common container of CXL component register block</i><br>
+><i> + *			       base pointers.</i><br>
+<br>
+kernel-doc script won't like this.  Your best bet may be to just drop<br>
+the /** to /* and have it ignored.<br>
+<br>
+><i> + *</i><br>
+><i> + * The only component registers that we care about are the CXL.cache and CXL.mem</i><br>
+><i> + * registers which are at offset 0x1000 from the component register base (CXL</i><br>
+><i> + * 2.0 8.2.4)</i><br>
+><i> + */</i><br>
+><i> +struct cxl_component_regs {</i><br>
+><i> +	CXL_COMPONENT_REGS();</i><br>
+><i> +};</i><br>
+><i> +</i><br>
+><i>  /**</i><br>
+><i>   * struct cxl_device_regs - Common container of CXL Device register</i><br>
+><i>   * 			    block base pointers</i><br>
+><i> @@ -59,6 +99,12 @@ struct cxl_device_regs {</i><br>
+><i>   * The specificity reads naturally from left-to-right.</i><br>
+><i>   */</i><br>
+><i>  struct cxl_regs {</i><br>
+><i> +	union {</i><br>
+><i> +		struct {</i><br>
+><i> +			CXL_COMPONENT_REGS();</i><br>
+><i> +		};</i><br>
+><i> +		struct cxl_component_regs component;</i><br>
+><i> +	};</i><br>
+><i>  	union {</i><br>
+><i>  		struct {</i><br>
+><i>  			CXL_DEVICE_REGS();</i><br>
+><i> @@ -67,6 +113,8 @@ struct cxl_regs {</i><br>
+><i>  	};</i><br>
+><i>  };</i><br>
+><i>  </i><br>
+><i> +void cxl_setup_component_regs(struct device *dev, void __iomem *base,</i><br>
+><i> +			      struct cxl_component_regs *regs);</i><br>
+><i>  void cxl_setup_device_regs(struct device *dev, void __iomem *base,</i><br>
+><i>  			   struct cxl_device_regs *regs);</i><br>
+><i>  </i><br>
+><i> diff --git a/drivers/cxl/mem.c b/drivers/cxl/mem.c</i><br>
+><i> index b7342aaf38c4..e915e3743b76 100644</i><br>
+><i> --- a/drivers/cxl/mem.c</i><br>
+><i> +++ b/drivers/cxl/mem.c</i><br>
+><i> @@ -974,6 +974,21 @@ static int cxl_mem_dvsec(struct pci_dev *pdev, int dvsec)</i><br>
+><i>  	return 0;</i><br>
+><i>  }</i><br>
+><i>  </i><br>
+><i> +static int __cxl_setup_component_regs(struct cxl_mem *cxlm, void __iomem *base)</i><br>
+><i> +{</i><br>
+><i> +	struct cxl_regs *regs = &cxlm->regs;</i><br>
+><i> +	struct pci_dev *pdev = cxlm->pdev;</i><br>
+><i> +	struct device *dev = &pdev->dev;</i><br>
+><i> +</i><br>
+><i> +	cxl_setup_component_regs(dev, base, &regs->component);</i><br>
+><i> +	if (!regs->hdm_decoder) {</i><br>
+><i> +		dev_err(dev, "HDM decoder registers not found\n");</i><br>
+><i> +		return -ENXIO;</i><br>
+><i> +	}</i><br>
+><i> +</i><br>
+><i> +	return 0;</i><br>
+><i> +}</i><br>
+><i> +</i><br>
+><i>  static int __cxl_setup_device_regs(struct cxl_mem *cxlm, void __iomem *base)</i><br>
+><i>  {</i><br>
+><i>  	struct cxl_regs *regs = &cxlm->regs;</i><br>
+><i> @@ -1032,16 +1047,30 @@ static int cxl_mem_setup_regs(struct cxl_mem *cxlm)</i><br>
+><i>  		pci_read_config_dword(pdev, regloc + 4, &reg_hi);</i><br>
+><i>  </i><br>
+><i>  		reg_type = FIELD_GET(CXL_REGLOC_RBI_MASK, reg_lo);</i><br>
+><i> +		if (reg_type == CXL_REGLOC_RBI_EMPTY ||</i><br>
+><i> +		    reg_type > CXL_REGLOC_RBI_MAX)</i><br>
+><i> +			continue;</i><br>
+><i> +</i><br>
+><i> +		base = cxl_mem_map_regblock(cxlm, reg_lo, reg_hi);</i><br>
+><i> +		if (IS_ERR(base))</i><br>
+><i> +			return PTR_ERR(base);</i><br>
+><i>  </i><br>
+><i> -		if (reg_type == CXL_REGLOC_RBI_MEMDEV) {</i><br>
+><i> -			base = cxl_mem_map_regblock(cxlm, reg_lo, reg_hi);</i><br>
+><i> -			if (IS_ERR(base))</i><br>
+><i> -				return PTR_ERR(base);</i><br>
+><i> +		switch (reg_type) {</i><br>
+><i> +		case CXL_REGLOC_RBI_COMPONENT:</i><br>
+><i> +			rc = __cxl_setup_component_regs(cxlm, base);</i><br>
+><i> +			if (rc)</i><br>
+><i> +				return rc;</i><br>
+><i>  </i><br>
+><i> +			dev_dbg(dev, "Set up component registers\n");</i><br>
+><i> +			break;</i><br>
+><i> +		case CXL_REGLOC_RBI_MEMDEV:</i><br>
+><i>  			rc = __cxl_setup_device_regs(cxlm, base);</i><br>
+><i>  			if (rc)</i><br>
+><i>  				return rc;</i><br>
+><i>  </i><br>
+><i> +			dev_dbg(dev, "Set up device registers\n");</i><br>
+><i> +			break;</i><br>
+><i> +		default:</i><br>
+><i>  			break;</i><br>
+><i>  		}</i><br>
+><i>  	}</i><br>
+><i> diff --git a/drivers/cxl/pci.h b/drivers/cxl/pci.h</i><br>
+><i> index af3ec078cf6c..8b8c6afbe605 100644</i><br>
+><i> --- a/drivers/cxl/pci.h</i><br>
+><i> +++ b/drivers/cxl/pci.h</i><br>
+><i> @@ -25,6 +25,7 @@</i><br>
+><i>  #define CXL_REGLOC_RBI_COMPONENT 1</i><br>
+><i>  #define CXL_REGLOC_RBI_VIRT 2</i><br>
+><i>  #define CXL_REGLOC_RBI_MEMDEV 3</i><br>
+><i> +#define CXL_REGLOC_RBI_MAX CXL_REGLOC_RBI_MEMDEV</i><br>
+><i>  </i><br>
+><i>  #define CXL_REGLOC_ADDR_MASK GENMASK(31, 16)</i><br>
+><i>  </i><br>
+<br>
+<br>
+

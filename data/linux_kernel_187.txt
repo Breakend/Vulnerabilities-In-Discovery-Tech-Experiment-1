@@ -1,0 +1,44 @@
+<br>
+do_each_pid_thread() { } while_each_pid_thread() is a double loop and<br>
+thus break doesn't work as expected. Also, it should be used under<br>
+tasklist_lock because otherwise we can race against change_pid() for<br>
+PGID/SID.<br>
+<br>
+Signed-off-by: Peter Zijlstra (Intel) <peterz@xxxxxxxxxxxxx><br>
+---<br>
+ block/ioprio.c |   11 +++++++++--<br>
+ 1 file changed, 9 insertions(+), 2 deletions(-)<br>
+<br>
+--- a/block/ioprio.c<br>
++++ b/block/ioprio.c<br>
+@@ -119,11 +119,17 @@ SYSCALL_DEFINE3(ioprio_set, int, which,<br>
+ 				pgrp = task_pgrp(current);<br>
+ 			else<br>
+ 				pgrp = find_vpid(who);<br>
++<br>
++			read_lock(&tasklist_lock);<br>
+ 			do_each_pid_thread(pgrp, PIDTYPE_PGID, p) {<br>
+ 				ret = set_task_ioprio(p, ioprio);<br>
+-				if (ret)<br>
+-					break;<br>
++				if (ret) {<br>
++					read_unlock(&tasklist_lock);<br>
++					goto out;<br>
++				}<br>
+ 			} while_each_pid_thread(pgrp, PIDTYPE_PGID, p);<br>
++			read_unlock(&tasklist_lock);<br>
++<br>
+ 			break;<br>
+ 		case IOPRIO_WHO_USER:<br>
+ 			uid = make_kuid(current_user_ns(), who);<br>
+@@ -153,6 +159,7 @@ SYSCALL_DEFINE3(ioprio_set, int, which,<br>
+ 			ret = -EINVAL;<br>
+ 	}<br>
+ <br>
++out:<br>
+ 	rcu_read_unlock();<br>
+ 	return ret;<br>
+ }<br>
+<br>
+<br>
+

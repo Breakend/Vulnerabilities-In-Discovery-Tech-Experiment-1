@@ -1,0 +1,181 @@
+There are a lot of tty-core-only functions that are listed in<br>
+include/linux/tty.h.  Move them to drivers/tty/tty.h so that no one else<br>
+can accidentally call them or think that they are public functions.<br>
+<br>
+Cc: Jiri Slaby <jirislaby@xxxxxxxxxx><br>
+Signed-off-by: Greg Kroah-Hartman <gregkh@xxxxxxxxxxxxxxxxxxx><br>
+---<br>
+ drivers/tty/n_gsm.c  |  1 +<br>
+ drivers/tty/n_hdlc.c |  1 +<br>
+ drivers/tty/tty.h    | 37 +++++++++++++++++++++++++++++++++++++<br>
+ include/linux/tty.h  | 34 ----------------------------------<br>
+ 4 files changed, 39 insertions(+), 34 deletions(-)<br>
+<br>
+diff --git a/drivers/tty/n_gsm.c b/drivers/tty/n_gsm.c<br>
+index 51dafc06f541..6114980c832d 100644<br>
+--- a/drivers/tty/n_gsm.c<br>
++++ b/drivers/tty/n_gsm.c<br>
+@@ -50,6 +50,7 @@<br>
+ #include <linux/netdevice.h><br>
+ #include <linux/etherdevice.h><br>
+ #include <linux/gsmmux.h><br>
++#include "tty.h"<br>
+ <br>
+ static int debug;<br>
+ module_param(debug, int, 0600);<br>
+diff --git a/drivers/tty/n_hdlc.c b/drivers/tty/n_hdlc.c<br>
+index 1363e659dc1d..e64ab74c9a2c 100644<br>
+--- a/drivers/tty/n_hdlc.c<br>
++++ b/drivers/tty/n_hdlc.c<br>
+@@ -100,6 +100,7 @@<br>
+ <br>
+ #include <asm/termios.h><br>
+ #include <linux/uaccess.h><br>
++#include "tty.h"<br>
+ <br>
+ /*<br>
+  * Buffers for individual HDLC frames<br>
+diff --git a/drivers/tty/tty.h b/drivers/tty/tty.h<br>
+index b0d78bfdbd8c..caaf97ba5267 100644<br>
+--- a/drivers/tty/tty.h<br>
++++ b/drivers/tty/tty.h<br>
+@@ -47,6 +47,43 @@ static inline void tty_set_flow_change(struct tty_struct *tty, int val)<br>
+ int tty_ldisc_lock(struct tty_struct *tty, unsigned long timeout);<br>
+ void tty_ldisc_unlock(struct tty_struct *tty);<br>
+ <br>
++int __tty_check_change(struct tty_struct *tty, int sig);<br>
++int tty_check_change(struct tty_struct *tty);<br>
++void __stop_tty(struct tty_struct *tty);<br>
++void __start_tty(struct tty_struct *tty);<br>
++void tty_vhangup_session(struct tty_struct *tty);<br>
++void tty_open_proc_set_tty(struct file *filp, struct tty_struct *tty);<br>
++int tty_signal_session_leader(struct tty_struct *tty, int exit_session);<br>
++void session_clear_tty(struct pid *session);<br>
++void tty_buffer_free_all(struct tty_port *port);<br>
++void tty_buffer_flush(struct tty_struct *tty, struct tty_ldisc *ld);<br>
++void tty_buffer_init(struct tty_port *port);<br>
++void tty_buffer_set_lock_subclass(struct tty_port *port);<br>
++bool tty_buffer_restart_work(struct tty_port *port);<br>
++bool tty_buffer_cancel_work(struct tty_port *port);<br>
++void tty_buffer_flush_work(struct tty_port *port);<br>
++speed_t tty_termios_input_baud_rate(struct ktermios *termios);<br>
++void tty_ldisc_hangup(struct tty_struct *tty, bool reset);<br>
++int tty_ldisc_reinit(struct tty_struct *tty, int disc);<br>
++long tty_ioctl(struct file *file, unsigned int cmd, unsigned long arg);<br>
++long tty_jobctrl_ioctl(struct tty_struct *tty, struct tty_struct *real_tty,<br>
++		       struct file *file, unsigned int cmd, unsigned long arg);<br>
++void tty_default_fops(struct file_operations *fops);<br>
++struct tty_struct *alloc_tty_struct(struct tty_driver *driver, int idx);<br>
++int tty_alloc_file(struct file *file);<br>
++void tty_add_file(struct tty_struct *tty, struct file *file);<br>
++void tty_free_file(struct file *file);<br>
++int tty_release(struct inode *inode, struct file *filp);<br>
++<br>
++#define tty_is_writelocked(tty)  (mutex_is_locked(&tty->atomic_write_lock))<br>
++<br>
++int tty_ldisc_setup(struct tty_struct *tty, struct tty_struct *o_tty);<br>
++void tty_ldisc_release(struct tty_struct *tty);<br>
++int __must_check tty_ldisc_init(struct tty_struct *tty);<br>
++void tty_ldisc_deinit(struct tty_struct *tty);<br>
++<br>
++void tty_sysctl_init(void);<br>
++<br>
+ /* tty_audit.c */<br>
+ #ifdef CONFIG_AUDIT<br>
+ void tty_audit_add_data(struct tty_struct *tty, const void *data, size_t size);<br>
+diff --git a/include/linux/tty.h b/include/linux/tty.h<br>
+index 143f393dca3b..1611214c8457 100644<br>
+--- a/include/linux/tty.h<br>
++++ b/include/linux/tty.h<br>
+@@ -431,11 +431,7 @@ static inline struct tty_struct *tty_kref_get(struct tty_struct *tty)<br>
+ }<br>
+ <br>
+ extern void tty_wait_until_sent(struct tty_struct *tty, long timeout);<br>
+-extern int __tty_check_change(struct tty_struct *tty, int sig);<br>
+-extern int tty_check_change(struct tty_struct *tty);<br>
+-extern void __stop_tty(struct tty_struct *tty);<br>
+ extern void stop_tty(struct tty_struct *tty);<br>
+-extern void __start_tty(struct tty_struct *tty);<br>
+ extern void start_tty(struct tty_struct *tty);<br>
+ extern int tty_register_driver(struct tty_driver *driver);<br>
+ extern int tty_unregister_driver(struct tty_driver *driver);<br>
+@@ -462,23 +458,11 @@ extern int tty_get_icount(struct tty_struct *tty,<br>
+ extern int is_current_pgrp_orphaned(void);<br>
+ extern void tty_hangup(struct tty_struct *tty);<br>
+ extern void tty_vhangup(struct tty_struct *tty);<br>
+-extern void tty_vhangup_session(struct tty_struct *tty);<br>
+ extern int tty_hung_up_p(struct file *filp);<br>
+ extern void do_SAK(struct tty_struct *tty);<br>
+ extern void __do_SAK(struct tty_struct *tty);<br>
+-extern void tty_open_proc_set_tty(struct file *filp, struct tty_struct *tty);<br>
+-extern int tty_signal_session_leader(struct tty_struct *tty, int exit_session);<br>
+-extern void session_clear_tty(struct pid *session);<br>
+ extern void no_tty(void);<br>
+-extern void tty_buffer_free_all(struct tty_port *port);<br>
+-extern void tty_buffer_flush(struct tty_struct *tty, struct tty_ldisc *ld);<br>
+-extern void tty_buffer_init(struct tty_port *port);<br>
+-extern void tty_buffer_set_lock_subclass(struct tty_port *port);<br>
+-extern bool tty_buffer_restart_work(struct tty_port *port);<br>
+-extern bool tty_buffer_cancel_work(struct tty_port *port);<br>
+-extern void tty_buffer_flush_work(struct tty_port *port);<br>
+ extern speed_t tty_termios_baud_rate(struct ktermios *termios);<br>
+-extern speed_t tty_termios_input_baud_rate(struct ktermios *termios);<br>
+ extern void tty_termios_encode_baud_rate(struct ktermios *termios,<br>
+ 						speed_t ibaud, speed_t obaud);<br>
+ extern void tty_encode_baud_rate(struct tty_struct *tty,<br>
+@@ -506,27 +490,16 @@ extern int tty_set_termios(struct tty_struct *tty, struct ktermios *kt);<br>
+ extern struct tty_ldisc *tty_ldisc_ref(struct tty_struct *);<br>
+ extern void tty_ldisc_deref(struct tty_ldisc *);<br>
+ extern struct tty_ldisc *tty_ldisc_ref_wait(struct tty_struct *);<br>
+-extern void tty_ldisc_hangup(struct tty_struct *tty, bool reset);<br>
+-extern int tty_ldisc_reinit(struct tty_struct *tty, int disc);<br>
+ extern const struct seq_operations tty_ldiscs_seq_ops;<br>
+ <br>
+ extern void tty_wakeup(struct tty_struct *tty);<br>
+ extern void tty_ldisc_flush(struct tty_struct *tty);<br>
+ <br>
+-extern long tty_ioctl(struct file *file, unsigned int cmd, unsigned long arg);<br>
+ extern int tty_mode_ioctl(struct tty_struct *tty, struct file *file,<br>
+ 			unsigned int cmd, unsigned long arg);<br>
+-extern long tty_jobctrl_ioctl(struct tty_struct *tty, struct tty_struct *real_tty,<br>
+-			      struct file *file, unsigned int cmd, unsigned long arg);<br>
+ extern int tty_perform_flush(struct tty_struct *tty, unsigned long arg);<br>
+-extern void tty_default_fops(struct file_operations *fops);<br>
+-extern struct tty_struct *alloc_tty_struct(struct tty_driver *driver, int idx);<br>
+-extern int tty_alloc_file(struct file *file);<br>
+-extern void tty_add_file(struct tty_struct *tty, struct file *file);<br>
+-extern void tty_free_file(struct file *file);<br>
+ extern struct tty_struct *tty_init_dev(struct tty_driver *driver, int idx);<br>
+ extern void tty_release_struct(struct tty_struct *tty, int idx);<br>
+-extern int tty_release(struct inode *inode, struct file *filp);<br>
+ extern void tty_init_termios(struct tty_struct *tty);<br>
+ extern void tty_save_termios(struct tty_struct *tty);<br>
+ extern int tty_standard_install(struct tty_driver *driver,<br>
+@@ -534,8 +507,6 @@ extern int tty_standard_install(struct tty_driver *driver,<br>
+ <br>
+ extern struct mutex tty_mutex;<br>
+ <br>
+-#define tty_is_writelocked(tty)  (mutex_is_locked(&tty->atomic_write_lock))<br>
+-<br>
+ extern void tty_port_init(struct tty_port *port);<br>
+ extern void tty_port_link_device(struct tty_port *port,<br>
+ 		struct tty_driver *driver, unsigned index);<br>
+@@ -655,13 +626,8 @@ static inline int tty_port_users(struct tty_port *port)<br>
+ extern int tty_register_ldisc(int disc, struct tty_ldisc_ops *new_ldisc);<br>
+ extern int tty_unregister_ldisc(int disc);<br>
+ extern int tty_set_ldisc(struct tty_struct *tty, int disc);<br>
+-extern int tty_ldisc_setup(struct tty_struct *tty, struct tty_struct *o_tty);<br>
+-extern void tty_ldisc_release(struct tty_struct *tty);<br>
+-extern int __must_check tty_ldisc_init(struct tty_struct *tty);<br>
+-extern void tty_ldisc_deinit(struct tty_struct *tty);<br>
+ extern int tty_ldisc_receive_buf(struct tty_ldisc *ld, const unsigned char *p,<br>
+ 				 char *f, int count);<br>
+-extern void tty_sysctl_init(void);<br>
+ <br>
+ /* n_tty.c */<br>
+ extern void n_tty_inherit_ops(struct tty_ldisc_ops *ops);<br>
+-- <br>
+2.31.1<br>
+<br>
+<br>
+

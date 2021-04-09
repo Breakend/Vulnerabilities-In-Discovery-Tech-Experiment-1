@@ -1,0 +1,64 @@
+On Thu, Apr 8, 2021 at 11:35 AM Chunfeng Yun <chunfeng.yun@xxxxxxxxxxxx> wrote:<br>
+><i></i><br>
+><i> When the dedicated wake irq is level trigger, enable it before</i><br>
+><i> calling runtime_suspend, will trigger an interrupt.</i><br>
+><i></i><br>
+><i> e.g.</i><br>
+><i> for a low level trigger type, it's low level at running time (0),</i><br>
+><i> and becomes high level when enters suspend (runtime_suspend (1) is</i><br>
+><i> called), a wakeup signal at (2) make it become low level, wake irq</i><br>
+><i> will be triggered.</i><br>
+><i></i><br>
+><i>                 ------------------</i><br>
+><i>                |           ^     ^|</i><br>
+><i> ----------------           |     | --------------</i><br>
+><i>  |<---(0)--->|<--(1)--|   (3)   (2)    (4)</i><br>
+><i></i><br>
+><i> if we enable the wake irq before calling runtime_suspend during (0),</i><br>
+><i> an interrupt will arise, it causes resume immediately;</i><br>
+<br>
+But that's necessary to avoid missing a wakeup interrupt, isn't it?<br>
+<br>
+><i> enable wake irq after calling runtime_suspend, e.g. at (3) or (4),</i><br>
+><i> will works.</i><br>
+><i></i><br>
+><i> This patch seems no side effect on edge trigger wake irq.</i><br>
+><i></i><br>
+><i> Signed-off-by: Chunfeng Yun <chunfeng.yun@xxxxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  drivers/base/power/runtime.c | 5 ++---</i><br>
+><i>  1 file changed, 2 insertions(+), 3 deletions(-)</i><br>
+><i></i><br>
+><i> diff --git a/drivers/base/power/runtime.c b/drivers/base/power/runtime.c</i><br>
+><i> index a46a7e30881b..796739a015a5 100644</i><br>
+><i> --- a/drivers/base/power/runtime.c</i><br>
+><i> +++ b/drivers/base/power/runtime.c</i><br>
+><i> @@ -619,12 +619,12 @@ static int rpm_suspend(struct device *dev, int rpmflags)</i><br>
+><i>         __update_runtime_status(dev, RPM_SUSPENDING);</i><br>
+><i></i><br>
+><i>         callback = RPM_GET_CALLBACK(dev, runtime_suspend);</i><br>
+><i> -</i><br>
+><i> -       dev_pm_enable_wake_irq_check(dev, true);</i><br>
+><i>         retval = rpm_callback(callback, dev);</i><br>
+><i>         if (retval)</i><br>
+><i>                 goto fail;</i><br>
+><i></i><br>
+><i> +       dev_pm_enable_wake_irq_check(dev, true);</i><br>
+><i> +</i><br>
+><i>   no_callback:</i><br>
+><i>         __update_runtime_status(dev, RPM_SUSPENDED);</i><br>
+><i>         pm_runtime_deactivate_timer(dev);</i><br>
+><i> @@ -659,7 +659,6 @@ static int rpm_suspend(struct device *dev, int rpmflags)</i><br>
+><i>         return retval;</i><br>
+><i></i><br>
+><i>   fail:</i><br>
+><i> -       dev_pm_disable_wake_irq_check(dev);</i><br>
+><i>         __update_runtime_status(dev, RPM_ACTIVE);</i><br>
+><i>         dev->power.deferred_resume = false;</i><br>
+><i>         wake_up_all(&dev->power.wait_queue);</i><br>
+><i> --</i><br>
+><i> 2.18.0</i><br>
+><i></i><br>
+<br>
+<br>
+

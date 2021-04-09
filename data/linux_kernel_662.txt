@@ -1,0 +1,187 @@
+<br>
+On 4/8/21 6:40 AM, Borislav Petkov wrote:<br>
+><i> On Wed, Mar 24, 2021 at 11:44:20AM -0500, Brijesh Singh wrote:</i><br>
+><i>> @@ -63,6 +63,10 @@ struct __packed snp_page_state_change {</i><br>
+><i>>  #define GHCB_REGISTER_GPA_RESP	0x013UL</i><br>
+><i>>  #define		GHCB_REGISTER_GPA_RESP_VAL(val)		((val) >> 12)</i><br>
+><i>>  </i><br>
+><i>> +/* Macro to convert the x86 page level to the RMP level and vice versa */</i><br>
+><i>> +#define X86_RMP_PG_LEVEL(level)	(((level) == PG_LEVEL_4K) ? RMP_PG_SIZE_4K : RMP_PG_SIZE_2M)</i><br>
+><i>> +#define RMP_X86_PG_LEVEL(level)	(((level) == RMP_PG_SIZE_4K) ? PG_LEVEL_4K : PG_LEVEL_2M)</i><br>
+><i> Please add those with the patch which uses them for the first time.</i><br>
+><i></i><br>
+><i> Also, it seems to me the names should be</i><br>
+><i></i><br>
+><i> X86_TO_RMP_PG_LEVEL</i><br>
+><i> RMP_TO_X86_PG_LEVEL</i><br>
+><i></i><br>
+><i> ...</i><br>
+<br>
+Noted.<br>
+<br>
+><i>> @@ -56,3 +56,108 @@ void sev_snp_register_ghcb(unsigned long paddr)</i><br>
+><i>>  	/* Restore the GHCB MSR value */</i><br>
+><i>>  	sev_es_wr_ghcb_msr(old);</i><br>
+><i>>  }</i><br>
+><i>> +</i><br>
+><i>> +static void sev_snp_issue_pvalidate(unsigned long vaddr, unsigned int npages, bool validate)</i><br>
+><i> pvalidate_pages() I guess.</i><br>
+<br>
+Noted.<br>
+<br>
+><i></i><br>
+><i>> +{</i><br>
+><i>> +	unsigned long eflags, vaddr_end, vaddr_next;</i><br>
+><i>> +	int rc;</i><br>
+><i>> +</i><br>
+><i>> +	vaddr = vaddr & PAGE_MASK;</i><br>
+><i>> +	vaddr_end = vaddr + (npages << PAGE_SHIFT);</i><br>
+><i>> +</i><br>
+><i>> +	for (; vaddr < vaddr_end; vaddr = vaddr_next) {</i><br>
+><i> Yuck, that vaddr_next gets initialized at the end of the loop. How about</i><br>
+><i> using a while loop here instead?</i><br>
+><i></i><br>
+><i> 	while (vaddr < vaddr_end) {</i><br>
+><i></i><br>
+><i> 		...</i><br>
+><i></i><br>
+><i> 		vaddr += PAGE_SIZE;</i><br>
+><i> 	}</i><br>
+><i></i><br>
+><i> then you don't need vaddr_next at all. Ditto for all the other loops in</i><br>
+><i> this patch which iterate over pages.</i><br>
+Yes, I will switch to use a while loop() in next rev.<br>
+><i></i><br>
+><i>> +		rc = __pvalidate(vaddr, RMP_PG_SIZE_4K, validate, &eflags);</i><br>
+><i> So this function gets only 4K pages to pvalidate?</i><br>
+<br>
+The early routines uses the GHCB MSR protocol for the validation. The<br>
+GHCB MSR protocol supports 4K only. The early routine can be called<br>
+before the GHCB is established.<br>
+<br>
+<br>
+><i></i><br>
+><i>> +</i><br>
+><i> ^ Superfluous newline.</i><br>
+Noted.<br>
+><i>> +		if (rc) {</i><br>
+><i>> +			pr_err("Failed to validate address 0x%lx ret %d\n", vaddr, rc);</i><br>
+><i> You can combine the pr_err and dump_stack() below into a WARN() here:</i><br>
+><i></i><br>
+><i> 		WARN(rc, ...);</i><br>
+Noted.<br>
+><i>> +			goto e_fail;</i><br>
+><i>> +		}</i><br>
+><i>> +</i><br>
+><i>> +		/* Check for the double validation condition */</i><br>
+><i>> +		if (eflags & X86_EFLAGS_CF) {</i><br>
+><i>> +			pr_err("Double %salidation detected (address 0x%lx)\n",</i><br>
+><i>> +					validate ? "v" : "inv", vaddr);</i><br>
+><i>> +			goto e_fail;</i><br>
+><i>> +		}</i><br>
+><i> As before - this should be communicated by a special retval from</i><br>
+><i> __pvalidate().</i><br>
+Yes.<br>
+><i></i><br>
+><i>> +</i><br>
+><i>> +		vaddr_next = vaddr + PAGE_SIZE;</i><br>
+><i>> +	}</i><br>
+><i>> +</i><br>
+><i>> +	return;</i><br>
+><i>> +</i><br>
+><i>> +e_fail:</i><br>
+><i>> +	/* Dump stack for the debugging purpose */</i><br>
+><i>> +	dump_stack();</i><br>
+><i>> +</i><br>
+><i>> +	/* Ask to terminate the guest */</i><br>
+><i>> +	sev_es_terminate(GHCB_SEV_ES_REASON_GENERAL_REQUEST);</i><br>
+><i> Another termination reason to #define.</i><br>
+><i></i><br>
+><i>> +}</i><br>
+><i>> +</i><br>
+><i>> +static void __init early_snp_set_page_state(unsigned long paddr, unsigned int npages, int op)</i><br>
+><i>> +{</i><br>
+><i>> +	unsigned long paddr_end, paddr_next;</i><br>
+><i>> +	u64 old, val;</i><br>
+><i>> +</i><br>
+><i>> +	paddr = paddr & PAGE_MASK;</i><br>
+><i>> +	paddr_end = paddr + (npages << PAGE_SHIFT);</i><br>
+><i>> +</i><br>
+><i>> +	/* save the old GHCB MSR */</i><br>
+><i>> +	old = sev_es_rd_ghcb_msr();</i><br>
+><i>> +</i><br>
+><i>> +	for (; paddr < paddr_end; paddr = paddr_next) {</i><br>
+><i>> +</i><br>
+><i>> +		/*</i><br>
+><i>> +		 * Use the MSR protocol VMGEXIT to request the page state change. We use the MSR</i><br>
+><i>> +		 * protocol VMGEXIT because in early boot we may not have the full GHCB setup</i><br>
+><i>> +		 * yet.</i><br>
+><i>> +		 */</i><br>
+><i>> +		sev_es_wr_ghcb_msr(GHCB_SNP_PAGE_STATE_REQ_GFN(paddr >> PAGE_SHIFT, op));</i><br>
+><i>> +		VMGEXIT();</i><br>
+><i> Yeah, I know we don't always strictly adhere to 80 columns but there's</i><br>
+><i> no real need not to fit that in 80 cols here so please shorten names and</i><br>
+><i> comments. Ditto for the rest.</i><br>
+Noted.<br>
+><i></i><br>
+><i>> +</i><br>
+><i>> +		val = sev_es_rd_ghcb_msr();</i><br>
+><i>> +</i><br>
+><i>> +		/* Read the response, if the page state change failed then terminate the guest. */</i><br>
+><i>> +		if (GHCB_SEV_GHCB_RESP_CODE(val) != GHCB_SNP_PAGE_STATE_CHANGE_RESP)</i><br>
+><i>> +			sev_es_terminate(GHCB_SEV_ES_REASON_GENERAL_REQUEST);</i><br>
+><i> if (...)</i><br>
+><i> 	goto fail;</i><br>
+><i></i><br>
+><i> and add that fail label at the end so that all the error handling path</i><br>
+><i> is out of the way.</i><br>
+Noted.<br>
+><i></i><br>
+><i>> +</i><br>
+><i>> +		if (GHCB_SNP_PAGE_STATE_RESP_VAL(val) != 0) {</i><br>
+><i> s/!= 0//</i><br>
+Noted.<br>
+><i></i><br>
+><i>> +			pr_err("Failed to change page state to '%s' paddr 0x%lx error 0x%llx\n",</i><br>
+><i>> +					op == SNP_PAGE_STATE_PRIVATE ? "private" : "shared",</i><br>
+><i>> +					paddr, GHCB_SNP_PAGE_STATE_RESP_VAL(val));</i><br>
+><i>> +</i><br>
+><i>> +			/* Dump stack for the debugging purpose */</i><br>
+><i>> +			dump_stack();</i><br>
+><i> WARN as above.</i><br>
+Noted.<br>
+><i></i><br>
+><i>> @@ -49,6 +50,27 @@ bool sev_enabled __section(".data");</i><br>
+><i>>  /* Buffer used for early in-place encryption by BSP, no locking needed */</i><br>
+><i>>  static char sme_early_buffer[PAGE_SIZE] __initdata __aligned(PAGE_SIZE);</i><br>
+><i>>  </i><br>
+><i>> +/*</i><br>
+><i>> + * When SNP is active, this routine changes the page state from private to shared before</i><br>
+><i>> + * copying the data from the source to destination and restore after the copy. This is required</i><br>
+><i>> + * because the source address is mapped as decrypted by the caller of the routine.</i><br>
+><i>> + */</i><br>
+><i>> +static inline void __init snp_aware_memcpy(void *dst, void *src, size_t sz,</i><br>
+><i>> +					   unsigned long paddr, bool dec)</i><br>
+><i> snp_memcpy() simply.</i><br>
+Noted.<br>
+><i></i><br>
+><i>> +{</i><br>
+><i>> +	unsigned long npages = PAGE_ALIGN(sz) >> PAGE_SHIFT;</i><br>
+><i>> +</i><br>
+><i>> +	/* If the paddr need to accessed decrypted, make the page shared before memcpy. */</i><br>
+><i> *needs*</i><br>
+><i></i><br>
+><i>> +	if (sev_snp_active() && dec)</i><br>
+><i> Flip that test so that you don't have it twice in the code:</i><br>
+><i></i><br>
+><i> 	if (!sev_snp_active()) {</i><br>
+><i> 		memcpy(dst, src, sz);</i><br>
+><i> 	} else {</i><br>
+><i> 		...</i><br>
+><i> 	}</i><br>
+><i></i><br>
+><i></i><br>
+I will look into it. thanks<br>
+<br>
+<br>
+

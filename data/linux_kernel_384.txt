@@ -1,0 +1,134 @@
+On 4/7/21 4:34 PM, Rob Herring wrote:<br>
+><i> On Wed, Apr 7, 2021 at 3:51 PM <frowand.list@xxxxxxxxx> wrote:</i><br>
+><i>></i><br>
+><i>> From: Frank Rowand <frank.rowand@xxxxxxxx></i><br>
+><i>></i><br>
+><i>> The Devicetree standard specifies an 8 byte alignment of the FDT.</i><br>
+><i>> Code in libfdt expects this alignment for an FDT image in memory.</i><br>
+><i>> kmemdup() returns 4 byte alignment on openrisc.  Replace kmemdup()</i><br>
+><i>> with kmalloc(), align pointer, memcpy() to get proper alignment.</i><br>
+><i>></i><br>
+><i>> The 4 byte alignment exposed a related bug which triggered a crash</i><br>
+><i>> on openrisc with:</i><br>
+><i>> commit 79edff12060f ("scripts/dtc: Update to upstream version v1.6.0-51-g183df9e9c2b9")</i><br>
+><i>> as reported in:</i><br>
+><i>> <a  rel="nofollow" href="https://lore.kernel.org/lkml/20210327224116.69309-1-linux@xxxxxxxxxxxx/">https://lore.kernel.org/lkml/20210327224116.69309-1-linux@xxxxxxxxxxxx/</a></i><br>
+><i>></i><br>
+><i>> Reported-by: Guenter Roeck <linux@xxxxxxxxxxxx></i><br>
+><i>> Signed-off-by: Frank Rowand <frank.rowand@xxxxxxxx></i><br>
+><i>> ---</i><br>
+><i>>  drivers/of/of_private.h | 2 ++</i><br>
+><i>>  drivers/of/overlay.c    | 8 ++++++--</i><br>
+><i>>  drivers/of/unittest.c   | 9 +++++++--</i><br>
+><i>>  3 files changed, 15 insertions(+), 4 deletions(-)</i><br>
+><i>></i><br>
+><i>> diff --git a/drivers/of/of_private.h b/drivers/of/of_private.h</i><br>
+><i>> index d9e6a324de0a..d717efbd637d 100644</i><br>
+><i>> --- a/drivers/of/of_private.h</i><br>
+><i>> +++ b/drivers/of/of_private.h</i><br>
+><i>> @@ -8,6 +8,8 @@</i><br>
+><i>>   * Copyright (C) 1996-2005 Paul Mackerras.</i><br>
+><i>>   */</i><br>
+><i>></i><br>
+><i>> +#define FDT_ALIGN_SIZE 8</i><br>
+><i>> +</i><br>
+><i>>  /**</i><br>
+><i>>   * struct alias_prop - Alias property in 'aliases' node</i><br>
+><i>>   * @link:      List node to link the structure in aliases_lookup list</i><br>
+><i>> diff --git a/drivers/of/overlay.c b/drivers/of/overlay.c</i><br>
+><i>> index 50bbe0edf538..8b40711ed202 100644</i><br>
+><i>> --- a/drivers/of/overlay.c</i><br>
+><i>> +++ b/drivers/of/overlay.c</i><br>
+><i>> @@ -1014,7 +1014,7 @@ static int of_overlay_apply(const void *fdt, struct device_node *tree,</i><br>
+><i>>  int of_overlay_fdt_apply(const void *overlay_fdt, u32 overlay_fdt_size,</i><br>
+><i>>                          int *ovcs_id)</i><br>
+><i>>  {</i><br>
+><i>> -       const void *new_fdt;</i><br>
+><i>> +       void *new_fdt;</i><br>
+><i>>         int ret;</i><br>
+><i>>         u32 size;</i><br>
+><i>>         struct device_node *overlay_root;</i><br>
+><i>> @@ -1036,10 +1036,14 @@ int of_overlay_fdt_apply(const void *overlay_fdt, u32 overlay_fdt_size,</i><br>
+><i>>          * Must create permanent copy of FDT because of_fdt_unflatten_tree()</i><br>
+><i>>          * will create pointers to the passed in FDT in the unflattened tree.</i><br>
+><i>>          */</i><br>
+><i>> -       new_fdt = kmemdup(overlay_fdt, size, GFP_KERNEL);</i><br>
+><i>> +       size += FDT_ALIGN_SIZE;</i><br>
+><i>> +       new_fdt = kmalloc(size, GFP_KERNEL);</i><br>
+><i>>         if (!new_fdt)</i><br>
+><i>>                 return -ENOMEM;</i><br>
+><i>></i><br>
+><i>> +       new_fdt = PTR_ALIGN(new_fdt, FDT_ALIGN_SIZE);</i><br>
+><i>> +       memcpy(new_fdt, overlay_fdt, size);</i><br>
+><i>> +</i><br>
+><i>>         of_fdt_unflatten_tree(new_fdt, NULL, &overlay_root);</i><br>
+><i>>         if (!overlay_root) {</i><br>
+><i>>                 pr_err("unable to unflatten overlay_fdt\n");</i><br>
+><i>> diff --git a/drivers/of/unittest.c b/drivers/of/unittest.c</i><br>
+><i>> index eb100627c186..edd6ce807691 100644</i><br>
+><i>> --- a/drivers/of/unittest.c</i><br>
+><i>> +++ b/drivers/of/unittest.c</i><br>
+><i>> @@ -22,6 +22,7 @@</i><br>
+><i>>  #include <linux/slab.h></i><br>
+><i>>  #include <linux/device.h></i><br>
+><i>>  #include <linux/platform_device.h></i><br>
+><i>> +#include <linux/kernel.h></i><br>
+><i>></i><br>
+><i>>  #include <linux/i2c.h></i><br>
+><i>>  #include <linux/i2c-mux.h></i><br>
+><i>> @@ -1415,7 +1416,7 @@ static int __init unittest_data_add(void)</i><br>
+><i>>          */</i><br>
+><i>>         extern uint8_t __dtb_testcases_begin[];</i><br>
+><i>>         extern uint8_t __dtb_testcases_end[];</i><br>
+><i>> -       const int size = __dtb_testcases_end - __dtb_testcases_begin;</i><br>
+><i>> +       u32 size = __dtb_testcases_end - __dtb_testcases_begin;</i><br>
+><i>>         int rc;</i><br>
+><i>></i><br>
+><i>>         if (!size) {</i><br>
+><i>> @@ -1425,10 +1426,14 @@ static int __init unittest_data_add(void)</i><br>
+><i>>         }</i><br>
+><i>></i><br>
+><i>>         /* creating copy */</i><br>
+><i>> -       unittest_data = kmemdup(__dtb_testcases_begin, size, GFP_KERNEL);</i><br>
+><i>> +       size += FDT_ALIGN_SIZE;</i><br>
+><i>> +       unittest_data = kmalloc(size, GFP_KERNEL);</i><br>
+><i>>         if (!unittest_data)</i><br>
+><i>>                 return -ENOMEM;</i><br>
+><i>></i><br>
+><i>> +       unittest_data = PTR_ALIGN(unittest_data, FDT_ALIGN_SIZE);</i><br>
+><i>> +       memcpy(unittest_data, __dtb_testcases_begin, size);</i><br>
+><i>> +</i><br>
+><i>>         of_fdt_unflatten_tree(unittest_data, NULL, &unittest_data_node);</i><br>
+><i>>         if (!unittest_data_node) {</i><br>
+><i>>                 pr_warn("%s: No tree to attach; not running tests\n", __func__);</i><br>
+><i> </i><br>
+><i> The next line here is a kfree(unittest_data) which I assume will fail</i><br>
+><i> if the ptr address changed. Same issue in the overlay code.</i><br>
+<br>
+Thanks for catching this.<br>
+<br>
+><i> </i><br>
+><i> The error path is easy to fix. Freeing the memory later on, not so</i><br>
+><i> much... </i><br>
+<br>
+The overlay subsystem retains ownership of the allocated memory and<br>
+responsibility for any subsequent kfree(), so actually not very<br>
+difficult.<br>
+<br>
+New version of the patch should be out this morning.<br>
+<br>
+-Frank<br>
+<br>
+><i> One solution is always alloc a power of 2 size, that's</i><br>
+><i> guaranteed to be 'size' aligned:</i><br>
+><i> </i><br>
+><i>  * The allocated object address is aligned to at least ARCH_KMALLOC_MINALIGN</i><br>
+><i>  * bytes. For @size of power of two bytes, the alignment is also guaranteed</i><br>
+><i>  * to be at least to the size.</i><br>
+><i> </i><br>
+><i> Rob</i><br>
+><i> .</i><br>
+><i> </i><br>
+<br>
+<br>
+

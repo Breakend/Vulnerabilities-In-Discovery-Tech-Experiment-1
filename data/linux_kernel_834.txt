@@ -1,0 +1,99 @@
+On 4/8/2021 1:45 PM, Artur Petrosyan wrote:<br>
+><i> Earlier "dwc2_port_suspend()" and "dwc2_port_resume()" functions</i><br>
+><i> were implemented without proper description and host or device mode</i><br>
+><i> difference.</i><br>
+><i> </i><br>
+><i> - Added "dwc2_port_suspend" and "dwc2_port_resume" functions to</i><br>
+><i>    "core.h" header file.</i><br>
+><i> </i><br>
+><i> - Updated function description in documentation.</i><br>
+><i> </i><br>
+><i> Signed-off-by: Artur Petrosyan <Arthur.Petrosyan@xxxxxxxxxxxx></i><br>
+<br>
+Acked-by: Minas Harutyunyan <Minas.Harutyunyan@xxxxxxxxxxxx><br>
+<br>
+><i> ---</i><br>
+><i>   Changes in v3:</i><br>
+><i>   - None</i><br>
+><i>   Changes in v2:</i><br>
+><i>   - None</i><br>
+><i> </i><br>
+><i>   drivers/usb/dwc2/core.h |  4 ++++</i><br>
+><i>   drivers/usb/dwc2/hcd.c  | 25 +++++++++++++++++++------</i><br>
+><i>   2 files changed, 23 insertions(+), 6 deletions(-)</i><br>
+><i> </i><br>
+><i> diff --git a/drivers/usb/dwc2/core.h b/drivers/usb/dwc2/core.h</i><br>
+><i> index 39037709a2ad..b7d99cf9e84c 100644</i><br>
+><i> --- a/drivers/usb/dwc2/core.h</i><br>
+><i> +++ b/drivers/usb/dwc2/core.h</i><br>
+><i> @@ -1470,6 +1470,8 @@ void dwc2_hcd_connect(struct dwc2_hsotg *hsotg);</i><br>
+><i>   void dwc2_hcd_disconnect(struct dwc2_hsotg *hsotg, bool force);</i><br>
+><i>   void dwc2_hcd_start(struct dwc2_hsotg *hsotg);</i><br>
+><i>   int dwc2_core_init(struct dwc2_hsotg *hsotg, bool initial_setup);</i><br>
+><i> +void dwc2_port_suspend(struct dwc2_hsotg *hsotg, u16 windex);</i><br>
+><i> +void dwc2_port_resume(struct dwc2_hsotg *hsotg);</i><br>
+><i>   int dwc2_backup_host_registers(struct dwc2_hsotg *hsotg);</i><br>
+><i>   int dwc2_restore_host_registers(struct dwc2_hsotg *hsotg);</i><br>
+><i>   int dwc2_host_enter_hibernation(struct dwc2_hsotg *hsotg);</i><br>
+><i> @@ -1493,6 +1495,8 @@ static inline void dwc2_hcd_start(struct dwc2_hsotg *hsotg) {}</i><br>
+><i>   static inline void dwc2_hcd_remove(struct dwc2_hsotg *hsotg) {}</i><br>
+><i>   static inline int dwc2_core_init(struct dwc2_hsotg *hsotg, bool initial_setup)</i><br>
+><i>   { return 0; }</i><br>
+><i> +static inline void dwc2_port_suspend(struct dwc2_hsotg *hsotg, u16 windex) {}</i><br>
+><i> +static inline void dwc2_port_resume(struct dwc2_hsotg *hsotg) {}</i><br>
+><i>   static inline int dwc2_hcd_init(struct dwc2_hsotg *hsotg)</i><br>
+><i>   { return 0; }</i><br>
+><i>   static inline int dwc2_backup_host_registers(struct dwc2_hsotg *hsotg)</i><br>
+><i> diff --git a/drivers/usb/dwc2/hcd.c b/drivers/usb/dwc2/hcd.c</i><br>
+><i> index dd0362e07444..f4247a66c2b2 100644</i><br>
+><i> --- a/drivers/usb/dwc2/hcd.c</i><br>
+><i> +++ b/drivers/usb/dwc2/hcd.c</i><br>
+><i> @@ -56,8 +56,6 @@</i><br>
+><i>   #include "core.h"</i><br>
+><i>   #include "hcd.h"</i><br>
+><i>   </i><br>
+><i> -static void dwc2_port_resume(struct dwc2_hsotg *hsotg);</i><br>
+><i> -</i><br>
+><i>   /*</i><br>
+><i>    * =========================================================================</i><br>
+><i>    *  Host Core Layer Functions</i><br>
+><i> @@ -3277,8 +3275,16 @@ static int dwc2_host_is_b_hnp_enabled(struct dwc2_hsotg *hsotg)</i><br>
+><i>   	return hcd->self.b_hnp_enable;</i><br>
+><i>   }</i><br>
+><i>   </i><br>
+><i> -/* Must NOT be called with interrupt disabled or spinlock held */</i><br>
+><i> -static void dwc2_port_suspend(struct dwc2_hsotg *hsotg, u16 windex)</i><br>
+><i> +/**</i><br>
+><i> + * dwc2_port_suspend() - Put controller in suspend mode for host.</i><br>
+><i> + *</i><br>
+><i> + * @hsotg: Programming view of the DWC_otg controller</i><br>
+><i> + * @windex: The control request wIndex field</i><br>
+><i> + *</i><br>
+><i> + * This function is for entering Host mode suspend.</i><br>
+><i> + * Must NOT be called with interrupt disabled or spinlock held.</i><br>
+><i> + */</i><br>
+><i> +void dwc2_port_suspend(struct dwc2_hsotg *hsotg, u16 windex)</i><br>
+><i>   {</i><br>
+><i>   	unsigned long flags;</i><br>
+><i>   	u32 hprt0;</i><br>
+><i> @@ -3328,8 +3334,15 @@ static void dwc2_port_suspend(struct dwc2_hsotg *hsotg, u16 windex)</i><br>
+><i>   	}</i><br>
+><i>   }</i><br>
+><i>   </i><br>
+><i> -/* Must NOT be called with interrupt disabled or spinlock held */</i><br>
+><i> -static void dwc2_port_resume(struct dwc2_hsotg *hsotg)</i><br>
+><i> +/**</i><br>
+><i> + * dwc2_port_resume() - Exit controller from suspend mode for host.</i><br>
+><i> + *</i><br>
+><i> + * @hsotg: Programming view of the DWC_otg controller</i><br>
+><i> + *</i><br>
+><i> + * This function is for exiting Host mode suspend.</i><br>
+><i> + * Must NOT be called with interrupt disabled or spinlock held.</i><br>
+><i> + */</i><br>
+><i> +void dwc2_port_resume(struct dwc2_hsotg *hsotg)</i><br>
+><i>   {</i><br>
+><i>   	unsigned long flags;</i><br>
+><i>   	u32 hprt0;</i><br>
+><i> </i><br>
+<br>
+

@@ -1,0 +1,82 @@
+On Thu, Apr 08, 2021 at 03:37:23PM +0100, Vincenzo Frascino wrote:<br>
+><i> The check_mte_async_tcf macro sets the TIF flag non-atomically. This can</i><br>
+><i> race with another CPU doing a set_tsk_thread_flag() and the flag can be</i><br>
+><i> lost in the process.</i><br>
+<br>
+Actually, it's all the *other* flags that get lost!<br>
+<br>
+><i> Move the tcf0 check to enter_from_user_mode() and clear tcf0 in</i><br>
+><i> exit_to_user_mode() to address the problem.</i><br>
+><i> </i><br>
+><i> Note: Moving the check in entry-common allows to use set_thread_flag()</i><br>
+><i> which is safe.</i><br>
+><i> </i><br>
+><i> Fixes: 637ec831ea4f ("arm64: mte: Handle synchronous and asynchronous</i><br>
+><i> tag check faults")</i><br>
+><i> Cc: Catalin Marinas <catalin.marinas@xxxxxxx></i><br>
+><i> Cc: Will Deacon <will@xxxxxxxxxx></i><br>
+><i> Reported-by: Will Deacon <will@xxxxxxxxxx></i><br>
+><i> Signed-off-by: Vincenzo Frascino <vincenzo.frascino@xxxxxxx></i><br>
+><i> ---</i><br>
+><i>  arch/arm64/include/asm/mte.h     |  8 ++++++++</i><br>
+><i>  arch/arm64/kernel/entry-common.c |  6 ++++++</i><br>
+><i>  arch/arm64/kernel/entry.S        | 30 ------------------------------</i><br>
+><i>  arch/arm64/kernel/mte.c          | 25 +++++++++++++++++++++++--</i><br>
+><i>  4 files changed, 37 insertions(+), 32 deletions(-)</i><br>
+><i> </i><br>
+><i> diff --git a/arch/arm64/include/asm/mte.h b/arch/arm64/include/asm/mte.h</i><br>
+><i> index 9b557a457f24..188f778c6f7b 100644</i><br>
+><i> --- a/arch/arm64/include/asm/mte.h</i><br>
+><i> +++ b/arch/arm64/include/asm/mte.h</i><br>
+><i> @@ -31,6 +31,8 @@ void mte_invalidate_tags(int type, pgoff_t offset);</i><br>
+><i>  void mte_invalidate_tags_area(int type);</i><br>
+><i>  void *mte_allocate_tag_storage(void);</i><br>
+><i>  void mte_free_tag_storage(char *storage);</i><br>
+><i> +void check_mte_async_tcf0(void);</i><br>
+><i> +void clear_mte_async_tcf0(void);</i><br>
+><i>  </i><br>
+><i>  #ifdef CONFIG_ARM64_MTE</i><br>
+><i>  </i><br>
+><i> @@ -83,6 +85,12 @@ static inline int mte_ptrace_copy_tags(struct task_struct *child,</i><br>
+><i>  {</i><br>
+><i>  	return -EIO;</i><br>
+><i>  }</i><br>
+><i> +void check_mte_async_tcf0(void)</i><br>
+><i> +{</i><br>
+><i> +}</i><br>
+><i> +void clear_mte_async_tcf0(void)</i><br>
+><i> +{</i><br>
+><i> +}</i><br>
+><i>  </i><br>
+><i>  static inline void mte_assign_mem_tag_range(void *addr, size_t size)</i><br>
+><i>  {</i><br>
+><i> diff --git a/arch/arm64/kernel/entry-common.c b/arch/arm64/kernel/entry-common.c</i><br>
+><i> index 9d3588450473..837d3624a1d5 100644</i><br>
+><i> --- a/arch/arm64/kernel/entry-common.c</i><br>
+><i> +++ b/arch/arm64/kernel/entry-common.c</i><br>
+><i> @@ -289,10 +289,16 @@ asmlinkage void noinstr enter_from_user_mode(void)</i><br>
+><i>  	CT_WARN_ON(ct_state() != CONTEXT_USER);</i><br>
+><i>  	user_exit_irqoff();</i><br>
+><i>  	trace_hardirqs_off_finish();</i><br>
+><i> +</i><br>
+><i> +	/* Check for asynchronous tag check faults in user space */</i><br>
+><i> +	check_mte_async_tcf0();</i><br>
+><i>  }</i><br>
+<br>
+Is enter_from_user_mode() always called when we enter the kernel from EL0?<br>
+afaict, some paths (e.g. el0_irq()) only end up calling it if<br>
+CONTEXT_TRACKING or TRACE_IRQFLAGS are enabled.<br>
+<br>
+><i>  </i><br>
+><i>  asmlinkage void noinstr exit_to_user_mode(void)</i><br>
+><i>  {</i><br>
+><i> +	/* Ignore asynchronous tag check faults in the uaccess routines */</i><br>
+><i> +	clear_mte_async_tcf0();</i><br>
+><i> +</i><br>
+<br>
+and this one seems to be called even less often.<br>
+<br>
+Will<br>
+<br>
+<br>
+

@@ -1,0 +1,86 @@
+On Wed, Apr 07, 2021 at 01:44:37PM +0100, Will Deacon wrote:<br>
+><i> [Moving Mark to To: since I'd like his view on this]</i><br>
+><i> </i><br>
+><i> On Thu, Apr 01, 2021 at 02:45:21PM -0500, Rob Herring wrote:</i><br>
+><i> > On Wed, Mar 31, 2021 at 11:01 AM Will Deacon <will@xxxxxxxxxx> wrote:</i><br>
+><i> > ></i><br>
+><i> > > On Tue, Mar 30, 2021 at 12:09:38PM -0500, Rob Herring wrote:</i><br>
+><i> > > > On Tue, Mar 30, 2021 at 10:31 AM Will Deacon <will@xxxxxxxxxx> wrote:</i><br>
+><i> > > > ></i><br>
+><i> > > > > On Wed, Mar 10, 2021 at 05:08:29PM -0700, Rob Herring wrote:</i><br>
+><i> > > > > > From: Raphael Gault <raphael.gault@xxxxxxx></i><br>
+<br>
+><i> > > > > > +static void armv8pmu_event_unmapped(struct perf_event *event, struct mm_struct *mm)</i><br>
+><i> > > > > > +{</i><br>
+><i> > > > > > +     struct arm_pmu *armpmu = to_arm_pmu(event->pmu);</i><br>
+><i> > > > > > +</i><br>
+><i> > > > > > +     if (!(event->hw.flags & ARMPMU_EL0_RD_CNTR))</i><br>
+><i> > > > > > +             return;</i><br>
+><i> > > > > > +</i><br>
+><i> > > > > > +     if (atomic_dec_and_test(&mm->context.pmu_direct_access))</i><br>
+><i> > > > > > +             on_each_cpu_mask(&armpmu->supported_cpus, refresh_pmuserenr, mm, 1);</i><br>
+><i> > > > ></i><br>
+><i> > > > > Given that the pmu_direct_access field is global per-mm, won't this go</i><br>
+><i> > > > > wrong if multiple PMUs are opened by the same process but only a subset</i><br>
+><i> > > > > are exposed to EL0? Perhaps pmu_direct_access should be treated as a mask</i><br>
+><i> > > > > rather than a counter, so that we can 'and' it with the supported_cpus for</i><br>
+><i> > > > > the PMU we're dealing with.</i><br>
+><i> > > ></i><br>
+><i> > > > It needs to be a count to support multiple events on the same PMU. If</i><br>
+><i> > > > the event is not enabled for EL0, then we'd exit out on the</i><br>
+><i> > > > ARMPMU_EL0_RD_CNTR check. So I think we're fine.</i><br>
+><i> > ></i><br>
+><i> > > I'm still not convinced; pmu_direct_access is shared between PMUs, so</i><br>
+><i> > > testing the result of atomic_dec_and_test() just doesn't make sense to</i><br>
+><i> > > me, as another PMU could be playing with the count.</i><br>
+><i> > </i><br>
+><i> > How is that a problem? Let's make a concrete example:</i><br>
+><i> > </i><br>
+><i> > map PMU1:event2 -> pmu_direct_access = 1 -> enable access</i><br>
+><i> > map PMU2:event3 -> pmu_direct_access = 2</i><br>
+><i> > map PMU1:event4 -> pmu_direct_access = 3</i><br>
+><i> > unmap PMU2:event3 -> pmu_direct_access = 2</i><br>
+><i> > unmap PMU1:event2 -> pmu_direct_access = 1</i><br>
+><i> > unmap PMU1:event4 -> pmu_direct_access = 0 -> disable access</i><br>
+><i> > </i><br>
+><i> > The only issue I can see is PMU2 remains enabled for user access until</i><br>
+><i> > the last unmap. But we're sharing the mm, so who cares? Also, in this</i><br>
+><i> > scenario it is the user's problem to pin themselves to cores sharing a</i><br>
+><i> > PMU. If the user doesn't do that, they get to keep the pieces.</i><br>
+><i> </i><br>
+><i> I guess I'm just worried about exposing the counters to userspace after</i><br>
+><i> the PMU driver (or perf core?) thinks that they're no longer exposed in</i><br>
+><i> case we leak other events.</i><br>
+<br>
+IMO that's not practically different from the single-PMU case (i.e.<br>
+multi-PMU isn't material, either we have a concern with leaking or we<br>
+don't); more on that below.<br>
+<br>
+While it looks odd to place this on the mm, I don't think it's the end<br>
+of the world.<br>
+<br>
+><i> However, I'm not sure how this is supposed to work normally: what</i><br>
+><i> happens if e.g. a privileged user has a per-cpu counter for a kernel</i><br>
+><i> event while a task has a counter with direct access -- can that task</i><br>
+><i> read the kernel event out of the PMU registers from userspace?</i><br>
+<br>
+Yes -- userspace could go read any counters even though it isn't<br>
+supposed to, and could potentially infer information from those. It<br>
+won't have access to the config registers or kernel data structures, so<br>
+it isn't guaranteed to know what the even is or when it is<br>
+context-switched/reprogrammed/etc.<br>
+<br>
+If we believe that's a problem, then it's difficult to do anything<br>
+robust other than denying userspace access entirely, since disabling<br>
+userspace access while in use would surprise applications, and denying<br>
+privileged events would need some global state that we consult at event<br>
+creation time (in addition to being an inversion of privilege).<br>
+<br>
+IIRC there was some fuss about this a while back on x86; I'll go dig and<br>
+see what I can find, unless Peter has a memory...<br>
+<br>
+Thanks,<br>
+Mark.<br>
+<br>
+<br>
+

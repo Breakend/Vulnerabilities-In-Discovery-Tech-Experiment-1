@@ -1,0 +1,93 @@
+With any regulatory domain requests coming from either user space or<br>
+802.11 IE (Information Element), the country is coded in ISO3166<br>
+standard.  It needs to be translated to firmware country code and<br>
+revision with the mapping info in settings->country_codes table.<br>
+Support populate country_codes table by parsing the mapping from DT.<br>
+<br>
+Signed-off-by: Shawn Guo <shawn.guo@xxxxxxxxxx><br>
+---<br>
+ .../wireless/broadcom/brcm80211/brcmfmac/of.c | 53 +++++++++++++++++++<br>
+ 1 file changed, 53 insertions(+)<br>
+<br>
+diff --git a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/of.c b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/of.c<br>
+index a7554265f95f..ea5c7f434c2c 100644<br>
+--- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/of.c<br>
++++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/of.c<br>
+@@ -12,12 +12,61 @@<br>
+ #include "common.h"<br>
+ #include "of.h"<br>
+ <br>
++static int brcmf_of_get_country_codes(struct device *dev,<br>
++				      struct brcmf_mp_device *settings)<br>
++{<br>
++	struct device_node *np = dev->of_node;<br>
++	struct brcmfmac_pd_cc_entry *cce;<br>
++	struct brcmfmac_pd_cc *cc;<br>
++	int count;<br>
++	int i;<br>
++<br>
++	count = of_property_count_strings(np, "brcm,ccode-map");<br>
++	if (count < 0) {<br>
++		/* The property is optional, so return success if it doesn't<br>
++		 * exist. Otherwise propagate the error code.<br>
++		 */<br>
++		return (count == -EINVAL) ? 0 : count;<br>
++	}<br>
++<br>
++	cc = devm_kzalloc(dev, sizeof(*cc) + count * sizeof(*cce), GFP_KERNEL);<br>
++	if (!cc)<br>
++		return -ENOMEM;<br>
++<br>
++	cc->table_size = count;<br>
++<br>
++	for (i = 0; i < count; i++) {<br>
++		const char *map;<br>
++		int ret;<br>
++<br>
++		cce = &cc->table[i];<br>
++<br>
++		if (of_property_read_string_index(np, "brcm,ccode-map",<br>
++						  i, &map))<br>
++			continue;<br>
++<br>
++		/* String format e.g. US-Q2-86 */<br>
++		strncpy(cce->iso3166, map, 2);<br>
++		strncpy(cce->cc, map + 3, 2);<br>
++<br>
++		ret = kstrtos32(map + 6, 10, &cce->rev);<br>
++		if (ret < 0)<br>
++			dev_warn(dev, "failed to read rev of map %s: %d",<br>
++				 cce->iso3166, ret);<br>
++	}<br>
++<br>
++	settings->country_codes = cc;<br>
++<br>
++	return 0;<br>
++}<br>
++<br>
+ void brcmf_of_probe(struct device *dev, enum brcmf_bus_type bus_type,<br>
+ 		    struct brcmf_mp_device *settings)<br>
+ {<br>
+ 	struct brcmfmac_sdio_pd *sdio = &settings->bus.sdio;<br>
+ 	struct device_node *root, *np = dev->of_node;<br>
+ 	int irq;<br>
++	int ret;<br>
+ 	u32 irqf;<br>
+ 	u32 val;<br>
+ <br>
+@@ -47,6 +96,10 @@ void brcmf_of_probe(struct device *dev, enum brcmf_bus_type bus_type,<br>
+ 	    !of_device_is_compatible(np, "brcm,bcm4329-fmac"))<br>
+ 		return;<br>
+ <br>
++	ret = brcmf_of_get_country_codes(dev, settings);<br>
++	if (ret)<br>
++		dev_warn(dev, "failed to get OF country code map\n");<br>
++<br>
+ 	if (of_property_read_u32(np, "brcm,drive-strength", &val) == 0)<br>
+ 		sdio->drive_strength = val;<br>
+ <br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+

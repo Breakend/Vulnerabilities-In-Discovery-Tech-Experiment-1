@@ -1,0 +1,54 @@
+From: Quanyang Wang <quanyang.wang@xxxxxxxxxxxxx><br>
+<br>
+The spi-mem framework has no locking to prevent ctlr->mem_ops->exec_op<br>
+from concurrency. So add the locking to zynqmp_qspi_exec_op.<br>
+<br>
+Fixes: 1c26372e5aa9 ("spi: spi-zynqmp-gqspi: Update driver to use spi-mem framework")<br>
+Signed-off-by: Quanyang Wang <quanyang.wang@xxxxxxxxxxxxx><br>
+Reviewed-by: Amit Kumar Mahapatra <amit.kumar-mahapatra@xxxxxxxxxx><br>
+---<br>
+ drivers/spi/spi-zynqmp-gqspi.c | 5 +++++<br>
+ 1 file changed, 5 insertions(+)<br>
+<br>
+diff --git a/drivers/spi/spi-zynqmp-gqspi.c b/drivers/spi/spi-zynqmp-gqspi.c<br>
+index d49ab6575553..3b39461d58b3 100644<br>
+--- a/drivers/spi/spi-zynqmp-gqspi.c<br>
++++ b/drivers/spi/spi-zynqmp-gqspi.c<br>
+@@ -173,6 +173,7 @@ struct zynqmp_qspi {<br>
+ 	u32 genfifoentry;<br>
+ 	enum mode_type mode;<br>
+ 	struct completion data_completion;<br>
++	struct mutex op_lock;<br>
+ };<br>
+ <br>
+ /**<br>
+@@ -951,6 +952,7 @@ static int zynqmp_qspi_exec_op(struct spi_mem *mem,<br>
+ 		op->cmd.opcode, op->cmd.buswidth, op->addr.buswidth,<br>
+ 		op->dummy.buswidth, op->data.buswidth);<br>
+ <br>
++	mutex_lock(&xqspi->op_lock);<br>
+ 	zynqmp_qspi_config_op(xqspi, mem->spi);<br>
+ 	zynqmp_qspi_chipselect(mem->spi, false);<br>
+ 	genfifoentry |= xqspi->genfifocs;<br>
+@@ -1084,6 +1086,7 @@ static int zynqmp_qspi_exec_op(struct spi_mem *mem,<br>
+ return_err:<br>
+ <br>
+ 	zynqmp_qspi_chipselect(mem->spi, true);<br>
++	mutex_unlock(&xqspi->op_lock);<br>
+ <br>
+ 	return err;<br>
+ }<br>
+@@ -1156,6 +1159,8 @@ static int zynqmp_qspi_probe(struct platform_device *pdev)<br>
+ 		goto clk_dis_pclk;<br>
+ 	}<br>
+ <br>
++	mutex_init(&xqspi->op_lock);<br>
++<br>
+ 	pm_runtime_use_autosuspend(&pdev->dev);<br>
+ 	pm_runtime_set_autosuspend_delay(&pdev->dev, SPI_AUTOSUSPEND_TIMEOUT);<br>
+ 	pm_runtime_set_active(&pdev->dev);<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

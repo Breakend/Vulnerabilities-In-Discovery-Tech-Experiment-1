@@ -1,0 +1,64 @@
+Hi Linus,<br>
+<br>
+/* Summary */<br>
+Syzbot reported a bug in close_range. Debugging this showed we didn't<br>
+recalculate the current maximum fd number for CLOSE_RANGE_UNSHARE |<br>
+CLOSE_RANGE_CLOEXEC after we unshared the file descriptors table.<br>
+<br>
+So max_fd could exceed the current fdtable maximum causing us to set excessive<br>
+bits. As a concrete example, let's say the user requested everything from fd 4<br>
+to ~0UL to be closed and their current fdtable size is 256 with their highest<br>
+open fd being 4. With CLOSE_RANGE_UNSHARE the caller will end up with a new<br>
+fdtable which has room for 64 file descriptors since that is the lowest fdtable<br>
+size we accept. But now max_fd will still point to 255 and needs to be<br>
+adjusted. Fix this by retrieving the correct maximum fd value in<br>
+__range_cloexec().<br>
+<br>
+I've carried this fix for a little while but since there was no linux-next<br>
+release over easter I waited until now.<br>
+<br>
+With this change close_range() can be simplified a bit but imho we are in no<br>
+hurry to do that and so I'll defer this for the 5.13 merge window.<br>
+<br>
+(Fwiw, the two follow-up patches sit in<br>
+ <a  rel="nofollow" href="https://git.kernel.org/brauner/h/fs/close_range">https://git.kernel.org/brauner/h/fs/close_range</a>.)<br>
+<br>
+/* Testing */<br>
+All patches have seen exposure in linux-next and are based on v5.12-rc4.<br>
+The selftests pass and the reproducer provided by syzbot did not trigger. The<br>
+patch also has a Tested-by from Dmitry but I had already pushed it out by the<br>
+time that came in so it's missing from the patch itself.<br>
+<br>
+/* Conflicts */<br>
+At the time of creating this pr no merge conflicts were reported. A test merge<br>
+and build with today's master 2021-04-08 12:20:00 CET worked fine.<br>
+<br>
+The following changes since commit 0d02ec6b3136c73c09e7859f0d0e4e2c4c07b49b:<br>
+<br>
+  Linux 5.12-rc4 (2021-03-21 14:56:43 -0700)<br>
+<br>
+are available in the Git repository at:<br>
+<br>
+  git@xxxxxxxxxxxxxxxxxxx:pub/scm/linux/kernel/git/brauner/linux tags/for-linus-2021-04-08<br>
+<br>
+for you to fetch changes up to 9b5b872215fe6d1ca6a1ef411f130bd58e269012:<br>
+<br>
+  file: fix close_range() for unshare+cloexec (2021-04-02 14:11:10 +0200)<br>
+<br>
+Please consider pulling these changes from the signed for-linus-2021-04-08 tag.<br>
+<br>
+Thanks!<br>
+Christian<br>
+<br>
+----------------------------------------------------------------<br>
+for-linus-2021-04-08<br>
+<br>
+----------------------------------------------------------------<br>
+Christian Brauner (1):<br>
+      file: fix close_range() for unshare+cloexec<br>
+<br>
+ fs/file.c | 21 +++++++++++++++++----<br>
+ 1 file changed, 17 insertions(+), 4 deletions(-)<br>
+<br>
+<br>
+

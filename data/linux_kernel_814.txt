@@ -1,0 +1,39 @@
+On Thu, Apr 08, 2021 at 05:51:19PM +0800, Jiapeng Chong wrote:<br>
+><i> Fix the following gcc warning:</i><br>
+><i> </i><br>
+><i> drivers/staging/ks7010/ks_hostif.c:929:19: warning: variable ‘noise’ set</i><br>
+><i> but not used [-Wunused-but-set-variable].</i><br>
+><i> </i><br>
+><i> Reported-by: Abaci Robot <abaci@xxxxxxxxxxxxxxxxx></i><br>
+><i> Signed-off-by: Jiapeng Chong <jiapeng.chong@xxxxxxxxxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  drivers/staging/ks7010/ks_hostif.c | 3 +--</i><br>
+><i>  1 file changed, 1 insertion(+), 2 deletions(-)</i><br>
+><i> </i><br>
+><i> diff --git a/drivers/staging/ks7010/ks_hostif.c b/drivers/staging/ks7010/ks_hostif.c</i><br>
+><i> index 8bc3b7d..499161d 100644</i><br>
+><i> --- a/drivers/staging/ks7010/ks_hostif.c</i><br>
+><i> +++ b/drivers/staging/ks7010/ks_hostif.c</i><br>
+><i> @@ -926,14 +926,13 @@ void hostif_bss_scan_confirm(struct ks_wlan_private *priv)</i><br>
+><i>  void hostif_phy_information_confirm(struct ks_wlan_private *priv)</i><br>
+><i>  {</i><br>
+><i>  	struct iw_statistics *wstats = &priv->wstats;</i><br>
+><i> -	u8 rssi, signal, noise;</i><br>
+><i> +	u8 rssi, signal;</i><br>
+><i>  	u8 link_speed;</i><br>
+><i>  	u32 transmitted_frame_count, received_fragment_count;</i><br>
+><i>  	u32 failed_count, fcs_error_count;</i><br>
+><i>  </i><br>
+><i>  	rssi = get_byte(priv);</i><br>
+><i>  	signal = get_byte(priv);</i><br>
+><i> -	noise = get_byte(priv);</i><br>
+<br>
+Are you sure you did not just break the functionality of the device<br>
+here?<br>
+<br>
+thanks,<br>
+<br>
+greg k-h<br>
+<br>
+<br>
+

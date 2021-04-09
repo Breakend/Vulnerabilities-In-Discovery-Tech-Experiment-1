@@ -1,0 +1,43 @@
+Trying to set CONFIG_CMA=y with CONFIG_DMA_CMA=n revealed that we have<br>
+three drivers that select these options. Random drivers should not<br>
+override user settings of such core knobs. Let's use "imply DMA_CMA"<br>
+instead, such that user configuration and dependencies are respected.<br>
+<br>
+v1 -> v2:<br>
+- Fix DRM_CMA -> DMA_CMA<br>
+<br>
+Cc: Joel Stanley <joel@xxxxxxxxx><br>
+Cc: David Airlie <airlied@xxxxxxxx><br>
+Cc: Daniel Vetter <daniel@xxxxxxxx><br>
+Cc: Andrew Jeffery <andrew@xxxxxxxx><br>
+Cc: Lucas Stach <l.stach@xxxxxxxxxxxxxx><br>
+Cc: Russell King <linux+etnaviv@xxxxxxxxxxxxxxx><br>
+Cc: Christian Gmeiner <christian.gmeiner@xxxxxxxxx><br>
+Cc: Mike Rapoport <rppt@xxxxxxxxxx><br>
+Cc: Arnd Bergmann <arnd@xxxxxxxx><br>
+Cc: Bartlomiej Zolnierkiewicz <b.zolnierkie@xxxxxxxxxxx><br>
+Cc: Linus Walleij <linus.walleij@xxxxxxxxxx><br>
+Cc: Michal Simek <michal.simek@xxxxxxxxxx><br>
+Cc: Masahiro Yamada <masahiroy@xxxxxxxxxx><br>
+Cc: Randy Dunlap <rdunlap@xxxxxxxxxxxxx><br>
+Cc: Peter Collingbourne <pcc@xxxxxxxxxx><br>
+Cc: linux-aspeed@xxxxxxxxxxxxxxxx<br>
+Cc: dri-devel@xxxxxxxxxxxxxxxxxxxxx<br>
+Cc: linux-arm-kernel@xxxxxxxxxxxxxxxxxxx<br>
+Cc: etnaviv@xxxxxxxxxxxxxxxxxxxxx<br>
+Cc: linux-fbdev@xxxxxxxxxxxxxxx<br>
+<br>
+David Hildenbrand (2):<br>
+  drivers/video/fbdev: don't select DMA_CMA<br>
+  drivers/gpu/drm: don't select DMA_CMA or CMA from aspeed or etnaviv<br>
+<br>
+ drivers/gpu/drm/aspeed/Kconfig  | 3 +--<br>
+ drivers/gpu/drm/etnaviv/Kconfig | 3 +--<br>
+ drivers/video/fbdev/Kconfig     | 2 +-<br>
+ 3 files changed, 3 insertions(+), 5 deletions(-)<br>
+<br>
+-- <br>
+2.30.2<br>
+<br>
+<br>
+

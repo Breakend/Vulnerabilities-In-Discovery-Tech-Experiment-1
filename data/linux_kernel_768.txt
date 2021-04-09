@@ -1,0 +1,31 @@
+On Thu, Apr 08, 2021 at 06:33:47PM +0800, Clark Wang wrote:<br>
+><i> When some drivers use spi to send data, spi_transfer->speed_hz is</i><br>
+><i> not assigned. If spidev->max_speed_hz is not assigned as well, it</i><br>
+><i> will cause an error in configuring the clock.</i><br>
+<br>
+><i> Add a check for these two values before configuring the clock. An</i><br>
+><i> error will be returned when they are not assigned.</i><br>
+<br>
+For the case where the transfer speed is not set __spi_validate() will<br>
+take the controller's maximum speed so the controller should just be<br>
+able to unconditionally use the transfer's speed.  Your issue is<br>
+therefore that the controllers are sometimes not setting a maximum<br>
+speed which this doesn't seem to fix AFAICT?  I'd expect the driver to<br>
+be able to work one out based on the input clock.<br>
+<br>
+><i>  struct spi_imx_devtype_data {</i><br>
+><i>  	void (*intctrl)(struct spi_imx_data *, int);</i><br>
+><i>  	int (*prepare_message)(struct spi_imx_data *, struct spi_message *);</i><br>
+><i> -	int (*prepare_transfer)(struct spi_imx_data *, struct spi_device *,</i><br>
+><i> -				struct spi_transfer *);</i><br>
+><i> +	int (*prepare_transfer)(struct spi_imx_data *, struct spi_device *);</i><br>
+><i>  	void (*trigger)(struct spi_imx_data *);</i><br>
+><i>  	int (*rx_available)(struct spi_imx_data *);</i><br>
+><i>  	void (*reset)(struct spi_imx_data *);</i><br>
+<br>
+This seems to be a fairly big and surprising refactoring for the<br>
+described change.  It's quite hard to tie the change to the changelog.<br>
+<p><strong>Attachment:
+<a href="00689/signature.asc" ><tt>signature.asc</tt></a></strong><br>
+<em>Description:</em> PGP signature</p>
+

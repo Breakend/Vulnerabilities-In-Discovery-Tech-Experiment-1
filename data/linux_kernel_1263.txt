@@ -1,0 +1,170 @@
+
+Am 08.04.21 um 11:30 schrieb David Stevens:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+On Thu, Apr 8, 2021 at 4:03 PM Christian König <christian.koenig@xxxxxxx> wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+Am 08.04.21 um 06:59 schrieb David Stevens:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+From: David Stevens <stevensd@xxxxxxxxxxxx><br>
+<br>
+This reverts commit 86bbd89d5da66fe760049ad3f04adc407ec0c4d6.<br>
+<br>
+Using the singleton stub fence in drm_syncobj_assign_null_handle means<br>
+that all syncobjs created in an already signaled state or any syncobjs<br>
+signaled by userspace will reference the singleton fence when exported<br>
+to a sync_file. If those sync_files are queried with SYNC_IOC_FILE_INFO,<br>
+then the timestamp_ns value returned will correspond to whenever the<br>
+singleton stub fence was first initialized. This can break the ability<br>
+of userspace to use timestamps of these fences, as the singleton stub<br>
+fence's timestamp bears no relationship to any meaningful event.<br>
+</blockquote>
+And why exactly is having the timestamp of the call to<br>
+drm_syncobj_assign_null_handle() better?<br>
+</blockquote>
+The timestamp returned by SYNC_IOC_FILE_INFO is the "timestamp of<br>
+status change in nanoseconds". If userspace signals the fence with<br>
+DRM_IOCTL_SYNCOBJ_SIGNAL, then a timestamp from<br>
+drm_syncobj_assign_null_handle corresponds to the status change. If<br>
+userspace sets DRM_SYNCOBJ_CREATE_SIGNALED when creating a fence, then<br>
+the status change happens immediately upon creation, which again<br>
+corresponds to when drm_syncobj_assign_null_handle gets called.<br>
+</blockquote>
+<br>
+Ok, that makes sense.<br>
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+Additional if you really need that please don't revert the patch.<br>
+Instead provide a function which returns a newly initialized stub fence<br>
+in the dma_fence.c code.<br>
+</blockquote>
+Ack.<br>
+</blockquote>
+<br>
+Just add a something like dma_fence_get_new_stub() with kmalloc(), 
+dma_fence_init() and dma_fence_signal().
+<br>
+<br>
+Shouldn't be more than a six liner.<br>
+<br>
+Thanks,<br>
+Christian.<br>
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+<br>
+-David<br>
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+Regards,<br>
+Christian.<br>
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+Signed-off-by: David Stevens <stevensd@xxxxxxxxxxxx><br>
+---<br>
+   drivers/gpu/drm/drm_syncobj.c | 58 ++++++++++++++++++++++++++---------<br>
+   1 file changed, 44 insertions(+), 14 deletions(-)<br>
+<br>
+diff --git a/drivers/gpu/drm/drm_syncobj.c b/drivers/gpu/drm/drm_syncobj.c<br>
+index 349146049849..7cc11f1a83f4 100644<br>
+--- a/drivers/gpu/drm/drm_syncobj.c<br>
++++ b/drivers/gpu/drm/drm_syncobj.c<br>
+@@ -211,6 +211,21 @@ struct syncobj_wait_entry {<br>
+   static void syncobj_wait_syncobj_func(struct drm_syncobj *syncobj,<br>
+                                     struct syncobj_wait_entry *wait);<br>
+<br>
++struct drm_syncobj_stub_fence {<br>
++     struct dma_fence base;<br>
++     spinlock_t lock;<br>
++};<br>
++<br>
++static const char *drm_syncobj_stub_fence_get_name(struct dma_fence *fence)<br>
++{<br>
++     return "syncobjstub";<br>
++}<br>
++<br>
++static const struct dma_fence_ops drm_syncobj_stub_fence_ops = {<br>
++     .get_driver_name = drm_syncobj_stub_fence_get_name,<br>
++     .get_timeline_name = drm_syncobj_stub_fence_get_name,<br>
++};<br>
++<br>
+   /**<br>
+    * drm_syncobj_find - lookup and reference a sync object.<br>
+    * @file_private: drm file private pointer<br>
+@@ -344,18 +359,24 @@ void drm_syncobj_replace_fence(struct drm_syncobj *syncobj,<br>
+   }<br>
+   EXPORT_SYMBOL(drm_syncobj_replace_fence);<br>
+<br>
+-/**<br>
+- * drm_syncobj_assign_null_handle - assign a stub fence to the sync object<br>
+- * @syncobj: sync object to assign the fence on<br>
+- *<br>
+- * Assign a already signaled stub fence to the sync object.<br>
+- */<br>
+-static void drm_syncobj_assign_null_handle(struct drm_syncobj *syncobj)<br>
++static int drm_syncobj_assign_null_handle(struct drm_syncobj *syncobj)<br>
+   {<br>
+-     struct dma_fence *fence = dma_fence_get_stub();<br>
++     struct drm_syncobj_stub_fence *fence;<br>
+<br>
+-     drm_syncobj_replace_fence(syncobj, fence);<br>
+-     dma_fence_put(fence);<br>
++     fence = kzalloc(sizeof(*fence), GFP_KERNEL);<br>
++     if (fence == NULL)<br>
++             return -ENOMEM;<br>
++<br>
++     spin_lock_init(&fence->lock);<br>
++     dma_fence_init(&fence->base, &drm_syncobj_stub_fence_ops,<br>
++                    &fence->lock, 0, 0);<br>
++     dma_fence_signal(&fence->base);<br>
++<br>
++     drm_syncobj_replace_fence(syncobj, &fence->base);<br>
++<br>
++     dma_fence_put(&fence->base);<br>
++<br>
++     return 0;<br>
+   }<br>
+<br>
+   /* 5s default for wait submission */<br>
+@@ -469,6 +490,7 @@ EXPORT_SYMBOL(drm_syncobj_free);<br>
+   int drm_syncobj_create(struct drm_syncobj **out_syncobj, uint32_t flags,<br>
+                      struct dma_fence *fence)<br>
+   {<br>
++     int ret;<br>
+       struct drm_syncobj *syncobj;<br>
+<br>
+       syncobj = kzalloc(sizeof(struct drm_syncobj), GFP_KERNEL);<br>
+@@ -479,8 +501,13 @@ int drm_syncobj_create(struct drm_syncobj **out_syncobj, uint32_t flags,<br>
+       INIT_LIST_HEAD(&syncobj->cb_list);<br>
+       spin_lock_init(&syncobj->lock);<br>
+<br>
+-     if (flags & DRM_SYNCOBJ_CREATE_SIGNALED)<br>
+-             drm_syncobj_assign_null_handle(syncobj);<br>
++     if (flags & DRM_SYNCOBJ_CREATE_SIGNALED) {<br>
++             ret = drm_syncobj_assign_null_handle(syncobj);<br>
++             if (ret < 0) {<br>
++                     drm_syncobj_put(syncobj);<br>
++                     return ret;<br>
++             }<br>
++     }<br>
+<br>
+       if (fence)<br>
+               drm_syncobj_replace_fence(syncobj, fence);<br>
+@@ -1322,8 +1349,11 @@ drm_syncobj_signal_ioctl(struct drm_device *dev, void *data,<br>
+       if (ret < 0)<br>
+               return ret;<br>
+<br>
+-     for (i = 0; i < args->count_handles; i++)<br>
+-             drm_syncobj_assign_null_handle(syncobjs[i]);<br>
++     for (i = 0; i < args->count_handles; i++) {<br>
++             ret = drm_syncobj_assign_null_handle(syncobjs[i]);<br>
++             if (ret < 0)<br>
++                     break;<br>
++     }<br>
+<br>
+       drm_syncobj_array_free(syncobjs, args->count_handles);<br>
+<br>
+</blockquote></blockquote></blockquote>
+<br>
+<br>
+

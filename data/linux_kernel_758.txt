@@ -1,0 +1,203 @@
+Introduces the TRAP_PERF si_code, and associated siginfo_t field<br>
+si_perf. These will be used by the perf event subsystem to send signals<br>
+(if requested) to the task where an event occurred.<br>
+<br>
+Acked-by: Geert Uytterhoeven <geert@xxxxxxxxxxxxxx> # m68k<br>
+Acked-by: Arnd Bergmann <arnd@xxxxxxxx> # asm-generic<br>
+Signed-off-by: Marco Elver <elver@xxxxxxxxxx><br>
+---<br>
+ arch/m68k/kernel/signal.c          |  3 +++<br>
+ arch/x86/kernel/signal_compat.c    |  5 ++++-<br>
+ fs/signalfd.c                      |  4 ++++<br>
+ include/linux/compat.h             |  2 ++<br>
+ include/linux/signal.h             |  1 +<br>
+ include/uapi/asm-generic/siginfo.h |  6 +++++-<br>
+ include/uapi/linux/signalfd.h      |  4 +++-<br>
+ kernel/signal.c                    | 11 +++++++++++<br>
+ 8 files changed, 33 insertions(+), 3 deletions(-)<br>
+<br>
+diff --git a/arch/m68k/kernel/signal.c b/arch/m68k/kernel/signal.c<br>
+index 349570f16a78..a4b7ee1df211 100644<br>
+--- a/arch/m68k/kernel/signal.c<br>
++++ b/arch/m68k/kernel/signal.c<br>
+@@ -622,6 +622,9 @@ static inline void siginfo_build_tests(void)<br>
+ 	/* _sigfault._addr_pkey */<br>
+ 	BUILD_BUG_ON(offsetof(siginfo_t, si_pkey) != 0x12);<br>
+ <br>
++	/* _sigfault._perf */<br>
++	BUILD_BUG_ON(offsetof(siginfo_t, si_perf) != 0x10);<br>
++<br>
+ 	/* _sigpoll */<br>
+ 	BUILD_BUG_ON(offsetof(siginfo_t, si_band)   != 0x0c);<br>
+ 	BUILD_BUG_ON(offsetof(siginfo_t, si_fd)     != 0x10);<br>
+diff --git a/arch/x86/kernel/signal_compat.c b/arch/x86/kernel/signal_compat.c<br>
+index a5330ff498f0..0e5d0a7e203b 100644<br>
+--- a/arch/x86/kernel/signal_compat.c<br>
++++ b/arch/x86/kernel/signal_compat.c<br>
+@@ -29,7 +29,7 @@ static inline void signal_compat_build_tests(void)<br>
+ 	BUILD_BUG_ON(NSIGFPE  != 15);<br>
+ 	BUILD_BUG_ON(NSIGSEGV != 9);<br>
+ 	BUILD_BUG_ON(NSIGBUS  != 5);<br>
+-	BUILD_BUG_ON(NSIGTRAP != 5);<br>
++	BUILD_BUG_ON(NSIGTRAP != 6);<br>
+ 	BUILD_BUG_ON(NSIGCHLD != 6);<br>
+ 	BUILD_BUG_ON(NSIGSYS  != 2);<br>
+ <br>
+@@ -138,6 +138,9 @@ static inline void signal_compat_build_tests(void)<br>
+ 	BUILD_BUG_ON(offsetof(siginfo_t, si_pkey) != 0x20);<br>
+ 	BUILD_BUG_ON(offsetof(compat_siginfo_t, si_pkey) != 0x14);<br>
+ <br>
++	BUILD_BUG_ON(offsetof(siginfo_t, si_perf) != 0x18);<br>
++	BUILD_BUG_ON(offsetof(compat_siginfo_t, si_perf) != 0x10);<br>
++<br>
+ 	CHECK_CSI_OFFSET(_sigpoll);<br>
+ 	CHECK_CSI_SIZE  (_sigpoll, 2*sizeof(int));<br>
+ 	CHECK_SI_SIZE   (_sigpoll, 4*sizeof(int));<br>
+diff --git a/fs/signalfd.c b/fs/signalfd.c<br>
+index 456046e15873..040a1142915f 100644<br>
+--- a/fs/signalfd.c<br>
++++ b/fs/signalfd.c<br>
+@@ -134,6 +134,10 @@ static int signalfd_copyinfo(struct signalfd_siginfo __user *uinfo,<br>
+ #endif<br>
+ 		new.ssi_addr_lsb = (short) kinfo->si_addr_lsb;<br>
+ 		break;<br>
++	case SIL_PERF_EVENT:<br>
++		new.ssi_addr = (long) kinfo->si_addr;<br>
++		new.ssi_perf = kinfo->si_perf;<br>
++		break;<br>
+ 	case SIL_CHLD:<br>
+ 		new.ssi_pid    = kinfo->si_pid;<br>
+ 		new.ssi_uid    = kinfo->si_uid;<br>
+diff --git a/include/linux/compat.h b/include/linux/compat.h<br>
+index 6e65be753603..c8821d966812 100644<br>
+--- a/include/linux/compat.h<br>
++++ b/include/linux/compat.h<br>
+@@ -236,6 +236,8 @@ typedef struct compat_siginfo {<br>
+ 					char _dummy_pkey[__COMPAT_ADDR_BND_PKEY_PAD];<br>
+ 					u32 _pkey;<br>
+ 				} _addr_pkey;<br>
++				/* used when si_code=TRAP_PERF */<br>
++				compat_u64 _perf;<br>
+ 			};<br>
+ 		} _sigfault;<br>
+ <br>
+diff --git a/include/linux/signal.h b/include/linux/signal.h<br>
+index 205526c4003a..1e98548d7cf6 100644<br>
+--- a/include/linux/signal.h<br>
++++ b/include/linux/signal.h<br>
+@@ -43,6 +43,7 @@ enum siginfo_layout {<br>
+ 	SIL_FAULT_MCEERR,<br>
+ 	SIL_FAULT_BNDERR,<br>
+ 	SIL_FAULT_PKUERR,<br>
++	SIL_PERF_EVENT,<br>
+ 	SIL_CHLD,<br>
+ 	SIL_RT,<br>
+ 	SIL_SYS,<br>
+diff --git a/include/uapi/asm-generic/siginfo.h b/include/uapi/asm-generic/siginfo.h<br>
+index d2597000407a..d0bb9125c853 100644<br>
+--- a/include/uapi/asm-generic/siginfo.h<br>
++++ b/include/uapi/asm-generic/siginfo.h<br>
+@@ -91,6 +91,8 @@ union __sifields {<br>
+ 				char _dummy_pkey[__ADDR_BND_PKEY_PAD];<br>
+ 				__u32 _pkey;<br>
+ 			} _addr_pkey;<br>
++			/* used when si_code=TRAP_PERF */<br>
++			__u64 _perf;<br>
+ 		};<br>
+ 	} _sigfault;<br>
+ <br>
+@@ -155,6 +157,7 @@ typedef struct siginfo {<br>
+ #define si_lower	_sifields._sigfault._addr_bnd._lower<br>
+ #define si_upper	_sifields._sigfault._addr_bnd._upper<br>
+ #define si_pkey		_sifields._sigfault._addr_pkey._pkey<br>
++#define si_perf		_sifields._sigfault._perf<br>
+ #define si_band		_sifields._sigpoll._band<br>
+ #define si_fd		_sifields._sigpoll._fd<br>
+ #define si_call_addr	_sifields._sigsys._call_addr<br>
+@@ -253,7 +256,8 @@ typedef struct siginfo {<br>
+ #define TRAP_BRANCH     3	/* process taken branch trap */<br>
+ #define TRAP_HWBKPT     4	/* hardware breakpoint/watchpoint */<br>
+ #define TRAP_UNK	5	/* undiagnosed trap */<br>
+-#define NSIGTRAP	5<br>
++#define TRAP_PERF	6	/* perf event with sigtrap=1 */<br>
++#define NSIGTRAP	6<br>
+ <br>
+ /*<br>
+  * There is an additional set of SIGTRAP si_codes used by ptrace<br>
+diff --git a/include/uapi/linux/signalfd.h b/include/uapi/linux/signalfd.h<br>
+index 83429a05b698..7e333042c7e3 100644<br>
+--- a/include/uapi/linux/signalfd.h<br>
++++ b/include/uapi/linux/signalfd.h<br>
+@@ -39,6 +39,8 @@ struct signalfd_siginfo {<br>
+ 	__s32 ssi_syscall;<br>
+ 	__u64 ssi_call_addr;<br>
+ 	__u32 ssi_arch;<br>
++	__u32 __pad3;<br>
++	__u64 ssi_perf;<br>
+ <br>
+ 	/*<br>
+ 	 * Pad strcture to 128 bytes. Remember to update the<br>
+@@ -49,7 +51,7 @@ struct signalfd_siginfo {<br>
+ 	 * comes out of a read(2) and we really don't want to have<br>
+ 	 * a compat on read(2).<br>
+ 	 */<br>
+-	__u8 __pad[28];<br>
++	__u8 __pad[16];<br>
+ };<br>
+ <br>
+ <br>
+diff --git a/kernel/signal.c b/kernel/signal.c<br>
+index f2718350bf4b..7061e4957650 100644<br>
+--- a/kernel/signal.c<br>
++++ b/kernel/signal.c<br>
+@@ -1199,6 +1199,7 @@ static inline bool has_si_pid_and_uid(struct kernel_siginfo *info)<br>
+ 	case SIL_FAULT_MCEERR:<br>
+ 	case SIL_FAULT_BNDERR:<br>
+ 	case SIL_FAULT_PKUERR:<br>
++	case SIL_PERF_EVENT:<br>
+ 	case SIL_SYS:<br>
+ 		ret = false;<br>
+ 		break;<br>
+@@ -2531,6 +2532,7 @@ static void hide_si_addr_tag_bits(struct ksignal *ksig)<br>
+ 	case SIL_FAULT_MCEERR:<br>
+ 	case SIL_FAULT_BNDERR:<br>
+ 	case SIL_FAULT_PKUERR:<br>
++	case SIL_PERF_EVENT:<br>
+ 		ksig->info.si_addr = arch_untagged_si_addr(<br>
+ 			ksig->info.si_addr, ksig->sig, ksig->info.si_code);<br>
+ 		break;<br>
+@@ -3341,6 +3343,10 @@ void copy_siginfo_to_external32(struct compat_siginfo *to,<br>
+ #endif<br>
+ 		to->si_pkey = from->si_pkey;<br>
+ 		break;<br>
++	case SIL_PERF_EVENT:<br>
++		to->si_addr = ptr_to_compat(from->si_addr);<br>
++		to->si_perf = from->si_perf;<br>
++		break;<br>
+ 	case SIL_CHLD:<br>
+ 		to->si_pid = from->si_pid;<br>
+ 		to->si_uid = from->si_uid;<br>
+@@ -3421,6 +3427,10 @@ static int post_copy_siginfo_from_user32(kernel_siginfo_t *to,<br>
+ #endif<br>
+ 		to->si_pkey = from->si_pkey;<br>
+ 		break;<br>
++	case SIL_PERF_EVENT:<br>
++		to->si_addr = compat_ptr(from->si_addr);<br>
++		to->si_perf = from->si_perf;<br>
++		break;<br>
+ 	case SIL_CHLD:<br>
+ 		to->si_pid    = from->si_pid;<br>
+ 		to->si_uid    = from->si_uid;<br>
+@@ -4601,6 +4611,7 @@ static inline void siginfo_buildtime_checks(void)<br>
+ 	CHECK_OFFSET(si_lower);<br>
+ 	CHECK_OFFSET(si_upper);<br>
+ 	CHECK_OFFSET(si_pkey);<br>
++	CHECK_OFFSET(si_perf);<br>
+ <br>
+ 	/* sigpoll */<br>
+ 	CHECK_OFFSET(si_band);<br>
+-- <br>
+2.31.0.208.g409f899ff0-goog<br>
+<br>
+<br>
+

@@ -1,0 +1,15 @@
+
+On 08/04/21 14:01, Vitaly Kuznetsov wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+<br>
+Also, we can probably defer kvm_hv_hypercall_read_xmm() until we know<br>
+how many regs we actually need to not read them all (we will always<br>
+need xmm[0] I guess so we can as well read it here).<br>
+</blockquote>
+<br>
+The cost is get/put FPU, so I think there's not much to gain from that.<br>
+<br>
+Paolo<br>
+<br>
+<br>
+

@@ -1,0 +1,46 @@
+On 4/8/21 12:44 PM, Nathan Chancellor wrote:<br>
+><i> LLVM 13 adds a new warning, -Walign-mismatch, which has an instance in</i><br>
+><i> blk_mq_complete_send_ipi():</i><br>
+><i> </i><br>
+><i> block/blk-mq.c:630:39: warning: passing 8-byte aligned argument to</i><br>
+><i> 32-byte aligned parameter 2 of 'smp_call_function_single_async' may</i><br>
+><i> result in an unaligned pointer access [-Walign-mismatch]</i><br>
+><i>                 smp_call_function_single_async(cpu, &rq->csd);</i><br>
+><i>                                                     ^</i><br>
+><i> 1 warning generated.</i><br>
+><i> </i><br>
+><i> This is expected after commit 4ccafe032005 ("block: unalign</i><br>
+><i> call_single_data in struct request"), which purposefully unaligned the</i><br>
+><i> structure to save space. Given that there is no real alignment</i><br>
+><i> requirement and there have been no reports of issues since that change,</i><br>
+><i> it should be safe to disable the warning for this one translation unit.</i><br>
+><i> </i><br>
+><i> Link: <a  rel="nofollow" href="https://github.com/ClangBuiltLinux/linux/issues/1328">https://github.com/ClangBuiltLinux/linux/issues/1328</a></i><br>
+><i> Link: <a  rel="nofollow" href="https://lore.kernel.org/r/20210310182307.zzcbi5w5jrmveld4@archlinux-ax161/">https://lore.kernel.org/r/20210310182307.zzcbi5w5jrmveld4@archlinux-ax161/</a></i><br>
+><i> Link: <a  rel="nofollow" href="https://lore.kernel.org/r/20210330230249.709221-1-jiancai@xxxxxxxxxx/">https://lore.kernel.org/r/20210330230249.709221-1-jiancai@xxxxxxxxxx/</a></i><br>
+><i> Signed-off-by: Nathan Chancellor <nathan@xxxxxxxxxx></i><br>
+<br>
+Reviewed-by: Guenter Roeck <linux@xxxxxxxxxxxx><br>
+<br>
+><i> ---</i><br>
+><i>  block/Makefile | 1 +</i><br>
+><i>  1 file changed, 1 insertion(+)</i><br>
+><i> </i><br>
+><i> diff --git a/block/Makefile b/block/Makefile</i><br>
+><i> index 8d841f5f986f..d69ac0bd8e61 100644</i><br>
+><i> --- a/block/Makefile</i><br>
+><i> +++ b/block/Makefile</i><br>
+><i> @@ -10,6 +10,7 @@ obj-$(CONFIG_BLOCK) := bio.o elevator.o blk-core.o blk-sysfs.o \</i><br>
+><i>  			blk-mq-sysfs.o blk-mq-cpumap.o blk-mq-sched.o ioctl.o \</i><br>
+><i>  			genhd.o ioprio.o badblocks.o partitions/ blk-rq-qos.o</i><br>
+><i>  </i><br>
+><i> +CFLAGS_blk-mq.o := $(call cc-disable-warning, align-mismatch)</i><br>
+><i>  obj-$(CONFIG_BOUNCE)		+= bounce.o</i><br>
+><i>  obj-$(CONFIG_BLK_SCSI_REQUEST)	+= scsi_ioctl.o</i><br>
+><i>  obj-$(CONFIG_BLK_DEV_BSG)	+= bsg.o</i><br>
+><i> </i><br>
+><i> base-commit: e49d033bddf5b565044e2abe4241353959bc9120</i><br>
+><i> </i><br>
+<br>
+<br>
+

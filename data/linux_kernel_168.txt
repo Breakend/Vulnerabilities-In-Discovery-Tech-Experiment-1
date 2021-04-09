@@ -1,0 +1,78 @@
+On 4/8/21 12:10 PM, Sean Christopherson wrote:<br>
+><i> On Thu, Apr 08, 2021, Tom Lendacky wrote:</i><br>
+><i>> From: Tom Lendacky <thomas.lendacky@xxxxxxx></i><br>
+><i>></i><br>
+><i>> Access to the GHCB is mainly in the VMGEXIT path and it is known that the</i><br>
+><i>> GHCB will be mapped. But there are two paths where it is possible the GHCB</i><br>
+><i>> might not be mapped.</i><br>
+><i>></i><br>
+><i>> The sev_vcpu_deliver_sipi_vector() routine will update the GHCB to inform</i><br>
+><i>> the caller of the AP Reset Hold NAE event that a SIPI has been delivered.</i><br>
+><i>> However, if a SIPI is performed without a corresponding AP Reset Hold,</i><br>
+><i>> then the GHCB might not be mapped (depending on the previous VMEXIT),</i><br>
+><i>> which will result in a NULL pointer dereference.</i><br>
+><i>></i><br>
+><i>> The svm_complete_emulated_msr() routine will update the GHCB to inform</i><br>
+><i>> the caller of a RDMSR/WRMSR operation about any errors. While it is likely</i><br>
+><i>> that the GHCB will be mapped in this situation, add a safe guard</i><br>
+><i>> in this path to be certain a NULL pointer dereference is not encountered.</i><br>
+><i>></i><br>
+><i>> Fixes: f1c6366e3043 ("KVM: SVM: Add required changes to support intercepts under SEV-ES")</i><br>
+><i>> Fixes: 647daca25d24 ("KVM: SVM: Add support for booting APs in an SEV-ES guest")</i><br>
+><i>> Signed-off-by: Tom Lendacky <thomas.lendacky@xxxxxxx></i><br>
+><i>></i><br>
+><i>> ---</i><br>
+><i>></i><br>
+><i>> Changes from v1:</i><br>
+><i>> - Added the svm_complete_emulated_msr() path as suggested by Sean</i><br>
+><i>>   Christopherson</i><br>
+><i>> - Add a WARN_ON_ONCE() to the sev_vcpu_deliver_sipi_vector() path</i><br>
+><i>> ---</i><br>
+><i>>  arch/x86/kvm/svm/sev.c | 3 +++</i><br>
+><i>>  arch/x86/kvm/svm/svm.c | 2 +-</i><br>
+><i>>  2 files changed, 4 insertions(+), 1 deletion(-)</i><br>
+><i>></i><br>
+><i>> diff --git a/arch/x86/kvm/svm/sev.c b/arch/x86/kvm/svm/sev.c</i><br>
+><i>> index 83e00e524513..7ac67615c070 100644</i><br>
+><i>> --- a/arch/x86/kvm/svm/sev.c</i><br>
+><i>> +++ b/arch/x86/kvm/svm/sev.c</i><br>
+><i>> @@ -2105,5 +2105,8 @@ void sev_vcpu_deliver_sipi_vector(struct kvm_vcpu *vcpu, u8 vector)</i><br>
+><i>>  	 * the guest will set the CS and RIP. Set SW_EXIT_INFO_2 to a</i><br>
+><i>>  	 * non-zero value.</i><br>
+><i>>  	 */</i><br>
+><i>> +	if (WARN_ON_ONCE(!svm->ghcb))</i><br>
+><i> </i><br>
+><i> Isn't this guest triggerable?  I.e. send a SIPI without doing the reset hold?</i><br>
+><i> If so, this should not WARN.</i><br>
+<br>
+Yes, it is a guest triggerable event. But a guest shouldn't be doing that,<br>
+so I thought adding the WARN_ON_ONCE() just to detect it wasn't bad.<br>
+Definitely wouldn't want a WARN_ON().<br>
+<br>
+Thanks,<br>
+Tom<br>
+<br>
+><i> </i><br>
+><i>> +		return;</i><br>
+><i>> +</i><br>
+><i>>  	ghcb_set_sw_exit_info_2(svm->ghcb, 1);</i><br>
+><i>>  }</i><br>
+><i>> diff --git a/arch/x86/kvm/svm/svm.c b/arch/x86/kvm/svm/svm.c</i><br>
+><i>> index 271196400495..534e52ba6045 100644</i><br>
+><i>> --- a/arch/x86/kvm/svm/svm.c</i><br>
+><i>> +++ b/arch/x86/kvm/svm/svm.c</i><br>
+><i>> @@ -2759,7 +2759,7 @@ static int svm_get_msr(struct kvm_vcpu *vcpu, struct msr_data *msr_info)</i><br>
+><i>>  static int svm_complete_emulated_msr(struct kvm_vcpu *vcpu, int err)</i><br>
+><i>>  {</i><br>
+><i>>  	struct vcpu_svm *svm = to_svm(vcpu);</i><br>
+><i>> -	if (!sev_es_guest(vcpu->kvm) || !err)</i><br>
+><i>> +	if (!err || !sev_es_guest(vcpu->kvm) || WARN_ON_ONCE(!svm->ghcb))</i><br>
+><i>>  		return kvm_complete_insn_gp(vcpu, err);</i><br>
+><i>>  </i><br>
+><i>>  	ghcb_set_sw_exit_info_1(svm->ghcb, 1);</i><br>
+><i>> -- </i><br>
+><i>> 2.31.0</i><br>
+><i>></i><br>
+<br>
+<br>
+

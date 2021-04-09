@@ -1,0 +1,30 @@
+Add maintainer for HiSilicon I2C driver.<br>
+<br>
+Signed-off-by: Yicong Yang <yangyicong@xxxxxxxxxxxxx><br>
+---<br>
+ MAINTAINERS | 7 +++++++<br>
+ 1 file changed, 7 insertions(+)<br>
+<br>
+diff --git a/MAINTAINERS b/MAINTAINERS<br>
+index 8d23b0e..da2754a 100644<br>
+--- a/MAINTAINERS<br>
++++ b/MAINTAINERS<br>
+@@ -8040,6 +8040,13 @@ F:	drivers/crypto/hisilicon/hpre/hpre.h<br>
+ F:	drivers/crypto/hisilicon/hpre/hpre_crypto.c<br>
+ F:	drivers/crypto/hisilicon/hpre/hpre_main.c<br>
+ <br>
++HISILICON I2C CONTROLLER DRIVER<br>
++M:	Yicong Yang <yangyicong@xxxxxxxxxxxxx><br>
++L:	linux-i2c@xxxxxxxxxxxxxxx<br>
++S:	Maintained<br>
++W:	<a  rel="nofollow" href="https://www.hisilicon.com">https://www.hisilicon.com</a><br>
++F:	drivers/i2c/busses/i2c-hisi.c<br>
++<br>
+ HISILICON LPC BUS DRIVER<br>
+ M:	john.garry@xxxxxxxxxx<br>
+ S:	Maintained<br>
+-- <br>
+2.8.1<br>
+<br>
+<br>
+

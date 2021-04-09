@@ -1,0 +1,50 @@
+Adding James here.<br>
+<br>
++ James Morse <james.morse@xxxxxxx><br>
+<br>
+On 4/7/21 10:56 PM, Mike Rapoport wrote:<br>
+><i> From: Mike Rapoport <rppt@xxxxxxxxxxxxx></i><br>
+><i> </i><br>
+><i> Hi,</i><br>
+><i> </i><br>
+><i> These patches aim to remove CONFIG_HOLES_IN_ZONE and essentially hardwire</i><br>
+><i> pfn_valid_within() to 1. </i><br>
+<br>
+That would be really great for arm64 platform as it will save CPU cycles on<br>
+many generic MM paths, given that our pfn_valid() has been expensive.<br>
+<br>
+><i> </i><br>
+><i> The idea is to mark NOMAP pages as reserved in the memory map and restore</i><br>
+<br>
+Though I am not really sure, would that possibly be problematic for UEFI/EFI<br>
+use cases as it might have just treated them as normal struct pages till now.<br>
+<br>
+><i> the intended semantics of pfn_valid() to designate availability of struct</i><br>
+><i> page for a pfn.</i><br>
+<br>
+Right, that would be better as the current semantics is not ideal.<br>
+<br>
+><i> </i><br>
+><i> With this the core mm will be able to cope with the fact that it cannot use</i><br>
+><i> NOMAP pages and the holes created by NOMAP ranges within MAX_ORDER blocks</i><br>
+><i> will be treated correctly even without the need for pfn_valid_within.</i><br>
+><i> </i><br>
+><i> The patches are only boot tested on qemu-system-aarch64 so I'd really</i><br>
+><i> appreciate memory stress tests on real hardware.</i><br>
+<br>
+Did some preliminary memory stress tests on a guest with portions of memory<br>
+marked as MEMBLOCK_NOMAP and did not find any obvious problem. But this might<br>
+require some testing on real UEFI environment with firmware using MEMBLOCK_NOMAP<br>
+memory to make sure that changing these struct pages to PageReserved() is safe.<br>
+<br>
+<br>
+><i> </i><br>
+><i> If this actually works we'll be one step closer to drop custom pfn_valid()</i><br>
+><i> on arm64 altogether.</i><br>
+<br>
+Right, planning to rework and respin the RFC originally sent last month.<br>
+<br>
+<a  rel="nofollow" href="https://patchwork.kernel.org/project/linux-mm/patch/1615174073-10520-1-git-send-email-anshuman.khandual@xxxxxxx/">https://patchwork.kernel.org/project/linux-mm/patch/1615174073-10520-1-git-send-email-anshuman.khandual@xxxxxxx/</a><br>
+<br>
+<br>
+

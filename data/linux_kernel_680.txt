@@ -1,0 +1,107 @@
+Vineeth Pillai <viremana@xxxxxxxxxxxxxxxxxxx> writes:<br>
+<br>
+><i> From Hyper-V TLFS:</i><br>
+><i>  "The hypervisor exposes hypercalls (HvFlushVirtualAddressSpace,</i><br>
+><i>   HvFlushVirtualAddressSpaceEx, HvFlushVirtualAddressList, and</i><br>
+><i>   HvFlushVirtualAddressListEx) that allow operating systems to more</i><br>
+><i>   efficiently manage the virtual TLB. The L1 hypervisor can choose to</i><br>
+><i>   allow its guest to use those hypercalls and delegate the responsibility</i><br>
+><i>   to handle them to the L0 hypervisor. This requires the use of a</i><br>
+><i>   partition assist page."</i><br>
+><i></i><br>
+><i> Add the Direct Virtual Flush support for SVM.</i><br>
+><i></i><br>
+><i> Related VMX changes:</i><br>
+><i> commit 6f6a657c9998 ("KVM/Hyper-V/VMX: Add direct tlb flush support")</i><br>
+><i></i><br>
+><i> Signed-off-by: Vineeth Pillai <viremana@xxxxxxxxxxxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  arch/x86/kvm/svm/svm.c | 48 ++++++++++++++++++++++++++++++++++++++++++</i><br>
+><i>  1 file changed, 48 insertions(+)</i><br>
+><i></i><br>
+><i> diff --git a/arch/x86/kvm/svm/svm.c b/arch/x86/kvm/svm/svm.c</i><br>
+><i> index 3562a247b7e8..c6d3f3a7c986 100644</i><br>
+><i> --- a/arch/x86/kvm/svm/svm.c</i><br>
+><i> +++ b/arch/x86/kvm/svm/svm.c</i><br>
+><i> @@ -440,6 +440,32 @@ static void svm_init_osvw(struct kvm_vcpu *vcpu)</i><br>
+><i>  		vcpu->arch.osvw.status |= 1;</i><br>
+><i>  }</i><br>
+><i>  </i><br>
+><i> +#if IS_ENABLED(CONFIG_HYPERV)</i><br>
+><i> +static int hv_enable_direct_tlbflush(struct kvm_vcpu *vcpu)</i><br>
+><i> +{</i><br>
+><i> +	struct hv_enlightenments *hve;</i><br>
+><i> +	struct hv_partition_assist_pg **p_hv_pa_pg =</i><br>
+><i> +			&to_kvm_hv(vcpu->kvm)->hv_pa_pg;</i><br>
+><i> +</i><br>
+><i> +	if (!*p_hv_pa_pg)</i><br>
+><i> +		*p_hv_pa_pg = kzalloc(PAGE_SIZE, GFP_KERNEL);</i><br>
+><i> +</i><br>
+><i> +	if (!*p_hv_pa_pg)</i><br>
+><i> +		return -ENOMEM;</i><br>
+><i> +</i><br>
+><i> +	hve = (struct hv_enlightenments *)&to_svm(vcpu)->vmcb->hv_enlightenments;</i><br>
+><i> +</i><br>
+><i> +	hve->partition_assist_page = __pa(*p_hv_pa_pg);</i><br>
+><i> +	hve->hv_vm_id = (unsigned long)vcpu->kvm;</i><br>
+><i> +	if (!hve->hv_enlightenments_control.nested_flush_hypercall) {</i><br>
+><i> +		hve->hv_enlightenments_control.nested_flush_hypercall = 1;</i><br>
+><i> +		vmcb_mark_dirty(to_svm(vcpu)->vmcb, VMCB_HV_NESTED_ENLIGHTENMENTS);</i><br>
+><i> +	}</i><br>
+><i> +</i><br>
+><i> +	return 0;</i><br>
+><i> +}</i><br>
+><i> +#endif</i><br>
+><i> +</i><br>
+><i>  static int has_svm(void)</i><br>
+><i>  {</i><br>
+><i>  	const char *msg;</i><br>
+><i> @@ -1034,6 +1060,21 @@ static __init int svm_hardware_setup(void)</i><br>
+><i>  		svm_x86_ops.tlb_remote_flush_with_range =</i><br>
+><i>  				kvm_hv_remote_flush_tlb_with_range;</i><br>
+><i>  	}</i><br>
+><i> +</i><br>
+><i> +	if (ms_hyperv.nested_features & HV_X64_NESTED_DIRECT_FLUSH) {</i><br>
+><i> +		pr_info("kvm: Hyper-V Direct TLB Flush enabled\n");</i><br>
+><i> +		for_each_online_cpu(cpu) {</i><br>
+><i> +			struct hv_vp_assist_page *vp_ap =</i><br>
+><i> +				hv_get_vp_assist_page(cpu);</i><br>
+><i> +</i><br>
+><i> +			if (!vp_ap)</i><br>
+><i> +				continue;</i><br>
+><i> +</i><br>
+><i> +			vp_ap->nested_control.features.directhypercall = 1;</i><br>
+><i> +		}</i><br>
+><i> +		svm_x86_ops.enable_direct_tlbflush =</i><br>
+><i> +				hv_enable_direct_tlbflush;</i><br>
+><i> +	}</i><br>
+><i>  #endif</i><br>
+><i>  </i><br>
+><i>  	if (nrips) {</i><br>
+><i> @@ -3913,6 +3954,13 @@ static __no_kcsan fastpath_t svm_vcpu_run(struct kvm_vcpu *vcpu)</i><br>
+><i>  	}</i><br>
+><i>  	svm->vmcb->save.cr2 = vcpu->arch.cr2;</i><br>
+><i>  </i><br>
+><i> +#if IS_ENABLED(CONFIG_HYPERV)</i><br>
+><i> +	if (svm->vmcb->hv_enlightenments.hv_vp_id != to_hv_vcpu(vcpu)->vp_index) {</i><br>
+<br>
+This looks wrong (see my previous comment about mixing KVM-on-Hyper-V<br>
+and Windows/Hyper-V-on-KVM). 'to_hv_vcpu(vcpu)->vp_index' is<br>
+'Windows/Hyper-V-on-KVM' thingy, it does not exist when we run without<br>
+any Hyper-V enlightenments exposed (e.g. when we run Linux as our<br>
+guest).<br>
+<br>
+><i> +		svm->vmcb->hv_enlightenments.hv_vp_id = to_hv_vcpu(vcpu)->vp_index;</i><br>
+><i> +		vmcb_mark_dirty(svm->vmcb, VMCB_HV_NESTED_ENLIGHTENMENTS);</i><br>
+><i> +	}</i><br>
+><i> +#endif</i><br>
+><i> +</i><br>
+><i>  	/*</i><br>
+><i>  	 * Run with all-zero DR6 unless needed, so that we can get the exact cause</i><br>
+><i>  	 * of a #DB.</i><br>
+<br>
+-- <br>
+Vitaly<br>
+<br>
+<br>
+

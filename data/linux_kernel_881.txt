@@ -1,0 +1,57 @@
+NUMA patches introduced this change to __sgx_sanitize_pages():<br>
+<br>
+-		if (!ret)<br>
+-			list_move(&page->list, &section->page_list);<br>
+-		else<br>
++		if (!ret) {<br>
++			/*<br>
++			 * page is now sanitized.  Make it available via the SGX<br>
++			 * page allocator:<br>
++			 */<br>
++			list_del(&page->list);<br>
++			sgx_free_epc_page(page);<br>
++		} else {<br>
++			/* The page is not yet clean - move to the dirty list. */<br>
+ 			list_move_tail(&page->list, &dirty);<br>
+-<br>
+-		spin_unlock(&section->lock);<br>
++		}<br>
+<br>
+This was done for the reason that it is best to keep the logic to assign<br>
+available-for-use EPC pages to the correct NUMA lists in a single location.<br>
+<br>
+The problem is that the sgx_nr_free_pages is also incremented by<br>
+sgx_free_epc_pages(), and thus it ends up having double the number of pages<br>
+available.<br>
+<br>
+The count was even before NUMA patches kind of out-of-sync, i.e. free pages<br>
+count was incremented before putting them to the free list, but it didn't<br>
+matter that much, because sanitization is fairly fast and it only prevented<br>
+ksgxd to trigger small time after the system had powered on.<br>
+<br>
+Fixes: 51ab30eb2ad4 ("x86/sgx: Replace section->init_laundry_list with sgx_dirty_page_list")<br>
+Signed-off-by: Jarkko Sakkinen <jarkko@xxxxxxxxxx><br>
+---<br>
+v2:<br>
+* Wrote more verbose and detailed description what is going on.<br>
+* Split out from the patches. This is urgent - the attributes can wait.<br>
+ arch/x86/kernel/cpu/sgx/main.c | 1 -<br>
+ 1 file changed, 1 deletion(-)<br>
+<br>
+diff --git a/arch/x86/kernel/cpu/sgx/main.c b/arch/x86/kernel/cpu/sgx/main.c<br>
+index 13a7599ce7d4..7df7048cb1c9 100644<br>
+--- a/arch/x86/kernel/cpu/sgx/main.c<br>
++++ b/arch/x86/kernel/cpu/sgx/main.c<br>
+@@ -657,7 +657,6 @@ static bool __init sgx_setup_epc_section(u64 phys_addr, u64 size,<br>
+ 		list_add_tail(&section->pages[i].list, &sgx_dirty_page_list);<br>
+ 	}<br>
+ <br>
+-	sgx_nr_free_pages += nr_pages;<br>
+ 	return true;<br>
+ }<br>
+ <br>
+-- <br>
+2.31.1<br>
+<br>
+<br>
+

@@ -1,0 +1,40 @@
+Use the common "nand-controller" node name for NAND controller node to<br>
+fix the `make dtbs_check` validation for Qcom platforms.<br>
+<br>
+Signed-off-by: Manivannan Sadhasivam <manivannan.sadhasivam@xxxxxxxxxx><br>
+---<br>
+ arch/arm/boot/dts/qcom-ipq4019.dtsi | 2 +-<br>
+ arch/arm/boot/dts/qcom-sdx55.dtsi   | 2 +-<br>
+ 2 files changed, 2 insertions(+), 2 deletions(-)<br>
+<br>
+diff --git a/arch/arm/boot/dts/qcom-ipq4019.dtsi b/arch/arm/boot/dts/qcom-ipq4019.dtsi<br>
+index 7bf1da916f25..ff1bdb10ad19 100644<br>
+--- a/arch/arm/boot/dts/qcom-ipq4019.dtsi<br>
++++ b/arch/arm/boot/dts/qcom-ipq4019.dtsi<br>
+@@ -480,7 +480,7 @@ qpic_bam: dma@7984000 {<br>
+ 			status = "disabled";<br>
+ 		};<br>
+ <br>
+-		nand: qpic-nand@79b0000 {<br>
++		nand: nand-controller@79b0000 {<br>
+ 			compatible = "qcom,ipq4019-nand";<br>
+ 			reg = <0x79b0000 0x1000>;<br>
+ 			#address-cells = <1>;<br>
+diff --git a/arch/arm/boot/dts/qcom-sdx55.dtsi b/arch/arm/boot/dts/qcom-sdx55.dtsi<br>
+index 3372e076f9bd..aa3edecf5810 100644<br>
+--- a/arch/arm/boot/dts/qcom-sdx55.dtsi<br>
++++ b/arch/arm/boot/dts/qcom-sdx55.dtsi<br>
+@@ -294,7 +294,7 @@ qpic_bam: dma-controller@1b04000 {<br>
+ 			status = "disabled";<br>
+ 		};<br>
+ <br>
+-		qpic_nand: nand@1b30000 {<br>
++		qpic_nand: nand-controller@1b30000 {<br>
+ 			compatible = "qcom,sdx55-nand";<br>
+ 			reg = <0x01b30000 0x10000>;<br>
+ 			#address-cells = <1>;<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

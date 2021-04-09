@@ -1,0 +1,15 @@
+Yu Kuai (3):<br>
+  mtd: rawnand: mtk: remove redundant dev_err call in mtk_ecc_probe()<br>
+  mtd: plat-ram: remove redundant dev_err call in platram_probe()<br>
+  mtd: phram: Fix error return code in phram_setup()<br>
+<br>
+ drivers/mtd/devices/phram.c    | 1 +<br>
+ drivers/mtd/maps/plat-ram.c    | 1 -<br>
+ drivers/mtd/nand/raw/mtk_ecc.c | 4 +---<br>
+ 3 files changed, 2 insertions(+), 4 deletions(-)<br>
+<br>
+-- <br>
+2.25.4<br>
+<br>
+<br>
+

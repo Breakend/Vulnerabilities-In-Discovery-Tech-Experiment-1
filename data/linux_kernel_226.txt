@@ -1,0 +1,66 @@
+Now that the proper infrastructure is in place, convert the irq-gic chip to<br>
+use handle_strict_flow_irq() along with IRQCHIP_AUTOMASKS_FLOW.<br>
+<br>
+For EOImode=1, the Priority Drop is moved from gic_handle_irq() into<br>
+chip->irq_ack(). This effectively pushes the EOI write down into<br>
+->handle_irq(), but doesn't change its ordering wrt the irqaction<br>
+handling.<br>
+<br>
+The EOImode=1 irqchip also gains IRQCHIP_EOI_THREADED, which allows the<br>
+->irq_eoi() call to be deferred to the tail of ONESHOT IRQ threads. This<br>
+means a threaded ONESHOT IRQ can now be handled entirely without a single<br>
+chip->irq_mask() call.<br>
+<br>
+EOImode=0 handling remains unchanged.<br>
+<br>
+Signed-off-by: Valentin Schneider <valentin.schneider@xxxxxxx><br>
+---<br>
+ drivers/irqchip/irq-gic.c | 14 +++++++++++---<br>
+ 1 file changed, 11 insertions(+), 3 deletions(-)<br>
+<br>
+diff --git a/drivers/irqchip/irq-gic.c b/drivers/irqchip/irq-gic.c<br>
+index b1d9c22caf2e..4919478c3e41 100644<br>
+--- a/drivers/irqchip/irq-gic.c<br>
++++ b/drivers/irqchip/irq-gic.c<br>
+@@ -344,8 +344,6 @@ static void __exception_irq_entry gic_handle_irq(struct pt_regs *regs)<br>
+ 		if (unlikely(irqnr >= 1020))<br>
+ 			break;<br>
+ <br>
+-		if (static_branch_likely(&supports_deactivate_key))<br>
+-			writel_relaxed(irqstat, cpu_base + GIC_CPU_EOI);<br>
+ 		isb();<br>
+ <br>
+ 		/*<br>
+@@ -1012,7 +1010,9 @@ static int gic_irq_domain_map(struct irq_domain *d, unsigned int irq,<br>
+ 		break;<br>
+ 	default:<br>
+ 		irq_domain_set_info(d, irq, hw, &gic->chip, d->host_data,<br>
+-				    handle_fasteoi_irq, NULL, NULL);<br>
++				    static_branch_likely(&supports_deactivate_key) ?<br>
++				    handle_strict_flow_irq : handle_fasteoi_irq,<br>
++				    NULL, NULL);<br>
+ 		irq_set_probe(irq);<br>
+ 		irqd_set_single_target(irqd);<br>
+ 		break;<br>
+@@ -1116,8 +1116,16 @@ static void gic_init_chip(struct gic_chip_data *gic, struct device *dev,<br>
+ <br>
+ 	if (use_eoimode1) {<br>
+ 		gic->chip.irq_mask = gic_eoimode1_mask_irq;<br>
++		gic->chip.irq_ack = gic_eoi_irq;<br>
+ 		gic->chip.irq_eoi = gic_eoimode1_eoi_irq;<br>
+ 		gic->chip.irq_set_vcpu_affinity = gic_irq_set_vcpu_affinity;<br>
++<br>
++		/*<br>
++		 * eoimode0 shouldn't expose FLOW_MASK because the priority<br>
++		 * drop is undissociable from the deactivation, and we do need<br>
++		 * the priority drop to happen within the flow handler.<br>
++		 */<br>
++		gic->chip.flags |= IRQCHIP_AUTOMASKS_FLOW | IRQCHIP_EOI_THREADED;<br>
+ 	}<br>
+ <br>
+ 	if (gic == &gic_data[0]) {<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

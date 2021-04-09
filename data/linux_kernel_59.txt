@@ -1,0 +1,86 @@
+Slot resets are bus resets with additional logic to prevent a device<br>
+from being removed during the reset. Currently slot and bus resets have<br>
+separate implementations in pci.c, complicating higher level logic. As<br>
+discussed on the mailing list, they should be combined into a generic<br>
+function which performs an SBR. This change adds a function,<br>
+pci_reset_bus_function(), which first attempts a slot reset and then<br>
+attempts a bus reset if -ENOTTY is returned, such that there is now a<br>
+single device agnostic function to perform an SBR.<br>
+<br>
+This new function is also needed to add SBR reset quirks and therefore<br>
+is exposed in pci.h.<br>
+<br>
+Link: <a  rel="nofollow" href="https://lkml.org/lkml/2021/3/23/911">https://lkml.org/lkml/2021/3/23/911</a><br>
+<br>
+Suggested-by: Alex Williamson <alex.williamson@xxxxxxxxxx><br>
+Signed-off-by: Amey Narkhede <ameynarkhede03@xxxxxxxxx><br>
+Signed-off-by: Raphael Norwitz <raphael.norwitz@xxxxxxxxxxx><br>
+---<br>
+ drivers/pci/pci.c   | 19 +++++++++++--------<br>
+ include/linux/pci.h |  1 +<br>
+ 2 files changed, 12 insertions(+), 8 deletions(-)<br>
+<br>
+diff --git a/drivers/pci/pci.c b/drivers/pci/pci.c<br>
+index 16a17215f633..a8f8dd588d15 100644<br>
+--- a/drivers/pci/pci.c<br>
++++ b/drivers/pci/pci.c<br>
+@@ -4982,6 +4982,15 @@ static int pci_dev_reset_slot_function(struct pci_dev *dev, int probe)<br>
+ 	return pci_reset_hotplug_slot(dev->slot->hotplug, probe);<br>
+ }<br>
+ <br>
++int pci_reset_bus_function(struct pci_dev *dev, int probe)<br>
++{<br>
++	int rc = pci_dev_reset_slot_function(dev, probe);<br>
++<br>
++	if (rc != -ENOTTY)<br>
++		return rc;<br>
++	return pci_parent_bus_reset(dev, probe);<br>
++}<br>
++<br>
+ static void pci_dev_lock(struct pci_dev *dev)<br>
+ {<br>
+ 	pci_cfg_access_lock(dev);<br>
+@@ -5102,10 +5111,7 @@ int __pci_reset_function_locked(struct pci_dev *dev)<br>
+ 	rc = pci_pm_reset(dev, 0);<br>
+ 	if (rc != -ENOTTY)<br>
+ 		return rc;<br>
+-	rc = pci_dev_reset_slot_function(dev, 0);<br>
+-	if (rc != -ENOTTY)<br>
+-		return rc;<br>
+-	return pci_parent_bus_reset(dev, 0);<br>
++	return pci_reset_bus_function(dev, 0);<br>
+ }<br>
+ EXPORT_SYMBOL_GPL(__pci_reset_function_locked);<br>
+ <br>
+@@ -5135,13 +5141,10 @@ int pci_probe_reset_function(struct pci_dev *dev)<br>
+ 	if (rc != -ENOTTY)<br>
+ 		return rc;<br>
+ 	rc = pci_pm_reset(dev, 1);<br>
+-	if (rc != -ENOTTY)<br>
+-		return rc;<br>
+-	rc = pci_dev_reset_slot_function(dev, 1);<br>
+ 	if (rc != -ENOTTY)<br>
+ 		return rc;<br>
+ <br>
+-	return pci_parent_bus_reset(dev, 1);<br>
++	return pci_reset_bus_function(dev, 1);<br>
+ }<br>
+ <br>
+ /**<br>
+diff --git a/include/linux/pci.h b/include/linux/pci.h<br>
+index 86c799c97b77..979d54335ac1 100644<br>
+--- a/include/linux/pci.h<br>
++++ b/include/linux/pci.h<br>
+@@ -1228,6 +1228,7 @@ int pci_probe_reset_bus(struct pci_bus *bus);<br>
+ int pci_reset_bus(struct pci_dev *dev);<br>
+ void pci_reset_secondary_bus(struct pci_dev *dev);<br>
+ void pcibios_reset_secondary_bus(struct pci_dev *dev);<br>
++int pci_reset_bus_function(struct pci_dev *dev, int probe);<br>
+ void pci_update_resource(struct pci_dev *dev, int resno);<br>
+ int __must_check pci_assign_resource(struct pci_dev *dev, int i);<br>
+ int __must_check pci_reassign_resource(struct pci_dev *dev, int i, resource_size_t add_size, resource_size_t align);<br>
+-- <br>
+2.20.1<br>
+<br>
+<br>
+

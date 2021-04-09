@@ -1,0 +1,31 @@
+With CONFIG_CFI_CLANG, the compiler replaces function pointers with<br>
+jump table addresses, which breaks dynamic ftrace as the address of<br>
+ftrace_call is replaced with the address of ftrace_call.cfi_jt. Use<br>
+function_nocfi() to get the address of the actual function instead.<br>
+<br>
+Suggested-by: Ben Dai <ben.dai@xxxxxxxxxx><br>
+Signed-off-by: Sami Tolvanen <samitolvanen@xxxxxxxxxx><br>
+Acked-by: Mark Rutland <mark.rutland@xxxxxxx><br>
+Tested-by: Nathan Chancellor <nathan@xxxxxxxxxx><br>
+---<br>
+ arch/arm64/kernel/ftrace.c | 2 +-<br>
+ 1 file changed, 1 insertion(+), 1 deletion(-)<br>
+<br>
+diff --git a/arch/arm64/kernel/ftrace.c b/arch/arm64/kernel/ftrace.c<br>
+index 86a5cf9bc19a..b5d3ddaf69d9 100644<br>
+--- a/arch/arm64/kernel/ftrace.c<br>
++++ b/arch/arm64/kernel/ftrace.c<br>
+@@ -55,7 +55,7 @@ int ftrace_update_ftrace_func(ftrace_func_t func)<br>
+ 	unsigned long pc;<br>
+ 	u32 new;<br>
+ <br>
+-	pc = (unsigned long)&ftrace_call;<br>
++	pc = (unsigned long)function_nocfi(ftrace_call);<br>
+ 	new = aarch64_insn_gen_branch_imm(pc, (unsigned long)func,<br>
+ 					  AARCH64_INSN_BRANCH_LINK);<br>
+ <br>
+-- <br>
+2.31.1.295.g9ea45b61b8-goog<br>
+<br>
+<br>
+

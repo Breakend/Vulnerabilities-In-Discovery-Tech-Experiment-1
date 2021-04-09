@@ -1,0 +1,28 @@
+><i> > > diff --git a/drivers/net/ethernet/microsoft/Kconfig</i><br>
+><i> > b/drivers/net/ethernet/microsoft/Kconfig</i><br>
+><i> > > new file mode 100644</i><br>
+><i> > > index 000000000000..12ef6b581566</i><br>
+><i> > > --- /dev/null</i><br>
+><i> > > +++ b/drivers/net/ethernet/microsoft/Kconfig</i><br>
+><i> > > @@ -0,0 +1,30 @@</i><br>
+><i> > > +#</i><br>
+><i> > > +# Microsoft Azure network device configuration</i><br>
+><i> > > +#</i><br>
+><i> > > +</i><br>
+><i> > > +config NET_VENDOR_MICROSOFT</i><br>
+><i> > > +	bool "Microsoft Azure Network Device"</i><br>
+><i> > </i><br>
+><i> > Seems to me that should be generalized, more like:</i><br>
+><i> > </i><br>
+><i> > 	bool "Microsoft Network Devices"</i><br>
+><i> This device is planned for Azure cloud at this time.</i><br>
+><i> We will update the wording if things change.</i><br>
+<br>
+This section is about the Vendor. Broadcom, Marvell, natsemi, toshiba,<br>
+etc. Microsoft is the Vendor here and all Microsoft Ethernet drivers<br>
+belong here. It does not matter what platform they are for.<br>
+<br>
+       Andrew<br>
+<br>
+<br>
+

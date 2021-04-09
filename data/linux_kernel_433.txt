@@ -1,0 +1,39 @@
+On 4/7/21 2:45 PM, Borislav Petkov wrote:<br>
+><i> On Wed, Apr 07, 2021 at 01:25:55PM +0200, Borislav Petkov wrote:</i><br>
+><i>> On Tue, Apr 06, 2021 at 02:42:43PM -0500, Tom Lendacky wrote:</i><br>
+><i>>> The GHCB spec only defines the "0" reason code set. We could provide Linux</i><br>
+><i>>> it's own reason code set with some more specific reason codes for</i><br>
+><i>>> failures, if that is needed.</i><br>
+><i>></i><br>
+><i>> Why Linux only?</i><br>
+><i>></i><br>
+><i>> Don't we want to have a generalized set of error codes which say what</i><br>
+><i>> has happened so that people can debug?</i><br>
+><i> </i><br>
+><i> To quote Tom from IRC - and that is perfectly fine too, AFAIC:</i><br>
+><i> </i><br>
+><i> <tlendacky> i'm ok with it, but i don't think it should be something dictated by the spec.  the problem is if you want to provide a new error code then the spec has to be updated constantly</i><br>
+><i> <tlendacky> that's why i said, pick a "reason code set" value and say those are what Linux will use. We could probably document them in Documentation/</i><br>
+><i> <tlendacky> the error code thing was an issue when introduced as part of the first spec.  that's why only a small number of reason codes are specified</i><br>
+><i> </i><br>
+><i> Yap, makes sense. What we should do in the spec, though, is say: "This</i><br>
+><i> range is for vendor-specific error codes".</i><br>
+><i> </i><br>
+><i> Also, is GHCBData[23:16] big enough and can we extend it simply? Or do</i><br>
+><i> we need the spec to at least dictate some ranges so that it can use some bits</i><br>
+><i> above, say, bit 32 or whatever the upper range of the extension is...</i><br>
+<br>
+Hopefully we won't have 255 different reason codes. But if we get to that<br>
+point we should be able to expand the reason code field to 16-bits. Just<br>
+need to be sure that if any new fields are added between now and then,<br>
+they are added at bit 32 or above.<br>
+<br>
+Thanks,<br>
+Tom<br>
+<br>
+><i> </i><br>
+><i> Hmmm.</i><br>
+><i> </i><br>
+<br>
+<br>
+

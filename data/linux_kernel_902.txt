@@ -1,0 +1,36 @@
+On Thu, Apr 8, 2021 at 1:00 PM David Hildenbrand <david@xxxxxxxxxx> wrote:<br>
+><i> ></i><br>
+><i> > It is a somewhat awkward way to say "prevent this symbol from</i><br>
+><i> > being =y if the dependency is =m".</i><br>
+><i></i><br>
+><i> What would be the right thing to do in the case here then to achieve the</i><br>
+><i> "if DRMA_ASPEED_GFX is enabled, also enable DMA_CMA id possible"?</i><br>
+><i></i><br>
+><i> One approach could be to have for DMA_CMA</i><br>
+><i></i><br>
+><i> default y if DRMA_ASPEED_GFX</i><br>
+><i></i><br>
+><i> but it feels like the wrong way to tackle this.</i><br>
+<br>
+I'm still not sure what you are trying to achieve. Is the idea only to provide<br>
+a useful default for DMA_CMA depending on which drivers are enabled?<br>
+<br>
+This is something you could do using a hidden helper symbol like<br>
+<br>
+config DRMA_ASPEED_GFX<br>
+       bool "Aspeed display driver"<br>
+       select DRM_WANT_CMA<br>
+<br>
+config DRM_WANT_CMA<br>
+       bool<br>
+       help<br>
+          Select this from any driver that benefits from CMA being enabled<br>
+<br>
+config DMA_CMA<br>
+       bool "Use CMA helpers for DRM"<br>
+       default DRM_WANT_CMA<br>
+<br>
+         Arnd<br>
+<br>
+<br>
+

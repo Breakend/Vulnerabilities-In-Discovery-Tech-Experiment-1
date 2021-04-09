@@ -1,0 +1,140 @@
+On Thu, Apr 01, 2021 at 11:32:21AM -0700, Dave Hansen wrote:<br>
+><i> </i><br>
+><i> From: Dave Hansen <dave.hansen@xxxxxxxxxxxxxxx></i><br>
+><i> </i><br>
+><i> Reclaim-based migration is attempting to optimize data placement in</i><br>
+><i> memory based on the system topology.  If the system changes, so must</i><br>
+><i> the migration ordering.</i><br>
+><i> </i><br>
+><i> The implementation is conceptually simple and entirely unoptimized.</i><br>
+><i> On any memory or CPU hotplug events, assume that a node was added or</i><br>
+><i> removed and recalculate all migration targets.  This ensures that the</i><br>
+><i> node_demotion[] array is always ready to be used in case the new</i><br>
+><i> reclaim mode is enabled.</i><br>
+><i> </i><br>
+><i> This recalculation is far from optimal, most glaringly that it does</i><br>
+><i> not even attempt to figure out the hotplug event would have some</i><br>
+><i> *actual* effect on the demotion order.  But, given the expected</i><br>
+><i> paucity of hotplug events, this should be fine.</i><br>
+><i> </i><br>
+><i> === What does RCU provide? ===</i><br>
+><i> </i><br>
+><i> Imaginge a simple loop which walks down the demotion path looking</i><br>
+><i> for the last node:</i><br>
+><i> </i><br>
+><i>         terminal_node = start_node;</i><br>
+><i>         while (node_demotion[terminal_node] != NUMA_NO_NODE) {</i><br>
+><i>                 terminal_node = node_demotion[terminal_node];</i><br>
+><i>         }</i><br>
+><i> </i><br>
+><i> The initial values are:</i><br>
+><i> </i><br>
+><i>         node_demotion[0] = 1;</i><br>
+><i>         node_demotion[1] = NUMA_NO_NODE;</i><br>
+><i> </i><br>
+><i> and are updated to:</i><br>
+><i> </i><br>
+><i>         node_demotion[0] = NUMA_NO_NODE;</i><br>
+><i>         node_demotion[1] = 0;</i><br>
+><i> </i><br>
+><i> What guarantees that the loop did not observe:</i><br>
+><i> </i><br>
+><i>         node_demotion[0] = 1;</i><br>
+><i>         node_demotion[1] = 0;</i><br>
+><i> </i><br>
+><i> and would loop forever?</i><br>
+><i> </i><br>
+><i> With RCU, a rcu_read_lock/unlock() can be placed around the</i><br>
+><i> loop.  Since the write side does a synchronize_rcu(), the loop</i><br>
+><i> that observed the old contents is known to be complete after the</i><br>
+><i> synchronize_rcu() has completed.</i><br>
+><i> </i><br>
+><i> RCU, combined with disable_all_migrate_targets(), ensures that</i><br>
+><i> the old migration state is not visible by the time</i><br>
+><i> __set_migration_target_nodes() is called.</i><br>
+><i> </i><br>
+><i> === What does READ_ONCE() provide? ===</i><br>
+><i> </i><br>
+><i> READ_ONCE() forbids the compiler from merging or reordering</i><br>
+><i> successive reads of node_demotion[].  This ensures that any</i><br>
+><i> updates are *eventually* observed.</i><br>
+><i> </i><br>
+><i> Consider the above loop again.  The compiler could theoretically</i><br>
+><i> read the entirety of node_demotion[] into local storage</i><br>
+><i> (registers) and never go back to memory, and *permanently*</i><br>
+><i> observe bad values for node_demotion[].</i><br>
+><i> </i><br>
+><i> Note: RCU does not provide any universal compiler-ordering</i><br>
+><i> guarantees:</i><br>
+><i> </i><br>
+><i> 	<a  rel="nofollow" href="https://lore.kernel.org/lkml/20150921204327.GH4029@xxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/lkml/20150921204327.GH4029@xxxxxxxxxxxxxxxxxx/</a></i><br>
+><i> </i><br>
+><i> Signed-off-by: Dave Hansen <dave.hansen@xxxxxxxxxxxxxxx></i><br>
+><i> Reviewed-by: Yang Shi <shy828301@xxxxxxxxx></i><br>
+><i> Cc: Wei Xu <weixugc@xxxxxxxxxx></i><br>
+><i> Cc: David Rientjes <rientjes@xxxxxxxxxx></i><br>
+><i> Cc: Huang Ying <ying.huang@xxxxxxxxx></i><br>
+><i> Cc: Dan Williams <dan.j.williams@xxxxxxxxx></i><br>
+><i> Cc: David Hildenbrand <david@xxxxxxxxxx></i><br>
+><i> Cc: osalvador <osalvador@xxxxxxx></i><br>
+><i> </i><br>
+<br>
+...<br>
+  <br>
+><i> +#if defined(CONFIG_MEMORY_HOTPLUG)</i><br>
+<br>
+I am not really into PMEM, and I ignore whether we need<br>
+CONFIG_MEMORY_HOTPLUG in order to have such memory on the system.<br>
+If so, the following can be partly ignored.<br>
+<br>
+I think that you either want to check CONFIG_MEMORY_HOTPLUG +<br>
+CONFIG_CPU_HOTPLUG, or just do not put it under any conf dependency.<br>
+<br>
+The thing is that migrate_on_reclaim_init() will only be called if<br>
+we have CONFIG_MEMORY_HOTPLUG, and when we do not have that (but we do have<br>
+CONFIG_CPU_HOTPLUG) the calls to set_migration_target_nodes() wont't be<br>
+made when the system brings up the CPUs during the boot phase,<br>
+which means node_demotion[] list won't be initialized.<br>
+<br>
+But this brings me to the next point.<br>
+<br>
+><i>From a conceptual point of view, I think you want to build the</i><br>
+node_demotion[] list, being orthogonal to it whether we support CPU Or<br>
+MEMORY hotplug.<br>
+<br>
+Now, in case we support CPU or MEMORY hotplug, we do want to be able to re-build<br>
+the list for .e.g: in case NUMA nodes become cpu-less or memory-less.<br>
+<br>
+On x86_64, CPU_HOTPLUG is enabled by default if SMP, the same for<br>
+MEMORY_HOTPLUG, but I am not sure about other archs.<br>
+Can we have !CPU_HOTPLUG && MEMORY_HOTPLUG, !MEMORY_HOTPLUG &&<br>
+CPU_HOTPLUG? I do now really know, but I think you should be careful<br>
+about that.<br>
+<br>
+If this was my call, I would:<br>
+<br>
+- Do not place the burden to initialize node_demotion[] list in CPU<br>
+  hotplug boot phase (or if so, be carefull because if I disable<br>
+  MEMORY_HOTPLUG, I end up with no demotion_list[])<br>
+- Diferentiate between migration_{online,offline}_cpu and<br>
+  migrate_on_reclaim_callback() and place them under their respective<br>
+  configs-dependency.<br>
+<br>
+But I might be missing some details so I might be off somewhere.<br>
+<br>
+Another thing that caught my eye is that we are calling<br>
+set_migration_target_nodes() for every CPU the system brings up at boot<br>
+phase. I know systems with *lots* of CPUs.<br>
+I am not sure whether we have a mechanism to delay that until all CPUs<br>
+that are meant to be online are online? (after boot?)<br>
+That's probably happening in wonderland, but was just speaking out loud.<br>
+<br>
+(Of course the same happen with memory_hotplug acpi operations.<br>
+All it takes is some qemu-handling)<br>
+<br>
+-- <br>
+Oscar Salvador<br>
+SUSE L3<br>
+<br>
+<br>
+

@@ -1,0 +1,19 @@
+On Thu, Apr 08, 2021 at 08:31:18AM +0000, Carlis wrote:<br>
+><i> From: Xuezhi Zhang <zhangxuezhi1@xxxxxxxxxx></i><br>
+><i> </i><br>
+><i> Fix the following coccicheck warning:</i><br>
+><i> drivers/gpu/drm//panel/panel-tpo-td043mtea1.c:217:8-16: </i><br>
+><i> WARNING: use scnprintf or sprintf</i><br>
+><i> drivers/gpu/drm//panel/panel-tpo-td043mtea1.c:189:8-16: </i><br>
+><i> WARNING: use scnprintf or sprintf</i><br>
+><i> </i><br>
+><i> Signed-off-by: Xuezhi Zhang <zhangxuezhi1@xxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  drivers/gpu/drm/panel/panel-tpo-td043mtea1.c | 4 ++--</i><br>
+><i>  1 file changed, 2 insertions(+), 2 deletions(-)</i><br>
+<br>
+Reviewed-by: Thierry Reding <treding@xxxxxxxxxx><br>
+<p><strong>Attachment:
+<a href="00636/signature.asc" ><tt>signature.asc</tt></a></strong><br>
+<em>Description:</em> PGP signature</p>
+

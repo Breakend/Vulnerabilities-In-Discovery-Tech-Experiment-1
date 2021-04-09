@@ -1,0 +1,38 @@
+pm_runtime_get_sync will increment pm usage counter even it failed.<br>
+Forgetting to putting operation will result in reference leak here. Fix<br>
+it by replacing it with pm_runtime_resume_and_get to keep usage counter<br>
+balanced.<br>
+<br>
+Reported-by: Hulk Robot <hulkci@xxxxxxxxxx><br>
+Signed-off-by: Li Huafei <lihuafei1@xxxxxxxxxx><br>
+---<br>
+ drivers/i2c/busses/i2c-sprd.c | 4 ++--<br>
+ 1 file changed, 2 insertions(+), 2 deletions(-)<br>
+<br>
+diff --git a/drivers/i2c/busses/i2c-sprd.c b/drivers/i2c/busses/i2c-sprd.c<br>
+index 2917fecf6c80..8ead7e021008 100644<br>
+--- a/drivers/i2c/busses/i2c-sprd.c<br>
++++ b/drivers/i2c/busses/i2c-sprd.c<br>
+@@ -290,7 +290,7 @@ static int sprd_i2c_master_xfer(struct i2c_adapter *i2c_adap,<br>
+ 	struct sprd_i2c *i2c_dev = i2c_adap->algo_data;<br>
+ 	int im, ret;<br>
+ <br>
+-	ret = pm_runtime_get_sync(i2c_dev->dev);<br>
++	ret = pm_runtime_resume_and_get(i2c_dev->dev);<br>
+ 	if (ret < 0)<br>
+ 		return ret;<br>
+ <br>
+@@ -576,7 +576,7 @@ static int sprd_i2c_remove(struct platform_device *pdev)<br>
+ 	struct sprd_i2c *i2c_dev = platform_get_drvdata(pdev);<br>
+ 	int ret;<br>
+ <br>
+-	ret = pm_runtime_get_sync(i2c_dev->dev);<br>
++	ret = pm_runtime_resume_and_get(i2c_dev->dev);<br>
+ 	if (ret < 0)<br>
+ 		return ret;<br>
+ <br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+

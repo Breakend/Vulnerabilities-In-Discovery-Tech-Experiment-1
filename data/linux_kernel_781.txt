@@ -1,0 +1,361 @@
+
+Hi,<br>
+<br>
+I have just a few nits below plus the points that others made.<br>
+<br>
+Am 22.02.21 um 14:28 schrieb Kevin Tang:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+Adds drm support for the Unisoc's display subsystem.<br>
+<br>
+This is drm kms driver, this driver provides support for the<br>
+application framework in Android, Yocto and more.<br>
+<br>
+Application framework can access Unisoc's display internel<br>
+peripherals through libdrm or libkms, it's test ok by modetest<br>
+(DRM/KMS test tool) and Android HWComposer.<br>
+<br>
+Cc: Orson Zhai <orsonzhai@xxxxxxxxx><br>
+Cc: Chunyan Zhang <zhang.lyra@xxxxxxxxx><br>
+Signed-off-by: Kevin Tang <kevin.tang@xxxxxxxxxx><br>
+<br>
+v4:<br>
+   - Move the devm_drm_dev_alloc to master_ops->bind function.<br>
+   - The managed drmm_mode_config_init() it is no longer necessary for drivers to explicitly call drm_mode_config_cleanup, so delete it.<br>
+---<br>
+  drivers/gpu/drm/Kconfig         |   2 +<br>
+  drivers/gpu/drm/Makefile        |   1 +<br>
+  drivers/gpu/drm/sprd/Kconfig    |  12 ++<br>
+  drivers/gpu/drm/sprd/Makefile   |   5 +<br>
+  drivers/gpu/drm/sprd/sprd_drm.c | 217 ++++++++++++++++++++++++++++++++<br>
+  drivers/gpu/drm/sprd/sprd_drm.h |  16 +++<br>
+  6 files changed, 253 insertions(+)<br>
+  create mode 100644 drivers/gpu/drm/sprd/Kconfig<br>
+  create mode 100644 drivers/gpu/drm/sprd/Makefile<br>
+  create mode 100644 drivers/gpu/drm/sprd/sprd_drm.c<br>
+  create mode 100644 drivers/gpu/drm/sprd/sprd_drm.h<br>
+<br>
+diff --git a/drivers/gpu/drm/Kconfig b/drivers/gpu/drm/Kconfig<br>
+index 8bf103de1..9d6ce2867 100644<br>
+--- a/drivers/gpu/drm/Kconfig<br>
++++ b/drivers/gpu/drm/Kconfig<br>
+@@ -382,6 +382,8 @@ source "drivers/gpu/drm/tidss/Kconfig"<br>
+  
+  source "drivers/gpu/drm/xlnx/Kconfig"
+<br>  
++source "drivers/gpu/drm/sprd/Kconfig"
+<br>
++<br>
+  # Keep legacy drivers last<br>
+  
+  menuconfig DRM_LEGACY
+<br>
+diff --git a/drivers/gpu/drm/Makefile b/drivers/gpu/drm/Makefile<br>
+index 02c229392..42d211d9c 100644<br>
+--- a/drivers/gpu/drm/Makefile<br>
++++ b/drivers/gpu/drm/Makefile<br>
+@@ -126,3 +126,4 @@ obj-$(CONFIG_DRM_ASPEED_GFX) += aspeed/<br>
+  obj-$(CONFIG_DRM_MCDE) += mcde/<br>
+  obj-$(CONFIG_DRM_TIDSS) += tidss/<br>
+  obj-y			+= xlnx/<br>
++obj-$(CONFIG_DRM_SPRD) += sprd/<br>
+diff --git a/drivers/gpu/drm/sprd/Kconfig b/drivers/gpu/drm/sprd/Kconfig<br>
+new file mode 100644<br>
+index 000000000..6e80cc9f3<br>
+--- /dev/null<br>
++++ b/drivers/gpu/drm/sprd/Kconfig<br>
+@@ -0,0 +1,12 @@<br>
++config DRM_SPRD<br>
++	tristate "DRM Support for Unisoc SoCs Platform"<br>
++	depends on ARCH_SPRD || COMPILE_TEST<br>
++	depends on DRM && OF<br>
++	select DRM_KMS_HELPER<br>
++	select DRM_GEM_CMA_HELPER<br>
++	select DRM_KMS_CMA_HELPER<br>
++	select DRM_MIPI_DSI<br>
+</blockquote>
+<br>
+Maybe keep the selects sorted by alphabet to make it more readable.<br>
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
++	help<br>
++	  Choose this option if you have a Unisoc chipset.<br>
++	  If M is selected the module will be called sprd_drm.<br>
++<br>
+diff --git a/drivers/gpu/drm/sprd/Makefile b/drivers/gpu/drm/sprd/Makefile<br>
+new file mode 100644<br>
+index 000000000..86d95d93a<br>
+--- /dev/null<br>
++++ b/drivers/gpu/drm/sprd/Makefile<br>
+@@ -0,0 +1,5 @@<br>
++# SPDX-License-Identifier: GPL-2.0<br>
++<br>
++subdir-ccflags-y += -I$(srctree)/$(src)<br>
++<br>
++obj-y := sprd_drm.o<br>
+diff --git a/drivers/gpu/drm/sprd/sprd_drm.c b/drivers/gpu/drm/sprd/sprd_drm.c<br>
+new file mode 100644<br>
+index 000000000..a1d3ed655<br>
+--- /dev/null<br>
++++ b/drivers/gpu/drm/sprd/sprd_drm.c<br>
+@@ -0,0 +1,217 @@<br>
++// SPDX-License-Identifier: GPL-2.0<br>
++/*<br>
++ * Copyright (C) 2020 Unisoc Inc.<br>
++ */<br>
++<br>
++#include <linux/component.h><br>
++#include <linux/dma-mapping.h><br>
++#include <linux/module.h><br>
++#include <linux/mutex.h><br>
++#include <linux/of_graph.h><br>
++#include <linux/of_platform.h><br>
++<br>
++#include <drm/drm_atomic_helper.h><br>
++#include <drm/drm_crtc_helper.h><br>
++#include <drm/drm_drv.h><br>
++#include <drm/drm_gem_cma_helper.h><br>
++#include <drm/drm_gem_framebuffer_helper.h><br>
++#include <drm/drm_of.h><br>
++#include <drm/drm_probe_helper.h><br>
++#include <drm/drm_vblank.h><br>
++<br>
++#include "sprd_drm.h"<br>
++<br>
++#define DRIVER_NAME	"sprd"<br>
++#define DRIVER_DESC	"Spreadtrum SoCs' DRM Driver"<br>
++#define DRIVER_DATE	"20200201"<br>
++#define DRIVER_MAJOR	1<br>
++#define DRIVER_MINOR	0<br>
++<br>
++static const struct drm_mode_config_helper_funcs sprd_drm_mode_config_helper = {<br>
++	.atomic_commit_tail = drm_atomic_helper_commit_tail_rpm,<br>
++};<br>
++<br>
++static const struct drm_mode_config_funcs sprd_drm_mode_config_funcs = {<br>
++	.fb_create = drm_gem_fb_create,<br>
++	.atomic_check = drm_atomic_helper_check,<br>
++	.atomic_commit = drm_atomic_helper_commit,<br>
++};<br>
++<br>
++static void sprd_drm_mode_config_init(struct drm_device *drm)<br>
++{<br>
++	drm->mode_config.min_width = 0;<br>
++	drm->mode_config.min_height = 0;<br>
++	drm->mode_config.max_width = 8192;<br>
++	drm->mode_config.max_height = 8192;<br>
++	drm->mode_config.allow_fb_modifiers = true;<br>
++<br>
++	drm->mode_config.funcs = &sprd_drm_mode_config_funcs;<br>
++	drm->mode_config.helper_private = &sprd_drm_mode_config_helper;<br>
++}<br>
++<br>
++DEFINE_DRM_GEM_CMA_FOPS(sprd_drm_fops);<br>
++<br>
++static struct drm_driver sprd_drm_drv = {<br>
++	.driver_features	= DRIVER_GEM | DRIVER_MODESET | DRIVER_ATOMIC,<br>
++	.fops			= &sprd_drm_fops,<br>
++<br>
++	/* GEM Operations */<br>
++	DRM_GEM_CMA_DRIVER_OPS,<br>
++<br>
++	.name			= DRIVER_NAME,<br>
++	.desc			= DRIVER_DESC,<br>
++	.date			= DRIVER_DATE,<br>
++	.major			= DRIVER_MAJOR,<br>
++	.minor			= DRIVER_MINOR,<br>
++};<br>
++<br>
++static int sprd_drm_bind(struct device *dev)<br>
++{<br>
++	struct platform_device *pdev = to_platform_device(dev);<br>
++	struct drm_device *drm;<br>
++	struct sprd_drm *sprd;<br>
++	int ret;<br>
++<br>
++	sprd = devm_drm_dev_alloc(dev, &sprd_drm_drv, struct sprd_drm, drm);<br>
++	if (IS_ERR(sprd))<br>
++		return PTR_ERR(sprd);<br>
++<br>
++	drm = &sprd->drm;<br>
++	platform_set_drvdata(pdev, drm);<br>
++<br>
++	ret = drmm_mode_config_init(drm);<br>
++	if (ret)<br>
++		return ret;<br>
++<br>
++	sprd_drm_mode_config_init(drm);<br>
++<br>
++	/* bind and init sub drivers */<br>
++	ret = component_bind_all(drm->dev, drm);<br>
++	if (ret) {<br>
++		drm_err(drm, "failed to bind all component.\n");<br>
++		return ret;<br>
++	}<br>
++<br>
++	/* vblank init */<br>
++	ret = drm_vblank_init(drm, drm->mode_config.num_crtc);<br>
++	if (ret) {<br>
++		drm_err(drm, "failed to initialize vblank.\n");<br>
++		goto err_unbind_all;<br>
++	}<br>
++	/* with irq_enabled = true, we can use the vblank feature. */<br>
++	drm->irq_enabled = true;<br>
++<br>
++	/* reset all the states of crtc/plane/encoder/connector */<br>
++	drm_mode_config_reset(drm);<br>
++<br>
++	/* init kms poll for handling hpd */<br>
++	drm_kms_helper_poll_init(drm);<br>
++<br>
++	ret = drm_dev_register(drm, 0);<br>
++	if (ret < 0)<br>
++		goto err_kms_helper_poll_fini;<br>
++<br>
++	return 0;<br>
++<br>
++err_kms_helper_poll_fini:<br>
++	drm_kms_helper_poll_fini(drm);<br>
++err_unbind_all:<br>
++	component_unbind_all(drm->dev, drm);<br>
++	return ret;<br>
++}<br>
++<br>
++static void sprd_drm_unbind(struct device *dev)<br>
++{<br>
++	struct drm_device *drm = dev_get_drvdata(dev);<br>
++<br>
++	drm_dev_unregister(drm);<br>
++<br>
++	drm_kms_helper_poll_fini(drm);<br>
++<br>
++	component_unbind_all(drm->dev, drm);<br>
++}<br>
++<br>
++static const struct component_master_ops drm_component_ops = {<br>
++	.bind = sprd_drm_bind,<br>
++	.unbind = sprd_drm_unbind,<br>
++};<br>
++<br>
++static int compare_of(struct device *dev, void *data)<br>
++{<br>
++	return dev->of_node == data;<br>
++}<br>
++<br>
++static int sprd_drm_probe(struct platform_device *pdev)<br>
++{<br>
++	struct device *dev = &pdev->dev;<br>
++	int ret;<br>
++<br>
++	ret = dma_set_mask_and_coherent(dev, ~0UL);<br>
++	if (ret) {<br>
++		dev_err(dev, "dma_set_mask_and_coherent failed (%d)\n", ret);<br>
++		return ret;<br>
++	}<br>
++<br>
++	return drm_of_component_probe(dev, compare_of, &drm_component_ops);<br>
++}<br>
++<br>
++static int sprd_drm_remove(struct platform_device *pdev)<br>
++{<br>
++	component_master_del(&pdev->dev, &drm_component_ops);<br>
++	return 0;<br>
++}<br>
++<br>
++static void sprd_drm_shutdown(struct platform_device *pdev)<br>
++{<br>
++	struct drm_device *drm = platform_get_drvdata(pdev);<br>
++<br>
++	if (!drm) {<br>
++		drm_warn(drm, "drm device is not available, no shutdown\n");<br>
++		return;<br>
++	}<br>
++<br>
++	drm_atomic_helper_shutdown(drm);<br>
++}<br>
++<br>
++static const struct of_device_id drm_match_table[] = {<br>
++	{ .compatible = "sprd,display-subsystem", },<br>
++	{ /* sentinel */ },<br>
++};<br>
++MODULE_DEVICE_TABLE(of, drm_match_table);<br>
++<br>
++static struct platform_driver sprd_drm_driver = {<br>
++	.probe = sprd_drm_probe,<br>
++	.remove = sprd_drm_remove,<br>
++	.shutdown = sprd_drm_shutdown,<br>
++	.driver = {<br>
++		.name = "sprd-drm-drv",<br>
++		.of_match_table = drm_match_table,<br>
++	},<br>
++};<br>
++<br>
++static struct platform_driver *sprd_drm_drivers[]  = {<br>
++	&sprd_drm_driver,<br>
++};<br>
++<br>
++static int __init sprd_drm_init(void)<br>
++{<br>
++	int ret;<br>
+</blockquote>
+<br>
+I think ret should just go away.<br>
+<br>
+Acked-by: Thomas Zimmermann <tzimmermann@xxxxxxx><br>
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
++<br>
++	ret = platform_register_drivers(sprd_drm_drivers,<br>
++					ARRAY_SIZE(sprd_drm_drivers));<br>
++	return ret;<br>
++}<br>
++<br>
++static void __exit sprd_drm_exit(void)<br>
++{<br>
++	platform_unregister_drivers(sprd_drm_drivers,<br>
++				    ARRAY_SIZE(sprd_drm_drivers));<br>
++}<br>
++<br>
++module_init(sprd_drm_init);<br>
++module_exit(sprd_drm_exit);<br>
++<br>
++MODULE_AUTHOR("Leon He <leon.he@xxxxxxxxxx>");<br>
++MODULE_AUTHOR("Kevin Tang <kevin.tang@xxxxxxxxxx>");<br>
++MODULE_DESCRIPTION("Unisoc DRM KMS Master Driver");<br>
++MODULE_LICENSE("GPL v2");<br>
+diff --git a/drivers/gpu/drm/sprd/sprd_drm.h b/drivers/gpu/drm/sprd/sprd_drm.h<br>
+new file mode 100644<br>
+index 000000000..9781fd591<br>
+--- /dev/null<br>
++++ b/drivers/gpu/drm/sprd/sprd_drm.h<br>
+@@ -0,0 +1,16 @@<br>
++/* SPDX-License-Identifier: GPL-2.0 */<br>
++/*<br>
++ * Copyright (C) 2020 Unisoc Inc.<br>
++ */<br>
++<br>
++#ifndef _SPRD_DRM_H_<br>
++#define _SPRD_DRM_H_<br>
++<br>
++#include <drm/drm_atomic.h><br>
++#include <drm/drm_print.h><br>
++<br>
++struct sprd_drm {<br>
++	struct drm_device drm;<br>
++};<br>
++<br>
++#endif /* _SPRD_DRM_H_ */<br>
+<br>
+</blockquote>
+<br>
+--<br>
+Thomas Zimmermann<br>
+Graphics Driver Developer<br>
+SUSE Software Solutions Germany GmbH<br>
+Maxfeldstr. 5, 90409 Nürnberg, Germany<br>
+(HRB 36809, AG Nürnberg)<br>
+Geschäftsführer: Felix Imendörffer<br>
+<br>
+<p><strong>Attachment:
+<a href="00383/OpenPGP_signature" ><tt>OpenPGP_signature</tt></a></strong><br>
+<em>Description:</em> OpenPGP digital signature</p>
+

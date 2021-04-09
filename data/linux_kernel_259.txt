@@ -1,0 +1,24 @@
+On Tue, Apr 06, 2021 at 05:26:33PM +0800, Greentime Hu wrote:<br>
+><i> From: Paul Walmsley <paul.walmsley@xxxxxxxxxx></i><br>
+><i> </i><br>
+><i> Add driver for the SiFive FU740 PCIe host controller.</i><br>
+><i> This controller is based on the DesignWare PCIe core.</i><br>
+><i> </i><br>
+><i> Signed-off-by: Paul Walmsley <paul.walmsley@xxxxxxxxxx></i><br>
+><i> Co-developed-by: Henry Styles <hes@xxxxxxxxxx></i><br>
+><i> Signed-off-by: Henry Styles <hes@xxxxxxxxxx></i><br>
+><i> Co-developed-by: Erik Danie <erik.danie@xxxxxxxxxx></i><br>
+><i> Signed-off-by: Erik Danie <erik.danie@xxxxxxxxxx></i><br>
+><i> Co-developed-by: Greentime Hu <greentime.hu@xxxxxxxxxx></i><br>
+><i> Signed-off-by: Greentime Hu <greentime.hu@xxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  drivers/pci/controller/dwc/Kconfig      |   9 +</i><br>
+><i>  drivers/pci/controller/dwc/Makefile     |   1 +</i><br>
+><i>  drivers/pci/controller/dwc/pcie-fu740.c | 308 ++++++++++++++++++++++++</i><br>
+><i>  3 files changed, 318 insertions(+)</i><br>
+><i>  create mode 100644 drivers/pci/controller/dwc/pcie-fu740.c</i><br>
+<br>
+Reviewed-by: Rob Herring <robh@xxxxxxxxxx><br>
+<br>
+<br>
+

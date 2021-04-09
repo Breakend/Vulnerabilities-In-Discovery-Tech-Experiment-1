@@ -1,0 +1,44 @@
+No one uses it, so remove it, it is dead code.<br>
+<br>
+Cc: Jiri Slaby <jirislaby@xxxxxxxxxx><br>
+Signed-off-by: Greg Kroah-Hartman <gregkh@xxxxxxxxxxxxxxxxxxx><br>
+---<br>
+ drivers/tty/tty_io.c | 7 -------<br>
+ include/linux/tty.h  | 1 -<br>
+ 2 files changed, 8 deletions(-)<br>
+<br>
+diff --git a/drivers/tty/tty_io.c b/drivers/tty/tty_io.c<br>
+index aa959f3371b1..5089104cafda 100644<br>
+--- a/drivers/tty/tty_io.c<br>
++++ b/drivers/tty/tty_io.c<br>
+@@ -251,13 +251,6 @@ const char *tty_name(const struct tty_struct *tty)<br>
+ <br>
+ EXPORT_SYMBOL(tty_name);<br>
+ <br>
+-const char *tty_driver_name(const struct tty_struct *tty)<br>
+-{<br>
+-	if (!tty || !tty->driver)<br>
+-		return "";<br>
+-	return tty->driver->name;<br>
+-}<br>
+-<br>
+ static int tty_paranoia_check(struct tty_struct *tty, struct inode *inode,<br>
+ 			      const char *routine)<br>
+ {<br>
+diff --git a/include/linux/tty.h b/include/linux/tty.h<br>
+index 777887d8bd6d..143f393dca3b 100644<br>
+--- a/include/linux/tty.h<br>
++++ b/include/linux/tty.h<br>
+@@ -430,7 +430,6 @@ static inline struct tty_struct *tty_kref_get(struct tty_struct *tty)<br>
+ 	return tty;<br>
+ }<br>
+ <br>
+-extern const char *tty_driver_name(const struct tty_struct *tty);<br>
+ extern void tty_wait_until_sent(struct tty_struct *tty, long timeout);<br>
+ extern int __tty_check_change(struct tty_struct *tty, int sig);<br>
+ extern int tty_check_change(struct tty_struct *tty);<br>
+-- <br>
+2.31.1<br>
+<br>
+<br>
+

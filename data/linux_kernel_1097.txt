@@ -1,0 +1,60 @@
+On Wed, Apr 07, 2021 at 01:07:20PM -0700, Badhri Jagan Sridharan wrote:<br>
+><i> power_supply_changed needs to be called to notify clients</i><br>
+><i> after the partner accepts the requested values for the pps</i><br>
+><i> case.</i><br>
+><i> </i><br>
+><i> Also, remove the redundant power_supply_changed at the end</i><br>
+><i> of the tcpm_reset_port as power_supply_changed is already</i><br>
+><i> called right after usb_type is changed.</i><br>
+><i> </i><br>
+><i> Fixes: f2a8aa053c176 ("typec: tcpm: Represent source supply through power_supply")</i><br>
+><i> Signed-off-by: Badhri Jagan Sridharan <badhri@xxxxxxxxxx></i><br>
+><i> Reviewed-by: Adam Thomson <Adam.Thomson.Opensource@xxxxxxxxxxx></i><br>
+<br>
+Reviewed-by: Heikki Krogerus <heikki.krogerus@xxxxxxxxxxxxxxx><br>
+<br>
+><i> ---</i><br>
+><i> Changes since V1:</i><br>
+><i> * Updated commit description to clarify Guenter Roeck's concern.</i><br>
+><i> * Added Reviewed-by tags</i><br>
+><i> ---</i><br>
+><i>  drivers/usb/typec/tcpm/tcpm.c | 4 +---</i><br>
+><i>  1 file changed, 1 insertion(+), 3 deletions(-)</i><br>
+><i> </i><br>
+><i> diff --git a/drivers/usb/typec/tcpm/tcpm.c b/drivers/usb/typec/tcpm/tcpm.c</i><br>
+><i> index b4a40099d7e9..d1d03ee90d8f 100644</i><br>
+><i> --- a/drivers/usb/typec/tcpm/tcpm.c</i><br>
+><i> +++ b/drivers/usb/typec/tcpm/tcpm.c</i><br>
+><i> @@ -2568,6 +2568,7 @@ static void tcpm_pd_ctrl_request(struct tcpm_port *port,</i><br>
+><i>  			port->pps_data.max_curr = port->pps_data.req_max_curr;</i><br>
+><i>  			port->req_supply_voltage = port->pps_data.req_out_volt;</i><br>
+><i>  			port->req_current_limit = port->pps_data.req_op_curr;</i><br>
+><i> +			power_supply_changed(port->psy);</i><br>
+><i>  			tcpm_set_state(port, SNK_TRANSITION_SINK, 0);</i><br>
+><i>  			break;</i><br>
+><i>  		case SOFT_RESET_SEND:</i><br>
+><i> @@ -3136,7 +3137,6 @@ static unsigned int tcpm_pd_select_pps_apdo(struct tcpm_port *port)</i><br>
+><i>  						      port->pps_data.req_out_volt));</i><br>
+><i>  		port->pps_data.req_op_curr = min(port->pps_data.max_curr,</i><br>
+><i>  						 port->pps_data.req_op_curr);</i><br>
+><i> -		power_supply_changed(port->psy);</i><br>
+><i>  	}</i><br>
+><i>  </i><br>
+><i>  	return src_pdo;</i><br>
+><i> @@ -3561,8 +3561,6 @@ static void tcpm_reset_port(struct tcpm_port *port)</i><br>
+><i>  	port->sink_cap_done = false;</i><br>
+><i>  	if (port->tcpc->enable_frs)</i><br>
+><i>  		port->tcpc->enable_frs(port->tcpc, false);</i><br>
+><i> -</i><br>
+><i> -	power_supply_changed(port->psy);</i><br>
+><i>  }</i><br>
+><i>  </i><br>
+><i>  static void tcpm_detach(struct tcpm_port *port)</i><br>
+><i> -- </i><br>
+><i> 2.31.1.295.g9ea45b61b8-goog</i><br>
+<br>
+-- <br>
+heikki<br>
+<br>
+<br>
+

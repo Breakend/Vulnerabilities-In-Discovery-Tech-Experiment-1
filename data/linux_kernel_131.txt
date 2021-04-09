@@ -1,0 +1,26 @@
+Add devicetree binding for Thundercomm T55 Dev kit based on SDX55.<br>
+<br>
+Cc: Rob Herring <robh+dt@xxxxxxxxxx><br>
+Cc: devicetree@xxxxxxxxxxxxxxx<br>
+Signed-off-by: Manivannan Sadhasivam <manivannan.sadhasivam@xxxxxxxxxx><br>
+---<br>
+ Documentation/devicetree/bindings/arm/qcom.yaml | 1 +<br>
+ 1 file changed, 1 insertion(+)<br>
+<br>
+diff --git a/Documentation/devicetree/bindings/arm/qcom.yaml b/Documentation/devicetree/bindings/arm/qcom.yaml<br>
+index d5d561d9e8aa..6827bf82fb74 100644<br>
+--- a/Documentation/devicetree/bindings/arm/qcom.yaml<br>
++++ b/Documentation/devicetree/bindings/arm/qcom.yaml<br>
+@@ -173,6 +173,7 @@ properties:<br>
+           - enum:<br>
+               - qcom,sdx55-mtp<br>
+               - qcom,sdx55-telit-fn980-tlb<br>
++              - qcom,sdx55-t55<br>
+           - const: qcom,sdx55<br>
+ <br>
+       - items:<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

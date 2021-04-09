@@ -1,0 +1,87 @@
+
+Hi Peter,<br>
+<br>
+Thanks for your detailed comments.<br>
+<br>
+If you have more comments for other patches, please let me know.<br>
+<br>
+On 2021/4/7 23:39, Peter Zijlstra wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+On Mon, Mar 29, 2021 at 01:41:29PM +0800, Like Xu wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+@@ -3869,10 +3876,12 @@ static struct perf_guest_switch_msr *intel_guest_get_msrs(int *nr, void *data)<br>
+  
+  		if (arr[1].guest)
+<br>
+  			arr[0].guest |= arr[1].guest;<br>
+-		else<br>
++		else {<br>
+  			arr[1].guest = arr[1].host;<br>
++			arr[2].guest = arr[2].host;<br>
++		}<br>
+</blockquote>
+What's all this gibberish?<br>
+<br>
+The way I read that it says:<br>
+<br>
+	if guest has PEBS_ENABLED<br>
+		guest GLOBAL_CTRL |= PEBS_ENABLED<br>
+	otherwise<br>
+		guest PEBS_ENABLED = host PEBS_ENABLED<br>
+		guest DS_AREA = host DS_AREA<br>
+<br>
+which is just completely random garbage afaict. Why would you leak host<br>
+msrs into the guest?<br>
+</blockquote>
+<br>
+In fact, this is not a leak at all.<br>
+<br>
+When we do "arr[i].guest = arr[i].host;" assignment in the 
+intel_guest_get_msrs(),
+<br>the KVM will check "if (msrs[i].host == msrs[i].guest)" and if so, it 
+disables the atomic
+<br>switch for this msr during vmx transaction in the caller 
+atomic_switch_perf_msrs().
+<br>
+<br>
+In that case, the msr value doesn't change and any guest write will be trapped.<br>
+If the next check is "msrs[i].host != msrs[i].guest", the atomic switch 
+will be triggered again.
+<br>
+<br>
+Compared to before, this part of the logic has not changed, which helps to 
+reduce overhead.
+<br>
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+Why would you change guest GLOBAL_CTRL implicitly;<br>
+</blockquote>
+<br>
+This is because in the early part of this function, we have operations:<br>
+<br>
+    if (x86_pmu.flags & PMU_FL_PEBS_ALL)<br>
+        arr[0].guest &= ~cpuc->pebs_enabled;<br>
+    else<br>
+        arr[0].guest &= ~(cpuc->pebs_enabled & PEBS_COUNTER_MASK);<br>
+<br>
+and if guest has PEBS_ENABLED, we need these bits back for PEBS counters:<br>
+<br>
+    arr[0].guest |= arr[1].guest;<br>
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+guest had better wrmsr that himself to control when stuff is enabled.<br>
+</blockquote>
+<br>
+When vm_entry, the msr value of GLOBAL_CTRL on the hardware may be<br>
+different from trapped value "pmu->global_ctrl" written by the guest.<br>
+<br>
+If the perf scheduler cross maps guest counter X to the host counter Y,<br>
+we have to enable the bit Y in GLOBAL_CTRL before vm_entry rather than X.<br>
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+<br>
+This just cannot be right.<br>
+</blockquote>
+<br>
+<br>
+

@@ -1,0 +1,29 @@
+pm_runtime_get_sync() will increase the rumtime PM counter<br>
+even it returns an error. Thus a pairing decrement is needed<br>
+to prevent refcount leak. Fix this by replacing this API with<br>
+pm_runtime_resume_and_get(), which will not change the runtime<br>
+PM counter on error.<br>
+<br>
+Signed-off-by: Dinghao Liu <dinghao.liu@xxxxxxxxxx><br>
+---<br>
+ drivers/dma/tegra20-apb-dma.c | 2 +-<br>
+ 1 file changed, 1 insertion(+), 1 deletion(-)<br>
+<br>
+diff --git a/drivers/dma/tegra20-apb-dma.c b/drivers/dma/tegra20-apb-dma.c<br>
+index 71827d9b0aa1..73178afaf4c2 100644<br>
+--- a/drivers/dma/tegra20-apb-dma.c<br>
++++ b/drivers/dma/tegra20-apb-dma.c<br>
+@@ -723,7 +723,7 @@ static void tegra_dma_issue_pending(struct dma_chan *dc)<br>
+ 		goto end;<br>
+ 	}<br>
+ 	if (!tdc->busy) {<br>
+-		err = pm_runtime_get_sync(tdc->tdma->dev);<br>
++		err = pm_runtime_resume_and_get(tdc->tdma->dev);<br>
+ 		if (err < 0) {<br>
+ 			dev_err(tdc2dev(tdc), "Failed to enable DMA\n");<br>
+ 			goto end;<br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+

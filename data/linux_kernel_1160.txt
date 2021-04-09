@@ -1,0 +1,45 @@
+Hi Dinghao,<br>
+<br>
+On Wed, Apr 07, 2021 at 12:07:38PM +0800, Dinghao Liu wrote:<br>
+><i> When mutex_lock_interruptible() fails, a pairing PM usage</i><br>
+><i> counter decrement is needed to keep the counter balanced.</i><br>
+<br>
+Thank you for the patch.<br>
+<br>
+><i> </i><br>
+><i> Signed-off-by: Dinghao Liu <dinghao.liu@xxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  drivers/input/mouse/cyapa.c | 4 +++-</i><br>
+><i>  1 file changed, 3 insertions(+), 1 deletion(-)</i><br>
+><i> </i><br>
+><i> diff --git a/drivers/input/mouse/cyapa.c b/drivers/input/mouse/cyapa.c</i><br>
+><i> index 77cc653edca2..e411ab45a218 100644</i><br>
+><i> --- a/drivers/input/mouse/cyapa.c</i><br>
+><i> +++ b/drivers/input/mouse/cyapa.c</i><br>
+><i> @@ -904,8 +904,10 @@ static ssize_t cyapa_update_rt_suspend_scanrate(struct device *dev,</i><br>
+><i>  	pm_runtime_get_sync(dev);</i><br>
+><i>  </i><br>
+><i>  	error = mutex_lock_interruptible(&cyapa->state_sync_lock);</i><br>
+><i> -	if (error)</i><br>
+><i> +	if (error) {</i><br>
+><i> +		pm_runtime_put_noidle(dev);</i><br>
+<br>
+Why "noidle" and not pm_runtime_put_sync_autosuspend() like we do in<br>
+case of normal flow?<br>
+<br>
+><i>  		return error;</i><br>
+><i> +	}</i><br>
+><i>  </i><br>
+><i>  	cyapa->runtime_suspend_sleep_time = min_t(u16, time, 1000);</i><br>
+><i>  	cyapa->runtime_suspend_power_mode =</i><br>
+><i> -- </i><br>
+><i> 2.17.1</i><br>
+><i> </i><br>
+<br>
+Thanks.<br>
+<br>
+-- <br>
+Dmitry<br>
+<br>
+<br>
+

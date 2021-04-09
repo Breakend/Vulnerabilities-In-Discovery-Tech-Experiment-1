@@ -1,0 +1,74 @@
+Currently, we start allocating AUX pages half the size of the total<br>
+requested AUX buffer size, ignoring the attr.aux_watermark setting. This,<br>
+in turn, makes intel_pt driver disregard the watermark also, as it uses<br>
+page order for its SG (ToPA) configuration.<br>
+<br>
+Now, this can be fixed in the intel_pt PMU driver, but seeing as it's the<br>
+only one currently making use of high order allocations, there is no<br>
+reason not to fix the allocator instead. This way, any other driver<br>
+wishing to add this support would not have to worry about this.<br>
+<br>
+Signed-off-by: Alexander Shishkin <alexander.shishkin@xxxxxxxxxxxxxxx><br>
+---<br>
+ kernel/events/ring_buffer.c | 34 ++++++++++++++++++----------------<br>
+ 1 file changed, 18 insertions(+), 16 deletions(-)<br>
+<br>
+diff --git a/kernel/events/ring_buffer.c b/kernel/events/ring_buffer.c<br>
+index bd55ccc91373..bd94b91bd4be 100644<br>
+--- a/kernel/events/ring_buffer.c<br>
++++ b/kernel/events/ring_buffer.c<br>
+@@ -674,21 +674,26 @@ int rb_alloc_aux(struct perf_buffer *rb, struct perf_event *event,<br>
+ 	if (!has_aux(event))<br>
+ 		return -EOPNOTSUPP;<br>
+ <br>
+-	/*<br>
+-	 * We need to start with the max_order that fits in nr_pages,<br>
+-	 * not the other way around, hence ilog2() and not get_order.<br>
+-	 */<br>
+-	max_order = ilog2(nr_pages);<br>
+-<br>
+-	/*<br>
+-	 * PMU requests more than one contiguous chunks of memory<br>
+-	 * for SW double buffering<br>
+-	 */<br>
+ 	if (!overwrite) {<br>
+-		if (!max_order)<br>
+-			return -EINVAL;<br>
++		/*<br>
++		 * Watermark defaults to half the buffer, and so does the<br>
++		 * max_order, to aid PMU drivers in double buffering.<br>
++		 */<br>
++		if (!watermark)<br>
++			watermark = nr_pages << (PAGE_SHIFT - 1);<br>
+ <br>
+-		max_order--;<br>
++		/*<br>
++		 * Use aux_watermark as the basis for chunking to<br>
++		 * help PMU drivers honor the watermark.<br>
++		 */<br>
++		max_order = get_order(watermark);<br>
++	} else {<br>
++		/*<br>
++		* We need to start with the max_order that fits in nr_pages,<br>
++		* not the other way around, hence ilog2() and not get_order.<br>
++		*/<br>
++		max_order = ilog2(nr_pages);<br>
++		watermark = 0;<br>
+ 	}<br>
+ <br>
+ 	rb->aux_pages = kcalloc_node(nr_pages, sizeof(void *), GFP_KERNEL,<br>
+@@ -743,9 +748,6 @@ int rb_alloc_aux(struct perf_buffer *rb, struct perf_event *event,<br>
+ 	rb->aux_overwrite = overwrite;<br>
+ 	rb->aux_watermark = watermark;<br>
+ <br>
+-	if (!rb->aux_watermark && !rb->aux_overwrite)<br>
+-		rb->aux_watermark = nr_pages << (PAGE_SHIFT - 1);<br>
+-<br>
+ out:<br>
+ 	if (!ret)<br>
+ 		rb->aux_pgoff = pgoff;<br>
+-- <br>
+2.30.2<br>
+<br>
+<br>
+

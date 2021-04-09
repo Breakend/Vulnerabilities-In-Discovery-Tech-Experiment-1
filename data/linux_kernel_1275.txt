@@ -1,0 +1,128 @@
+<br>
+<br>
+><i> -----Original Message-----</i><br>
+><i> From: Maciej S. Szmigiero [<a  rel="nofollow" href="mailto:mail@xxxxxxxxxxxxxxxxxxxxx">mailto:mail@xxxxxxxxxxxxxxxxxxxxx</a>]</i><br>
+><i> Sent: Thursday, April 08, 2021 4:53 AM</i><br>
+><i> To: Larry Finger; Pkshih</i><br>
+><i> Cc: linux-wireless@xxxxxxxxxxxxxxx; netdev@xxxxxxxxxxxxxxx; linux-kernel@xxxxxxxxxxxxxxx;</i><br>
+><i> johannes@xxxxxxxxxxxxxxxx; kvalo@xxxxxxxxxxxxxx</i><br>
+><i> Subject: Re: rtlwifi/rtl8192cu AP mode broken with PS STA</i><br>
+><i> </i><br>
+><i> On 07.04.2021 06:21, Larry Finger wrote:</i><br>
+><i> > On 4/6/21 9:48 PM, Pkshih wrote:</i><br>
+><i> >> On Tue, 2021-04-06 at 11:25 -0500, Larry Finger wrote:</i><br>
+><i> >>> On 4/6/21 7:06 AM, Maciej S. Szmigiero wrote:</i><br>
+><i> >>>> On 06.04.2021 12:00, Kalle Valo wrote:</i><br>
+><i> >>>>> "Maciej S. Szmigiero" <mail@xxxxxxxxxxxxxxxxxxxxx> writes:</i><br>
+><i> >>>>></i><br>
+><i> >>>>>> On 29.03.2021 00:54, Maciej S. Szmigiero wrote:</i><br>
+><i> >>>>>>> Hi,</i><br>
+><i> >>>>>>></i><br>
+><i> >>>>>>> It looks like rtlwifi/rtl8192cu AP mode is broken when a STA is using PS,</i><br>
+><i> >>>>>>> since the driver does not update its beacon to account for TIM changes,</i><br>
+><i> >>>>>>> so a station that is sleeping will never learn that it has packets</i><br>
+><i> >>>>>>> buffered at the AP.</i><br>
+><i> >>>>>>></i><br>
+><i> >>>>>>> Looking at the code, the rtl8192cu driver implements neither the set_tim()</i><br>
+><i> >>>>>>> callback, nor does it explicitly update beacon data periodically, so it</i><br>
+><i> >>>>>>> has no way to learn that it had changed.</i><br>
+><i> >>>>>>></i><br>
+><i> >>>>>>> This results in the AP mode being virtually unusable with STAs that do</i><br>
+><i> >>>>>>> PS and don't allow for it to be disabled (IoT devices, mobile phones,</i><br>
+><i> >>>>>>> etc.).</i><br>
+><i> >>>>>>></i><br>
+><i> >>>>>>> I think the easiest fix here would be to implement set_tim() for example</i><br>
+><i> >>>>>>> the way rt2x00 driver does: queue a work or schedule a tasklet to update</i><br>
+><i> >>>>>>> the beacon data on the device.</i><br>
+><i> >>>>>></i><br>
+><i> >>>>>> Are there any plans to fix this?</i><br>
+><i> >>>>>> The driver is listed as maintained by Ping-Ke.</i><br>
+><i> >>>>></i><br>
+><i> >>>>> Yeah, power save is hard and I'm not surprised that there are drivers</i><br>
+><i> >>>>> with broken power save mode support. If there's no fix available we</i><br>
+><i> >>>>> should stop supporting AP mode in the driver.</i><br>
+><i> >>>>></i><br>
+><i> >>>> <a  rel="nofollow" href="https://wireless.wiki.kernel.org/en/developers/documentation/mac80211/api">https://wireless.wiki.kernel.org/en/developers/documentation/mac80211/api</a></i><br>
+><i> >>>> clearly documents that "For AP mode, it must (...) react to the set_tim()</i><br>
+><i> >>>> callback or fetch each beacon from mac80211".</i><br>
+><i> >>>> The driver isn't doing either so no wonder the beacon it is sending</i><br>
+><i> >>>> isn't getting updated.</i><br>
+><i> >>>> As I have said above, it seems to me that all that needs to be done here</i><br>
+><i> >>>> is to queue a work in a set_tim() callback, then call</i><br>
+><i> >>>> send_beacon_frame() from rtlwifi/core.c from this work.</i><br>
+><i> >>>> But I don't know the exact device semantics, maybe it needs some other</i><br>
+><i> >>>> notification that the beacon has changed, too, or even tries to</i><br>
+><i> >>>> manage the TIM bitmap by itself.</i><br>
+><i> >>>> It would be a shame to lose the AP mode for such minor thing, though.</i><br>
+><i> >>>> I would play with this myself, but unfortunately I don't have time</i><br>
+><i> >>>> to work on this right now.</i><br>
+><i> >>>> That's where my question to Realtek comes: are there plans to actually</i><br>
+><i> >>>> fix this?</i><br>
+><i> >>></i><br>
+><i> >>> Yes, I am working on this. My only question is "if you are such an expert on the</i><br>
+><i> >>> problem, why do you not fix it?"</i><br>
+><i> >>></i><br>
+><i> >>> The example in rx200 is not particularly useful, and I have not found any other</i><br>
+><i> >>> examples.</i><br>
+><i> >>></i><br>
+><i> >></i><br>
+><i> >> Hi Larry,</i><br>
+><i> >></i><br>
+><i> >> I have a draft patch that forks a work to do send_beacon_frame(), whose</i><br>
+><i> >> behavior like Maciej mentioned.</i><br>
+><i> </i><br>
+><i> That's great, thanks!</i><br>
+><i> </i><br>
+><i> >> I did test on RTL8821AE; it works well. But, it seems already work well even</i><br>
+><i> >> I don't apply this patch, and I'm still digging why.</i><br>
+><i> </i><br>
+><i> It looks like PCI rtlwifi hardware uses a tasklet (specifically,</i><br>
+><i> _rtl_pci_prepare_bcn_tasklet() in pci.c) to periodically transfer the</i><br>
+><i> current beacon to the NIC.</i><br>
+<br>
+Got it.<br>
+<br>
+><i> </i><br>
+><i> This tasklet is scheduled on a RTL_IMR_BCNINT interrupt, which sounds</i><br>
+><i> like a beacon interval interrupt.</i><br>
+><i> </i><br>
+<br>
+Yes, PCI series update every beacon, so TIM and DTIM count maintained by<br>
+mac80211 work properly.<br>
+<br>
+><i> >> I don't have a rtl8192cu dongle on hand, but I'll try to find one.</i><br>
+><i> ></i><br>
+><i> > Maceij,</i><br>
+><i> ></i><br>
+><i> > Does this patch fix the problem?</i><br>
+><i> </i><br>
+><i> The beacon seems to be updating now and STAs no longer get stuck in PS</i><br>
+><i> mode.</i><br>
+><i> Although sometimes (every 2-3 minutes with continuous 1s interval pings)</i><br>
+><i> there is around 5s delay in updating the transmitted beacon - don't know</i><br>
+><i> why, maybe the NIC hardware still has the old version in queue?</i><br>
+<br>
+Since USB device doesn't update every beacon, dtim_count isn't updated neither.<br>
+It leads STA doesn't awake properly. Please try to fix dtim_period=1 in<br>
+hostapd.conf, which tells STA awakes every beacon interval.<br>
+<br>
+><i> </i><br>
+><i> I doubt, however that this set_tim() callback should be added for every</i><br>
+><i> rtlwifi device type.</i><br>
+><i> </i><br>
+><i> As I have said above, PCI devices seem to already have a mechanism in</i><br>
+><i> place to update their beacon each beacon interval.</i><br>
+><i> Your test that RTL8821AE works without this patch confirms that (at</i><br>
+><i> least for the rtl8821ae driver).</i><br>
+><i> </i><br>
+><i> It seems this callback is only necessarily for USB rtlwifi devices.</i><br>
+><i> Which currently means rtl8192cu only.</i><br>
+><i> </i><br>
+<br>
+I agree with you.<br>
+<br>
+--<br>
+Ping-Ke<br>
+<br>
+<br>
+

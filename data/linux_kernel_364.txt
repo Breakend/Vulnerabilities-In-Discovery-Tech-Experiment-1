@@ -1,0 +1,119 @@
+Pull out more common code from rsa-pkcs1pad into rsa-common.<br>
+<br>
+Signed-off-by: Varad Gautam <varad.gautam@xxxxxxxx><br>
+---<br>
+ crypto/rsa-common.c                  | 31 +++++++++++++++++++++++++++<br>
+ crypto/rsa-pkcs1pad.c                | 32 ----------------------------<br>
+ include/crypto/internal/rsa-common.h |  9 ++++++++<br>
+ 3 files changed, 40 insertions(+), 32 deletions(-)<br>
+<br>
+diff --git a/crypto/rsa-common.c b/crypto/rsa-common.c<br>
+index d70d7d405165f..6ed258a782875 100644<br>
+--- a/crypto/rsa-common.c<br>
++++ b/crypto/rsa-common.c<br>
+@@ -75,6 +75,37 @@ const struct rsa_asn1_template *rsa_lookup_asn1(const char *name)<br>
+ 	return NULL;<br>
+ }<br>
+ <br>
++void rsapad_akcipher_req_complete(struct crypto_async_request *child_async_req,<br>
++				  int err, rsa_akcipher_complete_cb cb)<br>
++{<br>
++	struct akcipher_request *req = child_async_req->data;<br>
++	struct crypto_async_request async_req;<br>
++<br>
++	if (err == -EINPROGRESS)<br>
++		return;<br>
++<br>
++	async_req.data = req->base.data;<br>
++	async_req.tfm = crypto_akcipher_tfm(crypto_akcipher_reqtfm(req));<br>
++	async_req.flags = child_async_req->flags;<br>
++	req->base.complete(&async_req, cb(req, err));<br>
++}<br>
++<br>
++void rsapad_akcipher_setup_child(struct akcipher_request *req,<br>
++				 struct scatterlist *src_sg,<br>
++				 struct scatterlist *dst_sg,<br>
++				 unsigned int src_len,<br>
++				 unsigned int dst_len,<br>
++				 crypto_completion_t cb)<br>
++{<br>
++	struct crypto_akcipher *tfm = crypto_akcipher_reqtfm(req);<br>
++	struct rsapad_tfm_ctx *ctx = akcipher_tfm_ctx(tfm);<br>
++	struct rsapad_akciper_req_ctx *req_ctx = akcipher_request_ctx(req);<br>
++<br>
++	akcipher_request_set_tfm(&req_ctx->child_req, ctx->child);<br>
++	akcipher_request_set_callback(&req_ctx->child_req, req->base.flags, cb, req);<br>
++	akcipher_request_set_crypt(&req_ctx->child_req, src_sg, dst_sg, src_len, dst_len);<br>
++}<br>
++<br>
+ int rsapad_set_pub_key(struct crypto_akcipher *tfm, const void *key,<br>
+ 		       unsigned int keylen)<br>
+ {<br>
+diff --git a/crypto/rsa-pkcs1pad.c b/crypto/rsa-pkcs1pad.c<br>
+index 30b0193b7352a..6fa207732fcbe 100644<br>
+--- a/crypto/rsa-pkcs1pad.c<br>
++++ b/crypto/rsa-pkcs1pad.c<br>
+@@ -9,38 +9,6 @@<br>
+ #include <linux/module.h><br>
+ #include <linux/random.h><br>
+ <br>
+-typedef int (*rsa_akcipher_complete_cb)(struct akcipher_request *, int);<br>
+-static void rsapad_akcipher_req_complete(struct crypto_async_request *child_async_req,<br>
+-					 int err, rsa_akcipher_complete_cb cb)<br>
+-{<br>
+-	struct akcipher_request *req = child_async_req->data;<br>
+-	struct crypto_async_request async_req;<br>
+-<br>
+-	if (err == -EINPROGRESS)<br>
+-		return;<br>
+-<br>
+-	async_req.data = req->base.data;<br>
+-	async_req.tfm = crypto_akcipher_tfm(crypto_akcipher_reqtfm(req));<br>
+-	async_req.flags = child_async_req->flags;<br>
+-	req->base.complete(&async_req, cb(req, err));<br>
+-}<br>
+-<br>
+-static void rsapad_akcipher_setup_child(struct akcipher_request *req,<br>
+-					struct scatterlist *src_sg,<br>
+-					struct scatterlist *dst_sg,<br>
+-					unsigned int src_len,<br>
+-					unsigned int dst_len,<br>
+-					crypto_completion_t cb)<br>
+-{<br>
+-	struct crypto_akcipher *tfm = crypto_akcipher_reqtfm(req);<br>
+-	struct rsapad_tfm_ctx *ctx = akcipher_tfm_ctx(tfm);<br>
+-	struct rsapad_akciper_req_ctx *req_ctx = akcipher_request_ctx(req);<br>
+-<br>
+-	akcipher_request_set_tfm(&req_ctx->child_req, ctx->child);<br>
+-	akcipher_request_set_callback(&req_ctx->child_req, req->base.flags, cb, req);<br>
+-	akcipher_request_set_crypt(&req_ctx->child_req, src_sg, dst_sg, src_len, dst_len);<br>
+-}<br>
+-<br>
+ static int pkcs1pad_encrypt_sign_complete(struct akcipher_request *req, int err)<br>
+ {<br>
+ 	struct crypto_akcipher *tfm = crypto_akcipher_reqtfm(req);<br>
+diff --git a/include/crypto/internal/rsa-common.h b/include/crypto/internal/rsa-common.h<br>
+index a6f20cce610ab..4fa3cf5a989cc 100644<br>
+--- a/include/crypto/internal/rsa-common.h<br>
++++ b/include/crypto/internal/rsa-common.h<br>
+@@ -34,6 +34,15 @@ struct rsapad_akciper_req_ctx {<br>
+ 	struct akcipher_request child_req;<br>
+ };<br>
+ <br>
++typedef int (*rsa_akcipher_complete_cb)(struct akcipher_request *, int);<br>
++void rsapad_akcipher_req_complete(struct crypto_async_request *child_async_req,<br>
++				  int err, rsa_akcipher_complete_cb cb);<br>
++void rsapad_akcipher_setup_child(struct akcipher_request *req,<br>
++				 struct scatterlist *src_sg,<br>
++				 struct scatterlist *dst_sg,<br>
++				 unsigned int src_len,<br>
++				 unsigned int dst_len,<br>
++				 crypto_completion_t cb);<br>
+ int rsapad_set_pub_key(struct crypto_akcipher *tfm, const void *key,<br>
+ 		       unsigned int keylen);<br>
+ int rsapad_set_priv_key(struct crypto_akcipher *tfm, const void *key,<br>
+-- <br>
+2.30.2<br>
+<br>
+<br>
+

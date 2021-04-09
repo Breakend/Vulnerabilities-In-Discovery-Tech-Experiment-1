@@ -1,0 +1,162 @@
+From: David Stevens <stevensd@xxxxxxxxxxxx><br>
+<br>
+Allocate a new private stub fence in drm_syncobj_assign_null_handle,<br>
+instead of using a static stub fence.<br>
+<br>
+When userspace creates a fence with DRM_SYNCOBJ_CREATE_SIGNALED or when<br>
+userspace signals a fence via DRM_IOCTL_SYNCOBJ_SIGNAL, the timestamp<br>
+obtained when the fence is exported and queried with SYNC_IOC_FILE_INFO<br>
+should match when the fence's status was changed from the perspective of<br>
+userspace, which is during the respective ioctl.<br>
+<br>
+When a static stub fence started being used in by these ioctls, this<br>
+behavior changed. Instead, the timestamp returned by SYNC_IOC_FILE_INFO<br>
+became the first time anything used the static stub fence, which has no<br>
+meaning to userspace.<br>
+<br>
+Signed-off-by: David Stevens <stevensd@xxxxxxxxxxxx><br>
+---<br>
+v1 -> v2:<br>
+ - checkpatch style fixes<br>
+<br>
+ drivers/dma-buf/dma-fence.c   | 33 ++++++++++++++++++++++++++++++++-<br>
+ drivers/gpu/drm/drm_syncobj.c | 25 +++++++++++++++++++------<br>
+ include/linux/dma-fence.h     |  1 +<br>
+ 3 files changed, 52 insertions(+), 7 deletions(-)<br>
+<br>
+diff --git a/drivers/dma-buf/dma-fence.c b/drivers/dma-buf/dma-fence.c<br>
+index d64fc03929be..6081eb962490 100644<br>
+--- a/drivers/dma-buf/dma-fence.c<br>
++++ b/drivers/dma-buf/dma-fence.c<br>
+@@ -26,6 +26,11 @@ EXPORT_TRACEPOINT_SYMBOL(dma_fence_signaled);<br>
+ static DEFINE_SPINLOCK(dma_fence_stub_lock);<br>
+ static struct dma_fence dma_fence_stub;<br>
+ <br>
++struct drm_fence_private_stub {<br>
++	struct dma_fence base;<br>
++	spinlock_t lock;<br>
++};<br>
++<br>
+ /*<br>
+  * fence context counter: each execution context should have its own<br>
+  * fence context, this allows checking if fences belong to the same<br>
+@@ -123,7 +128,9 @@ static const struct dma_fence_ops dma_fence_stub_ops = {<br>
+ /**<br>
+  * dma_fence_get_stub - return a signaled fence<br>
+  *<br>
+- * Return a stub fence which is already signaled.<br>
++ * Return a stub fence which is already signaled. The fence's<br>
++ * timestamp corresponds to the first time after boot this<br>
++ * function is called.<br>
+  */<br>
+ struct dma_fence *dma_fence_get_stub(void)<br>
+ {<br>
+@@ -141,6 +148,30 @@ struct dma_fence *dma_fence_get_stub(void)<br>
+ }<br>
+ EXPORT_SYMBOL(dma_fence_get_stub);<br>
+ <br>
++/**<br>
++ * dma_fence_allocate_private_stub - return a private, signaled fence<br>
++ *<br>
++ * Return a newly allocated and signaled stub fence.<br>
++ */<br>
++struct dma_fence *dma_fence_allocate_private_stub(void)<br>
++{<br>
++	struct drm_fence_private_stub *fence;<br>
++<br>
++	fence = kzalloc(sizeof(*fence), GFP_KERNEL);<br>
++	if (fence == NULL)<br>
++		return ERR_PTR(-ENOMEM);<br>
++<br>
++	spin_lock_init(&fence->lock);<br>
++	dma_fence_init(&fence->base,<br>
++		       &dma_fence_stub_ops,<br>
++		       &fence->lock,<br>
++		       0, 0);<br>
++	dma_fence_signal(&fence->base);<br>
++<br>
++	return &fence->base;<br>
++}<br>
++EXPORT_SYMBOL(dma_fence_allocate_private_stub);<br>
++<br>
+ /**<br>
+  * dma_fence_context_alloc - allocate an array of fence contexts<br>
+  * @num: amount of contexts to allocate<br>
+diff --git a/drivers/gpu/drm/drm_syncobj.c b/drivers/gpu/drm/drm_syncobj.c<br>
+index 349146049849..a54aa850d143 100644<br>
+--- a/drivers/gpu/drm/drm_syncobj.c<br>
++++ b/drivers/gpu/drm/drm_syncobj.c<br>
+@@ -350,12 +350,16 @@ EXPORT_SYMBOL(drm_syncobj_replace_fence);<br>
+  *<br>
+  * Assign a already signaled stub fence to the sync object.<br>
+  */<br>
+-static void drm_syncobj_assign_null_handle(struct drm_syncobj *syncobj)<br>
++static int drm_syncobj_assign_null_handle(struct drm_syncobj *syncobj)<br>
+ {<br>
+-	struct dma_fence *fence = dma_fence_get_stub();<br>
++	struct dma_fence *fence = dma_fence_allocate_private_stub();<br>
++<br>
++	if (IS_ERR(fence))<br>
++		return PTR_ERR(fence);<br>
+ <br>
+ 	drm_syncobj_replace_fence(syncobj, fence);<br>
+ 	dma_fence_put(fence);<br>
++	return 0;<br>
+ }<br>
+ <br>
+ /* 5s default for wait submission */<br>
+@@ -469,6 +473,7 @@ EXPORT_SYMBOL(drm_syncobj_free);<br>
+ int drm_syncobj_create(struct drm_syncobj **out_syncobj, uint32_t flags,<br>
+ 		       struct dma_fence *fence)<br>
+ {<br>
++	int ret;<br>
+ 	struct drm_syncobj *syncobj;<br>
+ <br>
+ 	syncobj = kzalloc(sizeof(struct drm_syncobj), GFP_KERNEL);<br>
+@@ -479,8 +484,13 @@ int drm_syncobj_create(struct drm_syncobj **out_syncobj, uint32_t flags,<br>
+ 	INIT_LIST_HEAD(&syncobj->cb_list);<br>
+ 	spin_lock_init(&syncobj->lock);<br>
+ <br>
+-	if (flags & DRM_SYNCOBJ_CREATE_SIGNALED)<br>
+-		drm_syncobj_assign_null_handle(syncobj);<br>
++	if (flags & DRM_SYNCOBJ_CREATE_SIGNALED) {<br>
++		ret = drm_syncobj_assign_null_handle(syncobj);<br>
++		if (ret < 0) {<br>
++			drm_syncobj_put(syncobj);<br>
++			return ret;<br>
++		}<br>
++	}<br>
+ <br>
+ 	if (fence)<br>
+ 		drm_syncobj_replace_fence(syncobj, fence);<br>
+@@ -1322,8 +1332,11 @@ drm_syncobj_signal_ioctl(struct drm_device *dev, void *data,<br>
+ 	if (ret < 0)<br>
+ 		return ret;<br>
+ <br>
+-	for (i = 0; i < args->count_handles; i++)<br>
+-		drm_syncobj_assign_null_handle(syncobjs[i]);<br>
++	for (i = 0; i < args->count_handles; i++) {<br>
++		ret = drm_syncobj_assign_null_handle(syncobjs[i]);<br>
++		if (ret < 0)<br>
++			break;<br>
++	}<br>
+ <br>
+ 	drm_syncobj_array_free(syncobjs, args->count_handles);<br>
+ <br>
+diff --git a/include/linux/dma-fence.h b/include/linux/dma-fence.h<br>
+index 9f12efaaa93a..6ffb4b2c6371 100644<br>
+--- a/include/linux/dma-fence.h<br>
++++ b/include/linux/dma-fence.h<br>
+@@ -587,6 +587,7 @@ static inline signed long dma_fence_wait(struct dma_fence *fence, bool intr)<br>
+ }<br>
+ <br>
+ struct dma_fence *dma_fence_get_stub(void);<br>
++struct dma_fence *dma_fence_allocate_private_stub(void);<br>
+ u64 dma_fence_context_alloc(unsigned num);<br>
+ <br>
+ #define DMA_FENCE_TRACE(f, fmt, args...) \<br>
+-- <br>
+2.31.0.208.g409f899ff0-goog<br>
+<br>
+<br>
+

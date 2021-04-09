@@ -1,0 +1,125 @@
+Subsequent patches will make the gic-v3 irqchip use an ->irq_ack()<br>
+callback. As a preparation, make the NMI flow handlers call said callback<br>
+if it is available.<br>
+<br>
+Since this departs from the fasteoi scheme of only issuing a suffix<br>
+->eoi(), rename the NMI flow handlers.<br>
+<br>
+Signed-off-by: Valentin Schneider <valentin.schneider@xxxxxxx><br>
+---<br>
+ drivers/irqchip/irq-gic-v3.c |  4 ++--<br>
+ include/linux/irq.h          |  4 ++--<br>
+ kernel/irq/chip.c            | 25 ++++++++++++++-----------<br>
+ 3 files changed, 18 insertions(+), 15 deletions(-)<br>
+<br>
+diff --git a/drivers/irqchip/irq-gic-v3.c b/drivers/irqchip/irq-gic-v3.c<br>
+index 94b89258d045..242a8fc5ec86 100644<br>
+--- a/drivers/irqchip/irq-gic-v3.c<br>
++++ b/drivers/irqchip/irq-gic-v3.c<br>
+@@ -484,10 +484,10 @@ static int gic_irq_nmi_setup(struct irq_data *d)<br>
+ 		/* Setting up PPI as NMI, only switch handler for first NMI */<br>
+ 		if (!refcount_inc_not_zero(&ppi_nmi_refs[idx])) {<br>
+ 			refcount_set(&ppi_nmi_refs[idx], 1);<br>
+-			desc->handle_irq = handle_percpu_devid_fasteoi_nmi;<br>
++			desc->handle_irq = handle_percpu_devid_nmi;<br>
+ 		}<br>
+ 	} else {<br>
+-		desc->handle_irq = handle_fasteoi_nmi;<br>
++		desc->handle_irq = handle_nmi;<br>
+ 	}<br>
+ <br>
+ 	gic_irq_set_prio(d, GICD_INT_NMI_PRI);<br>
+diff --git a/include/linux/irq.h b/include/linux/irq.h<br>
+index b605f0929d97..c39f46e37487 100644<br>
+--- a/include/linux/irq.h<br>
++++ b/include/linux/irq.h<br>
+@@ -667,8 +667,8 @@ extern void handle_percpu_devid_irq(struct irq_desc *desc);<br>
+ extern void handle_bad_irq(struct irq_desc *desc);<br>
+ extern void handle_nested_irq(unsigned int irq);<br>
+ <br>
+-extern void handle_fasteoi_nmi(struct irq_desc *desc);<br>
+-extern void handle_percpu_devid_fasteoi_nmi(struct irq_desc *desc);<br>
++extern void handle_nmi(struct irq_desc *desc);<br>
++extern void handle_percpu_devid_nmi(struct irq_desc *desc);<br>
+ <br>
+ extern int irq_chip_compose_msi_msg(struct irq_data *data, struct msi_msg *msg);<br>
+ extern int irq_chip_pm_get(struct irq_data *data);<br>
+diff --git a/kernel/irq/chip.c b/kernel/irq/chip.c<br>
+index 1add0b4f0662..ea077333d676 100644<br>
+--- a/kernel/irq/chip.c<br>
++++ b/kernel/irq/chip.c<br>
+@@ -748,18 +748,16 @@ void handle_fasteoi_irq(struct irq_desc *desc)<br>
+ EXPORT_SYMBOL_GPL(handle_fasteoi_irq);<br>
+ <br>
+ /**<br>
+- *	handle_fasteoi_nmi - irq handler for NMI interrupt lines<br>
++ *	handle_nmi - irq handler for NMI interrupt lines<br>
+  *	@desc:	the interrupt description structure for this irq<br>
+  *<br>
+  *	A simple NMI-safe handler, considering the restrictions<br>
+  *	from request_nmi.<br>
+  *<br>
+- *	Only a single callback will be issued to the chip: an ->eoi()<br>
+- *	call when the interrupt has been serviced. This enables support<br>
+- *	for modern forms of interrupt handlers, which handle the flow<br>
+- *	details in hardware, transparently.<br>
++ *      An ->ack() callback will be issued before servicing the interrupt,<br>
++ *      followed by an ->eoi() call.<br>
+  */<br>
+-void handle_fasteoi_nmi(struct irq_desc *desc)<br>
++void handle_nmi(struct irq_desc *desc)<br>
+ {<br>
+ 	struct irq_chip *chip = irq_desc_get_chip(desc);<br>
+ 	struct irqaction *action = desc->action;<br>
+@@ -768,6 +766,9 @@ void handle_fasteoi_nmi(struct irq_desc *desc)<br>
+ <br>
+ 	__kstat_incr_irqs_this_cpu(desc);<br>
+ <br>
++	if (chip->irq_ack)<br>
++		chip->irq_ack(&desc->irq_data);<br>
++<br>
+ 	trace_irq_handler_entry(irq, action);<br>
+ 	/*<br>
+ 	 * NMIs cannot be shared, there is only one action.<br>
+@@ -778,7 +779,7 @@ void handle_fasteoi_nmi(struct irq_desc *desc)<br>
+ 	if (chip->irq_eoi)<br>
+ 		chip->irq_eoi(&desc->irq_data);<br>
+ }<br>
+-EXPORT_SYMBOL_GPL(handle_fasteoi_nmi);<br>
++EXPORT_SYMBOL_GPL(handle_nmi);<br>
+ <br>
+ /**<br>
+  *	handle_edge_irq - edge type IRQ handler<br>
+@@ -1027,14 +1028,13 @@ void handle_percpu_devid_irq(struct irq_desc *desc)<br>
+ }<br>
+ <br>
+ /**<br>
+- * handle_percpu_devid_fasteoi_nmi - Per CPU local NMI handler with per cpu<br>
++ * handle_percpu_devid_nmi - Per CPU local NMI handler with per cpu<br>
+  *				     dev ids<br>
+  * @desc:	the interrupt description structure for this irq<br>
+  *<br>
+- * Similar to handle_fasteoi_nmi, but handling the dev_id cookie<br>
+- * as a percpu pointer.<br>
++ * Similar to handle_nmi, but handling the dev_id cookie as a percpu pointer.<br>
+  */<br>
+-void handle_percpu_devid_fasteoi_nmi(struct irq_desc *desc)<br>
++void handle_percpu_devid_nmi(struct irq_desc *desc)<br>
+ {<br>
+ 	struct irq_chip *chip = irq_desc_get_chip(desc);<br>
+ 	struct irqaction *action = desc->action;<br>
+@@ -1043,6 +1043,9 @@ void handle_percpu_devid_fasteoi_nmi(struct irq_desc *desc)<br>
+ <br>
+ 	__kstat_incr_irqs_this_cpu(desc);<br>
+ <br>
++	if (chip->irq_ack)<br>
++		chip->irq_ack(&desc->irq_data);<br>
++<br>
+ 	trace_irq_handler_entry(irq, action);<br>
+ 	res = action->handler(irq, raw_cpu_ptr(action->percpu_dev_id));<br>
+ 	trace_irq_handler_exit(irq, action, res);<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

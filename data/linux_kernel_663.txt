@@ -1,0 +1,27 @@
+Fix to return a negative error code from the error handling<br>
+case instead of 0, as done elsewhere in this function.<br>
+<br>
+Fixes: 7724105686e7 ("IB/hfi1: add driver files")<br>
+Reported-by: Hulk Robot <hulkci@xxxxxxxxxx><br>
+Signed-off-by: Wang Wensheng <wangwensheng4@xxxxxxxxxx><br>
+---<br>
+ drivers/infiniband/hw/hfi1/firmware.c | 1 +<br>
+ 1 file changed, 1 insertion(+)<br>
+<br>
+diff --git a/drivers/infiniband/hw/hfi1/firmware.c b/drivers/infiniband/hw/hfi1/firmware.c<br>
+index 0e83d4b..2cf102b 100644<br>
+--- a/drivers/infiniband/hw/hfi1/firmware.c<br>
++++ b/drivers/infiniband/hw/hfi1/firmware.c<br>
+@@ -1916,6 +1916,7 @@ int parse_platform_config(struct hfi1_devdata *dd)<br>
+ 			dd_dev_err(dd, "%s: Failed CRC check at offset %ld\n",<br>
+ 				   __func__, (ptr -<br>
+ 				   (u32 *)dd->platform_config.data));<br>
++			ret = -EINVAL;<br>
+ 			goto bail;<br>
+ 		}<br>
+ 		/* Jump the CRC DWORD */<br>
+-- <br>
+2.9.4<br>
+<br>
+<br>
+

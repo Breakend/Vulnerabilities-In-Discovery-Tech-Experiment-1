@@ -1,0 +1,99 @@
+Some operations, such as comparing a range of data in two files under<br>
+fsdax mode, requires nested iomap_open()/iomap_end() on two file.  Thus,<br>
+we introduce iomap_apply2() to accept arguments from two files and<br>
+iomap_actor2_t for actions on two files.<br>
+<br>
+Signed-off-by: Shiyang Ruan <ruansy.fnst@xxxxxxxxxxx><br>
+---<br>
+ fs/iomap/apply.c      | 52 +++++++++++++++++++++++++++++++++++++++++++<br>
+ include/linux/iomap.h |  7 +++++-<br>
+ 2 files changed, 58 insertions(+), 1 deletion(-)<br>
+<br>
+diff --git a/fs/iomap/apply.c b/fs/iomap/apply.c<br>
+index 26ab6563181f..0493da5286ad 100644<br>
+--- a/fs/iomap/apply.c<br>
++++ b/fs/iomap/apply.c<br>
+@@ -97,3 +97,55 @@ iomap_apply(struct inode *inode, loff_t pos, loff_t length, unsigned flags,<br>
+ <br>
+ 	return written ? written : ret;<br>
+ }<br>
++<br>
++loff_t<br>
++iomap_apply2(struct inode *ino1, loff_t pos1, struct inode *ino2, loff_t pos2,<br>
++		loff_t length, unsigned int flags, const struct iomap_ops *ops,<br>
++		void *data, iomap_actor2_t actor)<br>
++{<br>
++	struct iomap smap = { .type = IOMAP_HOLE };<br>
++	struct iomap dmap = { .type = IOMAP_HOLE };<br>
++	loff_t written = 0, ret, ret2 = 0;<br>
++	loff_t len1 = length, len2, min_len;<br>
++<br>
++	ret = ops->iomap_begin(ino1, pos1, len1, flags, &smap, NULL);<br>
++	if (ret)<br>
++		goto out;<br>
++	if (WARN_ON(smap.offset > pos1)) {<br>
++		written = -EIO;<br>
++		goto out_src;<br>
++	}<br>
++	if (WARN_ON(smap.length == 0)) {<br>
++		written = -EIO;<br>
++		goto out_src;<br>
++	}<br>
++	len2 = min_t(loff_t, len1, smap.length);<br>
++<br>
++	ret = ops->iomap_begin(ino2, pos2, len2, flags, &dmap, NULL);<br>
++	if (ret)<br>
++		goto out_src;<br>
++	if (WARN_ON(dmap.offset > pos2)) {<br>
++		written = -EIO;<br>
++		goto out_dest;<br>
++	}<br>
++	if (WARN_ON(dmap.length == 0)) {<br>
++		written = -EIO;<br>
++		goto out_dest;<br>
++	}<br>
++	min_len = min_t(loff_t, len2, dmap.length);<br>
++<br>
++	written = actor(ino1, pos1, ino2, pos2, min_len, data, &smap, &dmap);<br>
++<br>
++out_dest:<br>
++	if (ops->iomap_end)<br>
++		ret2 = ops->iomap_end(ino2, pos2, len2,<br>
++				      written > 0 ? written : 0, flags, &dmap);<br>
++out_src:<br>
++	if (ops->iomap_end)<br>
++		ret = ops->iomap_end(ino1, pos1, len1,<br>
++				     written > 0 ? written : 0, flags, &smap);<br>
++out:<br>
++	if (written)<br>
++		return written;<br>
++	return ret ?: ret2;<br>
++}<br>
+diff --git a/include/linux/iomap.h b/include/linux/iomap.h<br>
+index d202fd2d0f91..9493c48bcc9c 100644<br>
+--- a/include/linux/iomap.h<br>
++++ b/include/linux/iomap.h<br>
+@@ -150,10 +150,15 @@ struct iomap_ops {<br>
+  */<br>
+ typedef loff_t (*iomap_actor_t)(struct inode *inode, loff_t pos, loff_t len,<br>
+ 		void *data, struct iomap *iomap, struct iomap *srcmap);<br>
+-<br>
++typedef loff_t (*iomap_actor2_t)(struct inode *ino1, loff_t pos1,<br>
++		struct inode *ino2, loff_t pos2, loff_t len, void *data,<br>
++		struct iomap *smap, struct iomap *dmap);<br>
+ loff_t iomap_apply(struct inode *inode, loff_t pos, loff_t length,<br>
+ 		unsigned flags, const struct iomap_ops *ops, void *data,<br>
+ 		iomap_actor_t actor);<br>
++loff_t iomap_apply2(struct inode *ino1, loff_t pos1, struct inode *ino2,<br>
++		loff_t pos2, loff_t length, unsigned int flags,<br>
++		const struct iomap_ops *ops, void *data, iomap_actor2_t actor);<br>
+ <br>
+ ssize_t iomap_file_buffered_write(struct kiocb *iocb, struct iov_iter *from,<br>
+ 		const struct iomap_ops *ops);<br>
+-- <br>
+2.31.0<br>
+<br>
+<br>
+<br>
+<br>
+

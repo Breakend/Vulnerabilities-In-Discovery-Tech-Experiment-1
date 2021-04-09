@@ -1,0 +1,209 @@
+From: Ofir Bitton <obitton@xxxxxxxxx><br>
+<br>
+As part of the securing GAUDI, the F/W will configure the PCI iATU<br>
+regions. If the driver identifies a secured PCI ID, it will know to<br>
+skip iATU configuration in a very early stage.<br>
+<br>
+Signed-off-by: Ofir Bitton <obitton@xxxxxxxxx><br>
+Reviewed-by: Oded Gabbay <ogabbay@xxxxxxxxxx><br>
+Signed-off-by: Oded Gabbay <ogabbay@xxxxxxxxxx><br>
+---<br>
+ drivers/misc/habanalabs/common/habanalabs.h |  3 ++<br>
+ drivers/misc/habanalabs/common/pci/pci.c    | 52 +++++++++++++++++++++<br>
+ drivers/misc/habanalabs/gaudi/gaudi.c       | 23 +++++++++<br>
+ drivers/misc/habanalabs/goya/goya.c         | 24 +++++++++-<br>
+ 4 files changed, 101 insertions(+), 1 deletion(-)<br>
+<br>
+diff --git a/drivers/misc/habanalabs/common/habanalabs.h b/drivers/misc/habanalabs/common/habanalabs.h<br>
+index c1b46126c522..44e89da30b4a 100644<br>
+--- a/drivers/misc/habanalabs/common/habanalabs.h<br>
++++ b/drivers/misc/habanalabs/common/habanalabs.h<br>
+@@ -445,6 +445,7 @@ struct hl_mmu_properties {<br>
+  * @dram_supports_virtual_memory: is there an MMU towards the DRAM<br>
+  * @hard_reset_done_by_fw: true if firmware is handling hard reset flow<br>
+  * @num_functional_hbms: number of functional HBMs in each DCORE.<br>
++ * @iatu_done_by_fw: true if iATU configuration is being done by FW.<br>
+  */<br>
+ struct asic_fixed_properties {<br>
+ 	struct hw_queue_properties	*hw_queues_props;<br>
+@@ -508,6 +509,7 @@ struct asic_fixed_properties {<br>
+ 	u8				dram_supports_virtual_memory;<br>
+ 	u8				hard_reset_done_by_fw;<br>
+ 	u8				num_functional_hbms;<br>
++	u8				iatu_done_by_fw;<br>
+ };<br>
+ <br>
+ /**<br>
+@@ -2400,6 +2402,7 @@ int hl_fw_read_preboot_status(struct hl_device *hdev, u32 cpu_boot_status_reg,<br>
+ <br>
+ int hl_pci_bars_map(struct hl_device *hdev, const char * const name[3],<br>
+ 			bool is_wc[3]);<br>
++int hl_pci_elbi_read(struct hl_device *hdev, u64 addr, u32 *data);<br>
+ int hl_pci_iatu_write(struct hl_device *hdev, u32 addr, u32 data);<br>
+ int hl_pci_set_inbound_region(struct hl_device *hdev, u8 region,<br>
+ 		struct hl_inbound_pci_region *pci_region);<br>
+diff --git a/drivers/misc/habanalabs/common/pci/pci.c b/drivers/misc/habanalabs/common/pci/pci.c<br>
+index b799f9258fb0..e941b7eef346 100644<br>
+--- a/drivers/misc/habanalabs/common/pci/pci.c<br>
++++ b/drivers/misc/habanalabs/common/pci/pci.c<br>
+@@ -85,6 +85,58 @@ static void hl_pci_bars_unmap(struct hl_device *hdev)<br>
+ 	pci_release_regions(pdev);<br>
+ }<br>
+ <br>
++int hl_pci_elbi_read(struct hl_device *hdev, u64 addr, u32 *data)<br>
++{<br>
++	struct pci_dev *pdev = hdev->pdev;<br>
++	ktime_t timeout;<br>
++	u64 msec;<br>
++	u32 val;<br>
++<br>
++	if (hdev->pldm)<br>
++		msec = HL_PLDM_PCI_ELBI_TIMEOUT_MSEC;<br>
++	else<br>
++		msec = HL_PCI_ELBI_TIMEOUT_MSEC;<br>
++<br>
++	/* Clear previous status */<br>
++	pci_write_config_dword(pdev, mmPCI_CONFIG_ELBI_STS, 0);<br>
++<br>
++	pci_write_config_dword(pdev, mmPCI_CONFIG_ELBI_ADDR, (u32) addr);<br>
++	pci_write_config_dword(pdev, mmPCI_CONFIG_ELBI_CTRL, 0);<br>
++<br>
++	timeout = ktime_add_ms(ktime_get(), msec);<br>
++	for (;;) {<br>
++		pci_read_config_dword(pdev, mmPCI_CONFIG_ELBI_STS, &val);<br>
++		if (val & PCI_CONFIG_ELBI_STS_MASK)<br>
++			break;<br>
++		if (ktime_compare(ktime_get(), timeout) > 0) {<br>
++			pci_read_config_dword(pdev, mmPCI_CONFIG_ELBI_STS,<br>
++						&val);<br>
++			break;<br>
++		}<br>
++<br>
++		usleep_range(300, 500);<br>
++	}<br>
++<br>
++	if ((val & PCI_CONFIG_ELBI_STS_MASK) == PCI_CONFIG_ELBI_STS_DONE) {<br>
++		pci_read_config_dword(pdev, mmPCI_CONFIG_ELBI_DATA, data);<br>
++<br>
++		return 0;<br>
++	}<br>
++<br>
++	if (val & PCI_CONFIG_ELBI_STS_ERR) {<br>
++		dev_err(hdev->dev, "Error reading from ELBI\n");<br>
++		return -EIO;<br>
++	}<br>
++<br>
++	if (!(val & PCI_CONFIG_ELBI_STS_MASK)) {<br>
++		dev_err(hdev->dev, "ELBI read didn't finish in time\n");<br>
++		return -EIO;<br>
++	}<br>
++<br>
++	dev_err(hdev->dev, "ELBI read has undefined bits in status\n");<br>
++	return -EIO;<br>
++}<br>
++<br>
+ /**<br>
+  * hl_pci_elbi_write() - Write through the ELBI interface.<br>
+  * @hdev: Pointer to hl_device structure.<br>
+diff --git a/drivers/misc/habanalabs/gaudi/gaudi.c b/drivers/misc/habanalabs/gaudi/gaudi.c<br>
+index 841748392e49..8730b691ec61 100644<br>
+--- a/drivers/misc/habanalabs/gaudi/gaudi.c<br>
++++ b/drivers/misc/habanalabs/gaudi/gaudi.c<br>
+@@ -629,6 +629,11 @@ static int gaudi_init_iatu(struct hl_device *hdev)<br>
+ 	struct hl_outbound_pci_region outbound_region;<br>
+ 	int rc;<br>
+ <br>
++	if (hdev->asic_prop.iatu_done_by_fw) {<br>
++		hdev->asic_funcs->set_dma_mask_from_fw(hdev);<br>
++		return 0;<br>
++	}<br>
++<br>
+ 	/* Inbound Region 0 - Bar 0 - Point to SRAM + CFG */<br>
+ 	inbound_region.mode = PCI_BAR_MATCH_MODE;<br>
+ 	inbound_region.bar = SRAM_BAR_ID;<br>
+@@ -673,6 +678,7 @@ static int gaudi_early_init(struct hl_device *hdev)<br>
+ {<br>
+ 	struct asic_fixed_properties *prop = &hdev->asic_prop;<br>
+ 	struct pci_dev *pdev = hdev->pdev;<br>
++	u32 fw_boot_status;<br>
+ 	int rc;<br>
+ <br>
+ 	rc = gaudi_get_fixed_properties(hdev);<br>
+@@ -706,6 +712,23 @@ static int gaudi_early_init(struct hl_device *hdev)<br>
+ <br>
+ 	prop->dram_pci_bar_size = pci_resource_len(pdev, HBM_BAR_ID);<br>
+ <br>
++	/* If FW security is enabled at this point it means no access to ELBI */<br>
++	if (!hdev->asic_prop.fw_security_disabled) {<br>
++		hdev->asic_prop.iatu_done_by_fw = true;<br>
++		goto pci_init;<br>
++	}<br>
++<br>
++	rc = hl_pci_elbi_read(hdev, CFG_BASE + mmCPU_BOOT_DEV_STS0,<br>
++				&fw_boot_status);<br>
++	if (rc)<br>
++		goto free_queue_props;<br>
++<br>
++	/* Check whether FW is configuring iATU */<br>
++	if ((fw_boot_status & CPU_BOOT_DEV_STS0_ENABLED) &&<br>
++			(fw_boot_status & CPU_BOOT_DEV_STS0_FW_IATU_CONF_EN))<br>
++		hdev->asic_prop.iatu_done_by_fw = true;<br>
++<br>
++pci_init:<br>
+ 	rc = hl_pci_init(hdev);<br>
+ 	if (rc)<br>
+ 		goto free_queue_props;<br>
+diff --git a/drivers/misc/habanalabs/goya/goya.c b/drivers/misc/habanalabs/goya/goya.c<br>
+index 44dd4d8d8822..e27338f4aad2 100644<br>
+--- a/drivers/misc/habanalabs/goya/goya.c<br>
++++ b/drivers/misc/habanalabs/goya/goya.c<br>
+@@ -555,6 +555,11 @@ static int goya_init_iatu(struct hl_device *hdev)<br>
+ 	struct hl_outbound_pci_region outbound_region;<br>
+ 	int rc;<br>
+ <br>
++	if (hdev->asic_prop.iatu_done_by_fw) {<br>
++		hdev->asic_funcs->set_dma_mask_from_fw(hdev);<br>
++		return 0;<br>
++	}<br>
++<br>
+ 	/* Inbound Region 0 - Bar 0 - Point to SRAM and CFG */<br>
+ 	inbound_region.mode = PCI_BAR_MATCH_MODE;<br>
+ 	inbound_region.bar = SRAM_CFG_BAR_ID;<br>
+@@ -602,7 +607,7 @@ static int goya_early_init(struct hl_device *hdev)<br>
+ {<br>
+ 	struct asic_fixed_properties *prop = &hdev->asic_prop;<br>
+ 	struct pci_dev *pdev = hdev->pdev;<br>
+-	u32 val;<br>
++	u32 fw_boot_status, val;<br>
+ 	int rc;<br>
+ <br>
+ 	rc = goya_get_fixed_properties(hdev);<br>
+@@ -636,6 +641,23 @@ static int goya_early_init(struct hl_device *hdev)<br>
+ <br>
+ 	prop->dram_pci_bar_size = pci_resource_len(pdev, DDR_BAR_ID);<br>
+ <br>
++	/* If FW security is enabled at this point it means no access to ELBI */<br>
++	if (!hdev->asic_prop.fw_security_disabled) {<br>
++		hdev->asic_prop.iatu_done_by_fw = true;<br>
++		goto pci_init;<br>
++	}<br>
++<br>
++	rc = hl_pci_elbi_read(hdev, CFG_BASE + mmCPU_BOOT_DEV_STS0,<br>
++				&fw_boot_status);<br>
++	if (rc)<br>
++		goto free_queue_props;<br>
++<br>
++	/* Check whether FW is configuring iATU */<br>
++	if ((fw_boot_status & CPU_BOOT_DEV_STS0_ENABLED) &&<br>
++			(fw_boot_status & CPU_BOOT_DEV_STS0_FW_IATU_CONF_EN))<br>
++		hdev->asic_prop.iatu_done_by_fw = true;<br>
++<br>
++pci_init:<br>
+ 	rc = hl_pci_init(hdev);<br>
+ 	if (rc)<br>
+ 		goto free_queue_props;<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

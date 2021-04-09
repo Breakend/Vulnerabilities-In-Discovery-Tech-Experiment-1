@@ -1,0 +1,424 @@
+From: SeongJae Park <sjpark@xxxxxxxxx><br>
+<br>
+Even somehow the initial monitoring target regions are well constructed<br>
+to fulfill the assumption (pages in same region have similar access<br>
+frequencies), the data access pattern can be dynamically changed.  This<br>
+will result in low monitoring quality.  To keep the assumption as much<br>
+as possible, DAMON adaptively merges and splits each region based on<br>
+their access frequency.<br>
+<br>
+For each ``aggregation interval``, it compares the access frequencies of<br>
+adjacent regions and merges those if the frequency difference is small.<br>
+Then, after it reports and clears the aggregated access frequency of<br>
+each region, it splits each region into two or three regions if the<br>
+total number of regions will not exceed the user-specified maximum<br>
+number of regions after the split.<br>
+<br>
+In this way, DAMON provides its best-effort quality and minimal overhead<br>
+while keeping the upper-bound overhead that users set.<br>
+<br>
+Signed-off-by: SeongJae Park <sjpark@xxxxxxxxx><br>
+Reviewed-by: Leonard Foerster <foersleo@xxxxxxxxx><br>
+---<br>
+ include/linux/damon.h |  23 +++--<br>
+ mm/damon/core.c       | 214 +++++++++++++++++++++++++++++++++++++++++-<br>
+ 2 files changed, 227 insertions(+), 10 deletions(-)<br>
+<br>
+diff --git a/include/linux/damon.h b/include/linux/damon.h<br>
+index 67db309ad61b..0bd5d6913a6c 100644<br>
+--- a/include/linux/damon.h<br>
++++ b/include/linux/damon.h<br>
+@@ -12,6 +12,9 @@<br>
+ #include <linux/time64.h><br>
+ #include <linux/types.h><br>
+ <br>
++/* Minimal region size.  Every damon_region is aligned by this. */<br>
++#define DAMON_MIN_REGION	PAGE_SIZE<br>
++<br>
+ /**<br>
+  * struct damon_addr_range - Represents an address region of [@start, @end).<br>
+  * @start:	Start address of the region (inclusive).<br>
+@@ -85,6 +88,8 @@ struct damon_ctx;<br>
+  * prepared for the next access check.<br>
+  * @check_accesses should check the accesses to each region that made after the<br>
+  * last preparation and update the number of observed accesses of each region.<br>
++ * It should also return max number of observed accesses that made as a result<br>
++ * of its update.  The value will be used for regions adjustment threshold.<br>
+  * @reset_aggregated should reset the access monitoring results that aggregated<br>
+  * by @check_accesses.<br>
+  * @target_valid should check whether the target is still valid for the<br>
+@@ -95,7 +100,7 @@ struct damon_primitive {<br>
+ 	void (*init)(struct damon_ctx *context);<br>
+ 	void (*update)(struct damon_ctx *context);<br>
+ 	void (*prepare_access_checks)(struct damon_ctx *context);<br>
+-	void (*check_accesses)(struct damon_ctx *context);<br>
++	unsigned int (*check_accesses)(struct damon_ctx *context);<br>
+ 	void (*reset_aggregated)(struct damon_ctx *context);<br>
+ 	bool (*target_valid)(void *target);<br>
+ 	void (*cleanup)(struct damon_ctx *context);<br>
+@@ -172,7 +177,9 @@ struct damon_callback {<br>
+  * @primitive:	Set of monitoring primitives for given use cases.<br>
+  * @callback:	Set of callbacks for monitoring events notifications.<br>
+  *<br>
+- * @region_targets:	Head of monitoring targets (&damon_target) list.<br>
++ * @min_nr_regions:	The minimum number of adaptive monitoring regions.<br>
++ * @max_nr_regions:	The maximum number of adaptive monitoring regions.<br>
++ * @adaptive_targets:	Head of monitoring targets (&damon_target) list.<br>
+  */<br>
+ struct damon_ctx {<br>
+ 	unsigned long sample_interval;<br>
+@@ -191,7 +198,9 @@ struct damon_ctx {<br>
+ 	struct damon_primitive primitive;<br>
+ 	struct damon_callback callback;<br>
+ <br>
+-	struct list_head region_targets;<br>
++	unsigned long min_nr_regions;<br>
++	unsigned long max_nr_regions;<br>
++	struct list_head adaptive_targets;<br>
+ };<br>
+ <br>
+ #define damon_next_region(r) \<br>
+@@ -207,10 +216,10 @@ struct damon_ctx {<br>
+ 	list_for_each_entry_safe(r, next, &t->regions_list, list)<br>
+ <br>
+ #define damon_for_each_target(t, ctx) \<br>
+-	list_for_each_entry(t, &(ctx)->region_targets, list)<br>
++	list_for_each_entry(t, &(ctx)->adaptive_targets, list)<br>
+ <br>
+ #define damon_for_each_target_safe(t, next, ctx)	\<br>
+-	list_for_each_entry_safe(t, next, &(ctx)->region_targets, list)<br>
++	list_for_each_entry_safe(t, next, &(ctx)->adaptive_targets, list)<br>
+ <br>
+ #ifdef CONFIG_DAMON<br>
+ <br>
+@@ -224,11 +233,13 @@ struct damon_target *damon_new_target(unsigned long id);<br>
+ void damon_add_target(struct damon_ctx *ctx, struct damon_target *t);<br>
+ void damon_free_target(struct damon_target *t);<br>
+ void damon_destroy_target(struct damon_target *t);<br>
++unsigned int damon_nr_regions(struct damon_target *t);<br>
+ <br>
+ struct damon_ctx *damon_new_ctx(void);<br>
+ void damon_destroy_ctx(struct damon_ctx *ctx);<br>
+ int damon_set_attrs(struct damon_ctx *ctx, unsigned long sample_int,<br>
+-		unsigned long aggr_int, unsigned long primitive_upd_int);<br>
++		unsigned long aggr_int, unsigned long primitive_upd_int,<br>
++		unsigned long min_nr_reg, unsigned long max_nr_reg);<br>
+ <br>
+ int damon_start(struct damon_ctx **ctxs, int nr_ctxs);<br>
+ int damon_stop(struct damon_ctx **ctxs, int nr_ctxs);<br>
+diff --git a/mm/damon/core.c b/mm/damon/core.c<br>
+index 94db494dcf70..b36b6bdd94e2 100644<br>
+--- a/mm/damon/core.c<br>
++++ b/mm/damon/core.c<br>
+@@ -10,8 +10,12 @@<br>
+ #include <linux/damon.h><br>
+ #include <linux/delay.h><br>
+ #include <linux/kthread.h><br>
++#include <linux/random.h><br>
+ #include <linux/slab.h><br>
+ <br>
++/* Get a random number in [l, r) */<br>
++#define damon_rand(l, r) (l + prandom_u32_max(r - l))<br>
++<br>
+ static DEFINE_MUTEX(damon_lock);<br>
+ static int nr_running_ctxs;<br>
+ <br>
+@@ -87,7 +91,7 @@ struct damon_target *damon_new_target(unsigned long id)<br>
+ <br>
+ void damon_add_target(struct damon_ctx *ctx, struct damon_target *t)<br>
+ {<br>
+-	list_add_tail(&t->list, &ctx->region_targets);<br>
++	list_add_tail(&t->list, &ctx->adaptive_targets);<br>
+ }<br>
+ <br>
+ static void damon_del_target(struct damon_target *t)<br>
+@@ -110,6 +114,17 @@ void damon_destroy_target(struct damon_target *t)<br>
+ 	damon_free_target(t);<br>
+ }<br>
+ <br>
++unsigned int damon_nr_regions(struct damon_target *t)<br>
++{<br>
++	struct damon_region *r;<br>
++	unsigned int nr_regions = 0;<br>
++<br>
++	damon_for_each_region(r, t)<br>
++		nr_regions++;<br>
++<br>
++	return nr_regions;<br>
++}<br>
++<br>
+ struct damon_ctx *damon_new_ctx(void)<br>
+ {<br>
+ 	struct damon_ctx *ctx;<br>
+@@ -127,7 +142,10 @@ struct damon_ctx *damon_new_ctx(void)<br>
+ <br>
+ 	mutex_init(&ctx->kdamond_lock);<br>
+ <br>
+-	INIT_LIST_HEAD(&ctx->region_targets);<br>
++	ctx->min_nr_regions = 10;<br>
++	ctx->max_nr_regions = 1000;<br>
++<br>
++	INIT_LIST_HEAD(&ctx->adaptive_targets);<br>
+ <br>
+ 	return ctx;<br>
+ }<br>
+@@ -157,6 +175,8 @@ void damon_destroy_ctx(struct damon_ctx *ctx)<br>
+  * @sample_int:		time interval between samplings<br>
+  * @aggr_int:		time interval between aggregations<br>
+  * @primitive_upd_int:	time interval between monitoring primitive updates<br>
++ * @min_nr_reg:		minimal number of regions<br>
++ * @max_nr_reg:		maximum number of regions<br>
+  *<br>
+  * This function should not be called while the kdamond is running.<br>
+  * Every time interval is in micro-seconds.<br>
+@@ -164,15 +184,49 @@ void damon_destroy_ctx(struct damon_ctx *ctx)<br>
+  * Return: 0 on success, negative error code otherwise.<br>
+  */<br>
+ int damon_set_attrs(struct damon_ctx *ctx, unsigned long sample_int,<br>
+-		    unsigned long aggr_int, unsigned long primitive_upd_int)<br>
++		    unsigned long aggr_int, unsigned long primitive_upd_int,<br>
++		    unsigned long min_nr_reg, unsigned long max_nr_reg)<br>
+ {<br>
++	if (min_nr_reg < 3) {<br>
++		pr_err("min_nr_regions (%lu) must be at least 3\n",<br>
++				min_nr_reg);<br>
++		return -EINVAL;<br>
++	}<br>
++	if (min_nr_reg > max_nr_reg) {<br>
++		pr_err("invalid nr_regions.  min (%lu) > max (%lu)\n",<br>
++				min_nr_reg, max_nr_reg);<br>
++		return -EINVAL;<br>
++	}<br>
++<br>
+ 	ctx->sample_interval = sample_int;<br>
+ 	ctx->aggr_interval = aggr_int;<br>
+ 	ctx->primitive_update_interval = primitive_upd_int;<br>
++	ctx->min_nr_regions = min_nr_reg;<br>
++	ctx->max_nr_regions = max_nr_reg;<br>
+ <br>
+ 	return 0;<br>
+ }<br>
+ <br>
++/* Returns the size upper limit for each monitoring region */<br>
++static unsigned long damon_region_sz_limit(struct damon_ctx *ctx)<br>
++{<br>
++	struct damon_target *t;<br>
++	struct damon_region *r;<br>
++	unsigned long sz = 0;<br>
++<br>
++	damon_for_each_target(t, ctx) {<br>
++		damon_for_each_region(r, t)<br>
++			sz += r->ar.end - r->ar.start;<br>
++	}<br>
++<br>
++	if (ctx->min_nr_regions)<br>
++		sz /= ctx->min_nr_regions;<br>
++	if (sz < DAMON_MIN_REGION)<br>
++		sz = DAMON_MIN_REGION;<br>
++<br>
++	return sz;<br>
++}<br>
++<br>
+ static bool damon_kdamond_running(struct damon_ctx *ctx)<br>
+ {<br>
+ 	bool running;<br>
+@@ -339,6 +393,149 @@ static void kdamond_reset_aggregated(struct damon_ctx *c)<br>
+ 	}<br>
+ }<br>
+ <br>
++#define sz_damon_region(r) (r->ar.end - r->ar.start)<br>
++<br>
++/*<br>
++ * Merge two adjacent regions into one region<br>
++ */<br>
++static void damon_merge_two_regions(struct damon_region *l,<br>
++				struct damon_region *r)<br>
++{<br>
++	unsigned long sz_l = sz_damon_region(l), sz_r = sz_damon_region(r);<br>
++<br>
++	l->nr_accesses = (l->nr_accesses * sz_l + r->nr_accesses * sz_r) /<br>
++			(sz_l + sz_r);<br>
++	l->ar.end = r->ar.end;<br>
++	damon_destroy_region(r);<br>
++}<br>
++<br>
++#define diff_of(a, b) (a > b ? a - b : b - a)<br>
++<br>
++/*<br>
++ * Merge adjacent regions having similar access frequencies<br>
++ *<br>
++ * t		target affected by this merge operation<br>
++ * thres	'->nr_accesses' diff threshold for the merge<br>
++ * sz_limit	size upper limit of each region<br>
++ */<br>
++static void damon_merge_regions_of(struct damon_target *t, unsigned int thres,<br>
++				   unsigned long sz_limit)<br>
++{<br>
++	struct damon_region *r, *prev = NULL, *next;<br>
++<br>
++	damon_for_each_region_safe(r, next, t) {<br>
++		if (prev && prev->ar.end == r->ar.start &&<br>
++		    diff_of(prev->nr_accesses, r->nr_accesses) <= thres &&<br>
++		    sz_damon_region(prev) + sz_damon_region(r) <= sz_limit)<br>
++			damon_merge_two_regions(prev, r);<br>
++		else<br>
++			prev = r;<br>
++	}<br>
++}<br>
++<br>
++/*<br>
++ * Merge adjacent regions having similar access frequencies<br>
++ *<br>
++ * threshold	'->nr_accesses' diff threshold for the merge<br>
++ * sz_limit	size upper limit of each region<br>
++ *<br>
++ * This function merges monitoring target regions which are adjacent and their<br>
++ * access frequencies are similar.  This is for minimizing the monitoring<br>
++ * overhead under the dynamically changeable access pattern.  If a merge was<br>
++ * unnecessarily made, later 'kdamond_split_regions()' will revert it.<br>
++ */<br>
++static void kdamond_merge_regions(struct damon_ctx *c, unsigned int threshold,<br>
++				  unsigned long sz_limit)<br>
++{<br>
++	struct damon_target *t;<br>
++<br>
++	damon_for_each_target(t, c)<br>
++		damon_merge_regions_of(t, threshold, sz_limit);<br>
++}<br>
++<br>
++/*<br>
++ * Split a region in two<br>
++ *<br>
++ * r		the region to be split<br>
++ * sz_r		size of the first sub-region that will be made<br>
++ */<br>
++static void damon_split_region_at(struct damon_ctx *ctx,<br>
++				  struct damon_region *r, unsigned long sz_r)<br>
++{<br>
++	struct damon_region *new;<br>
++<br>
++	new = damon_new_region(r->ar.start + sz_r, r->ar.end);<br>
++	if (!new)<br>
++		return;<br>
++<br>
++	r->ar.end = new->ar.start;<br>
++<br>
++	damon_insert_region(new, r, damon_next_region(r));<br>
++}<br>
++<br>
++/* Split every region in the given target into 'nr_subs' regions */<br>
++static void damon_split_regions_of(struct damon_ctx *ctx,<br>
++				     struct damon_target *t, int nr_subs)<br>
++{<br>
++	struct damon_region *r, *next;<br>
++	unsigned long sz_region, sz_sub = 0;<br>
++	int i;<br>
++<br>
++	damon_for_each_region_safe(r, next, t) {<br>
++		sz_region = r->ar.end - r->ar.start;<br>
++<br>
++		for (i = 0; i < nr_subs - 1 &&<br>
++				sz_region > 2 * DAMON_MIN_REGION; i++) {<br>
++			/*<br>
++			 * Randomly select size of left sub-region to be at<br>
++			 * least 10 percent and at most 90% of original region<br>
++			 */<br>
++			sz_sub = ALIGN_DOWN(damon_rand(1, 10) *<br>
++					sz_region / 10, DAMON_MIN_REGION);<br>
++			/* Do not allow blank region */<br>
++			if (sz_sub == 0 || sz_sub >= sz_region)<br>
++				continue;<br>
++<br>
++			damon_split_region_at(ctx, r, sz_sub);<br>
++			sz_region = sz_sub;<br>
++		}<br>
++	}<br>
++}<br>
++<br>
++/*<br>
++ * Split every target region into randomly-sized small regions<br>
++ *<br>
++ * This function splits every target region into random-sized small regions if<br>
++ * current total number of the regions is equal or smaller than half of the<br>
++ * user-specified maximum number of regions.  This is for maximizing the<br>
++ * monitoring accuracy under the dynamically changeable access patterns.  If a<br>
++ * split was unnecessarily made, later 'kdamond_merge_regions()' will revert<br>
++ * it.<br>
++ */<br>
++static void kdamond_split_regions(struct damon_ctx *ctx)<br>
++{<br>
++	struct damon_target *t;<br>
++	unsigned int nr_regions = 0;<br>
++	static unsigned int last_nr_regions;<br>
++	int nr_subregions = 2;<br>
++<br>
++	damon_for_each_target(t, ctx)<br>
++		nr_regions += damon_nr_regions(t);<br>
++<br>
++	if (nr_regions > ctx->max_nr_regions / 2)<br>
++		return;<br>
++<br>
++	/* Maybe the middle of the region has different access frequency */<br>
++	if (last_nr_regions == nr_regions &&<br>
++			nr_regions < ctx->max_nr_regions / 3)<br>
++		nr_subregions = 3;<br>
++<br>
++	damon_for_each_target(t, ctx)<br>
++		damon_split_regions_of(ctx, t, nr_subregions);<br>
++<br>
++	last_nr_regions = nr_regions;<br>
++}<br>
++<br>
+ /*<br>
+  * Check whether it is time to check and apply the target monitoring regions<br>
+  *<br>
+@@ -395,6 +592,8 @@ static int kdamond_fn(void *data)<br>
+ 	struct damon_ctx *ctx = (struct damon_ctx *)data;<br>
+ 	struct damon_target *t;<br>
+ 	struct damon_region *r, *next;<br>
++	unsigned int max_nr_accesses = 0;<br>
++	unsigned long sz_limit = 0;<br>
+ <br>
+ 	pr_info("kdamond (%d) starts\n", ctx->kdamond->pid);<br>
+ <br>
+@@ -403,6 +602,8 @@ static int kdamond_fn(void *data)<br>
+ 	if (ctx->callback.before_start && ctx->callback.before_start(ctx))<br>
+ 		set_kdamond_stop(ctx);<br>
+ <br>
++	sz_limit = damon_region_sz_limit(ctx);<br>
++<br>
+ 	while (!kdamond_need_stop(ctx)) {<br>
+ 		if (ctx->primitive.prepare_access_checks)<br>
+ 			ctx->primitive.prepare_access_checks(ctx);<br>
+@@ -413,13 +614,17 @@ static int kdamond_fn(void *data)<br>
+ 		usleep_range(ctx->sample_interval, ctx->sample_interval + 1);<br>
+ <br>
+ 		if (ctx->primitive.check_accesses)<br>
+-			ctx->primitive.check_accesses(ctx);<br>
++			max_nr_accesses = ctx->primitive.check_accesses(ctx);<br>
+ <br>
+ 		if (kdamond_aggregate_interval_passed(ctx)) {<br>
++			kdamond_merge_regions(ctx,<br>
++					max_nr_accesses / 10,<br>
++					sz_limit);<br>
+ 			if (ctx->callback.after_aggregation &&<br>
+ 					ctx->callback.after_aggregation(ctx))<br>
+ 				set_kdamond_stop(ctx);<br>
+ 			kdamond_reset_aggregated(ctx);<br>
++			kdamond_split_regions(ctx);<br>
+ 			if (ctx->primitive.reset_aggregated)<br>
+ 				ctx->primitive.reset_aggregated(ctx);<br>
+ 		}<br>
+@@ -427,6 +632,7 @@ static int kdamond_fn(void *data)<br>
+ 		if (kdamond_need_update_primitive(ctx)) {<br>
+ 			if (ctx->primitive.update)<br>
+ 				ctx->primitive.update(ctx);<br>
++			sz_limit = damon_region_sz_limit(ctx);<br>
+ 		}<br>
+ 	}<br>
+ 	damon_for_each_target(t, ctx) {<br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+

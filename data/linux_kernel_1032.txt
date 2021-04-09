@@ -1,0 +1,46 @@
+On Thu, Apr 08, 2021, lihaiwei.kernel@xxxxxxxxx wrote:<br>
+><i> From: Haiwei Li <lihaiwei@xxxxxxxxxxx></i><br>
+><i> </i><br>
+><i> vmcs_check32 misses the check for 64-bit and 64-bit high.</i><br>
+<br>
+Can you clarify in the changelog that, while it is architecturally legal to<br>
+access 64-bit and 64-bit high fields with a 32-bit read/write in 32-bit mode,<br>
+KVM should never do partial accesses to VMCS fields.  And/or note that the<br>
+32-bit accesses are done in vmcs_{read,write}64() when necessary?  Hmm, maybe:<br>
+<br>
+  Add compile-time assertions in vmcs_check32() to disallow accesses to<br>
+  64-bit and 64-bit high fields via vmcs_{read,write}32().  Upper level<br>
+  KVM code should never do partial accesses to VMCS fields.  KVM handles<br>
+  the split accesses automatically in vmcs_{read,write}64() when running<br>
+  as a 32-bit kernel.<br>
+<br>
+With something along those lines:<br>
+<br>
+Reviewed-and-tested-by: Sean Christopherson <seanjc@xxxxxxxxxx> <br>
+<br>
+><i> Signed-off-by: Haiwei Li <lihaiwei@xxxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  arch/x86/kvm/vmx/vmx_ops.h | 4 ++++</i><br>
+><i>  1 file changed, 4 insertions(+)</i><br>
+><i> </i><br>
+><i> diff --git a/arch/x86/kvm/vmx/vmx_ops.h b/arch/x86/kvm/vmx/vmx_ops.h</i><br>
+><i> index 692b0c3..164b64f 100644</i><br>
+><i> --- a/arch/x86/kvm/vmx/vmx_ops.h</i><br>
+><i> +++ b/arch/x86/kvm/vmx/vmx_ops.h</i><br>
+><i> @@ -37,6 +37,10 @@ static __always_inline void vmcs_check32(unsigned long field)</i><br>
+><i>  {</i><br>
+><i>  	BUILD_BUG_ON_MSG(__builtin_constant_p(field) && ((field) & 0x6000) == 0,</i><br>
+><i>  			 "32-bit accessor invalid for 16-bit field");</i><br>
+><i> +	BUILD_BUG_ON_MSG(__builtin_constant_p(field) && ((field) & 0x6001) == 0x2000,</i><br>
+><i> +			 "32-bit accessor invalid for 64-bit field");</i><br>
+><i> +	BUILD_BUG_ON_MSG(__builtin_constant_p(field) && ((field) & 0x6001) == 0x2001,</i><br>
+><i> +			 "32-bit accessor invalid for 64-bit high field");</i><br>
+><i>  	BUILD_BUG_ON_MSG(__builtin_constant_p(field) && ((field) & 0x6000) == 0x6000,</i><br>
+><i>  			 "32-bit accessor invalid for natural width field");</i><br>
+><i>  }</i><br>
+><i> -- </i><br>
+><i> 1.8.3.1</i><br>
+><i> </i><br>
+<br>
+<br>
+

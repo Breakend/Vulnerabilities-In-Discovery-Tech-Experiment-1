@@ -1,0 +1,73 @@
+
+On 08.04.2021 06:42, Pkshih wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em"><blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+-----Original Message-----<br>
+From: Maciej S. Szmigiero [<a  rel="nofollow" href="mailto:mail@xxxxxxxxxxxxxxxxxxxxx">mailto:mail@xxxxxxxxxxxxxxxxxxxxx</a>]<br>
+Sent: Thursday, April 08, 2021 4:53 AM<br>
+To: Larry Finger; Pkshih<br>
+Cc: linux-wireless@xxxxxxxxxxxxxxx; netdev@xxxxxxxxxxxxxxx; linux-kernel@xxxxxxxxxxxxxxx;<br>
+johannes@xxxxxxxxxxxxxxxx; kvalo@xxxxxxxxxxxxxx<br>
+Subject: Re: rtlwifi/rtl8192cu AP mode broken with PS STA<br>
+<br>
+</blockquote></blockquote>
+(...)<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em"><blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em"><blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+Maceij,<br>
+<br>
+Does this patch fix the problem?<br>
+</blockquote>
+<br>
+The beacon seems to be updating now and STAs no longer get stuck in PS<br>
+mode.<br>
+Although sometimes (every 2-3 minutes with continuous 1s interval pings)<br>
+there is around 5s delay in updating the transmitted beacon - don't know<br>
+why, maybe the NIC hardware still has the old version in queue?<br>
+</blockquote>
+<br>
+Since USB device doesn't update every beacon, dtim_count isn't updated neither.<br>
+It leads STA doesn't awake properly. Please try to fix dtim_period=1 in<br>
+hostapd.conf, which tells STA awakes every beacon interval.<br>
+</blockquote>
+<br>
+The situation is the same with dtim_period=1.<br>
+<br>
+When I look at a packet trace (captured from a different NIC running in<br>
+monitor mode) it's obvious that the pinged STA wakes up almost<br>
+immediately once it sees its DTIM bit set in a beacon.<br>
+<br>
+But many beacons pass (the network has beacon interval of 0.1s) between<br>
+where a ping request (ICMP echo request) is buffered on the AP and where<br>
+the transmitted beacon actually starts to have DTIM bit set.<br>
+<br>
+I am observing delays up to 9 seconds, which means a delay up to 90<br>
+beacons between when DTIM bit should be set and when it actually gets<br>
+set.<br>
+<br>
+As I said above, this happens only sometimes (every 2-3 minutes with<br>
+continuous 1s interval pings) but there is definitely something wrong<br>
+here.<br>
+<br>
+My wild guess would be that if the NIC is prevented from sending a beacon<br>
+due to, for example, its radio channel being busy it keeps that beacon<br>
+in queue for the next transmission attempt and only then sends it and<br>
+removes from that queue.<br>
+Even thought there might be newer beacon data already available for<br>
+transmission.<br>
+<br>
+And then these "unsent" beacons pile up in queue and the delays I am<br>
+observing are simply old queued beacons (that don't have the DTIM bit<br>
+set yet) being transmitted.<br>
+<br>
+But that's just my hypothesis - I don't know how rtl8192cu hardware<br>
+actually works.<br>
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+--<br>
+Ping-Ke<br>
+</blockquote>
+<br>
+Thanks,<br>
+Maciej<br>
+<br>
+<br>
+

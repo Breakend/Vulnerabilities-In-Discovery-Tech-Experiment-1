@@ -1,0 +1,41 @@
+This series adds support for ECDSA-signed kernel modules. It also<br>
+attempts to address a kbuild issue where a developer created an ECDSA<br>
+key for signing kernel modules and then builds an older version of the<br>
+kernel, when bisecting the kernel for example, that does not support<br>
+ECDSA keys.<br>
+<br>
+The first patch addresses the kbuild issue of needing to delete that<br>
+ECDSA key if it is in certs/signing_key.pem and trigger the creation<br>
+of an RSA key. However, for this to work this patch would have to be<br>
+backported to previous versions of the kernel but would also only work<br>
+for the developer if he/she used a stable version of the kernel to which<br>
+this patch was applied. So whether this patch actually achieves the<br>
+wanted effect is not always guaranteed.<br>
+<br>
+The 2nd patch adds the support for the ECSDA-signed kernel modules.<br>
+<br>
+This patch depends on the ECDSA support series currently queued here:<br>
+<a  rel="nofollow" href="https://git.kernel.org/pub/scm/linux/kernel/git/herbert/cryptodev-2.6.git/log/?h=ecc">https://git.kernel.org/pub/scm/linux/kernel/git/herbert/cryptodev-2.6.git/log/?h=ecc</a><br>
+<br>
+  Stefan<br>
+<br>
+v2:<br>
+  - Adjustment to ECDSA key detector string in 2/2<br>
+  - Rephrased cover letter and patch descriptions with Mimi<br>
+<br>
+<br>
+Stefan Berger (2):<br>
+  certs: Trigger creation of RSA module signing key if it's not an RSA<br>
+    key<br>
+  certs: Add support for using elliptic curve keys for signing modules<br>
+<br>
+ certs/Kconfig                         | 25 +++++++++++++++++++++++++<br>
+ certs/Makefile                        | 14 ++++++++++++++<br>
+ crypto/asymmetric_keys/pkcs7_parser.c |  4 ++++<br>
+ 3 files changed, 43 insertions(+)<br>
+<br>
+-- <br>
+2.29.2<br>
+<br>
+<br>
+

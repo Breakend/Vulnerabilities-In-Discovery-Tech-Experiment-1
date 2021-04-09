@@ -1,0 +1,27 @@
+Am Donnerstag, den 01.04.2021, 09:46 +0200 schrieb Johan Hovold:<br>
+><i> On Wed, Mar 31, 2021 at 01:21:15PM +0200, Oliver Neukum wrote:</i><br>
+><i> > Am Mittwoch, den 31.03.2021, 09:08 +0200 schrieb Oliver Neukum:</i><br>
+<br>
+><i> > on the third hand, the more I look at this, would you mind putting</i><br>
+><i> > sibling_release() with a modified name into usbcore? This functionality</i><br>
+><i> > is not limited to serial drivers. btusb needs it; cdc-acm needs it;</i><br>
+><i> > usbaudio neds it. We have code duplication.</i><br>
+><i> </i><br>
+><i> Tell me about it. ;) Unfortunately, drivers all tend to handle this</i><br>
+><i> slightly different, for example, using a disconnected flag, some claim</i><br>
+><i> more than one other interface, others look like they may be using their</i><br>
+><i> interface data as a flag for other purposes, etc.</i><br>
+><i> </i><br>
+><i> At some point we could unify all this but until then I don't think</i><br>
+><i> putting only half of an interface into core makes much sense.</i><br>
+<br>
+OK, very well, then let's look at this from a fundamental point<br>
+and design a bit. First, can we disregard the case of more than<br>
+two interfaces?<br>
+<br>
+	Regards<br>
+		Oliver<br>
+<br>
+<br>
+<br>
+

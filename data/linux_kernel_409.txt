@@ -1,0 +1,335 @@
+Disable use of the fscache I/O routined by the AFS filesystem.  It's about<br>
+to transition to passing iov_iters down and fscache is about to have its<br>
+I/O path to use iov_iter, so all that needs to change.<br>
+<br>
+Signed-off-by: David Howells <dhowells@xxxxxxxxxx><br>
+cc: linux-afs@xxxxxxxxxxxxxxxxxxx<br>
+cc: linux-cachefs@xxxxxxxxxx<br>
+cc: linux-fsdevel@xxxxxxxxxxxxxxx<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/158861209824.340223.1864211542341758994.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/158861209824.340223.1864211542341758994.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # rfc<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/159465768717.1376105.2229314852486665807.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/159465768717.1376105.2229314852486665807.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a><br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/160588457929.3465195.1730097418904945578.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/160588457929.3465195.1730097418904945578.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # rfc<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161118143744.1232039.2727898205333669064.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161118143744.1232039.2727898205333669064.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # rfc<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161161039077.2537118.7986870854927176905.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161161039077.2537118.7986870854927176905.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v2<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161340403323.1303470.8159439948319423431.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161340403323.1303470.8159439948319423431.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v3<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161539547167.286939.3536238932531122332.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161539547167.286939.3536238932531122332.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v4<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161653802797.2770958.547311814861545911.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161653802797.2770958.547311814861545911.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v5<br>
+---<br>
+<br>
+ fs/afs/file.c  |  199 ++++++++++----------------------------------------------<br>
+ fs/afs/inode.c |    2 -<br>
+ fs/afs/write.c |   10 ---<br>
+ 3 files changed, 36 insertions(+), 175 deletions(-)<br>
+<br>
+diff --git a/fs/afs/file.c b/fs/afs/file.c<br>
+index 960b64268623..314f6a9517c7 100644<br>
+--- a/fs/afs/file.c<br>
++++ b/fs/afs/file.c<br>
+@@ -202,24 +202,6 @@ void afs_put_read(struct afs_read *req)<br>
+ 	}<br>
+ }<br>
+ <br>
+-#ifdef CONFIG_AFS_FSCACHE<br>
+-/*<br>
+- * deal with notification that a page was read from the cache<br>
+- */<br>
+-static void afs_file_readpage_read_complete(struct page *page,<br>
+-					    void *data,<br>
+-					    int error)<br>
+-{<br>
+-	_enter("%p,%p,%d", page, data, error);<br>
+-<br>
+-	/* if the read completes with an error, we just unlock the page and let<br>
+-	 * the VM reissue the readpage */<br>
+-	if (!error)<br>
+-		SetPageUptodate(page);<br>
+-	unlock_page(page);<br>
+-}<br>
+-#endif<br>
+-<br>
+ static void afs_fetch_data_success(struct afs_operation *op)<br>
+ {<br>
+ 	struct afs_vnode *vnode = op->file[0].vnode;<br>
+@@ -287,89 +269,46 @@ int afs_page_filler(void *data, struct page *page)<br>
+ 	if (test_bit(AFS_VNODE_DELETED, &vnode->flags))<br>
+ 		goto error;<br>
+ <br>
+-	/* is it cached? */<br>
+-#ifdef CONFIG_AFS_FSCACHE<br>
+-	ret = fscache_read_or_alloc_page(vnode->cache,<br>
+-					 page,<br>
+-					 afs_file_readpage_read_complete,<br>
+-					 NULL,<br>
+-					 GFP_KERNEL);<br>
+-#else<br>
+-	ret = -ENOBUFS;<br>
+-#endif<br>
+-	switch (ret) {<br>
+-		/* read BIO submitted (page in cache) */<br>
+-	case 0:<br>
+-		break;<br>
+-<br>
+-		/* page not yet cached */<br>
+-	case -ENODATA:<br>
+-		_debug("cache said ENODATA");<br>
+-		goto go_on;<br>
+-<br>
+-		/* page will not be cached */<br>
+-	case -ENOBUFS:<br>
+-		_debug("cache said ENOBUFS");<br>
+-<br>
+-		fallthrough;<br>
+-	default:<br>
+-	go_on:<br>
+-		req = kzalloc(struct_size(req, array, 1), GFP_KERNEL);<br>
+-		if (!req)<br>
+-			goto enomem;<br>
+-<br>
+-		/* We request a full page.  If the page is a partial one at the<br>
+-		 * end of the file, the server will return a short read and the<br>
+-		 * unmarshalling code will clear the unfilled space.<br>
+-		 */<br>
+-		refcount_set(&req->usage, 1);<br>
+-		req->pos = (loff_t)page->index << PAGE_SHIFT;<br>
+-		req->len = PAGE_SIZE;<br>
+-		req->nr_pages = 1;<br>
+-		req->pages = req->array;<br>
+-		req->pages[0] = page;<br>
+-		get_page(page);<br>
+-<br>
+-		/* read the contents of the file from the server into the<br>
+-		 * page */<br>
+-		ret = afs_fetch_data(vnode, key, req);<br>
+-		afs_put_read(req);<br>
+-<br>
+-		if (ret < 0) {<br>
+-			if (ret == -ENOENT) {<br>
+-				_debug("got NOENT from server"<br>
+-				       " - marking file deleted and stale");<br>
+-				set_bit(AFS_VNODE_DELETED, &vnode->flags);<br>
+-				ret = -ESTALE;<br>
+-			}<br>
+-<br>
+-#ifdef CONFIG_AFS_FSCACHE<br>
+-			fscache_uncache_page(vnode->cache, page);<br>
+-#endif<br>
+-			BUG_ON(PageFsCache(page));<br>
+-<br>
+-			if (ret == -EINTR ||<br>
+-			    ret == -ENOMEM ||<br>
+-			    ret == -ERESTARTSYS ||<br>
+-			    ret == -EAGAIN)<br>
+-				goto error;<br>
+-			goto io_error;<br>
+-		}<br>
++	req = kzalloc(struct_size(req, array, 1), GFP_KERNEL);<br>
++	if (!req)<br>
++		goto enomem;<br>
+ <br>
+-		SetPageUptodate(page);<br>
++	/* We request a full page.  If the page is a partial one at the<br>
++	 * end of the file, the server will return a short read and the<br>
++	 * unmarshalling code will clear the unfilled space.<br>
++	 */<br>
++	refcount_set(&req->usage, 1);<br>
++	req->pos = (loff_t)page->index << PAGE_SHIFT;<br>
++	req->len = PAGE_SIZE;<br>
++	req->nr_pages = 1;<br>
++	req->pages = req->array;<br>
++	req->pages[0] = page;<br>
++	get_page(page);<br>
++<br>
++	/* read the contents of the file from the server into the<br>
++	 * page */<br>
++	ret = afs_fetch_data(vnode, key, req);<br>
++	afs_put_read(req);<br>
+ <br>
+-		/* send the page to the cache */<br>
+-#ifdef CONFIG_AFS_FSCACHE<br>
+-		if (PageFsCache(page) &&<br>
+-		    fscache_write_page(vnode->cache, page, vnode->status.size,<br>
+-				       GFP_KERNEL) != 0) {<br>
+-			fscache_uncache_page(vnode->cache, page);<br>
+-			BUG_ON(PageFsCache(page));<br>
++	if (ret < 0) {<br>
++		if (ret == -ENOENT) {<br>
++			_debug("got NOENT from server"<br>
++			       " - marking file deleted and stale");<br>
++			set_bit(AFS_VNODE_DELETED, &vnode->flags);<br>
++			ret = -ESTALE;<br>
+ 		}<br>
+-#endif<br>
+-		unlock_page(page);<br>
++<br>
++		if (ret == -EINTR ||<br>
++		    ret == -ENOMEM ||<br>
++		    ret == -ERESTARTSYS ||<br>
++		    ret == -EAGAIN)<br>
++			goto error;<br>
++		goto io_error;<br>
+ 	}<br>
+ <br>
++	SetPageUptodate(page);<br>
++	unlock_page(page);<br>
++<br>
+ 	_leave(" = 0");<br>
+ 	return 0;<br>
+ <br>
+@@ -415,23 +354,10 @@ static int afs_readpage(struct file *file, struct page *page)<br>
+  */<br>
+ static void afs_readpages_page_done(struct afs_read *req)<br>
+ {<br>
+-#ifdef CONFIG_AFS_FSCACHE<br>
+-	struct afs_vnode *vnode = req->vnode;<br>
+-#endif<br>
+ 	struct page *page = req->pages[req->index];<br>
+ <br>
+ 	req->pages[req->index] = NULL;<br>
+ 	SetPageUptodate(page);<br>
+-<br>
+-	/* send the page to the cache */<br>
+-#ifdef CONFIG_AFS_FSCACHE<br>
+-	if (PageFsCache(page) &&<br>
+-	    fscache_write_page(vnode->cache, page, vnode->status.size,<br>
+-			       GFP_KERNEL) != 0) {<br>
+-		fscache_uncache_page(vnode->cache, page);<br>
+-		BUG_ON(PageFsCache(page));<br>
+-	}<br>
+-#endif<br>
+ 	unlock_page(page);<br>
+ 	put_page(page);<br>
+ }<br>
+@@ -490,9 +416,6 @@ static int afs_readpages_one(struct file *file, struct address_space *mapping,<br>
+ 		index = page->index;<br>
+ 		if (add_to_page_cache_lru(page, mapping, index,<br>
+ 					  readahead_gfp_mask(mapping))) {<br>
+-#ifdef CONFIG_AFS_FSCACHE<br>
+-			fscache_uncache_page(vnode->cache, page);<br>
+-#endif<br>
+ 			put_page(page);<br>
+ 			break;<br>
+ 		}<br>
+@@ -525,9 +448,6 @@ static int afs_readpages_one(struct file *file, struct address_space *mapping,<br>
+ 	for (i = 0; i < req->nr_pages; i++) {<br>
+ 		page = req->pages[i];<br>
+ 		if (page) {<br>
+-#ifdef CONFIG_AFS_FSCACHE<br>
+-			fscache_uncache_page(vnode->cache, page);<br>
+-#endif<br>
+ 			SetPageError(page);<br>
+ 			unlock_page(page);<br>
+ 		}<br>
+@@ -559,37 +479,6 @@ static int afs_readpages(struct file *file, struct address_space *mapping,<br>
+ 	}<br>
+ <br>
+ 	/* attempt to read as many of the pages as possible */<br>
+-#ifdef CONFIG_AFS_FSCACHE<br>
+-	ret = fscache_read_or_alloc_pages(vnode->cache,<br>
+-					  mapping,<br>
+-					  pages,<br>
+-					  &nr_pages,<br>
+-					  afs_file_readpage_read_complete,<br>
+-					  NULL,<br>
+-					  mapping_gfp_mask(mapping));<br>
+-#else<br>
+-	ret = -ENOBUFS;<br>
+-#endif<br>
+-<br>
+-	switch (ret) {<br>
+-		/* all pages are being read from the cache */<br>
+-	case 0:<br>
+-		BUG_ON(!list_empty(pages));<br>
+-		BUG_ON(nr_pages != 0);<br>
+-		_leave(" = 0 [reading all]");<br>
+-		return 0;<br>
+-<br>
+-		/* there were pages that couldn't be read from the cache */<br>
+-	case -ENODATA:<br>
+-	case -ENOBUFS:<br>
+-		break;<br>
+-<br>
+-		/* other error */<br>
+-	default:<br>
+-		_leave(" = %d", ret);<br>
+-		return ret;<br>
+-	}<br>
+-<br>
+ 	while (!list_empty(pages)) {<br>
+ 		ret = afs_readpages_one(file, mapping, pages);<br>
+ 		if (ret < 0)<br>
+@@ -669,17 +558,6 @@ static void afs_invalidatepage(struct page *page, unsigned int offset,<br>
+ <br>
+ 	BUG_ON(!PageLocked(page));<br>
+ <br>
+-#ifdef CONFIG_AFS_FSCACHE<br>
+-	/* we clean up only if the entire page is being invalidated */<br>
+-	if (offset == 0 && length == PAGE_SIZE) {<br>
+-		if (PageFsCache(page)) {<br>
+-			struct afs_vnode *vnode = AFS_FS_I(page->mapping->host);<br>
+-			fscache_wait_on_page_write(vnode->cache, page);<br>
+-			fscache_uncache_page(vnode->cache, page);<br>
+-		}<br>
+-	}<br>
+-#endif<br>
+-<br>
+ 	if (PagePrivate(page))<br>
+ 		afs_invalidate_dirty(page, offset, length);<br>
+ <br>
+@@ -701,13 +579,6 @@ static int afs_releasepage(struct page *page, gfp_t gfp_flags)<br>
+ <br>
+ 	/* deny if page is being written to the cache and the caller hasn't<br>
+ 	 * elected to wait */<br>
+-#ifdef CONFIG_AFS_FSCACHE<br>
+-	if (!fscache_maybe_release_page(vnode->cache, page, gfp_flags)) {<br>
+-		_leave(" = F [cache busy]");<br>
+-		return 0;<br>
+-	}<br>
+-#endif<br>
+-<br>
+ 	if (PagePrivate(page)) {<br>
+ 		priv = (unsigned long)detach_page_private(page);<br>
+ 		trace_afs_page_dirty(vnode, tracepoint_string("rel"),<br>
+diff --git a/fs/afs/inode.c b/fs/afs/inode.c<br>
+index 12be88716e4c..8de6f05987b4 100644<br>
+--- a/fs/afs/inode.c<br>
++++ b/fs/afs/inode.c<br>
+@@ -427,7 +427,7 @@ static void afs_get_inode_cache(struct afs_vnode *vnode)<br>
+ 	} __packed key;<br>
+ 	struct afs_vnode_cache_aux aux;<br>
+ <br>
+-	if (vnode->status.type == AFS_FTYPE_DIR) {<br>
++	if (vnode->status.type != AFS_FTYPE_FILE) {<br>
+ 		vnode->cache = NULL;<br>
+ 		return;<br>
+ 	}<br>
+diff --git a/fs/afs/write.c b/fs/afs/write.c<br>
+index eb737ed63afb..901bd2ee2dd0 100644<br>
+--- a/fs/afs/write.c<br>
++++ b/fs/afs/write.c<br>
+@@ -847,9 +847,6 @@ vm_fault_t afs_page_mkwrite(struct vm_fault *vmf)<br>
+ 	/* Wait for the page to be written to the cache before we allow it to<br>
+ 	 * be modified.  We then assume the entire page will need writing back.<br>
+ 	 */<br>
+-#ifdef CONFIG_AFS_FSCACHE<br>
+-	fscache_wait_on_page_write(vnode->cache, vmf->page);<br>
+-#endif<br>
+ <br>
+ 	if (wait_on_page_writeback_killable(vmf->page))<br>
+ 		return VM_FAULT_RETRY;<br>
+@@ -935,12 +932,5 @@ int afs_launder_page(struct page *page)<br>
+ 	priv = (unsigned long)detach_page_private(page);<br>
+ 	trace_afs_page_dirty(vnode, tracepoint_string("laundered"),<br>
+ 			     page->index, priv);<br>
+-<br>
+-#ifdef CONFIG_AFS_FSCACHE<br>
+-	if (PageFsCache(page)) {<br>
+-		fscache_wait_on_page_write(vnode->cache, page);<br>
+-		fscache_uncache_page(vnode->cache, page);<br>
+-	}<br>
+-#endif<br>
+ 	return ret;<br>
+ }<br>
+<br>
+<br>
+<br>
+

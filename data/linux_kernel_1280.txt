@@ -1,0 +1,72 @@
+Now that kexec does its relocations with the MMU enabled, we no longer<br>
+need to clean the relocation data to the PoC.<br>
+<br>
+Co-developed-by: James Morse <james.morse@xxxxxxx><br>
+Signed-off-by: Pavel Tatashin <pasha.tatashin@xxxxxxxxxx><br>
+---<br>
+ arch/arm64/kernel/machine_kexec.c | 40 -------------------------------<br>
+ 1 file changed, 40 deletions(-)<br>
+<br>
+diff --git a/arch/arm64/kernel/machine_kexec.c b/arch/arm64/kernel/machine_kexec.c<br>
+index d5c8aefc66f3..a1c9bee0cddd 100644<br>
+--- a/arch/arm64/kernel/machine_kexec.c<br>
++++ b/arch/arm64/kernel/machine_kexec.c<br>
+@@ -76,45 +76,6 @@ int machine_kexec_prepare(struct kimage *kimage)<br>
+ 	return 0;<br>
+ }<br>
+ <br>
+-/**<br>
+- * kexec_list_flush - Helper to flush the kimage list and source pages to PoC.<br>
+- */<br>
+-static void kexec_list_flush(struct kimage *kimage)<br>
+-{<br>
+-	kimage_entry_t *entry;<br>
+-<br>
+-	__flush_dcache_area(kimage, sizeof(*kimage));<br>
+-<br>
+-	for (entry = &kimage->head; ; entry++) {<br>
+-		unsigned int flag;<br>
+-		void *addr;<br>
+-<br>
+-		/* flush the list entries. */<br>
+-		__flush_dcache_area(entry, sizeof(kimage_entry_t));<br>
+-<br>
+-		flag = *entry & IND_FLAGS;<br>
+-		if (flag == IND_DONE)<br>
+-			break;<br>
+-<br>
+-		addr = phys_to_virt(*entry & PAGE_MASK);<br>
+-<br>
+-		switch (flag) {<br>
+-		case IND_INDIRECTION:<br>
+-			/* Set entry point just before the new list page. */<br>
+-			entry = (kimage_entry_t *)addr - 1;<br>
+-			break;<br>
+-		case IND_SOURCE:<br>
+-			/* flush the source pages. */<br>
+-			__flush_dcache_area(addr, PAGE_SIZE);<br>
+-			break;<br>
+-		case IND_DESTINATION:<br>
+-			break;<br>
+-		default:<br>
+-			BUG();<br>
+-		}<br>
+-	}<br>
+-}<br>
+-<br>
+ /**<br>
+  * kexec_segment_flush - Helper to flush the kimage segments to PoC.<br>
+  */<br>
+@@ -200,7 +161,6 @@ int machine_kexec_post_load(struct kimage *kimage)<br>
+ 	__flush_dcache_area(reloc_code, reloc_size);<br>
+ 	flush_icache_range((uintptr_t)reloc_code, (uintptr_t)reloc_code +<br>
+ 			   reloc_size);<br>
+-	kexec_list_flush(kimage);<br>
+ 	kexec_image_info(kimage);<br>
+ <br>
+ 	return 0;<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

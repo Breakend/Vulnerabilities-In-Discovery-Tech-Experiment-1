@@ -1,0 +1,26 @@
+When platform_get_irq() fails, a pairing PM usage counter<br>
+increment is needed to keep the counter balanced. It's the<br>
+same for the following error paths.<br>
+<br>
+Signed-off-by: Dinghao Liu <dinghao.liu@xxxxxxxxxx><br>
+---<br>
+ drivers/spi/spi-zynqmp-gqspi.c | 1 +<br>
+ 1 file changed, 1 insertion(+)<br>
+<br>
+diff --git a/drivers/spi/spi-zynqmp-gqspi.c b/drivers/spi/spi-zynqmp-gqspi.c<br>
+index c8fa6ee18ae7..95963a2de64a 100644<br>
+--- a/drivers/spi/spi-zynqmp-gqspi.c<br>
++++ b/drivers/spi/spi-zynqmp-gqspi.c<br>
+@@ -1197,6 +1197,7 @@ static int zynqmp_qspi_probe(struct platform_device *pdev)<br>
+ 	return 0;<br>
+ <br>
+ clk_dis_all:<br>
++	pm_runtime_get_noresume(&pdev->dev);<br>
+ 	pm_runtime_set_suspended(&pdev->dev);<br>
+ 	pm_runtime_disable(&pdev->dev);<br>
+ 	clk_disable_unprepare(xqspi->refclk);<br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+

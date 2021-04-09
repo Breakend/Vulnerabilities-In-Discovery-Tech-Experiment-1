@@ -1,0 +1,31 @@
+Hi Daniel,<br>
+<br>
+Daniel Palmer <daniel@xxxxxxxx> wrote on Wed, 7 Apr 2021 21:01:01 +0900:<br>
+<br>
+><i> Hi Miquel,</i><br>
+><i> </i><br>
+><i> On Wed, 7 Apr 2021 at 17:02, Miquel Raynal <miquel.raynal@xxxxxxxxxxx> wrote:</i><br>
+><i> > You may look at micron_8_ecc_get_status() helper to guide you. But</i><br>
+><i> > IMHO, if there are 0-3 bf, you should probably assume there were 3 bf</i><br>
+><i> > and return 3, if there were 4, return 4, if it's uncorrectable return</i><br>
+><i> > -EBADMSG otherwise -EINVAL.  </i><br>
+><i> </i><br>
+><i> Understood.</i><br>
+><i> </i><br>
+><i> > We should verify that this does not mess with UBI wear leveling</i><br>
+><i> > though. Please check that returning 3-bit errors no matter the</i><br>
+><i> > actual number of flipped bits does not lead UBI to move the data away</i><br>
+><i> > (I think it's fine but we need to be sure otherwise the implementation</i><br>
+><i> > proposal is not valid).  </i><br>
+><i> </i><br>
+><i> Ok. I'm not sure how to check that yet but I'll look into it.</i><br>
+><i> </i><br>
+<br>
+You can probably check the threshold in sysfs<br>
+(/sys/class/mtd/mtdX/*threshold*).<br>
+<br>
+Thanks,<br>
+Miquèl<br>
+<br>
+<br>
+

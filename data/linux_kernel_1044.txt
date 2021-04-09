@@ -1,0 +1,29 @@
+A: <a  rel="nofollow" href="http://en.wikipedia.org/wiki/Top_post">http://en.wikipedia.org/wiki/Top_post</a><br>
+Q: Were do I find info about this thing called top-posting?<br>
+A: Because it messes up the order in which people normally read text.<br>
+Q: Why is top-posting such a bad thing?<br>
+A: Top-posting.<br>
+Q: What is the most annoying thing in e-mail?<br>
+<br>
+A: No.<br>
+Q: Should I include quotations after my reply?<br>
+<br>
+<a  rel="nofollow" href="http://daringfireball.net/2007/07/on_top">http://daringfireball.net/2007/07/on_top</a><br>
+<br>
+On Thu, Apr 08, 2021 at 01:36:07PM +0530, Mitali Borkar wrote:<br>
+><i> Okay, should I rename the patch?</i><br>
+<br>
+I can't take it as-is, so you need to change something :)<br>
+<br>
+><i> I removed a line and matched alignment, so should I rename this</i><br>
+><i> appropriately?</i><br>
+<br>
+Only do one logical thing per patch, so if this is 2 logical things,<br>
+then you need 2 patches, right?<br>
+<br>
+thanks,<br>
+<br>
+greg k-h<br>
+<br>
+<br>
+

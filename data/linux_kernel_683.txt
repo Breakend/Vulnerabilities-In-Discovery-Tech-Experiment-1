@@ -1,0 +1,37 @@
+pm_runtime_get_sync() will increment pm usage counter even it failed.<br>
+Forgetting to putting operation will result in reference leak here.<br>
+Fix it by replacing it with pm_runtime_resume_and_get() to keep usage<br>
+counter balanced.<br>
+<br>
+Signed-off-by: Pu Lehui <pulehui@xxxxxxxxxx><br>
+---<br>
+ drivers/i2c/busses/i2c-img-scb.c | 4 ++--<br>
+ 1 file changed, 2 insertions(+), 2 deletions(-)<br>
+<br>
+diff --git a/drivers/i2c/busses/i2c-img-scb.c b/drivers/i2c/busses/i2c-img-scb.c<br>
+index 98a89301ed2a..8e987945ed45 100644<br>
+--- a/drivers/i2c/busses/i2c-img-scb.c<br>
++++ b/drivers/i2c/busses/i2c-img-scb.c<br>
+@@ -1057,7 +1057,7 @@ static int img_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,<br>
+ 			atomic = true;<br>
+ 	}<br>
+ <br>
+-	ret = pm_runtime_get_sync(adap->dev.parent);<br>
++	ret = pm_runtime_resume_and_get(adap->dev.parent);<br>
+ 	if (ret < 0)<br>
+ 		return ret;<br>
+ <br>
+@@ -1158,7 +1158,7 @@ static int img_i2c_init(struct img_i2c *i2c)<br>
+ 	u32 rev;<br>
+ 	int ret;<br>
+ <br>
+-	ret = pm_runtime_get_sync(i2c->adap.dev.parent);<br>
++	ret = pm_runtime_resume_and_get(i2c->adap.dev.parent);<br>
+ 	if (ret < 0)<br>
+ 		return ret;<br>
+ <br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+

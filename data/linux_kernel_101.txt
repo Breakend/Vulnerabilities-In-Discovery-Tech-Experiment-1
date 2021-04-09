@@ -1,0 +1,48 @@
+Hi George,<br>
+<br>
+On Thu, Apr 8, 2021 at 2:26 PM Sven Van Asbroeck <thesven73@xxxxxxxxx> wrote:<br>
+><i></i><br>
+><i> George, I will send a patch for you to try shortly. Except if you're</i><br>
+><i> already ahead :)</i><br>
+<br>
+Would this work for you? It does for me.<br>
+<br>
+diff --git a/drivers/net/ethernet/microchip/lan743x_main.c<br>
+b/drivers/net/ethernet/microchip/lan743x_main.c<br>
+index dbdfabff3b00..7b6794aa8ea9 100644<br>
+--- a/drivers/net/ethernet/microchip/lan743x_main.c<br>
++++ b/drivers/net/ethernet/microchip/lan743x_main.c<br>
+@@ -885,8 +885,8 @@ static int lan743x_mac_set_mtu(struct<br>
+lan743x_adapter *adapter, int new_mtu)<br>
+        }<br>
+<br>
+        mac_rx &= ~(MAC_RX_MAX_SIZE_MASK_);<br>
+-       mac_rx |= (((new_mtu + ETH_HLEN + 4) << MAC_RX_MAX_SIZE_SHIFT_) &<br>
+-                 MAC_RX_MAX_SIZE_MASK_);<br>
++       mac_rx |= (((new_mtu + ETH_HLEN + ETH_FCS_LEN)<br>
++                 << MAC_RX_MAX_SIZE_SHIFT_) & MAC_RX_MAX_SIZE_MASK_);<br>
+        lan743x_csr_write(adapter, MAC_RX, mac_rx);<br>
+<br>
+        if (enabled) {<br>
+@@ -1944,7 +1944,7 @@ static int lan743x_rx_init_ring_element(struct<br>
+lan743x_rx *rx, int index)<br>
+        struct sk_buff *skb;<br>
+        dma_addr_t dma_ptr;<br>
+<br>
+-       buffer_length = netdev->mtu + ETH_HLEN + 4 + RX_HEAD_PADDING;<br>
++       buffer_length = netdev->mtu + ETH_HLEN + ETH_FCS_LEN + RX_HEAD_PADDING;<br>
+<br>
+        descriptor = &rx->ring_cpu_ptr[index];<br>
+        buffer_info = &rx->buffer_info[index];<br>
+@@ -2040,7 +2040,7 @@ lan743x_rx_trim_skb(struct sk_buff *skb, int frame_length)<br>
+                dev_kfree_skb_irq(skb);<br>
+                return NULL;<br>
+        }<br>
+-       frame_length = max_t(int, 0, frame_length - RX_HEAD_PADDING - 2);<br>
++       frame_length = max_t(int, 0, frame_length - ETH_FCS_LEN);<br>
+        if (skb->len > frame_length) {<br>
+                skb->tail -= skb->len - frame_length;<br>
+                skb->len = frame_length;<br>
+<br>
+<br>
+

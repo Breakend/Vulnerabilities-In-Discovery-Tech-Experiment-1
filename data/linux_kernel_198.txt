@@ -1,0 +1,67 @@
+Add the first and third qupv3 nodes used to hook<br>
+up peripherals on some devices, as well as the iommus properties for all<br>
+of them.<br>
+<br>
+Signed-off-by: Caleb Connolly <caleb@xxxxxxxxxxxxx><br>
+---<br>
+ arch/arm64/boot/dts/qcom/sm8150.dtsi | 28 ++++++++++++++++++++++++++++<br>
+ 1 file changed, 28 insertions(+)<br>
+<br>
+diff --git a/arch/arm64/boot/dts/qcom/sm8150.dtsi b/arch/arm64/boot/dts/qcom/sm8150.dtsi<br>
+index e5bb17bc2f46..543417d74216 100644<br>
+--- a/arch/arm64/boot/dts/qcom/sm8150.dtsi<br>
++++ b/arch/arm64/boot/dts/qcom/sm8150.dtsi<br>
+@@ -577,12 +577,26 @@ gcc: clock-controller@100000 {<br>
+ 				 <&sleep_clk>;<br>
+ 		};<br>
+ <br>
++		qupv3_id_0: geniqup@8c0000 {<br>
++			compatible = "qcom,geni-se-qup";<br>
++			reg = <0x0 0x008c0000 0x0 0x6000>;<br>
++			clock-names = "m-ahb", "s-ahb";<br>
++			clocks = <&gcc GCC_QUPV3_WRAP_0_M_AHB_CLK>,<br>
++				 <&gcc GCC_QUPV3_WRAP_0_S_AHB_CLK>;<br>
++			iommus = <&apps_smmu 0xc3 0x0>;<br>
++			#address-cells = <2>;<br>
++			#size-cells = <2>;<br>
++			ranges;<br>
++			status = "disabled";<br>
++		};<br>
++<br>
+ 		qupv3_id_1: geniqup@ac0000 {<br>
+ 			compatible = "qcom,geni-se-qup";<br>
+ 			reg = <0x0 0x00ac0000 0x0 0x6000>;<br>
+ 			clock-names = "m-ahb", "s-ahb";<br>
+ 			clocks = <&gcc GCC_QUPV3_WRAP_1_M_AHB_CLK>,<br>
+ 				 <&gcc GCC_QUPV3_WRAP_1_S_AHB_CLK>;<br>
++			iommus = <&apps_smmu 0x603 0x0>;<br>
+ 			#address-cells = <2>;<br>
+ 			#size-cells = <2>;<br>
+ 			ranges;<br>
+@@ -598,6 +612,20 @@ uart2: serial@a90000 {<br>
+ 			};<br>
+ 		};<br>
+ <br>
++		qupv3_id_2: geniqup@cc0000 {<br>
++			compatible = "qcom,geni-se-qup";<br>
++			reg = <0x0 0x00cc0000 0x0 0x6000>;<br>
++<br>
++			clock-names = "m-ahb", "s-ahb";<br>
++			clocks = <&gcc GCC_QUPV3_WRAP_2_M_AHB_CLK>,<br>
++				 <&gcc GCC_QUPV3_WRAP_2_S_AHB_CLK>;<br>
++			iommus = <&apps_smmu 0x7a3 0x0>;<br>
++			#address-cells = <2>;<br>
++			#size-cells = <2>;<br>
++			ranges;<br>
++			status = "disabled";<br>
++		};<br>
++<br>
+ 		config_noc: interconnect@1500000 {<br>
+ 			compatible = "qcom,sm8150-config-noc";<br>
+ 			reg = <0 0x01500000 0 0x7400>;<br>
+-- <br>
+2.30.2<br>
+<br>
+<br>
+<br>
+

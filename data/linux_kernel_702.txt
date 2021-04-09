@@ -1,0 +1,107 @@
+Vineeth Pillai <viremana@xxxxxxxxxxxxxxxxxxx> writes:<br>
+<br>
+><i> Enable remote TLB flush for SVM.</i><br>
+><i></i><br>
+><i> Signed-off-by: Vineeth Pillai <viremana@xxxxxxxxxxxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  arch/x86/kvm/svm/svm.c | 35 +++++++++++++++++++++++++++++++++++</i><br>
+><i>  1 file changed, 35 insertions(+)</i><br>
+><i></i><br>
+><i> diff --git a/arch/x86/kvm/svm/svm.c b/arch/x86/kvm/svm/svm.c</i><br>
+><i> index baee91c1e936..6287cab61f15 100644</i><br>
+><i> --- a/arch/x86/kvm/svm/svm.c</i><br>
+><i> +++ b/arch/x86/kvm/svm/svm.c</i><br>
+><i> @@ -36,6 +36,7 @@</i><br>
+><i>  #include <asm/spec-ctrl.h></i><br>
+><i>  #include <asm/cpu_device_id.h></i><br>
+><i>  #include <asm/traps.h></i><br>
+><i> +#include <asm/mshyperv.h></i><br>
+><i>  </i><br>
+><i>  #include <asm/virtext.h></i><br>
+><i>  #include "trace.h"</i><br>
+><i> @@ -43,6 +44,8 @@</i><br>
+><i>  #include "svm.h"</i><br>
+><i>  #include "svm_ops.h"</i><br>
+><i>  </i><br>
+><i> +#include "hyperv.h"</i><br>
+><i> +</i><br>
+><i>  #define __ex(x) __kvm_handle_fault_on_reboot(x)</i><br>
+><i>  </i><br>
+><i>  MODULE_AUTHOR("Qumranet");</i><br>
+><i> @@ -928,6 +931,8 @@ static __init void svm_set_cpu_caps(void)</i><br>
+><i>  		kvm_cpu_cap_set(X86_FEATURE_VIRT_SSBD);</i><br>
+><i>  }</i><br>
+><i>  </i><br>
+><i> +static struct kvm_x86_ops svm_x86_ops;</i><br>
+><i> +</i><br>
+><i>  static __init int svm_hardware_setup(void)</i><br>
+><i>  {</i><br>
+><i>  	int cpu;</i><br>
+><i> @@ -997,6 +1002,16 @@ static __init int svm_hardware_setup(void)</i><br>
+><i>  	kvm_configure_mmu(npt_enabled, get_max_npt_level(), PG_LEVEL_1G);</i><br>
+><i>  	pr_info("kvm: Nested Paging %sabled\n", npt_enabled ? "en" : "dis");</i><br>
+><i>  </i><br>
+><i> +#if IS_ENABLED(CONFIG_HYPERV)</i><br>
+><i> +	if (ms_hyperv.nested_features & HV_X64_NESTED_ENLIGHTENED_TLB</i><br>
+><i> +	    && npt_enabled) {</i><br>
+><i> +		pr_info("kvm: Hyper-V enlightened NPT TLB flush enabled\n");</i><br>
+><i> +		svm_x86_ops.tlb_remote_flush = kvm_hv_remote_flush_tlb;</i><br>
+><i> +		svm_x86_ops.tlb_remote_flush_with_range =</i><br>
+><i> +				kvm_hv_remote_flush_tlb_with_range;</i><br>
+><i> +	}</i><br>
+><i> +#endif</i><br>
+><i> +</i><br>
+><i>  	if (nrips) {</i><br>
+><i>  		if (!boot_cpu_has(X86_FEATURE_NRIPS))</i><br>
+><i>  			nrips = false;</i><br>
+><i> @@ -1112,6 +1127,21 @@ static void svm_check_invpcid(struct vcpu_svm *svm)</i><br>
+><i>  	}</i><br>
+><i>  }</i><br>
+><i>  </i><br>
+><i> +#if IS_ENABLED(CONFIG_HYPERV)</i><br>
+><i> +static void hv_init_vmcb(struct vmcb *vmcb)</i><br>
+><i> +{</i><br>
+><i> +	struct hv_enlightenments *hve = &vmcb->hv_enlightenments;</i><br>
+><i> +</i><br>
+><i> +	if (npt_enabled &&</i><br>
+><i> +	    ms_hyperv.nested_features & HV_X64_NESTED_ENLIGHTENED_TLB)</i><br>
+><i> +		hve->hv_enlightenments_control.enlightened_npt_tlb = 1;</i><br>
+><i> +}</i><br>
+><i> +#else</i><br>
+><i> +static inline void hv_init_vmcb(struct vmcb *vmcb)</i><br>
+><i> +{</i><br>
+><i> +}</i><br>
+><i> +#endif</i><br>
+><i> +</i><br>
+><i>  static void init_vmcb(struct vcpu_svm *svm)</i><br>
+><i>  {</i><br>
+><i>  	struct vmcb_control_area *control = &svm->vmcb->control;</i><br>
+><i> @@ -1274,6 +1304,8 @@ static void init_vmcb(struct vcpu_svm *svm)</i><br>
+><i>  		}</i><br>
+><i>  	}</i><br>
+><i>  </i><br>
+><i> +	hv_init_vmcb(svm->vmcb);</i><br>
+><i> +</i><br>
+><i>  	vmcb_mark_all_dirty(svm->vmcb);</i><br>
+><i>  </i><br>
+><i>  	enable_gif(svm);</i><br>
+><i> @@ -3967,6 +3999,9 @@ static void svm_load_mmu_pgd(struct kvm_vcpu *vcpu, unsigned long root,</i><br>
+><i>  		svm->vmcb->control.nested_cr3 = cr3;</i><br>
+><i>  		vmcb_mark_dirty(svm->vmcb, VMCB_NPT);</i><br>
+><i>  </i><br>
+><i> +		if (kvm_x86_ops.tlb_remote_flush)</i><br>
+><i> +			kvm_update_arch_tdp_pointer(vcpu->kvm, vcpu, cr3);</i><br>
+><i> +</i><br>
+<br>
+VMX has "#if IS_ENABLED(CONFIG_HYPERV)" around this, should we add it<br>
+here too?<br>
+<br>
+><i>  		/* Loading L2's CR3 is handled by enter_svm_guest_mode.  */</i><br>
+><i>  		if (!test_bit(VCPU_EXREG_CR3, (ulong *)&vcpu->arch.regs_avail))</i><br>
+><i>  			return;</i><br>
+<br>
+-- <br>
+Vitaly<br>
+<br>
+<br>
+

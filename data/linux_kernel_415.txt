@@ -1,0 +1,104 @@
+Add set/end/wait_on_page_fscache() as aliases of<br>
+set/end/wait_page_private_2().  These allow a page to marked with<br>
+PG_fscache, the flag to be removed and waiters woken and waiting for the<br>
+flag to be cleared.  A ref on the page is also taken and dropped.<br>
+<br>
+[Linus suggested putting the fscache-themed functions into the<br>
+ caching-specific headers rather than pagemap.h[1]]<br>
+<br>
+Changes:<br>
+v5:<br>
+- Mirror the changes to the core routines[2].<br>
+<br>
+Signed-off-by: David Howells <dhowells@xxxxxxxxxx><br>
+cc: Linus Torvalds <torvalds@xxxxxxxxxxxxxxxxxxxx><br>
+cc: Matthew Wilcox <willy@xxxxxxxxxxxxx><br>
+cc: linux-mm@xxxxxxxxx<br>
+cc: linux-cachefs@xxxxxxxxxx<br>
+cc: linux-afs@xxxxxxxxxxxxxxxxxxx<br>
+cc: linux-nfs@xxxxxxxxxxxxxxx<br>
+cc: linux-cifs@xxxxxxxxxxxxxxx<br>
+cc: ceph-devel@xxxxxxxxxxxxxxx<br>
+cc: v9fs-developer@xxxxxxxxxxxxxxxxxxxxx<br>
+cc: linux-fsdevel@xxxxxxxxxxxxxxx<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/1330473.1612974547@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/1330473.1612974547@xxxxxxxxxxxxxxxxxxxxxx/</a><br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/CAHk-=wjgA-74ddehziVk=XAEMTKswPu1Yw4uaro1R3ibs27ztw@xxxxxxxxxxxxxx/">https://lore.kernel.org/r/CAHk-=wjgA-74ddehziVk=XAEMTKswPu1Yw4uaro1R3ibs27ztw@xxxxxxxxxxxxxx/</a> [1]<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161340393568.1303470.4997526899111310530.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161340393568.1303470.4997526899111310530.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v3<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161539536093.286939.5076448803512118764.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161539536093.286939.5076448803512118764.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v4<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/2499407.1616505440@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/2499407.1616505440@xxxxxxxxxxxxxxxxxxxxxx/</a> [2]<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161653793873.2770958.12157243390965814502.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161653793873.2770958.12157243390965814502.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v5<br>
+---<br>
+<br>
+ include/linux/netfs.h |   57 +++++++++++++++++++++++++++++++++++++++++++++++++<br>
+ 1 file changed, 57 insertions(+)<br>
+<br>
+diff --git a/include/linux/netfs.h b/include/linux/netfs.h<br>
+index cc1102040488..8479d63406f7 100644<br>
+--- a/include/linux/netfs.h<br>
++++ b/include/linux/netfs.h<br>
+@@ -26,4 +26,61 @@<br>
+ #define TestSetPageFsCache(page)	TestSetPagePrivate2((page))<br>
+ #define TestClearPageFsCache(page)	TestClearPagePrivate2((page))<br>
+ <br>
++/**<br>
++ * set_page_fscache - Set PG_fscache on a page and take a ref<br>
++ * @page: The page.<br>
++ *<br>
++ * Set the PG_fscache (PG_private_2) flag on a page and take the reference<br>
++ * needed for the VM to handle its lifetime correctly.  This sets the flag and<br>
++ * takes the reference unconditionally, so care must be taken not to set the<br>
++ * flag again if it's already set.<br>
++ */<br>
++static inline void set_page_fscache(struct page *page)<br>
++{<br>
++	set_page_private_2(page);<br>
++}<br>
++<br>
++/**<br>
++ * end_page_fscache - Clear PG_fscache and release any waiters<br>
++ * @page: The page<br>
++ *<br>
++ * Clear the PG_fscache (PG_private_2) bit on a page and wake up any sleepers<br>
++ * waiting for this.  The page ref held for PG_private_2 being set is released.<br>
++ *<br>
++ * This is, for example, used when a netfs page is being written to a local<br>
++ * disk cache, thereby allowing writes to the cache for the same page to be<br>
++ * serialised.<br>
++ */<br>
++static inline void end_page_fscache(struct page *page)<br>
++{<br>
++	end_page_private_2(page);<br>
++}<br>
++<br>
++/**<br>
++ * wait_on_page_fscache - Wait for PG_fscache to be cleared on a page<br>
++ * @page: The page to wait on<br>
++ *<br>
++ * Wait for PG_fscache (aka PG_private_2) to be cleared on a page.<br>
++ */<br>
++static inline void wait_on_page_fscache(struct page *page)<br>
++{<br>
++	wait_on_page_private_2(page);<br>
++}<br>
++<br>
++/**<br>
++ * wait_on_page_fscache_killable - Wait for PG_fscache to be cleared on a page<br>
++ * @page: The page to wait on<br>
++ *<br>
++ * Wait for PG_fscache (aka PG_private_2) to be cleared on a page or until a<br>
++ * fatal signal is received by the calling task.<br>
++ *<br>
++ * Return:<br>
++ * - 0 if successful.<br>
++ * - -EINTR if a fatal signal was encountered.<br>
++ */<br>
++static inline int wait_on_page_fscache_killable(struct page *page)<br>
++{<br>
++	return wait_on_page_private_2_killable(page);<br>
++}<br>
++<br>
+ #endif /* _LINUX_NETFS_H */<br>
+<br>
+<br>
+<br>
+

@@ -1,0 +1,24 @@
+
+On 08/04/21 17:40, Siddharth Chandrasekaran wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em"><blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em"><blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em"><blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+Although the Hyper-v TLFS mentions that a guest cannot use this feature<br>
+unless the hypervisor advertises support for it, some hypercalls which<br>
+we plan on upstreaming in future uses them anyway.<br>
+</blockquote>
+No, please don't do this. Check the feature bit(s) before you issue<br>
+hypercalls which rely on the extended interface.<br>
+</blockquote>
+Perhaps Siddharth should clarify this, but I read it as Hyper-V being<br>
+buggy and using XMM arguments unconditionally.<br>
+</blockquote>
+The guest is at fault here as it expects Hyper-V to consume arguments<br>
+from XMM registers for certain hypercalls (that we are working) even if<br>
+we didn't expose the feature via CPUID bits.<br>
+</blockquote>
+<br>
+What guest is that?<br>
+<br>
+Paolo<br>
+<br>
+<br>
+

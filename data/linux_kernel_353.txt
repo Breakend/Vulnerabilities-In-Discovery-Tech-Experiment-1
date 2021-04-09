@@ -1,0 +1,10 @@
+Varad Gautam <varad.gautam@xxxxxxxx> wrote:<br>
+<br>
+><i> +	Opt_slen,		/* "slen=<salt-length>" eg. "slen=32" */</i><br>
+<br>
+"slen" seems a bit unobvious.  Maybe "saltlen=..."?<br>
+<br>
+David<br>
+<br>
+<br>
+

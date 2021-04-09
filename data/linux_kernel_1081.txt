@@ -1,0 +1,55 @@
+pm_runtime_get_sync will increment pm usage counter even it failed.<br>
+Forgetting to putting operation will result in reference leak here.<br>
+Fix it by replacing it with pm_runtime_resume_and_get to keep usage<br>
+counter balanced.<br>
+<br>
+Signed-off-by: Shixin Liu <liushixin2@xxxxxxxxxx><br>
+---<br>
+ drivers/crypto/stm32/stm32-hash.c | 8 ++++----<br>
+ 1 file changed, 4 insertions(+), 4 deletions(-)<br>
+<br>
+diff --git a/drivers/crypto/stm32/stm32-hash.c b/drivers/crypto/stm32/stm32-hash.c<br>
+index 7ac0573ef663..389de9e3302d 100644<br>
+--- a/drivers/crypto/stm32/stm32-hash.c<br>
++++ b/drivers/crypto/stm32/stm32-hash.c<br>
+@@ -813,7 +813,7 @@ static void stm32_hash_finish_req(struct ahash_request *req, int err)<br>
+ static int stm32_hash_hw_init(struct stm32_hash_dev *hdev,<br>
+ 			      struct stm32_hash_request_ctx *rctx)<br>
+ {<br>
+-	pm_runtime_get_sync(hdev->dev);<br>
++	pm_runtime_resume_and_get(hdev->dev);<br>
+ <br>
+ 	if (!(HASH_FLAGS_INIT & hdev->flags)) {<br>
+ 		stm32_hash_write(hdev, HASH_CR, HASH_CR_INIT);<br>
+@@ -962,7 +962,7 @@ static int stm32_hash_export(struct ahash_request *req, void *out)<br>
+ 	u32 *preg;<br>
+ 	unsigned int i;<br>
+ <br>
+-	pm_runtime_get_sync(hdev->dev);<br>
++	pm_runtime_resume_and_get(hdev->dev);<br>
+ <br>
+ 	while ((stm32_hash_read(hdev, HASH_SR) & HASH_SR_BUSY))<br>
+ 		cpu_relax();<br>
+@@ -1000,7 +1000,7 @@ static int stm32_hash_import(struct ahash_request *req, const void *in)<br>
+ <br>
+ 	preg = rctx->hw_context;<br>
+ <br>
+-	pm_runtime_get_sync(hdev->dev);<br>
++	pm_runtime_resume_and_get(hdev->dev);<br>
+ <br>
+ 	stm32_hash_write(hdev, HASH_IMR, *preg++);<br>
+ 	stm32_hash_write(hdev, HASH_STR, *preg++);<br>
+@@ -1566,7 +1566,7 @@ static int stm32_hash_remove(struct platform_device *pdev)<br>
+ 	if (!hdev)<br>
+ 		return -ENODEV;<br>
+ <br>
+-	ret = pm_runtime_get_sync(hdev->dev);<br>
++	ret = pm_runtime_resume_and_get(hdev->dev);<br>
+ 	if (ret < 0)<br>
+ 		return ret;<br>
+ <br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

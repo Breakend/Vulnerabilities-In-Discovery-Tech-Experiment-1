@@ -1,0 +1,114 @@
+On Thu, Apr 08, 2021, Paolo Bonzini wrote:<br>
+><i> On 08/04/21 13:15, Wanpeng Li wrote:</i><br>
+><i> > I saw this splatting:</i><br>
+><i> > </i><br>
+><i> >   BUG: sleeping function called from invalid context at</i><br>
+><i> > arch/x86/kvm/kvm_cache_regs.h:115</i><br>
+><i> >    kvm_pdptr_read+0x20/0x60 [kvm]</i><br>
+><i> >    kvm_mmu_load+0x3bd/0x540 [kvm]</i><br>
+><i> > </i><br>
+><i> > There is a might_sleep() in kvm_pdptr_read(), however, the original</i><br>
+><i> > commit didn't explain more. I can send a formal one if the below fix</i><br>
+><i> > is acceptable.</i><br>
+<br>
+We don't want to drop mmu_lock, even temporarily.  The reason for holding it<br>
+across the entire sequence is to ensure kvm_mmu_available_pages() isn't violated.<br>
+<br>
+><i> I think we can just push make_mmu_pages_available down into</i><br>
+><i> kvm_mmu_load's callees.  This way it's not necessary to hold the lock</i><br>
+><i> until after the PDPTR check:</i><br>
+<br>
+...<br>
+<br>
+><i> @@ -4852,14 +4868,10 @@ int kvm_mmu_load(struct kvm_vcpu *vcpu)</i><br>
+><i>  	r = mmu_alloc_special_roots(vcpu);</i><br>
+><i>  	if (r)</i><br>
+><i>  		goto out;</i><br>
+><i> -	write_lock(&vcpu->kvm->mmu_lock);</i><br>
+><i> -	if (make_mmu_pages_available(vcpu))</i><br>
+><i> -		r = -ENOSPC;</i><br>
+><i> -	else if (vcpu->arch.mmu->direct_map)</i><br>
+><i> +	if (vcpu->arch.mmu->direct_map)</i><br>
+><i>  		r = mmu_alloc_direct_roots(vcpu);</i><br>
+><i>  	else</i><br>
+><i>  		r = mmu_alloc_shadow_roots(vcpu);</i><br>
+><i> -	write_unlock(&vcpu->kvm->mmu_lock);</i><br>
+><i>  	if (r)</i><br>
+><i>  		goto out;</i><br>
+<br>
+Freaking PDPTRs.  I was really hoping we could keep the lock and pages_available()<br>
+logic outside of the helpers.  What if kvm_mmu_load() reads the PDPTRs and<br>
+passes them into mmu_alloc_shadow_roots()?  Or is that too ugly?<br>
+<br>
+diff --git a/arch/x86/kvm/mmu/mmu.c b/arch/x86/kvm/mmu/mmu.c<br>
+index efb41f31e80a..e3c4938cd665 100644<br>
+--- a/arch/x86/kvm/mmu/mmu.c<br>
++++ b/arch/x86/kvm/mmu/mmu.c<br>
+@@ -3275,11 +3275,11 @@ static int mmu_alloc_direct_roots(struct kvm_vcpu *vcpu)<br>
+        return 0;<br>
+ }<br>
+<br>
+-static int mmu_alloc_shadow_roots(struct kvm_vcpu *vcpu)<br>
++static int mmu_alloc_shadow_roots(struct kvm_vcpu *vcpu, u64 pdptrs[4])<br>
+ {<br>
+        struct kvm_mmu *mmu = vcpu->arch.mmu;<br>
+-       u64 pdptrs[4], pm_mask;<br>
+        gfn_t root_gfn, root_pgd;<br>
++       u64 pm_mask;<br>
+        hpa_t root;<br>
+        int i;<br>
+<br>
+@@ -3291,11 +3291,8 @@ static int mmu_alloc_shadow_roots(struct kvm_vcpu *vcpu)<br>
+<br>
+        if (mmu->root_level == PT32E_ROOT_LEVEL) {<br>
+                for (i = 0; i < 4; ++i) {<br>
+-                       pdptrs[i] = mmu->get_pdptr(vcpu, i);<br>
+-                       if (!(pdptrs[i] & PT_PRESENT_MASK))<br>
+-                               continue;<br>
+-<br>
+-                       if (mmu_check_root(vcpu, pdptrs[i] >> PAGE_SHIFT))<br>
++                       if ((pdptrs[i] & PT_PRESENT_MASK) &&<br>
++                           mmu_check_root(vcpu, pdptrs[i] >> PAGE_SHIFT))<br>
+                                return 1;<br>
+                }<br>
+        }<br>
+@@ -4844,21 +4841,33 @@ EXPORT_SYMBOL_GPL(kvm_mmu_reset_context);<br>
+<br>
+ int kvm_mmu_load(struct kvm_vcpu *vcpu)<br>
+ {<br>
+-       int r;<br>
++       struct kvm_mmu *mmu = vcpu->arch.mmu;<br>
++       u64 pdptrs[4];<br>
++       int r, i;<br>
+<br>
+-       r = mmu_topup_memory_caches(vcpu, !vcpu->arch.mmu->direct_map);<br>
++       r = mmu_topup_memory_caches(vcpu, !mmu->direct_map);<br>
+        if (r)<br>
+                goto out;<br>
+        r = mmu_alloc_special_roots(vcpu);<br>
+        if (r)<br>
+                goto out;<br>
++<br>
++       /*<br>
++        * On SVM, reading PDPTRs might access guest memory, which might fault<br>
++        * and thus might sleep.  Grab the PDPTRs before acquiring mmu_lock.<br>
++        */<br>
++       if (!mmu->direct_map && mmu->root_level == PT32E_ROOT_LEVEL) {<br>
++               for (i = 0; i < 4; ++i)<br>
++                       pdptrs[i] = mmu->get_pdptr(vcpu, i);<br>
++       }<br>
++<br>
+        write_lock(&vcpu->kvm->mmu_lock);<br>
+        if (make_mmu_pages_available(vcpu))<br>
+                r = -ENOSPC;<br>
+        else if (vcpu->arch.mmu->direct_map)<br>
+                r = mmu_alloc_direct_roots(vcpu);<br>
+        else<br>
+-               r = mmu_alloc_shadow_roots(vcpu);<br>
++               r = mmu_alloc_shadow_roots(vcpu, pdptrs);<br>
+        write_unlock(&vcpu->kvm->mmu_lock);<br>
+        if (r)<br>
+                goto out;<br>
+<br>
+<br>
+

@@ -1,0 +1,29 @@
+From: Haiwei Li <lihaiwei@xxxxxxxxxxx><br>
+<br>
+vmcs_check32 misses the check for 64-bit and 64-bit high.<br>
+<br>
+Signed-off-by: Haiwei Li <lihaiwei@xxxxxxxxxxx><br>
+---<br>
+ arch/x86/kvm/vmx/vmx_ops.h | 4 ++++<br>
+ 1 file changed, 4 insertions(+)<br>
+<br>
+diff --git a/arch/x86/kvm/vmx/vmx_ops.h b/arch/x86/kvm/vmx/vmx_ops.h<br>
+index 692b0c3..164b64f 100644<br>
+--- a/arch/x86/kvm/vmx/vmx_ops.h<br>
++++ b/arch/x86/kvm/vmx/vmx_ops.h<br>
+@@ -37,6 +37,10 @@ static __always_inline void vmcs_check32(unsigned long field)<br>
+ {<br>
+ 	BUILD_BUG_ON_MSG(__builtin_constant_p(field) && ((field) & 0x6000) == 0,<br>
+ 			 "32-bit accessor invalid for 16-bit field");<br>
++	BUILD_BUG_ON_MSG(__builtin_constant_p(field) && ((field) & 0x6001) == 0x2000,<br>
++			 "32-bit accessor invalid for 64-bit field");<br>
++	BUILD_BUG_ON_MSG(__builtin_constant_p(field) && ((field) & 0x6001) == 0x2001,<br>
++			 "32-bit accessor invalid for 64-bit high field");<br>
+ 	BUILD_BUG_ON_MSG(__builtin_constant_p(field) && ((field) & 0x6000) == 0x6000,<br>
+ 			 "32-bit accessor invalid for natural width field");<br>
+ }<br>
+-- <br>
+1.8.3.1<br>
+<br>
+<br>
+

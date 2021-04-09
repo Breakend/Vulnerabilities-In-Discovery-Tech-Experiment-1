@@ -1,0 +1,48 @@
+Cleanup patch for CHECK: blank lines aren't necessary after an open<br>
+brace '{'<br>
+Reported by checkpatch<br>
+<br>
+Signed-off-by: Mitali Borkar <mitaliborkar810@xxxxxxxxx><br>
+---<br>
+ drivers/staging/rtl8712/usb_intf.c | 7 +++----<br>
+ 1 file changed, 3 insertions(+), 4 deletions(-)<br>
+<br>
+diff --git a/drivers/staging/rtl8712/usb_intf.c b/drivers/staging/rtl8712/usb_intf.c<br>
+index dc21e7743349..9038570fb949 100644<br>
+--- a/drivers/staging/rtl8712/usb_intf.c<br>
++++ b/drivers/staging/rtl8712/usb_intf.c<br>
+@@ -36,7 +36,6 @@ static int r871xu_drv_init(struct usb_interface *pusb_intf,<br>
+ static void r871xu_dev_remove(struct usb_interface *pusb_intf);<br>
+ <br>
+ static const struct usb_device_id rtl871x_usb_id_tbl[] = {<br>
+-<br>
+ /* RTL8188SU */<br>
+ 	/* Realtek */<br>
+ 	{USB_DEVICE(0x0BDA, 0x8171)},<br>
+@@ -441,7 +440,7 @@ static int r871xu_drv_init(struct usb_interface *pusb_intf,<br>
+ <br>
+ 			for (i = 0, offset = 0; i < 128; i += 8, offset++)<br>
+ 				r8712_efuse_pg_packet_read(padapter, offset,<br>
+-						     &pdata[i]);<br>
++							   &pdata[i]);<br>
+ <br>
+ 			if (!r8712_initmac || !mac_pton(r8712_initmac, mac)) {<br>
+ 				/* Use the mac address stored in the Efuse<br>
+@@ -561,10 +560,10 @@ static int r871xu_drv_init(struct usb_interface *pusb_intf,<br>
+ 			 */<br>
+ 			mac[0] &= 0xFE;<br>
+ 			dev_info(&udev->dev,<br>
+-				"r8712u: MAC Address from user = %pM\n", mac);<br>
++				 "r8712u: MAC Address from user = %pM\n", mac);<br>
+ 		} else {<br>
+ 			dev_info(&udev->dev,<br>
+-				"r8712u: MAC Address from efuse = %pM\n", mac);<br>
++				 "r8712u: MAC Address from efuse = %pM\n", mac);<br>
+ 		}<br>
+ 		ether_addr_copy(pnetdev->dev_addr, mac);<br>
+ 	}<br>
+-- <br>
+2.30.2<br>
+<br>
+<br>
+

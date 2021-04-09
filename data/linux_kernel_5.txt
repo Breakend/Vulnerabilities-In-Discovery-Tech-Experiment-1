@@ -1,0 +1,131 @@
+When master clock is used, master clock rate is set exclusively.<br>
+Parent clocks of master clock cannot be changed after a call to<br>
+clk_set_rate_exclusive(). So the parent clock of SAI kernel clock<br>
+must be set before.<br>
+Ensure also that exclusive rate operations are balanced<br>
+in STM32 SAI driver.<br>
+<br>
+Signed-off-by: Olivier Moysan <olivier.moysan@xxxxxx><br>
+Signed-off-by: Mark Brown <broonie@xxxxxxxxxx><br>
+---<br>
+ sound/soc/stm/stm32_sai_sub.c | 64 +++++++++++++++++++++++++----------<br>
+ 1 file changed, 47 insertions(+), 17 deletions(-)<br>
+<br>
+diff --git a/sound/soc/stm/stm32_sai_sub.c b/sound/soc/stm/stm32_sai_sub.c<br>
+index 83d8a7ac56f4..d7045aa520de 100644<br>
+--- a/sound/soc/stm/stm32_sai_sub.c<br>
++++ b/sound/soc/stm/stm32_sai_sub.c<br>
+@@ -70,6 +70,7 @@<br>
+ #define SAI_IEC60958_STATUS_BYTES	24<br>
+ <br>
+ #define SAI_MCLK_NAME_LEN		32<br>
++#define SAI_RATE_11K			11025<br>
+ <br>
+ /**<br>
+  * struct stm32_sai_sub_data - private data of SAI sub block (block A or B)<br>
+@@ -309,6 +310,25 @@ static int stm32_sai_set_clk_div(struct stm32_sai_sub_data *sai,<br>
+ 	return ret;<br>
+ }<br>
+ <br>
++static int stm32_sai_set_parent_clock(struct stm32_sai_sub_data *sai,<br>
++				      unsigned int rate)<br>
++{<br>
++	struct platform_device *pdev = sai->pdev;<br>
++	struct clk *parent_clk = sai->pdata->clk_x8k;<br>
++	int ret;<br>
++<br>
++	if (!(rate % SAI_RATE_11K))<br>
++		parent_clk = sai->pdata->clk_x11k;<br>
++<br>
++	ret = clk_set_parent(sai->sai_ck, parent_clk);<br>
++	if (ret)<br>
++		dev_err(&pdev->dev, " Error %d setting sai_ck parent clock. %s",<br>
++			ret, ret == -EBUSY ?<br>
++			"Active stream rates conflict\n" : "\n");<br>
++<br>
++	return ret;<br>
++}<br>
++<br>
+ static long stm32_sai_mclk_round_rate(struct clk_hw *hw, unsigned long rate,<br>
+ 				      unsigned long *prate)<br>
+ {<br>
+@@ -490,25 +510,29 @@ static int stm32_sai_set_sysclk(struct snd_soc_dai *cpu_dai,<br>
+ 	struct stm32_sai_sub_data *sai = snd_soc_dai_get_drvdata(cpu_dai);<br>
+ 	int ret;<br>
+ <br>
+-	if (dir == SND_SOC_CLOCK_OUT) {<br>
++	if (dir == SND_SOC_CLOCK_OUT && sai->sai_mclk) {<br>
+ 		ret = regmap_update_bits(sai->regmap, STM_SAI_CR1_REGX,<br>
+ 					 SAI_XCR1_NODIV,<br>
+ 					 (unsigned int)~SAI_XCR1_NODIV);<br>
+ 		if (ret < 0)<br>
+ 			return ret;<br>
+ <br>
+-		dev_dbg(cpu_dai->dev, "SAI MCLK frequency is %uHz\n", freq);<br>
+-		sai->mclk_rate = freq;<br>
++		/* If master clock is used, set parent clock now */<br>
++		ret = stm32_sai_set_parent_clock(sai, freq);<br>
++		if (ret)<br>
++			return ret;<br>
+ <br>
+-		if (sai->sai_mclk) {<br>
+-			ret = clk_set_rate_exclusive(sai->sai_mclk,<br>
+-						     sai->mclk_rate);<br>
+-			if (ret) {<br>
+-				dev_err(cpu_dai->dev,<br>
+-					"Could not set mclk rate\n");<br>
+-				return ret;<br>
+-			}<br>
++		ret = clk_set_rate_exclusive(sai->sai_mclk, freq);<br>
++		if (ret) {<br>
++			dev_err(cpu_dai->dev,<br>
++				ret == -EBUSY ?<br>
++				"Active streams have incompatible rates" :<br>
++				"Could not set mclk rate\n");<br>
++			return ret;<br>
+ 		}<br>
++<br>
++		dev_dbg(cpu_dai->dev, "SAI MCLK frequency is %uHz\n", freq);<br>
++		sai->mclk_rate = freq;<br>
+ 	}<br>
+ <br>
+ 	return 0;<br>
+@@ -916,11 +940,13 @@ static int stm32_sai_configure_clock(struct snd_soc_dai *cpu_dai,<br>
+ 	int div = 0, cr1 = 0;<br>
+ 	int sai_clk_rate, mclk_ratio, den;<br>
+ 	unsigned int rate = params_rate(params);<br>
++	int ret;<br>
+ <br>
+-	if (!(rate % 11025))<br>
+-		clk_set_parent(sai->sai_ck, sai->pdata->clk_x11k);<br>
+-	else<br>
+-		clk_set_parent(sai->sai_ck, sai->pdata->clk_x8k);<br>
++	if (!sai->sai_mclk) {<br>
++		ret = stm32_sai_set_parent_clock(sai, rate);<br>
++		if (ret)<br>
++			return ret;<br>
++	}<br>
+ 	sai_clk_rate = clk_get_rate(sai->sai_ck);<br>
+ <br>
+ 	if (STM_SAI_IS_F4(sai->pdata)) {<br>
+@@ -1079,9 +1105,13 @@ static void stm32_sai_shutdown(struct snd_pcm_substream *substream,<br>
+ 	regmap_update_bits(sai->regmap, STM_SAI_CR1_REGX, SAI_XCR1_NODIV,<br>
+ 			   SAI_XCR1_NODIV);<br>
+ <br>
+-	clk_disable_unprepare(sai->sai_ck);<br>
++	/* Release mclk rate only if rate was actually set */<br>
++	if (sai->mclk_rate) {<br>
++		clk_rate_exclusive_put(sai->sai_mclk);<br>
++		sai->mclk_rate = 0;<br>
++	}<br>
+ <br>
+-	clk_rate_exclusive_put(sai->sai_mclk);<br>
++	clk_disable_unprepare(sai->sai_ck);<br>
+ <br>
+ 	spin_lock_irqsave(&sai->irq_lock, flags);<br>
+ 	sai->substream = NULL;<br>
+-- <br>
+2.20.1<br>
+<br>
+<br>
+

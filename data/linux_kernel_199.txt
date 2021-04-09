@@ -1,0 +1,27 @@
+Document the iommus property for QCOM Geni SE.<br>
+<br>
+Signed-off-by: Caleb Connolly <caleb@xxxxxxxxxxxxx><br>
+---<br>
+ Documentation/devicetree/bindings/soc/qcom/qcom,geni-se.yaml | 3 +++<br>
+ 1 file changed, 3 insertions(+)<br>
+<br>
+diff --git a/Documentation/devicetree/bindings/soc/qcom/qcom,geni-se.yaml b/Documentation/devicetree/bindings/soc/qcom/qcom,geni-se.yaml<br>
+index 84671950ca0d..6a3b001bf01c 100644<br>
+--- a/Documentation/devicetree/bindings/soc/qcom/qcom,geni-se.yaml<br>
++++ b/Documentation/devicetree/bindings/soc/qcom/qcom,geni-se.yaml<br>
+@@ -51,6 +51,9 @@ properties:<br>
+   interconnect-names:<br>
+     const: qup-core<br>
+ <br>
++  iommus:<br>
++    maxItems: 1<br>
++<br>
+ required:<br>
+   - compatible<br>
+   - reg<br>
+-- <br>
+2.30.2<br>
+<br>
+<br>
+<br>
+

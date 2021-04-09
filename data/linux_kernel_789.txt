@@ -1,0 +1,51 @@
+On Thu, Apr 08, 2021 at 12:05:21PM +0200, David Hildenbrand wrote:<br>
+><i> Trying to set CONFIG_CMA=y with CONFIG_DMA_CMA=n revealed that we have</i><br>
+><i> three drivers that select these options. Random drivers should not</i><br>
+><i> override user settings of such core knobs. Let's use "imply DMA_CMA"</i><br>
+><i> instead, such that user configuration and dependencies are respected.</i><br>
+><i> </i><br>
+><i> v1 -> v2:</i><br>
+><i> - Fix DRM_CMA -> DMA_CMA</i><br>
+><i> </i><br>
+><i> Cc: Joel Stanley <joel@xxxxxxxxx></i><br>
+><i> Cc: David Airlie <airlied@xxxxxxxx></i><br>
+><i> Cc: Daniel Vetter <daniel@xxxxxxxx></i><br>
+><i> Cc: Andrew Jeffery <andrew@xxxxxxxx></i><br>
+><i> Cc: Lucas Stach <l.stach@xxxxxxxxxxxxxx></i><br>
+><i> Cc: Russell King <linux+etnaviv@xxxxxxxxxxxxxxx></i><br>
+><i> Cc: Christian Gmeiner <christian.gmeiner@xxxxxxxxx></i><br>
+><i> Cc: Mike Rapoport <rppt@xxxxxxxxxx></i><br>
+><i> Cc: Arnd Bergmann <arnd@xxxxxxxx></i><br>
+><i> Cc: Bartlomiej Zolnierkiewicz <b.zolnierkie@xxxxxxxxxxx></i><br>
+><i> Cc: Linus Walleij <linus.walleij@xxxxxxxxxx></i><br>
+><i> Cc: Michal Simek <michal.simek@xxxxxxxxxx></i><br>
+><i> Cc: Masahiro Yamada <masahiroy@xxxxxxxxxx></i><br>
+><i> Cc: Randy Dunlap <rdunlap@xxxxxxxxxxxxx></i><br>
+><i> Cc: Peter Collingbourne <pcc@xxxxxxxxxx></i><br>
+><i> Cc: linux-aspeed@xxxxxxxxxxxxxxxx</i><br>
+><i> Cc: dri-devel@xxxxxxxxxxxxxxxxxxxxx</i><br>
+><i> Cc: linux-arm-kernel@xxxxxxxxxxxxxxxxxxx</i><br>
+><i> Cc: etnaviv@xxxxxxxxxxxxxxxxxxxxx</i><br>
+><i> Cc: linux-fbdev@xxxxxxxxxxxxxxx</i><br>
+><i> </i><br>
+><i> David Hildenbrand (2):</i><br>
+><i>   drivers/video/fbdev: don't select DMA_CMA</i><br>
+><i>   drivers/gpu/drm: don't select DMA_CMA or CMA from aspeed or etnaviv</i><br>
+><i> </i><br>
+><i>  drivers/gpu/drm/aspeed/Kconfig  | 3 +--</i><br>
+><i>  drivers/gpu/drm/etnaviv/Kconfig | 3 +--</i><br>
+><i>  drivers/video/fbdev/Kconfig     | 2 +-</i><br>
+><i>  3 files changed, 3 insertions(+), 5 deletions(-)</i><br>
+<br>
+Acked-by: Mike Rapoport <rppt@xxxxxxxxxxxxx><br>
+<br>
+><i> -- </i><br>
+><i> 2.30.2</i><br>
+><i> </i><br>
+<br>
+-- <br>
+Sincerely yours,<br>
+Mike.<br>
+<br>
+<br>
+

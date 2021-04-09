@@ -1,0 +1,61 @@
+Siddharth Chandrasekaran <sidcha@xxxxxxxxx> writes:<br>
+<br>
+><i> Now that all extant hypercalls that can use XMM registers (based on</i><br>
+><i> spec) for input/outputs are patched to support them, we can start</i><br>
+><i> advertising this feature to guests.</i><br>
+><i></i><br>
+><i> Cc: Alexander Graf <graf@xxxxxxxxxx></i><br>
+><i> Cc: Evgeny Iakovlev <eyakovl@xxxxxxxxx></i><br>
+><i> Signed-off-by: Siddharth Chandrasekaran <sidcha@xxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  arch/x86/include/asm/hyperv-tlfs.h | 4 ++--</i><br>
+><i>  arch/x86/kvm/hyperv.c              | 1 +</i><br>
+><i>  2 files changed, 3 insertions(+), 2 deletions(-)</i><br>
+><i></i><br>
+><i> diff --git a/arch/x86/include/asm/hyperv-tlfs.h b/arch/x86/include/asm/hyperv-tlfs.h</i><br>
+><i> index e6cd3fee562b..1f160ef60509 100644</i><br>
+><i> --- a/arch/x86/include/asm/hyperv-tlfs.h</i><br>
+><i> +++ b/arch/x86/include/asm/hyperv-tlfs.h</i><br>
+><i> @@ -49,10 +49,10 @@</i><br>
+><i>  /* Support for physical CPU dynamic partitioning events is available*/</i><br>
+><i>  #define HV_X64_CPU_DYNAMIC_PARTITIONING_AVAILABLE	BIT(3)</i><br>
+><i>  /*</i><br>
+><i> - * Support for passing hypercall input parameter block via XMM</i><br>
+><i> + * Support for passing hypercall input and output parameter block via XMM</i><br>
+><i>   * registers is available</i><br>
+><i>   */</i><br>
+><i> -#define HV_X64_HYPERCALL_PARAMS_XMM_AVAILABLE		BIT(4)</i><br>
+><i> +#define HV_X64_HYPERCALL_PARAMS_XMM_AVAILABLE		BIT(4) | BIT(15)</i><br>
+<br>
+TLFS 6.0b states that there are two distinct bits for input and output:<br>
+<br>
+CPUID Leaf 0x40000003.EDX:<br>
+Bit 4: support for passing hypercall input via XMM registers is available.<br>
+Bit 15: support for returning hypercall output via XMM registers is available.<br>
+<br>
+and HV_X64_HYPERCALL_PARAMS_XMM_AVAILABLE is not currently used<br>
+anywhere, I'd suggest we just rename <br>
+<br>
+HV_X64_HYPERCALL_PARAMS_XMM_AVAILABLE to HV_X64_HYPERCALL_XMM_INPUT_AVAILABLE<br>
+and add HV_X64_HYPERCALL_XMM_OUTPUT_AVAILABLE (bit 15).<br>
+<br>
+><i>  /* Support for a virtual guest idle state is available */</i><br>
+><i>  #define HV_X64_GUEST_IDLE_STATE_AVAILABLE		BIT(5)</i><br>
+><i>  /* Frequency MSRs available */</i><br>
+><i> diff --git a/arch/x86/kvm/hyperv.c b/arch/x86/kvm/hyperv.c</i><br>
+><i> index bf2f86f263f1..dd462c1d641d 100644</i><br>
+><i> --- a/arch/x86/kvm/hyperv.c</i><br>
+><i> +++ b/arch/x86/kvm/hyperv.c</i><br>
+><i> @@ -2254,6 +2254,7 @@ int kvm_get_hv_cpuid(struct kvm_vcpu *vcpu, struct kvm_cpuid2 *cpuid,</i><br>
+><i>  			ent->ebx |= HV_POST_MESSAGES;</i><br>
+><i>  			ent->ebx |= HV_SIGNAL_EVENTS;</i><br>
+><i>  </i><br>
+><i> +			ent->edx |= HV_X64_HYPERCALL_PARAMS_XMM_AVAILABLE;</i><br>
+><i>  			ent->edx |= HV_FEATURE_FREQUENCY_MSRS_AVAILABLE;</i><br>
+><i>  			ent->edx |= HV_FEATURE_GUEST_CRASH_MSR_AVAILABLE;</i><br>
+<br>
+-- <br>
+Vitaly<br>
+<br>
+<br>
+

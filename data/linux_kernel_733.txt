@@ -1,0 +1,36 @@
+On Thu, Apr 01, 2021 at 04:17:03PM +0800, Wan Jiabing wrote:<br>
+><i> struct drm_gem_object is declared twice. One is declared</i><br>
+><i> at 40th line. The blew one is not needed. Remove the duplicate.</i><br>
+><i> </i><br>
+><i> Signed-off-by: Wan Jiabing <wanjiabing@xxxxxxxx></i><br>
+<br>
+Pushed to drm-misc-next, thanks for your patch.<br>
+-Daniel<br>
+<br>
+><i> ---</i><br>
+><i>  drivers/gpu/drm/drm_internal.h | 1 -</i><br>
+><i>  1 file changed, 1 deletion(-)</i><br>
+><i> </i><br>
+><i> diff --git a/drivers/gpu/drm/drm_internal.h b/drivers/gpu/drm/drm_internal.h</i><br>
+><i> index fad2249ee67b..1265de2b9d90 100644</i><br>
+><i> --- a/drivers/gpu/drm/drm_internal.h</i><br>
+><i> +++ b/drivers/gpu/drm/drm_internal.h</i><br>
+><i> @@ -170,7 +170,6 @@ void drm_sysfs_connector_remove(struct drm_connector *connector);</i><br>
+><i>  void drm_sysfs_lease_event(struct drm_device *dev);</i><br>
+><i>  </i><br>
+><i>  /* drm_gem.c */</i><br>
+><i> -struct drm_gem_object;</i><br>
+><i>  int drm_gem_init(struct drm_device *dev);</i><br>
+><i>  int drm_gem_handle_create_tail(struct drm_file *file_priv,</i><br>
+><i>  			       struct drm_gem_object *obj,</i><br>
+><i> -- </i><br>
+><i> 2.25.1</i><br>
+><i> </i><br>
+<br>
+-- <br>
+Daniel Vetter<br>
+Software Engineer, Intel Corporation<br>
+<a  rel="nofollow" href="http://blog.ffwll.ch">http://blog.ffwll.ch</a><br>
+<br>
+<br>
+

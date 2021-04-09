@@ -1,0 +1,47 @@
+There is error message within devm_ioremap_resource<br>
+already, so remove the dev_err calls to avoid redundant<br>
+error messages.<br>
+<br>
+Signed-off-by: Chen Hui <clare.chenhui@xxxxxxxxxx><br>
+---<br>
+ drivers/clk/samsung/clk-exynos4412-isp.c | 4 +---<br>
+ drivers/clk/samsung/clk-s5pv210-audss.c  | 4 +---<br>
+ 2 files changed, 2 insertions(+), 6 deletions(-)<br>
+<br>
+diff --git a/drivers/clk/samsung/clk-exynos4412-isp.c b/drivers/clk/samsung/clk-exynos4412-isp.c<br>
+index 4b9e73608c21..b69e381b8c0c 100644<br>
+--- a/drivers/clk/samsung/clk-exynos4412-isp.c<br>
++++ b/drivers/clk/samsung/clk-exynos4412-isp.c<br>
+@@ -115,10 +115,8 @@ static int __init exynos4x12_isp_clk_probe(struct platform_device *pdev)<br>
+ <br>
+ 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);<br>
+ 	reg_base = devm_ioremap_resource(dev, res);<br>
+-	if (IS_ERR(reg_base)) {<br>
+-		dev_err(dev, "failed to map registers\n");<br>
++	if (IS_ERR(reg_base))<br>
+ 		return PTR_ERR(reg_base);<br>
+-	}<br>
+ <br>
+ 	exynos4x12_save_isp = samsung_clk_alloc_reg_dump(exynos4x12_clk_isp_save,<br>
+ 					ARRAY_SIZE(exynos4x12_clk_isp_save));<br>
+diff --git a/drivers/clk/samsung/clk-s5pv210-audss.c b/drivers/clk/samsung/clk-s5pv210-audss.c<br>
+index 14985ebd043b..a7827a120695 100644<br>
+--- a/drivers/clk/samsung/clk-s5pv210-audss.c<br>
++++ b/drivers/clk/samsung/clk-s5pv210-audss.c<br>
+@@ -72,10 +72,8 @@ static int s5pv210_audss_clk_probe(struct platform_device *pdev)<br>
+ <br>
+ 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);<br>
+ 	reg_base = devm_ioremap_resource(&pdev->dev, res);<br>
+-	if (IS_ERR(reg_base)) {<br>
+-		dev_err(&pdev->dev, "failed to map audss registers\n");<br>
++	if (IS_ERR(reg_base))<br>
+ 		return PTR_ERR(reg_base);<br>
+-	}<br>
+ <br>
+ 	clk_data = devm_kzalloc(&pdev->dev,<br>
+ 				struct_size(clk_data, hws, AUDSS_MAX_CLKS),<br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+

@@ -1,0 +1,126 @@
+pci_p2pdma_map_type() will be needed by the dma-iommu map_sg<br>
+implementation because it will need to determine the mapping type<br>
+ahead of actually doing the mapping to create the actual iommu mapping.<br>
+<br>
+Signed-off-by: Logan Gunthorpe <logang@xxxxxxxxxxxx><br>
+---<br>
+ drivers/pci/p2pdma.c       | 34 +++++++++++++++++++++++-----------<br>
+ include/linux/pci-p2pdma.h | 15 +++++++++++++++<br>
+ 2 files changed, 38 insertions(+), 11 deletions(-)<br>
+<br>
+diff --git a/drivers/pci/p2pdma.c b/drivers/pci/p2pdma.c<br>
+index bcb1a6d6119d..38c93f57a941 100644<br>
+--- a/drivers/pci/p2pdma.c<br>
++++ b/drivers/pci/p2pdma.c<br>
+@@ -20,13 +20,6 @@<br>
+ #include <linux/seq_buf.h><br>
+ #include <linux/xarray.h><br>
+ <br>
+-enum pci_p2pdma_map_type {<br>
+-	PCI_P2PDMA_MAP_UNKNOWN = 0,<br>
+-	PCI_P2PDMA_MAP_NOT_SUPPORTED,<br>
+-	PCI_P2PDMA_MAP_BUS_ADDR,<br>
+-	PCI_P2PDMA_MAP_THRU_HOST_BRIDGE,<br>
+-};<br>
+-<br>
+ struct pci_p2pdma {<br>
+ 	struct gen_pool *pool;<br>
+ 	bool p2pmem_published;<br>
+@@ -822,13 +815,30 @@ void pci_p2pmem_publish(struct pci_dev *pdev, bool publish)<br>
+ }<br>
+ EXPORT_SYMBOL_GPL(pci_p2pmem_publish);<br>
+ <br>
+-static enum pci_p2pdma_map_type pci_p2pdma_map_type(struct dev_pagemap *pgmap,<br>
+-						    struct device *dev)<br>
++/**<br>
++ * pci_p2pdma_map_type - return the type of mapping that should be used for<br>
++ *	a given device and pgmap<br>
++ * @pgmap: the pagemap of a page to determine the mapping type for<br>
++ * @dev: device that is mapping the page<br>
++ * @dma_attrs: the attributes passed to the dma_map operation --<br>
++ *	this is so they can be checked to ensure P2PDMA pages were not<br>
++ *	introduced into an incorrect interface (like dma_map_sg). *<br>
++ *<br>
++ * Returns one of:<br>
++ *	PCI_P2PDMA_MAP_NOT_SUPPORTED - The mapping should not be done<br>
++ *	PCI_P2PDMA_MAP_BUS_ADDR - The mapping should use the PCI bus address<br>
++ *	PCI_P2PDMA_MAP_THRU_HOST_BRIDGE - The mapping should be done directly<br>
++ */<br>
++enum pci_p2pdma_map_type pci_p2pdma_map_type(struct dev_pagemap *pgmap,<br>
++		struct device *dev, unsigned long dma_attrs)<br>
+ {<br>
+ 	struct pci_dev *provider = to_p2p_pgmap(pgmap)->provider;<br>
+ 	enum pci_p2pdma_map_type ret;<br>
+ 	struct pci_dev *client;<br>
+ <br>
++	WARN_ONCE(!(dma_attrs & __DMA_ATTR_PCI_P2PDMA),<br>
++		  "PCI P2PDMA pages were mapped with dma_map_sg!");<br>
++<br>
+ 	if (!provider->p2pdma)<br>
+ 		return PCI_P2PDMA_MAP_NOT_SUPPORTED;<br>
+ <br>
+@@ -879,7 +889,8 @@ int pci_p2pdma_map_sg_attrs(struct device *dev, struct scatterlist *sg,<br>
+ 	struct pci_p2pdma_pagemap *p2p_pgmap =<br>
+ 		to_p2p_pgmap(sg_page(sg)->pgmap);<br>
+ <br>
+-	switch (pci_p2pdma_map_type(sg_page(sg)->pgmap, dev)) {<br>
++	switch (pci_p2pdma_map_type(sg_page(sg)->pgmap, dev,<br>
++				    __DMA_ATTR_PCI_P2PDMA)) {<br>
+ 	case PCI_P2PDMA_MAP_THRU_HOST_BRIDGE:<br>
+ 		return dma_map_sg_attrs(dev, sg, nents, dir, attrs);<br>
+ 	case PCI_P2PDMA_MAP_BUS_ADDR:<br>
+@@ -904,7 +915,8 @@ void pci_p2pdma_unmap_sg_attrs(struct device *dev, struct scatterlist *sg,<br>
+ {<br>
+ 	enum pci_p2pdma_map_type map_type;<br>
+ <br>
+-	map_type = pci_p2pdma_map_type(sg_page(sg)->pgmap, dev);<br>
++	map_type = pci_p2pdma_map_type(sg_page(sg)->pgmap, dev,<br>
++				       __DMA_ATTR_PCI_P2PDMA);<br>
+ <br>
+ 	if (map_type == PCI_P2PDMA_MAP_THRU_HOST_BRIDGE)<br>
+ 		dma_unmap_sg_attrs(dev, sg, nents, dir, attrs);<br>
+diff --git a/include/linux/pci-p2pdma.h b/include/linux/pci-p2pdma.h<br>
+index 8318a97c9c61..a06072ac3a52 100644<br>
+--- a/include/linux/pci-p2pdma.h<br>
++++ b/include/linux/pci-p2pdma.h<br>
+@@ -16,6 +16,13 @@<br>
+ struct block_device;<br>
+ struct scatterlist;<br>
+ <br>
++enum pci_p2pdma_map_type {<br>
++	PCI_P2PDMA_MAP_UNKNOWN = 0,<br>
++	PCI_P2PDMA_MAP_NOT_SUPPORTED,<br>
++	PCI_P2PDMA_MAP_BUS_ADDR,<br>
++	PCI_P2PDMA_MAP_THRU_HOST_BRIDGE,<br>
++};<br>
++<br>
+ #ifdef CONFIG_PCI_P2PDMA<br>
+ int pci_p2pdma_add_resource(struct pci_dev *pdev, int bar, size_t size,<br>
+ 		u64 offset);<br>
+@@ -30,6 +37,8 @@ struct scatterlist *pci_p2pmem_alloc_sgl(struct pci_dev *pdev,<br>
+ 					 unsigned int *nents, u32 length);<br>
+ void pci_p2pmem_free_sgl(struct pci_dev *pdev, struct scatterlist *sgl);<br>
+ void pci_p2pmem_publish(struct pci_dev *pdev, bool publish);<br>
++enum pci_p2pdma_map_type pci_p2pdma_map_type(struct dev_pagemap *pgmap,<br>
++		struct device *dev, unsigned long dma_attrs);<br>
+ int pci_p2pdma_map_sg_attrs(struct device *dev, struct scatterlist *sg,<br>
+ 		int nents, enum dma_data_direction dir, unsigned long attrs);<br>
+ void pci_p2pdma_unmap_sg_attrs(struct device *dev, struct scatterlist *sg,<br>
+@@ -83,6 +92,12 @@ static inline void pci_p2pmem_free_sgl(struct pci_dev *pdev,<br>
+ static inline void pci_p2pmem_publish(struct pci_dev *pdev, bool publish)<br>
+ {<br>
+ }<br>
++static inline enum pci_p2pdma_map_type pci_p2pdma_map_type(<br>
++		struct dev_pagemap *pgmap, struct device *dev,<br>
++		unsigned long dma_attrs)<br>
++{<br>
++	return PCI_P2PDMA_MAP_NOT_SUPPORTED;<br>
++}<br>
+ static inline int pci_p2pdma_map_sg_attrs(struct device *dev,<br>
+ 		struct scatterlist *sg, int nents, enum dma_data_direction dir,<br>
+ 		unsigned long attrs)<br>
+-- <br>
+2.20.1<br>
+<br>
+<br>
+

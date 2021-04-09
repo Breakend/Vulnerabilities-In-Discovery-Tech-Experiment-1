@@ -1,0 +1,28 @@
+Ensure the dma operations support p2pdma before using the RDMA<br>
+device for P2PDMA. This allows switching the RDMA driver from<br>
+pci_p2pdma_map_sg() to dma_map_sg_p2pdma().<br>
+<br>
+Signed-off-by: Logan Gunthorpe <logang@xxxxxxxxxxxx><br>
+---<br>
+ drivers/nvme/target/rdma.c | 3 ++-<br>
+ 1 file changed, 2 insertions(+), 1 deletion(-)<br>
+<br>
+diff --git a/drivers/nvme/target/rdma.c b/drivers/nvme/target/rdma.c<br>
+index 6c1f3ab7649c..3ec7e77e5416 100644<br>
+--- a/drivers/nvme/target/rdma.c<br>
++++ b/drivers/nvme/target/rdma.c<br>
+@@ -414,7 +414,8 @@ static int nvmet_rdma_alloc_rsp(struct nvmet_rdma_device *ndev,<br>
+ 	if (ib_dma_mapping_error(ndev->device, r->send_sge.addr))<br>
+ 		goto out_free_rsp;<br>
+ <br>
+-	if (!ib_uses_virt_dma(ndev->device))<br>
++	if (!ib_uses_virt_dma(ndev->device) &&<br>
++	    dma_pci_p2pdma_supported(&ndev->device->dev))<br>
+ 		r->req.p2p_client = &ndev->device->dev;<br>
+ 	r->send_sge.length = sizeof(*r->req.cqe);<br>
+ 	r->send_sge.lkey = ndev->pd->local_dma_lkey;<br>
+-- <br>
+2.20.1<br>
+<br>
+<br>
+

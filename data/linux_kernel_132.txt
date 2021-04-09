@@ -1,0 +1,319 @@
+Thundercomm T55 is the development platform based on the Qualcomm SDX55<br>
+chipset. This basic support includes support for debug serial, NAND<br>
+flash, BAM DMA, USB and regulators support.<br>
+<br>
+<a  rel="nofollow" href="https://www.thundercomm.com/app_en/product/1593506006365532">https://www.thundercomm.com/app_en/product/1593506006365532</a><br>
+<br>
+Signed-off-by: Manivannan Sadhasivam <manivannan.sadhasivam@xxxxxxxxxx><br>
+---<br>
+ arch/arm/boot/dts/Makefile           |   3 +-<br>
+ arch/arm/boot/dts/qcom-sdx55-t55.dts | 281 +++++++++++++++++++++++++++<br>
+ 2 files changed, 283 insertions(+), 1 deletion(-)<br>
+ create mode 100644 arch/arm/boot/dts/qcom-sdx55-t55.dts<br>
+<br>
+diff --git a/arch/arm/boot/dts/Makefile b/arch/arm/boot/dts/Makefile<br>
+index 874ab2b66187..1d314fdf6014 100644<br>
+--- a/arch/arm/boot/dts/Makefile<br>
++++ b/arch/arm/boot/dts/Makefile<br>
+@@ -930,7 +930,8 @@ dtb-$(CONFIG_ARCH_QCOM) += \<br>
+ 	qcom-msm8974-sony-xperia-honami.dtb \<br>
+ 	qcom-mdm9615-wp8548-mangoh-green.dtb \<br>
+ 	qcom-sdx55-mtp.dtb \<br>
+-	qcom-sdx55-telit-fn980-tlb.dtb<br>
++	qcom-sdx55-telit-fn980-tlb.dtb \<br>
++	qcom-sdx55-t55.dtb<br>
+ dtb-$(CONFIG_ARCH_RDA) += \<br>
+ 	rda8810pl-orangepi-2g-iot.dtb \<br>
+ 	rda8810pl-orangepi-i96.dtb<br>
+diff --git a/arch/arm/boot/dts/qcom-sdx55-t55.dts b/arch/arm/boot/dts/qcom-sdx55-t55.dts<br>
+new file mode 100644<br>
+index 000000000000..ddcd53aa533d<br>
+--- /dev/null<br>
++++ b/arch/arm/boot/dts/qcom-sdx55-t55.dts<br>
+@@ -0,0 +1,281 @@<br>
++// SPDX-License-Identifier: BSD-3-Clause<br>
++/*<br>
++ * Copyright (c) 2021, Linaro Ltd.<br>
++ */<br>
++<br>
++/dts-v1/;<br>
++<br>
++#include <dt-bindings/gpio/gpio.h><br>
++#include <dt-bindings/regulator/qcom,rpmh-regulator.h><br>
++#include "qcom-sdx55.dtsi"<br>
++#include "qcom-pmx55.dtsi"<br>
++<br>
++/ {<br>
++	model = "Thundercomm T55 Development Kit";<br>
++	compatible = "qcom,sdx55-t55", "qcom,sdx55";<br>
++	qcom,board-id = <0xb010008 0x4>;<br>
++<br>
++	aliases {<br>
++		serial0 = &blsp1_uart3;<br>
++	};<br>
++<br>
++	chosen {<br>
++		stdout-path = "serial0:115200n8";<br>
++	};<br>
++<br>
++	reserved-memory {<br>
++		#address-cells = <1>;<br>
++		#size-cells = <1>;<br>
++		ranges;<br>
++<br>
++		mpss_debug_mem: memory@8ef00000 {<br>
++			no-map;<br>
++			reg = <0x8ef00000 0x800000>;<br>
++		};<br>
++<br>
++		ipa_fw_mem: memory@8fced000 {<br>
++			no-map;<br>
++			reg = <0x8fced000 0x10000>;<br>
++		};<br>
++<br>
++		mpss_adsp_mem: memory@90800000 {<br>
++			no-map;<br>
++			reg = <0x90800000 0xf800000>;<br>
++		};<br>
++	};<br>
++<br>
++	vph_pwr: vph-pwr-regulator {<br>
++		compatible = "regulator-fixed";<br>
++		regulator-name = "vph_pwr";<br>
++		regulator-min-microvolt = <3700000>;<br>
++		regulator-max-microvolt = <3700000>;<br>
++	};<br>
++<br>
++	vreg_bob_3p3: pmx55-bob {<br>
++		compatible = "regulator-fixed";<br>
++		regulator-name = "vreg_bob_3p3";<br>
++		regulator-min-microvolt = <3300000>;<br>
++		regulator-max-microvolt = <3300000>;<br>
++<br>
++		regulator-always-on;<br>
++		regulator-boot-on;<br>
++<br>
++		vin-supply = <&vph_pwr>;<br>
++	};<br>
++<br>
++	vreg_s7e_mx_0p752: pmx55-s7e {<br>
++		compatible = "regulator-fixed";<br>
++		regulator-name = "vreg_s7e_mx_0p752";<br>
++		regulator-min-microvolt = <752000>;<br>
++		regulator-max-microvolt = <752000>;<br>
++<br>
++		vin-supply = <&vph_pwr>;<br>
++	};<br>
++<br>
++	vreg_sd_vdd: sd-vdd {<br>
++		compatible = "regulator-fixed";<br>
++		regulator-name = "vreg_sd_vdd";<br>
++		regulator-min-microvolt = <2950000>;<br>
++		regulator-max-microvolt = <2950000>;<br>
++<br>
++		vin-supply = <&vreg_vddpx_2>;<br>
++	};<br>
++<br>
++	vreg_vddpx_2: vddpx-2 {<br>
++		compatible = "regulator-gpio";<br>
++		regulator-name = "vreg_vddpx_2";<br>
++		regulator-min-microvolt = <1800000>;<br>
++		regulator-max-microvolt = <2850000>;<br>
++		enable-gpios = <&tlmm 98 GPIO_ACTIVE_HIGH>;<br>
++		gpios = <&tlmm 100 GPIO_ACTIVE_HIGH>;<br>
++		states = <1800000 0>, <2850000 1>;<br>
++		startup-delay-us = <200000>;<br>
++		enable-active-high;<br>
++		regulator-boot-on;<br>
++<br>
++		vin-supply = <&vph_pwr>;<br>
++	};<br>
++};<br>
++<br>
++&apps_rsc {<br>
++	pmx55-rpmh-regulators {<br>
++		compatible = "qcom,pmx55-rpmh-regulators";<br>
++		qcom,pmic-id = "e";<br>
++<br>
++		vdd-s1-supply = <&vph_pwr>;<br>
++		vdd-s2-supply = <&vph_pwr>;<br>
++		vdd-s3-supply = <&vph_pwr>;<br>
++		vdd-s4-supply = <&vph_pwr>;<br>
++		vdd-s5-supply = <&vph_pwr>;<br>
++		vdd-s6-supply = <&vph_pwr>;<br>
++		vdd-s7-supply = <&vph_pwr>;<br>
++		vdd-l1-l2-supply = <&vreg_s2e_1p224>;<br>
++		vdd-l3-l9-supply = <&vreg_s3e_0p824>;<br>
++		vdd-l4-l12-supply = <&vreg_s4e_1p904>;<br>
++		vdd-l5-l6-supply = <&vreg_s4e_1p904>;<br>
++		vdd-l7-l8-supply = <&vreg_s3e_0p824>;<br>
++		vdd-l10-l11-l13-supply = <&vreg_bob_3p3>;<br>
++		vdd-l14-supply = <&vreg_s7e_mx_0p752>;<br>
++		vdd-l15-supply = <&vreg_s2e_1p224>;<br>
++		vdd-l16-supply = <&vreg_s4e_1p904>;<br>
++<br>
++		vreg_s2e_1p224: smps2 {<br>
++			regulator-min-microvolt = <1280000>;<br>
++			regulator-max-microvolt = <1400000>;<br>
++		};<br>
++<br>
++		vreg_s3e_0p824: smps3 {<br>
++			regulator-min-microvolt = <800000>;<br>
++			regulator-max-microvolt = <1000000>;<br>
++		};<br>
++<br>
++		vreg_s4e_1p904: smps4 {<br>
++			regulator-min-microvolt = <1800000>;<br>
++			regulator-max-microvolt = <1960000>;<br>
++		};<br>
++<br>
++		vreg_l1e_bb_1p2: ldo1 {<br>
++			regulator-min-microvolt = <1200000>;<br>
++			regulator-max-microvolt = <1200000>;<br>
++			regulator-initial-mode = <RPMH_REGULATOR_MODE_LPM>;<br>
++		};<br>
++<br>
++		ldo2 {<br>
++			regulator-min-microvolt = <1128000>;<br>
++			regulator-max-microvolt = <1128000>;<br>
++			regulator-initial-mode = <RPMH_REGULATOR_MODE_LPM>;<br>
++		};<br>
++<br>
++		ldo3 {<br>
++			regulator-min-microvolt = <800000>;<br>
++			regulator-max-microvolt = <800000>;<br>
++			regulator-initial-mode = <RPMH_REGULATOR_MODE_LPM>;<br>
++		};<br>
++<br>
++		vreg_l4e_bb_0p875: ldo4 {<br>
++			regulator-min-microvolt = <872000>;<br>
++			regulator-max-microvolt = <872000>;<br>
++			regulator-initial-mode = <RPMH_REGULATOR_MODE_LPM>;<br>
++		};<br>
++<br>
++		vreg_l5e_bb_1p7: ldo5 {<br>
++			regulator-min-microvolt = <1704000>;<br>
++			regulator-max-microvolt = <1900000>;<br>
++			regulator-initial-mode = <RPMH_REGULATOR_MODE_LPM>;<br>
++		};<br>
++<br>
++		ldo6 {<br>
++			regulator-min-microvolt = <1800000>;<br>
++			regulator-max-microvolt = <1800000>;<br>
++			regulator-initial-mode = <RPMH_REGULATOR_MODE_LPM>;<br>
++		};<br>
++<br>
++		ldo7 {<br>
++			regulator-min-microvolt = <480000>;<br>
++			regulator-max-microvolt = <900000>;<br>
++			regulator-initial-mode = <RPMH_REGULATOR_MODE_LPM>;<br>
++		};<br>
++<br>
++		ldo8 {<br>
++			regulator-min-microvolt = <480000>;<br>
++			regulator-max-microvolt = <900000>;<br>
++			regulator-initial-mode = <RPMH_REGULATOR_MODE_LPM>;<br>
++		};<br>
++<br>
++		ldo9 {<br>
++			regulator-min-microvolt = <800000>;<br>
++			regulator-max-microvolt = <800000>;<br>
++			regulator-initial-mode = <RPMH_REGULATOR_MODE_LPM>;<br>
++		};<br>
++<br>
++		vreg_l10e_3p1: ldo10 {<br>
++			regulator-min-microvolt = <3088000>;<br>
++			regulator-max-microvolt = <3088000>;<br>
++			regulator-initial-mode = <RPMH_REGULATOR_MODE_LPM>;<br>
++		};<br>
++<br>
++		ldo11 {<br>
++			regulator-min-microvolt = <1704000>;<br>
++			regulator-max-microvolt = <2928000>;<br>
++			regulator-initial-mode = <RPMH_REGULATOR_MODE_LPM>;<br>
++		};<br>
++<br>
++		ldo12 {<br>
++			regulator-min-microvolt = <1200000>;<br>
++			regulator-max-microvolt = <1200000>;<br>
++			regulator-initial-mode = <RPMH_REGULATOR_MODE_LPM>;<br>
++		};<br>
++<br>
++		ldo13 {<br>
++			regulator-min-microvolt = <1704000>;<br>
++			regulator-max-microvolt = <2928000>;<br>
++			regulator-initial-mode = <RPMH_REGULATOR_MODE_LPM>;<br>
++		};<br>
++<br>
++		ldo14 {<br>
++			regulator-min-microvolt = <600000>;<br>
++			regulator-max-microvolt = <800000>;<br>
++			regulator-initial-mode = <RPMH_REGULATOR_MODE_LPM>;<br>
++		};<br>
++<br>
++		ldo15 {<br>
++			regulator-min-microvolt = <1200000>;<br>
++			regulator-max-microvolt = <1200000>;<br>
++			regulator-initial-mode = <RPMH_REGULATOR_MODE_LPM>;<br>
++		};<br>
++<br>
++		ldo16 {<br>
++			regulator-min-microvolt = <1704000>;<br>
++			regulator-max-microvolt = <1904000>;<br>
++			regulator-initial-mode = <RPMH_REGULATOR_MODE_LPM>;<br>
++		};<br>
++	};<br>
++};<br>
++<br>
++&blsp1_uart3 {<br>
++	status = "ok";<br>
++};<br>
++<br>
++&qpic_bam {<br>
++	status = "ok";<br>
++};<br>
++<br>
++&qpic_nand {<br>
++	status = "ok";<br>
++<br>
++	nand@0 {<br>
++		reg = <0>;<br>
++<br>
++		nand-ecc-strength = <8>;<br>
++		nand-ecc-step-size = <512>;<br>
++		nand-bus-width = <8>;<br>
++		/* efs2 partition is secured */<br>
++		secure-regions = <0x500000 0xb00000>;<br>
++	};<br>
++};<br>
++<br>
++&remoteproc_mpss {<br>
++	status = "okay";<br>
++	memory-region = <&mpss_adsp_mem>;<br>
++};<br>
++<br>
++&usb_hsphy {<br>
++	status = "okay";<br>
++	vdda-pll-supply = <&vreg_l4e_bb_0p875>;<br>
++	vdda33-supply = <&vreg_l10e_3p1>;<br>
++	vdda18-supply = <&vreg_l5e_bb_1p7>;<br>
++};<br>
++<br>
++&usb_qmpphy {<br>
++	status = "okay";<br>
++	vdda-phy-supply = <&vreg_l4e_bb_0p875>;<br>
++	vdda-pll-supply = <&vreg_l1e_bb_1p2>;<br>
++};<br>
++<br>
++&usb {<br>
++	status = "okay";<br>
++};<br>
++<br>
++&usb_dwc3 {<br>
++	dr_mode = "peripheral";<br>
++};<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

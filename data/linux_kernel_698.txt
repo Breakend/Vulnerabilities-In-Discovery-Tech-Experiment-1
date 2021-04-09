@@ -1,0 +1,26 @@
+
+<br>
+On 4/8/21 7:18 AM, Vitaly Kuznetsov wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+  	enable_gif(svm);<br>
+@@ -3967,6 +3999,9 @@ static void svm_load_mmu_pgd(struct kvm_vcpu *vcpu, unsigned long root,<br>
+  		svm->vmcb->control.nested_cr3 = cr3;<br>
+  		vmcb_mark_dirty(svm->vmcb, VMCB_NPT);<br>
+  
++		if (kvm_x86_ops.tlb_remote_flush)
+<br>
++			kvm_update_arch_tdp_pointer(vcpu->kvm, vcpu, cr3);<br>
++<br>
+</blockquote>
+VMX has "#if IS_ENABLED(CONFIG_HYPERV)" around this, should we add it<br>
+here too?<br>
+</blockquote>
+Agreed. Will fix.<br>
+<br>
+Thanks,<br>
+Vineeth<br>
+<br>
+<br>
+

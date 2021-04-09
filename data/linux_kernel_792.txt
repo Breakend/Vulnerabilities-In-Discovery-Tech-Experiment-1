@@ -1,0 +1,55 @@
+Random drivers should not override a user configuration of core knobs<br>
+(e.g., CONFIG_DMA_CMA=n). Use "imply" instead, to still respect<br>
+dependencies and manual overrides.<br>
+<br>
+"This is similar to "select" as it enforces a lower limit on another<br>
+ symbol except that the "implied" symbol's value may still be set to n<br>
+ from a direct dependency or with a visible prompt."<br>
+<br>
+Implying DMA_CMA should be sufficient, as that depends on CMA.<br>
+<br>
+Note: If this is a real dependency, we should use "depends on DMA_CMA"<br>
+instead -  but I assume the driver can work without CMA just fine --<br>
+esp. when we wouldn't have HAVE_DMA_CONTIGUOUS right now.<br>
+<br>
+Signed-off-by: David Hildenbrand <david@xxxxxxxxxx><br>
+---<br>
+ drivers/gpu/drm/aspeed/Kconfig  | 3 +--<br>
+ drivers/gpu/drm/etnaviv/Kconfig | 3 +--<br>
+ 2 files changed, 2 insertions(+), 4 deletions(-)<br>
+<br>
+diff --git a/drivers/gpu/drm/aspeed/Kconfig b/drivers/gpu/drm/aspeed/Kconfig<br>
+index 5e95bcea43e9..b35bb1aa9b91 100644<br>
+--- a/drivers/gpu/drm/aspeed/Kconfig<br>
++++ b/drivers/gpu/drm/aspeed/Kconfig<br>
+@@ -6,9 +6,8 @@ config DRM_ASPEED_GFX<br>
+ 	depends on MMU<br>
+ 	select DRM_KMS_HELPER<br>
+ 	select DRM_KMS_CMA_HELPER<br>
+-	select DMA_CMA if HAVE_DMA_CONTIGUOUS<br>
+-	select CMA if HAVE_DMA_CONTIGUOUS<br>
+ 	select MFD_SYSCON<br>
++	imply DMA_CMA<br>
+ 	help<br>
+ 	  Chose this option if you have an ASPEED AST2500 SOC Display<br>
+ 	  Controller (aka GFX).<br>
+diff --git a/drivers/gpu/drm/etnaviv/Kconfig b/drivers/gpu/drm/etnaviv/Kconfig<br>
+index faa7fc68b009..5f5576b7221a 100644<br>
+--- a/drivers/gpu/drm/etnaviv/Kconfig<br>
++++ b/drivers/gpu/drm/etnaviv/Kconfig<br>
+@@ -9,9 +9,8 @@ config DRM_ETNAVIV<br>
+ 	select THERMAL if DRM_ETNAVIV_THERMAL<br>
+ 	select TMPFS<br>
+ 	select WANT_DEV_COREDUMP<br>
+-	select CMA if HAVE_DMA_CONTIGUOUS<br>
+-	select DMA_CMA if HAVE_DMA_CONTIGUOUS<br>
+ 	select DRM_SCHED<br>
++	imply DMA_CMA<br>
+ 	help<br>
+ 	  DRM driver for Vivante GPUs.<br>
+ <br>
+-- <br>
+2.30.2<br>
+<br>
+<br>
+

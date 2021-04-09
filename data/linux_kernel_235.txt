@@ -1,0 +1,159 @@
+Hi folks!<br>
+<br>
+This is the spiritual successor to [1], which was over 6 years ago (!).<br>
+<br>
+Background<br>
+==========<br>
+<br>
+GIC mechanics<br>
++++++++++++++<br>
+<br>
+There are three IRQ operations:<br>
+o Acknowledge. This gives us the IRQ number that interrupted us, and also<br>
+  - raises the running priority of the CPU interface to that of the IRQ<br>
+  - sets the active bit of the IRQ<br>
+o Priority Drop. This "clears" the running priority.<br>
+o Deactivate. This clears the active bit of the IRQ.<br>
+<br>
+o The CPU interface has a running priority value. No interrupt of lower or<br>
+  equal priority will be signaled to the CPU attached to that interface. On<br>
+  Linux, we only have two priority values: pNMIs at highest priority, and<br>
+  everything else at the other priority.<br>
+o Most GIC interrupts have an "active" bit. This bit is set on Acknowledge<br>
+  and cleared on Deactivate. A given interrupt cannot be re-signaled to a<br>
+  CPU if it has its active bit set (i.e. if it "fires" again while it's<br>
+  being handled).<br>
+<br>
+EOImode fun<br>
++++++++++++<br>
+<br>
+In EOImode=0, Priority Drop and Deactivate are undissociable. The<br>
+(simplified) interrupt handling flow is as follows: <br>
+<br>
+  <~IRQ><br>
+    Acknowledge<br>
+    Priority Drop + Deactivate<br>
+    <interrupts can once again be signaled, once interrupts are re-enabled><br>
+<br>
+With EOImode=1, we can invoke each operation individually. This gives us:<br>
+<br>
+  <~IRQ><br>
+    Acknowledge<br>
+    Priority Drop<br>
+    <*other* interrupts can be signaled from here, once interrupts are re-enabled><br>
+    Deactivate<br>
+    <*this* interrupt can be signaled again><br>
+<br>
+What this means is that with EOImode=1, any interrupt is kept "masked" by<br>
+its active bit between Priority Drop and Deactivate.<br>
+<br>
+Threaded IRQs and ONESHOT<br>
+=========================<br>
+<br>
+ONESHOT threaded IRQs must remain masked between the main handler and the<br>
+threaded handler. Right now we do this using the conventional irq_mask()<br>
+operations, which looks like this: <br>
+<br>
+ <irq handler><br>
+   Acknowledge<br>
+   Priority Drop   <br>
+   irq_mask()<br>
+   Deactivate<br>
+<br>
+ <threaded handler><br>
+   irq_unmask()<br>
+<br>
+However, masking for the GICs means poking the distributor, and there's no<br>
+sysreg for that - it's an MMIO access. We've seen above that our IRQ<br>
+handling can give us masking "for free", and this is what this patch set is<br>
+all about. It turns the above handling into:<br>
+<br>
+  <irq handler><br>
+    Acknowledge<br>
+    Priority Drop<br>
+<br>
+  <threaded handler><br>
+    Deactivate<br>
+<br>
+No irq_mask() => fewer MMIO accesses => happier users (or so I've been<br>
+told). This is especially relevant to PREEMPT_RT which forces threaded<br>
+IRQs.<br>
+    <br>
+Testing<br>
+=======<br>
+<br>
+GICv2<br>
++++++<br>
+<br>
+I've tested this on my Juno with forced irqthreads. This makes the pl011<br>
+IRQ into a threaded ONESHOT IRQ, so I spammed my keyboard into the console<br>
+and verified via ftrace that there were no irq_mask() / irq_unmask()<br>
+involved.<br>
+<br>
+GICv3<br>
++++++<br>
+<br>
+I've tested this on my Ampere eMAG, which uncovered "fun" interactions with<br>
+the MSI domains. Did the same trick as the Juno with the pl011.<br>
+<br>
+pNMIs cause said eMAG to freeze, but that's true even without my patches. I<br>
+did try them out under QEMU+KVM and that looked fine, although that means I<br>
+only got to test EOImode=0. I'll try to dig into this when I get some more<br>
+cycles.<br>
+<br>
+TODOs<br>
+=====<br>
+<br>
+MSI hierarchy story<br>
++++++++++++++++++++<br>
+<br>
+I 'hate' patch 8/10 because it's so very easy to break. See changelog for<br>
+my thoughts on the thing.<br>
+<br>
+Performance numbers<br>
++++++++++++++++++++<br>
+<br>
+The whole point of this was to shave off some time spent issuing requests<br>
+to the distributor. On my Juno the IRQ for eth0 gets forcefully threaded<br>
+and thus becomes a ONESHOT threaded IRQ - I've tried to test this with<br>
+netperf, but the delta is lost in the noise (and there is quite a lot of<br>
+noise, unfortunately).<br>
+<br>
+I'm still looking for something I can benchmark on the eMAG to get some<br>
+GICv3 results.<br>
+<br>
+Links<br>
+=====<br>
+<br>
+[1]: <a  rel="nofollow" href="https://lore.kernel.org/lkml/1414235215-10468-1-git-send-email-marc.zyngier@xxxxxxx/">https://lore.kernel.org/lkml/1414235215-10468-1-git-send-email-marc.zyngier@xxxxxxx/</a><br>
+<br>
+Valentin Schneider (10):<br>
+  genirq: Add chip flag to denote automatic IRQ (un)masking<br>
+  genirq: Define irq_ack() and irq_eoi() helpers<br>
+  genirq: Employ ack_irq() and eoi_irq() where relevant<br>
+  genirq: Add handle_strict_flow_irq() flow handler<br>
+  genirq: Let purely flow-masked ONESHOT irqs through<br>
+    unmask_threaded_irq()<br>
+  genirq: Don't mask IRQ within flow handler if IRQ is flow-masked<br>
+  genirq, irq-gic-v3: Make NMI flow handlers use ->irq_ack() if<br>
+    available<br>
+  irqchip/gic-v3-its: Use irq_chip_ack_parent()<br>
+  irqchip/gic: Convert to handle_strict_flow_irq()<br>
+  irqchip/gic-v3: Convert to handle_strict_flow_irq()<br>
+<br>
+ drivers/irqchip/irq-gic-v3-its-pci-msi.c |   1 +<br>
+ drivers/irqchip/irq-gic-v3-its.c         |   1 +<br>
+ drivers/irqchip/irq-gic-v3.c             |  27 ++++--<br>
+ drivers/irqchip/irq-gic.c                |  14 ++-<br>
+ include/linux/irq.h                      |  15 ++-<br>
+ kernel/irq/chip.c                        | 117 +++++++++++++++++++----<br>
+ kernel/irq/debugfs.c                     |   2 +<br>
+ kernel/irq/internals.h                   |   7 ++<br>
+ kernel/irq/manage.c                      |   2 +-<br>
+ 9 files changed, 154 insertions(+), 32 deletions(-)<br>
+<br>
+--<br>
+2.25.1<br>
+<br>
+<br>
+

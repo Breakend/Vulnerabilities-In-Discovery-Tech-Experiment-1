@@ -1,0 +1,161 @@
+This series adds support for Clang's Control-Flow Integrity (CFI)<br>
+checking. With CFI, the compiler injects a runtime check before each<br>
+indirect function call to ensure the target is a valid function with<br>
+the correct static type. This restricts possible call targets and<br>
+makes it more difficult for an attacker to exploit bugs that allow the<br>
+modification of stored function pointers. For more details, see:<br>
+<br>
+  <a  rel="nofollow" href="https://clang.llvm.org/docs/ControlFlowIntegrity.html">https://clang.llvm.org/docs/ControlFlowIntegrity.html</a><br>
+<br>
+The first patch contains build system changes and error handling,<br>
+and implements support for cross-module indirect call checking. The<br>
+remaining patches address issues caused by the compiler<br>
+instrumentation. These include fixing known type mismatches, as well<br>
+as issues with address space confusion and cross-module function<br>
+address equality.<br>
+<br>
+These patches add support only for arm64, but I'll post patches also<br>
+for x86_64 after we address the remaining issues there, including<br>
+objtool support.<br>
+<br>
+You can also pull this series from<br>
+<br>
+  <a  rel="nofollow" href="https://github.com/samitolvanen/linux.git">https://github.com/samitolvanen/linux.git</a> cfi-v6<br>
+<br>
+---<br>
+Changes in v6:<br>
+ - Added temporary variables and moved assembly constraints to a<br>
+   separate line based on Mark's suggestions.<br>
+<br>
+Changes in v5:<br>
+ - Changed module.lds.S to only include <asm/page.h> when CFI is<br>
+   enabled to fix the MIPS build.<br>
+ - Added a patch that fixes dynamic ftrace with CFI on arm64.<br>
+<br>
+Changes in v4:<br>
+ - Per Mark's suggestion, dropped __pa_function() and renamed<br>
+   __va_function() to function_nocfi().<br>
+ - Added a comment to function_nocfi() to explain what it does.<br>
+ - Updated the psci patch to use an intermediate variable for<br>
+   the physical address for clarity.<br>
+<br>
+Changes in v3:<br>
+ - Added a patch to change list_sort() callers treewide to use<br>
+   const pointers instead of simply removing the internal casts.<br>
+ - Changed cleanup_symbol_name() to return bool.<br>
+ - Changed module.lds.S to drop the .eh_frame section only with<br>
+   CONFIG_CFI_CLANG.<br>
+ - Switched to synchronize_rcu() in update_shadow().<br>
+<br>
+Changes in v2:<br>
+ - Fixed .text merging in module.lds.S.<br>
+ - Added WARN_ON_FUNCTION_MISMATCH() and changed kernel/thread.c<br>
+   and kernel/workqueue.c to use the macro instead.<br>
+<br>
+<br>
+Sami Tolvanen (18):<br>
+  add support for Clang CFI<br>
+  cfi: add __cficanonical<br>
+  mm: add generic function_nocfi macro<br>
+  module: ensure __cfi_check alignment<br>
+  workqueue: use WARN_ON_FUNCTION_MISMATCH<br>
+  kthread: use WARN_ON_FUNCTION_MISMATCH<br>
+  kallsyms: strip ThinLTO hashes from static functions<br>
+  bpf: disable CFI in dispatcher functions<br>
+  treewide: Change list_sort to use const pointers<br>
+  lkdtm: use function_nocfi<br>
+  psci: use function_nocfi for cpu_resume<br>
+  arm64: implement function_nocfi<br>
+  arm64: use function_nocfi with __pa_symbol<br>
+  arm64: add __nocfi to functions that jump to a physical address<br>
+  arm64: add __nocfi to __apply_alternatives<br>
+  arm64: ftrace: use function_nocfi for ftrace_call<br>
+  KVM: arm64: Disable CFI for nVHE<br>
+  arm64: allow CONFIG_CFI_CLANG to be selected<br>
+<br>
+ Makefile                                      |  17 +<br>
+ arch/Kconfig                                  |  45 +++<br>
+ arch/arm64/Kconfig                            |   1 +<br>
+ arch/arm64/include/asm/memory.h               |  16 +<br>
+ arch/arm64/include/asm/mmu_context.h          |   4 +-<br>
+ arch/arm64/kernel/acpi_parking_protocol.c     |   3 +-<br>
+ arch/arm64/kernel/alternative.c               |   4 +-<br>
+ arch/arm64/kernel/cpu-reset.h                 |  10 +-<br>
+ arch/arm64/kernel/cpufeature.c                |   4 +-<br>
+ arch/arm64/kernel/ftrace.c                    |   2 +-<br>
+ arch/arm64/kernel/psci.c                      |   3 +-<br>
+ arch/arm64/kernel/smp_spin_table.c            |   3 +-<br>
+ arch/arm64/kvm/hyp/nvhe/Makefile              |   6 +-<br>
+ arch/arm64/kvm/vgic/vgic-its.c                |   8 +-<br>
+ arch/arm64/kvm/vgic/vgic.c                    |   3 +-<br>
+ block/blk-mq-sched.c                          |   3 +-<br>
+ block/blk-mq.c                                |   3 +-<br>
+ drivers/acpi/nfit/core.c                      |   3 +-<br>
+ drivers/acpi/numa/hmat.c                      |   3 +-<br>
+ drivers/clk/keystone/sci-clk.c                |   4 +-<br>
+ drivers/firmware/psci/psci.c                  |   7 +-<br>
+ drivers/gpu/drm/drm_modes.c                   |   3 +-<br>
+ drivers/gpu/drm/i915/gt/intel_engine_user.c   |   3 +-<br>
+ drivers/gpu/drm/i915/gvt/debugfs.c            |   2 +-<br>
+ drivers/gpu/drm/i915/selftests/i915_gem_gtt.c |   3 +-<br>
+ drivers/gpu/drm/radeon/radeon_cs.c            |   4 +-<br>
+ .../hw/usnic/usnic_uiom_interval_tree.c       |   3 +-<br>
+ drivers/interconnect/qcom/bcm-voter.c         |   2 +-<br>
+ drivers/md/raid5.c                            |   3 +-<br>
+ drivers/misc/lkdtm/usercopy.c                 |   2 +-<br>
+ drivers/misc/sram.c                           |   4 +-<br>
+ drivers/nvme/host/core.c                      |   3 +-<br>
+ .../controller/cadence/pcie-cadence-host.c    |   3 +-<br>
+ drivers/spi/spi-loopback-test.c               |   3 +-<br>
+ fs/btrfs/raid56.c                             |   3 +-<br>
+ fs/btrfs/tree-log.c                           |   3 +-<br>
+ fs/btrfs/volumes.c                            |   3 +-<br>
+ fs/ext4/fsmap.c                               |   4 +-<br>
+ fs/gfs2/glock.c                               |   3 +-<br>
+ fs/gfs2/log.c                                 |   2 +-<br>
+ fs/gfs2/lops.c                                |   3 +-<br>
+ fs/iomap/buffered-io.c                        |   3 +-<br>
+ fs/ubifs/gc.c                                 |   7 +-<br>
+ fs/ubifs/replay.c                             |   4 +-<br>
+ fs/xfs/scrub/bitmap.c                         |   4 +-<br>
+ fs/xfs/xfs_bmap_item.c                        |   4 +-<br>
+ fs/xfs/xfs_buf.c                              |   6 +-<br>
+ fs/xfs/xfs_extent_busy.c                      |   4 +-<br>
+ fs/xfs/xfs_extent_busy.h                      |   3 +-<br>
+ fs/xfs/xfs_extfree_item.c                     |   4 +-<br>
+ fs/xfs/xfs_refcount_item.c                    |   4 +-<br>
+ fs/xfs/xfs_rmap_item.c                        |   4 +-<br>
+ include/asm-generic/bug.h                     |  16 +<br>
+ include/asm-generic/vmlinux.lds.h             |  20 +-<br>
+ include/linux/bpf.h                           |   4 +-<br>
+ include/linux/cfi.h                           |  41 +++<br>
+ include/linux/compiler-clang.h                |   3 +<br>
+ include/linux/compiler_types.h                |   8 +<br>
+ include/linux/init.h                          |   6 +-<br>
+ include/linux/list_sort.h                     |   7 +-<br>
+ include/linux/mm.h                            |  10 +<br>
+ include/linux/module.h                        |  13 +-<br>
+ include/linux/pci.h                           |   4 +-<br>
+ init/Kconfig                                  |   2 +-<br>
+ kernel/Makefile                               |   4 +<br>
+ kernel/cfi.c                                  | 329 ++++++++++++++++++<br>
+ kernel/kallsyms.c                             |  55 ++-<br>
+ kernel/kthread.c                              |   3 +-<br>
+ kernel/module.c                               |  43 +++<br>
+ kernel/workqueue.c                            |   2 +-<br>
+ lib/list_sort.c                               |  17 +-<br>
+ lib/test_list_sort.c                          |   3 +-<br>
+ net/tipc/name_table.c                         |   4 +-<br>
+ scripts/Makefile.modfinal                     |   2 +-<br>
+ scripts/module.lds.S                          |  19 +-<br>
+ 75 files changed, 760 insertions(+), 113 deletions(-)<br>
+ create mode 100644 include/linux/cfi.h<br>
+ create mode 100644 kernel/cfi.c<br>
+<br>
+<br>
+base-commit: e0a472fffe435af52ea4e21e1e0001c5c8ffc6c7<br>
+-- <br>
+2.31.1.295.g9ea45b61b8-goog<br>
+<br>
+<br>
+

@@ -1,0 +1,30 @@
+Add support for the two GPIOs present on Qualcomm Technologies, Inc.<br>
+PM8008.<br>
+<br>
+Reviewed-by: Bjorn Andersson <bjorn.andersson@xxxxxxxxxx><br>
+Signed-off-by: Guru Das Srinagesh <gurus@xxxxxxxxxxxxxx><br>
+---<br>
+Changes from last patchset:<br>
+- Moved "pm8008" up a line to keep things sorted alphabetically<br>
+<br>
+ drivers/pinctrl/qcom/pinctrl-spmi-gpio.c | 1 +<br>
+ 1 file changed, 1 insertion(+)<br>
+<br>
+diff --git a/drivers/pinctrl/qcom/pinctrl-spmi-gpio.c b/drivers/pinctrl/qcom/pinctrl-spmi-gpio.c<br>
+index c2b9f2e..00870da 100644<br>
+--- a/drivers/pinctrl/qcom/pinctrl-spmi-gpio.c<br>
++++ b/drivers/pinctrl/qcom/pinctrl-spmi-gpio.c<br>
+@@ -1135,6 +1135,7 @@ static const struct of_device_id pmic_gpio_of_match[] = {<br>
+ 	{ .compatible = "qcom,pmr735b-gpio", .data = (void *) 4 },<br>
+ 	{ .compatible = "qcom,pm6150-gpio", .data = (void *) 10 },<br>
+ 	{ .compatible = "qcom,pm6150l-gpio", .data = (void *) 12 },<br>
++	{ .compatible = "qcom,pm8008-gpio", .data = (void *) 2 },<br>
+ 	/* pmx55 has 11 GPIOs with holes on 3, 7, 10, 11 */<br>
+ 	{ .compatible = "qcom,pmx55-gpio", .data = (void *) 11 },<br>
+ 	{ },<br>
+-- <br>
+The Qualcomm Innovation Center, Inc. is a member of the Code Aurora Forum,<br>
+a Linux Foundation Collaborative Project<br>
+<br>
+<br>
+

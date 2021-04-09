@@ -1,0 +1,84 @@
+Hi Greg,<br>
+<br>
+On 4/7/2021 14:00, Artur Petrosyan wrote:<br>
+><i> This patch set fixes and improves the Partial Power Down mode for</i><br>
+><i> dwc2 core.</i><br>
+><i> It adds support for the following cases</i><br>
+><i>      1. Entering and exiting partial power down when a port is</i><br>
+><i>         suspended, resumed, port reset is asserted.</i><br>
+><i>      2. Exiting the partial power down mode before removing driver.</i><br>
+><i>      3. Exiting partial power down in wakeup detected interrupt handler.</i><br>
+><i>      4. Exiting from partial power down mode when connector ID.</i><br>
+><i>         status changes to "connId B</i><br>
+><i> </i><br>
+><i> It updates and fixes the implementation of dwc2 entering and</i><br>
+><i> exiting partial power down mode when the system (PC) is suspended.</i><br>
+><i> </i><br>
+><i> The patch set also improves the implementation of function handlers</i><br>
+><i> for entering and exiting host or device partial power down.</i><br>
+><i> </i><br>
+><i> NOTE: This is the second patch set in the power saving mode fixes</i><br>
+><i> series.</i><br>
+><i> This patch set is part of multiple series and is continuation</i><br>
+><i> of the "usb: dwc2: Fix and improve power saving modes" patch set.</i><br>
+><i> (Patch set link: <a  rel="nofollow" href="https://marc.info/?l=linux-usb&m=160379622403975&w=2">https://marc.info/?l=linux-usb&m=160379622403975&w=2</a>).</i><br>
+><i> The patches that were included in the "usb: dwc2:</i><br>
+><i> Fix and improve power saving modes" which was submitted</i><br>
+><i> earlier was too large and needed to be split up into</i><br>
+><i> smaller patch sets.</i><br>
+><i> </i><br>
+><i> </i><br>
+><i> Artur Petrosyan (14):</i><br>
+><i>    usb: dwc2: Add device partial power down functions</i><br>
+><i>    usb: dwc2: Add host partial power down functions</i><br>
+><i>    usb: dwc2: Update enter and exit partial power down functions</i><br>
+><i>    usb: dwc2: Add partial power down exit flow in wakeup intr.</i><br>
+><i>    usb: dwc2: Update port suspend/resume function definitions.</i><br>
+><i>    usb: dwc2: Add enter partial power down when port is suspended</i><br>
+><i>    usb: dwc2: Add exit partial power down when port is resumed</i><br>
+><i>    usb: dwc2: Add exit partial power down when port reset is asserted</i><br>
+><i>    usb: dwc2: Add part. power down exit from</i><br>
+><i>      dwc2_conn_id_status_change().</i><br>
+><i>    usb: dwc2: Allow exit partial power down in urb enqueue</i><br>
+><i>    usb: dwc2: Fix session request interrupt handler</i><br>
+><i>    usb: dwc2: Update partial power down entering by system suspend</i><br>
+><i>    usb: dwc2: Fix partial power down exiting by system resume</i><br>
+><i>    usb: dwc2: Add exit partial power down before removing driver</i><br>
+><i> </i><br>
+><i>   drivers/usb/dwc2/core.c      | 113 ++-------</i><br>
+><i>   drivers/usb/dwc2/core.h      |  27 ++-</i><br>
+><i>   drivers/usb/dwc2/core_intr.c |  46 ++--</i><br>
+><i>   drivers/usb/dwc2/gadget.c    | 148 ++++++++++-</i><br>
+><i>   drivers/usb/dwc2/hcd.c       | 458 +++++++++++++++++++++++++----------</i><br>
+><i>   drivers/usb/dwc2/hw.h        |   1 +</i><br>
+><i>   drivers/usb/dwc2/platform.c  |  11 +-</i><br>
+><i>   7 files changed, 558 insertions(+), 246 deletions(-)</i><br>
+><i> </i><br>
+><i> </i><br>
+><i> base-commit: e9fcb07704fcef6fa6d0333fd2b3a62442eaf45b</i><br>
+><i> </i><br>
+I have submitted this patch set yesterday. It contains 14 patches. But <br>
+only 2 of those patches were received by LKML only the cover letter and <br>
+the 13th patch. <br>
+(<a  rel="nofollow" href="https://lore.kernel.org/linux-usb/cover.1617782102.git.Arthur.Petrosyan@xxxxxxxxxxxx/T/#t">https://lore.kernel.org/linux-usb/cover.1617782102.git.Arthur.Petrosyan@xxxxxxxxxxxx/T/#t</a>)<br>
+<br>
+I checked here at Synopsys, Minas did receive all the patches as his <br>
+email is in To list. Could this be an issue of vger.kernel.org mailing <br>
+server?<br>
+<br>
+Because I checked every local possibility that could result to such <br>
+behavior. The patch 13 which was received by LKML has the similar <br>
+content as the other patches.<br>
+<br>
+The mailing tool that was used is ssmtp, checked all the configurations <br>
+everything is fine.<br>
+<br>
+Could you please suggest what should I do in this situation?<br>
+<br>
+Regards,<br>
+Artur<br>
+<br>
+<br>
+<br>
+<br>
+

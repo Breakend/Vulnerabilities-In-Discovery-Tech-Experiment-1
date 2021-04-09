@@ -1,0 +1,23 @@
+Paolo Bonzini <pbonzini@xxxxxxxxxx> writes:<br>
+<br>
+><i> On 08/04/21 14:01, Vitaly Kuznetsov wrote:</i><br>
+><i>> </i><br>
+><i>> Also, we can probably defer kvm_hv_hypercall_read_xmm() until we know</i><br>
+><i>> how many regs we actually need to not read them all (we will always</i><br>
+><i>> need xmm[0] I guess so we can as well read it here).</i><br>
+><i></i><br>
+><i> The cost is get/put FPU, so I think there's not much to gain from that.</i><br>
+><i></i><br>
+<br>
+Maybe, I just think that in most cases we will only need xmm0. To make<br>
+the optimization work we can probably do kvm_get_fpu() once we figured<br>
+out that we're dealing with XMM hypercall and do kvm_put_fpu() when<br>
+we're done processing hypercall parameters. This way we don't need to do<br>
+get/put twice. We can certainly leave this idea to the (possible) future<br>
+optimizations.<br>
+<br>
+-- <br>
+Vitaly<br>
+<br>
+<br>
+

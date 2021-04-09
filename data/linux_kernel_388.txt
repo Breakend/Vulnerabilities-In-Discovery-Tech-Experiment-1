@@ -1,0 +1,65 @@
+Em qui, 2021-04-08 às 13:20 -0300, Ezequiel Garcia escreveu:<br>
+><i> Ola Aline,</i><br>
+Ola Ezequiel,<br>
+<br>
+><i> Welcome to the kernel community. Hope you enjoy some of this</i><br>
+><i> Outreachy adventures.</i><br>
+Thank you!<br>
+<br>
+><i> Normally, when you submit a v2, we want to know what changed</i><br>
+><i> between the first submission and v2.</i><br>
+><i> </i><br>
+><i> If you are subscribed to linux-media, you can read some</i><br>
+><i> of the series with a vN+1 and look how it's done. Examples:</i><br>
+><i> </i><br>
+><i> <a  rel="nofollow" href="https://www.spinics.net/lists/linux-media/msg190043.html">https://www.spinics.net/lists/linux-media/msg190043.html</a></i><br>
+><i> </i><br>
+><i> <a  rel="nofollow" href="https://www.spinics.net/lists/linux-media/msg189923.html">https://www.spinics.net/lists/linux-media/msg189923.html</a></i><br>
+><i> </i><br>
+><i> I'm sure your Outreachy mentors can tell you more.</i><br>
+Thank you for the examples, it won't happen again.<br>
+<br>
+The reason for sending a v2 is that I sent my very first patchset<br>
+yesterday and I sent the cover-letter together, but (I think) I wasn't<br>
+supposed to, and as the patches weren't marked as [PATCH 1/2] and<br>
+[PATCH 2/2] in the email - since I commited all the files with the same<br>
+message - I tought it was wrong and sent again today.<br>
+<br>
+However, I just realized that I've changed just the subject of the e-<br>
+mail, but I would've to change the commit message, right? And then, it<br>
+would be a second version, am I right? <br>
+<br>
+Thank you in advance,<br>
+<br>
+><i> On Thu, 2021-04-08 at 11:07 -0300, Aline Santana Cordeiro wrote:</i><br>
+><i> > Aligns line break with the remaining function arguments</i><br>
+><i> > to the open parenthesis. Issue found by checkpatch.</i><br>
+><i> > </i><br>
+><i> > Signed-off-by: Aline Santana Cordeiro <   </i><br>
+><i> > alinesantanacordeiro@xxxxxxxxx></i><br>
+><i> > ---</i><br>
+><i> >  drivers/staging/media/hantro/hantro_hw.h | 2 +-</i><br>
+><i> >  1 file changed, 1 insertion(+), 1 deletion(-)</i><br>
+><i> > </i><br>
+><i> > diff --git a/drivers/staging/media/hantro/hantro_hw.h</i><br>
+><i> > b/drivers/staging/media/hantro/hantro_hw.h</i><br>
+><i> > index 34c9e46..a650b9c 100644</i><br>
+><i> > --- a/drivers/staging/media/hantro/hantro_hw.h</i><br>
+><i> > +++ b/drivers/staging/media/hantro/hantro_hw.h</i><br>
+><i> > @@ -207,7 +207,7 @@ hantro_h264_mv_size(unsigned int width,</i><br>
+><i> > unsigned int height)</i><br>
+><i> >  void hantro_g1_mpeg2_dec_run(struct hantro_ctx *ctx);</i><br>
+><i> >  void rk3399_vpu_mpeg2_dec_run(struct hantro_ctx *ctx);</i><br>
+><i> >  void hantro_mpeg2_dec_copy_qtable(u8 *qtable,</i><br>
+><i> > -       const struct v4l2_ctrl_mpeg2_quantization *ctrl);</i><br>
+><i> > +                                 const struct</i><br>
+><i> > v4l2_ctrl_mpeg2_quantization *ctrl);</i><br>
+><i> >  int hantro_mpeg2_dec_init(struct hantro_ctx *ctx);</i><br>
+><i> >  void hantro_mpeg2_dec_exit(struct hantro_ctx *ctx);</i><br>
+><i> >  </i><br>
+><i> </i><br>
+><i> </i><br>
+<br>
+<br>
+<br>
+

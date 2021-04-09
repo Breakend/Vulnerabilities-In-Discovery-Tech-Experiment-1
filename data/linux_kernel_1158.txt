@@ -1,0 +1,39 @@
+On Wed, Apr 07, 2021 at 09:50:50PM -0400, min.li.xe@xxxxxxxxxxx wrote:<br>
+><i> From: Min Li <min.li.xe@xxxxxxxxxxx></i><br>
+><i> </i><br>
+><i> This driver is developed for the IDT ClockMatrix(TM) and 82P33xxx families</i><br>
+><i> of timing and synchronization devices.It will be used by Renesas PTP Clock</i><br>
+><i> Manager for Linux (pcm4l) software to provide support to GNSS assisted</i><br>
+><i> partial timing support (APTS) and other networking timing functions.</i><br>
+><i> </i><br>
+><i> Current version provides kernel API's to support the following functions</i><br>
+><i> -set combomode to enable SYNCE clock support</i><br>
+><i> -read dpll's state to determine if the dpll is locked to the GNSS channel</i><br>
+><i> -read dpll's ffo (fractional frequency offset) in ppqt</i><br>
+><i> </i><br>
+><i> Signed-off-by: Min Li <min.li.xe@xxxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i> Change log</i><br>
+><i> -rebase change to linux-next tree</i><br>
+><i> -remove uncessary condition checks suggested by Greg</i><br>
+><i> -fix compile error for x86_64</i><br>
+><i> -register device through misc_register suggested by Greg</i><br>
+><i> -change to use module_platform_device to register driver</i><br>
+><i> -remove empty open and release functions</i><br>
+><i> -more informational comment for struct rsmu_cdev</i><br>
+><i> </i><br>
+><i>  drivers/misc/Kconfig      |   9 ++</i><br>
+><i>  drivers/misc/Makefile     |   2 +</i><br>
+><i>  drivers/misc/rsmu_cdev.c  | 231 ++++++++++++++++++++++++++++++++++++++++++++++</i><br>
+><i>  drivers/misc/rsmu_cdev.h  |  74 +++++++++++++++</i><br>
+><i>  drivers/misc/rsmu_cm.c    | 166 +++++++++++++++++++++++++++++++++</i><br>
+><i>  drivers/misc/rsmu_sabre.c | 133 ++++++++++++++++++++++++++</i><br>
+<br>
+Again, please make this only one file.<br>
+<br>
+thanks,<br>
+<br>
+greg k-h<br>
+<br>
+<br>
+

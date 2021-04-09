@@ -1,0 +1,88 @@
+On Thu, Apr 08, 2021 at 10:55:53AM +0200, Greg KH wrote:<br>
+><i> So to add crazy complexity to the kernel, </i><br>
+<br>
+I agree that this can be tricky. However, driver developers are going to<br>
+open code this either way. The problem with that as well, and one of my<br>
+own reasons for striving for at least *trying* for a generic solution,<br>
+was that I am aware that driver developers may be trying a busy solution<br>
+rather than the try method. The busy approach means you could also end<br>
+up in a situation where userspace can prevent full undoing / removal<br>
+of a driver. The try method is best effort in the sense that if the<br>
+driver is going it won't be allowed.<br>
+<br>
+So a sensible consideration I think is we at least choose one of these:<br>
+<br>
+ a) We allow driver developers to open code it on drivers which need it on<br>
+    each and every single sysfs knob on the driver where its needed, and<br>
+    accept folks might do it wrong<br>
+<br>
+ b) Provide a macro which is opt-in, ie, not doing it for all<br>
+    attributes, but perhaps one which the driver author *is* aware to<br>
+    try / put of the driver method.<br>
+<br>
+ c) Document this race and other races / failings so that driver<br>
+    authors who do care about module removal are aware and know what<br>
+    to do.<br>
+<br>
+In this thread two races were exposed on syfs:<br>
+<br>
+  * deadlock when a sysfs attribute uses a lock which is also used on<br>
+    module __exit<br>
+<br>
+  * possible race against the device's private data, and this is type<br>
+    specific. I think many people probably missed the last hunks of my<br>
+    proposed patch which added dev_type_get() which were not part of the<br>
+    deadlock fix. At least I showed how attributes for all block devices<br>
+    have an exposed race, which can crash if removal of a block device<br>
+    with del_gendisk() happens while a sysfs attribute is about to be<br>
+    used.<br>
+ <br>
+I don't think either race is trivial for a driver developer to assume a<br>
+solution for. Most focus on this thread was about the first race, the<br>
+seconod however is also very real, and likely can cause more issues on<br>
+rolling backs on error codes unrelated to rmmod...<br>
+<br>
+><i> for an operation that can only</i><br>
+><i> be triggered manually by a root user, is not worth it in my opinion, as</i><br>
+><i> the maintainer of that code the complexity was asked to be made to.</i><br>
+<br>
+Three things:<br>
+<br>
+1) Many driver maintainers *do* care that rmmod works well. To the point<br>
+that if it does not, they feel ashamed. Reason for this is that in some<br>
+subsystems this *is* a typical test case. So although rmmod may be<br>
+a vodoo thing for core, many driver developers do want this to work<br>
+well.<br>
+<br>
+As someone who also works on many test cases to expose odd issues in the<br>
+kernel unrelated to module removal, I can also say that module removal<br>
+does also expose other possible races which would otherwise be difficult<br>
+to trigger. So it is also a helfup aid as a developer working on<br>
+differen areas of the kernel.<br>
+<br>
+2) Folks have pointed out that this is not just about rmmod, rolling<br>
+back removal of sysfs attributes due to error code paths is another<br>
+real scenario to consider. I don't think we have rules to tell userspace<br>
+to not muck with sysfs files after they are exposed. In fact those<br>
+uevents we send to userspace allow userspace to know exactly when to<br>
+muck with them.<br>
+<br>
+3) Sadly, some sysfs attributes also purposely do things which *also*<br>
+mimic what is typically done on module removal, such as removal of an<br>
+interface, or block device. That was the case with zram, it allows<br>
+remvoal / reset of a device... Yes these are odd things to do, but we<br>
+allow for it. And sysfs users *do* need to be aware of these corner<br>
+cases if they want to support them.<br>
+<br>
+There **may** be some severity to some of the issues mentioned above, to<br>
+allow really bad things to be done in userspace even without module<br>
+removal... but I didn't have time yet to expose a pattern with coccinelle<br>
+yet to see how commonplace some of these issue are. I was focusing at<br>
+first more for a generic solution if possible, as I thought that would<br>
+be better first evaluated, and to let others slowly become aware of the<br>
+issue.<br>
+<br>
+  Luis<br>
+<br>
+<br>
+

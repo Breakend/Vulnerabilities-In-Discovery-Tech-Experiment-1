@@ -1,0 +1,171 @@
+From: SeongJae Park <sjpark@xxxxxxxxx><br>
+<br>
+This commit adds a simple user space tests for DAMON.  The tests are<br>
+using kselftest framework.<br>
+<br>
+Signed-off-by: SeongJae Park <sjpark@xxxxxxxxx><br>
+---<br>
+ tools/testing/selftests/damon/Makefile        |  7 ++<br>
+ .../selftests/damon/_chk_dependency.sh        | 28 ++++++<br>
+ .../testing/selftests/damon/debugfs_attrs.sh  | 98 +++++++++++++++++++<br>
+ 3 files changed, 133 insertions(+)<br>
+ create mode 100644 tools/testing/selftests/damon/Makefile<br>
+ create mode 100644 tools/testing/selftests/damon/_chk_dependency.sh<br>
+ create mode 100755 tools/testing/selftests/damon/debugfs_attrs.sh<br>
+<br>
+diff --git a/tools/testing/selftests/damon/Makefile b/tools/testing/selftests/damon/Makefile<br>
+new file mode 100644<br>
+index 000000000000..8a3f2cd9fec0<br>
+--- /dev/null<br>
++++ b/tools/testing/selftests/damon/Makefile<br>
+@@ -0,0 +1,7 @@<br>
++# SPDX-License-Identifier: GPL-2.0<br>
++# Makefile for damon selftests<br>
++<br>
++TEST_FILES = _chk_dependency.sh<br>
++TEST_PROGS = debugfs_attrs.sh<br>
++<br>
++include ../lib.mk<br>
+diff --git a/tools/testing/selftests/damon/_chk_dependency.sh b/tools/testing/selftests/damon/_chk_dependency.sh<br>
+new file mode 100644<br>
+index 000000000000..e090836c2bf7<br>
+--- /dev/null<br>
++++ b/tools/testing/selftests/damon/_chk_dependency.sh<br>
+@@ -0,0 +1,28 @@<br>
++#!/bin/bash<br>
++# SPDX-License-Identifier: GPL-2.0<br>
++<br>
++# Kselftest framework requirement - SKIP code is 4.<br>
++ksft_skip=4<br>
++<br>
++DBGFS=/sys/kernel/debug/damon<br>
++<br>
++if [ $EUID -ne 0 ];<br>
++then<br>
++	echo "Run as root"<br>
++	exit $ksft_skip<br>
++fi<br>
++<br>
++if [ ! -d $DBGFS ]<br>
++then<br>
++	echo "$DBGFS not found"<br>
++	exit $ksft_skip<br>
++fi<br>
++<br>
++for f in attrs target_ids monitor_on<br>
++do<br>
++	if [ ! -f "$DBGFS/$f" ]<br>
++	then<br>
++		echo "$f not found"<br>
++		exit 1<br>
++	fi<br>
++done<br>
+diff --git a/tools/testing/selftests/damon/debugfs_attrs.sh b/tools/testing/selftests/damon/debugfs_attrs.sh<br>
+new file mode 100755<br>
+index 000000000000..4a8ab4910ee4<br>
+--- /dev/null<br>
++++ b/tools/testing/selftests/damon/debugfs_attrs.sh<br>
+@@ -0,0 +1,98 @@<br>
++#!/bin/bash<br>
++# SPDX-License-Identifier: GPL-2.0<br>
++<br>
++source ./_chk_dependency.sh<br>
++<br>
++# Test attrs file<br>
++file="$DBGFS/attrs"<br>
++<br>
++ORIG_CONTENT=$(cat $file)<br>
++<br>
++echo 1 2 3 4 5 > $file<br>
++if [ $? -ne 0 ]<br>
++then<br>
++	echo "$file write failed"<br>
++	echo $ORIG_CONTENT > $file<br>
++	exit 1<br>
++fi<br>
++<br>
++echo 1 2 3 4 > $file<br>
++if [ $? -eq 0 ]<br>
++then<br>
++	echo "$file write success (should failed)"<br>
++	echo $ORIG_CONTENT > $file<br>
++	exit 1<br>
++fi<br>
++<br>
++CONTENT=$(cat $file)<br>
++if [ "$CONTENT" != "1 2 3 4 5" ]<br>
++then<br>
++	echo "$file not written"<br>
++	echo $ORIG_CONTENT > $file<br>
++	exit 1<br>
++fi<br>
++<br>
++echo $ORIG_CONTENT > $file<br>
++<br>
++# Test target_ids file<br>
++file="$DBGFS/target_ids"<br>
++<br>
++ORIG_CONTENT=$(cat $file)<br>
++<br>
++echo "1 2 3 4" > $file<br>
++if [ $? -ne 0 ]<br>
++then<br>
++	echo "$file write fail"<br>
++	echo $ORIG_CONTENT > $file<br>
++	exit 1<br>
++fi<br>
++<br>
++echo "1 2 abc 4" > $file<br>
++if [ $? -ne 0 ]<br>
++then<br>
++	echo "$file write fail"<br>
++	echo $ORIG_CONTENT > $file<br>
++	exit 1<br>
++fi<br>
++<br>
++CONTENT=$(cat $file)<br>
++if [ "$CONTENT" != "1 2" ]<br>
++then<br>
++	echo "$file not written"<br>
++	echo $ORIG_CONTENT > $file<br>
++	exit 1<br>
++fi<br>
++<br>
++echo abc 2 3 > $file<br>
++if [ $? -ne 0 ]<br>
++then<br>
++	echo "$file wrong value write fail"<br>
++	echo $ORIG_CONTENT > $file<br>
++	exit 1<br>
++fi<br>
++<br>
++if [ ! -z "$(cat $file)" ]<br>
++then<br>
++	echo "$file not cleared"<br>
++	echo $ORIG_CONTENT > $file<br>
++	exit 1<br>
++fi<br>
++<br>
++echo > $file<br>
++if [ $? -ne 0 ]<br>
++then<br>
++	echo "$file init fail"<br>
++	echo $ORIG_CONTENT > $file<br>
++	exit 1<br>
++fi<br>
++<br>
++if [ ! -z "$(cat $file)" ]<br>
++then<br>
++	echo "$file not initialized"<br>
++	echo $ORIG_CONTENT > $file<br>
++	exit 1<br>
++fi<br>
++<br>
++echo $ORIG_CONTENT > $file<br>
++<br>
++echo "PASS"<br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+

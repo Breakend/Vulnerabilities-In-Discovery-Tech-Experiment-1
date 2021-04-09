@@ -1,0 +1,52 @@
+Hi<br>
+<br>
+On Wed, Apr 7, 2021 at 10:11 PM Pierre <pierre.gondois@xxxxxxx> wrote:<br>
+><i></i><br>
+><i> Hi,</i><br>
+><i> > I test the patch, but the overflow still exists.</i><br>
+><i> > In the "sched/fair: Use pd_cache to speed up find_energy_efficient_cpu()"</i><br>
+><i> > I wonder why recompute the cpu util when cpu==dst_cpu in compute_energy(),</i><br>
+><i> > when the dst_cpu's util change, it also would cause the overflow.</i><br>
+><i></i><br>
+><i> The patches aim to cache the energy values for the CPUs whose</i><br>
+><i> utilization is not modified (so we don't have to compute it multiple</i><br>
+><i> times). The values cached are the 'base values' of the CPUs, i.e. when</i><br>
+><i> the task is not placed on the CPU. When (cpu==dst_cpu) in</i><br>
+><i> compute_energy(), it means the energy values need to be updated instead</i><br>
+><i> of using the cached ones.</i><br>
+><i></i><br>
+well, is it better to use the task_util(p) + cache values ? but in<br>
+this case, the cache<br>
+values may need more parameters.<br>
+<br>
+><i> You are right, there is still a possibility to have a negative delta</i><br>
+><i> with the patches at:</i><br>
+><i> <a  rel="nofollow" href="https://gitlab.arm.com/linux-arm/linux-power/-/commits/eas/next/integration-20210129">https://gitlab.arm.com/linux-arm/linux-power/-/commits/eas/next/integration-20210129</a></i><br>
+><i> Adding a check before subtracting the values, and bailing out in such</i><br>
+><i> case would avoid this, such as at:</i><br>
+><i> <a  rel="nofollow" href="https://gitlab.arm.com/linux-arm/linux-pg/-/commits/feec_bail_out/">https://gitlab.arm.com/linux-arm/linux-pg/-/commits/feec_bail_out/</a></i><br>
+><i></i><br>
+In your patch, you bail out the case by "go to fail", that means you<br>
+don't use eas in such<br>
+case. However, in the actual scene, the case often occurr when select<br>
+cpu for small task.<br>
+As a result, the small task would not select cpu according to the eas,<br>
+it may affect<br>
+power consumption?<br>
+<br>
+><i> I think a similar modification should be done in your patch. Even though</i><br>
+><i> this is a good idea to group the calls to compute_energy() to reduce the</i><br>
+><i> chances of having updates of utilization values in between the</i><br>
+><i> compute_energy() calls,</i><br>
+><i> there is still a chance to have updates. I think it happened when I</i><br>
+><i> applied your patch.</i><br>
+><i></i><br>
+><i> About changing the delta(s) from 'unsigned long' to 'long', I am not</i><br>
+><i> sure of the meaning of having a negative delta. I thing it would be</i><br>
+><i> better to check and fail before it happens instead.</i><br>
+><i></i><br>
+><i> Regards</i><br>
+><i></i><br>
+<br>
+<br>
+

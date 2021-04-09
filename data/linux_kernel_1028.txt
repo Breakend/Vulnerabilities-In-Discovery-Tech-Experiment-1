@@ -1,0 +1,38 @@
+On Thu, Apr 08, 2021 at 09:59:20AM +0200, Uwe Kleine-König wrote:<br>
+><i> Hello Nobuhiro,</i><br>
+><i> </i><br>
+><i> On Thu, Apr 08, 2021 at 08:15:48AM +0900, Nobuhiro Iwamatsu wrote:</i><br>
+><i> > > > +	/*</i><br>
+><i> > > > +	 * pwmc is a 2-bit divider for the input clock running at 1 MHz.</i><br>
+><i> > > > +	 * When the settings of the PWM are modified, the new values are shadowed in hardware until</i><br>
+><i> > > > +	 * the period register (PCSR) is written and the currently running period is completed. This</i><br>
+><i> > > > +	 * way the hardware switches atomically from the old setting to the new.</i><br>
+><i> > > > +	 * Also, disabling the hardware completes the currently running period and keeps the output</i><br>
+><i> > > > +	 * at low level at all times.</i><br>
+><i> > > </i><br>
+><i> > > Did you just copy my optimal description or is your hardware really that</i><br>
+><i> > > nice?</i><br>
+><i> > </i><br>
+><i> > Yes, this hardware works as you wrote.</i><br>
+><i> > And I added about the state if the sinnal when this hardware disabled.</i><br>
+><i> > </i><br>
+><i> > > </i><br>
+><i> > > Do you know scripts/checkpatch.pl? I bet it will tell you to limit your</i><br>
+><i> > > lines to approx. 80 chars where sensible.</i><br>
+><i> > </i><br>
+><i> > Yes, I know. I ran scripts/checkpatch.pl before send patch.</i><br>
+><i> > I understand that the number of characters per line has been changed to</i><br>
+><i> > 100 characters. Does the pwm driver recommend 80 characters?</i><br>
+><i> </i><br>
+><i> For free-text comments I'd still recommend 80, yes. For code lines I'd</i><br>
+><i> be indeed more lax, as a line break in function calls reduces readability.</i><br>
+<br>
+Let's not start making any special rules. It becomes impossible for<br>
+anyone to keep track of those. If checkpatch doesn't complain for<br>
+comments that exceed 80 characters, I will not reject based on that.<br>
+<br>
+Thierry<br>
+<p><strong>Attachment:
+<a href="00556/signature.asc" ><tt>signature.asc</tt></a></strong><br>
+<em>Description:</em> PGP signature</p>
+

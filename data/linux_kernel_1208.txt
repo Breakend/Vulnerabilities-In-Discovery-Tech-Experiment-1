@@ -1,0 +1,59 @@
+Hi jlinton,<br>
+<br>
+Thank you for the patch! Perhaps something to improve:<br>
+<br>
+[auto build test WARNING on usb/usb-testing]<br>
+[also build test WARNING on peter.chen-usb/for-usb-next balbi-usb/testing/next v5.12-rc6 next-20210407]<br>
+[If your patch is applied to the wrong git tree, kindly drop us a note.<br>
+And when submitting patch, we suggest to use '--base' as documented in<br>
+<a  rel="nofollow" href="https://git-scm.com/docs/git-format-patch">https://git-scm.com/docs/git-format-patch</a>]<br>
+<br>
+url:    <a  rel="nofollow" href="https://github.com/0day-ci/linux/commits/jlinton/usb-dwc2-Enable-RPi-in-ACPI-mode/20210408-112405">https://github.com/0day-ci/linux/commits/jlinton/usb-dwc2-Enable-RPi-in-ACPI-mode/20210408-112405</a><br>
+base:   <a  rel="nofollow" href="https://git.kernel.org/pub/scm/linux/kernel/git/gregkh/usb.git">https://git.kernel.org/pub/scm/linux/kernel/git/gregkh/usb.git</a> usb-testing<br>
+config: parisc-randconfig-r005-20210407 (attached as .config)<br>
+compiler: hppa-linux-gcc (GCC) 9.3.0<br>
+reproduce (this is a W=1 build):<br>
+        wget <a  rel="nofollow" href="https://raw.githubusercontent.com/intel/lkp-tests/master/sbin/make.cross">https://raw.githubusercontent.com/intel/lkp-tests/master/sbin/make.cross</a> -O ~/bin/make.cross<br>
+        chmod +x ~/bin/make.cross<br>
+        # <a  rel="nofollow" href="https://github.com/0day-ci/linux/commit/09dcd4fc8628ed453434dee372e69ec8e5d3d338">https://github.com/0day-ci/linux/commit/09dcd4fc8628ed453434dee372e69ec8e5d3d338</a><br>
+        git remote add linux-review <a  rel="nofollow" href="https://github.com/0day-ci/linux">https://github.com/0day-ci/linux</a><br>
+        git fetch --no-tags linux-review jlinton/usb-dwc2-Enable-RPi-in-ACPI-mode/20210408-112405<br>
+        git checkout 09dcd4fc8628ed453434dee372e69ec8e5d3d338<br>
+        # save the attached .config to linux build tree<br>
+        COMPILER_INSTALL_PATH=$HOME/0day COMPILER=gcc-9.3.0 make.cross ARCH=parisc <br>
+<br>
+If you fix the issue, kindly add following tag as appropriate<br>
+Reported-by: kernel test robot <lkp@xxxxxxxxx><br>
+<br>
+All warnings (new ones prefixed by >>):<br>
+<br>
+><i>> drivers/usb/dwc2/params.c:236:15: warning: initialization of 'long unsigned int' from 'void (*)(struct dwc2_hsotg *)' makes integer from pointer without a cast [-Wint-conversion]</i><br>
+     236 |  { "BCM2848", dwc2_set_bcm_params },<br>
+         |               ^~~~~~~~~~~~~~~~~~~<br>
+   drivers/usb/dwc2/params.c:236:15: note: (near initialization for 'dwc2_acpi_match[0].driver_data')<br>
+   drivers/usb/dwc2/params.c: In function 'dwc2_init_params':<br>
+><i>> drivers/usb/dwc2/params.c:890:10: warning: assignment discards 'const' qualifier from pointer target type [-Wdiscarded-qualifiers]</i><br>
+     890 |   amatch = acpi_match_device(dwc2_acpi_match, hsotg->dev);<br>
+         |          ^<br>
+><i>> drivers/usb/dwc2/params.c:892:15: warning: assignment to 'void (*)(struct dwc2_hsotg *)' from 'kernel_ulong_t' {aka 'long unsigned int'} makes pointer from integer without a cast [-Wint-conversion]</i><br>
+     892 |    set_params = amatch->driver_data;<br>
+         |               ^<br>
+<br>
+<br>
+vim +236 drivers/usb/dwc2/params.c<br>
+<br>
+   234	<br>
+   235	const struct acpi_device_id dwc2_acpi_match[] = {<br>
+ ><i> 236		{ "BCM2848", dwc2_set_bcm_params },</i><br>
+   237		{ },<br>
+   238	};<br>
+   239	MODULE_DEVICE_TABLE(acpi, dwc2_acpi_match);<br>
+   240	<br>
+<br>
+---<br>
+0-DAY CI Kernel Test Service, Intel Corporation<br>
+<a  rel="nofollow" href="https://lists.01.org/hyperkitty/list/kbuild-all@xxxxxxxxxxxx">https://lists.01.org/hyperkitty/list/kbuild-all@xxxxxxxxxxxx</a><br>
+<p><strong>Attachment:
+<a href="00060/.config.gz" ><tt>.config.gz</tt></a></strong><br>
+<em>Description:</em> application/gzip</p>
+

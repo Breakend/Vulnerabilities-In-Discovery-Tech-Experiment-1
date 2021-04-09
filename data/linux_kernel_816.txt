@@ -1,0 +1,37 @@
+
+<br>
+On 4/8/2021 1:01 PM, Ruiqi Gong wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+<br>
+There is a error message within devm_ioremap_resource<br>
+already, so remove the dev_err call to avoid redundant<br>
+error message.<br>
+<br>
+Reported-by: Hulk Robot <hulkci@xxxxxxxxxx><br>
+Signed-off-by: Ruiqi Gong <gongruiqi1@xxxxxxxxxx><br>
+---<br>
+  drivers/thermal/thermal_mmio.c | 5 +----<br>
+  1 file changed, 1 insertion(+), 4 deletions(-)<br>
+<br>
+diff --git a/drivers/thermal/thermal_mmio.c b/drivers/thermal/thermal_mmio.c<br>
+index d0bdf1ea3331..ded1dd0d4ef7 100644<br>
+--- a/drivers/thermal/thermal_mmio.c<br>
++++ b/drivers/thermal/thermal_mmio.c<br>
+@@ -54,11 +54,8 @@ static int thermal_mmio_probe(struct platform_device *pdev)<br>
+<br>
+         resource = platform_get_resource(pdev, IORESOURCE_MEM, 0);<br>
+         sensor->mmio_base = devm_ioremap_resource(&pdev->dev, resource);<br>
+-       if (IS_ERR(sensor->mmio_base)) {<br>
+-               dev_err(&pdev->dev, "failed to ioremap memory (%ld)\n",<br>
+-                       PTR_ERR(sensor->mmio_base));<br>
++       if (IS_ERR(sensor->mmio_base))<br>
+                 return PTR_ERR(sensor->mmio_base);<br>
+-       }<br>
+<br>
+         sensor_init_func = device_get_match_data(&pdev->dev);<br>
+         if (sensor_init_func) {<br>
+</blockquote>
+Acked-by: Talel Shenhar <talel@xxxxxxxxxx><br>
+<br>
+<br>
+

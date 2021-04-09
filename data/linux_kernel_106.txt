@@ -1,0 +1,30 @@
+On Fri, Apr 2, 2021 at 8:14 AM YueHaibing <yuehaibing@xxxxxxxxxx> wrote:<br>
+><i></i><br>
+><i> commit 9a7875461fd0 ("PM: runtime: Replace pm_runtime_callbacks_present()")</i><br>
+><i> forget to change the inline version.</i><br>
+><i></i><br>
+><i> Fixes: 9a7875461fd0 ("PM: runtime: Replace pm_runtime_callbacks_present()")</i><br>
+><i> Signed-off-by: YueHaibing <yuehaibing@xxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  include/linux/pm_runtime.h | 2 +-</i><br>
+><i>  1 file changed, 1 insertion(+), 1 deletion(-)</i><br>
+><i></i><br>
+><i> diff --git a/include/linux/pm_runtime.h b/include/linux/pm_runtime.h</i><br>
+><i> index b492ae00cc90..6c08a085367b 100644</i><br>
+><i> --- a/include/linux/pm_runtime.h</i><br>
+><i> +++ b/include/linux/pm_runtime.h</i><br>
+><i> @@ -265,7 +265,7 @@ static inline void pm_runtime_no_callbacks(struct device *dev) {}</i><br>
+><i>  static inline void pm_runtime_irq_safe(struct device *dev) {}</i><br>
+><i>  static inline bool pm_runtime_is_irq_safe(struct device *dev) { return false; }</i><br>
+><i></i><br>
+><i> -static inline bool pm_runtime_callbacks_present(struct device *dev) { return false; }</i><br>
+><i> +static inline bool pm_runtime_has_no_callbacks(struct device *dev) { return false; }</i><br>
+><i>  static inline void pm_runtime_mark_last_busy(struct device *dev) {}</i><br>
+><i>  static inline void __pm_runtime_use_autosuspend(struct device *dev,</i><br>
+><i>                                                 bool use) {}</i><br>
+><i> --</i><br>
+<br>
+Applied as 5.13 material, thanks!<br>
+<br>
+<br>
+

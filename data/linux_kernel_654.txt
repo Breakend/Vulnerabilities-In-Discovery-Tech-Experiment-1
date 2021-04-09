@@ -1,0 +1,31 @@
+Hi all,<br>
+<br>
+After merging the kvm-arm tree, today's linux-next build (htmldocs)<br>
+produced this warning:<br>
+<br>
+/home/sfr/next/next/Documentation/virt/kvm/arm/ptp_kvm.rst:19: WARNING: Malformed table.<br>
+Text in column margin in table line 5.<br>
+<br>
+=============    ==========    ==========<br>
+Function ID:     (uint32)      0x86000001<br>
+Arguments:       (uint32)      KVM_PTP_VIRT_COUNTER(0)<br>
+                               KVM_PTP_PHYS_COUNTER(1)<br>
+Return Values:   (int32)       NOT_SUPPORTED(-1) on error, or<br>
+                 (uint32)      Upper 32 bits of wall clock time (r0)<br>
+                 (uint32)      Lower 32 bits of wall clock time (r1)<br>
+                 (uint32)      Upper 32 bits of counter (r2)<br>
+                 (uint32)      Lower 32 bits of counter (r3)<br>
+Endianness:                    No Restrictions.<br>
+=============    ==========    ==========<br>
+<br>
+Introduced by commit<br>
+<br>
+  3bf725699bf6 ("KVM: arm64: Add support for the KVM PTP service")<br>
+<br>
+-- <br>
+Cheers,<br>
+Stephen Rothwell<br>
+<p><strong>Attachment:
+<a href="00495/pgpiu6T3VwMpD.pgp" ><tt>pgpiu6T3VwMpD.pgp</tt></a></strong><br>
+<em>Description:</em> OpenPGP digital signature</p>
+

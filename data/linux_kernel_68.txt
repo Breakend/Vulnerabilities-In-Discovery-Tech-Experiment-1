@@ -1,0 +1,14 @@
+On Tue, 30 Mar 2021 13:54:49 +0800, Jisheng Zhang wrote:<br>
+><i> They are not needed after booting, so mark them as __init to move them</i><br>
+><i> to the .init section.</i><br>
+<br>
+Applied to arm64 (for-next/misc), thanks!<br>
+<br>
+[1/1] arm64: Add __init section marker to some functions<br>
+      <a  rel="nofollow" href="https://git.kernel.org/arm64/c/a7dcf58ae5d2">https://git.kernel.org/arm64/c/a7dcf58ae5d2</a><br>
+<br>
+-- <br>
+Catalin<br>
+<br>
+<br>
+

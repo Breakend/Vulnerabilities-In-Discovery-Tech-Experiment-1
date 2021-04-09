@@ -1,0 +1,40 @@
+On 2021/4/8 15:03, Longfang Liu wrote:<br>
+><i> When rebooting the EHCI driver, ehci_shutdown() will be called.</i><br>
+><i> if the sbrn flag is 0, ehci_shutdown() will return directly.</i><br>
+><i> </i><br>
+><i> Our EHCI hardware does not define the SBRN register, which cause</i><br>
+><i> its value to default to 0. The sbrn flag being 0 will cause the</i><br>
+><i> EHCI interrupt signal to not be turned off after reboot. An interrupt</i><br>
+><i> that is not closed will cause an exception to the device sharing</i><br>
+><i> the interrupt.</i><br>
+><i> </i><br>
+><i> Currently, our hardware has this problem. We hope to solve this</i><br>
+><i> problem by skipping reading the sbrn register value. On the next</i><br>
+><i> generation of hardware, we will define this SBRN register in accordance</i><br>
+><i> with the controller standard.</i><br>
+><i> </i><br>
+><i> Signed-off-by: Longfang Liu <liulongfang@xxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  drivers/usb/host/ehci-pci.c | 2 ++</i><br>
+><i>  1 file changed, 2 insertions(+)</i><br>
+><i> </i><br>
+><i> diff --git a/drivers/usb/host/ehci-pci.c b/drivers/usb/host/ehci-pci.c</i><br>
+><i> index 3c3820a..5dc6821 100644</i><br>
+><i> --- a/drivers/usb/host/ehci-pci.c</i><br>
+><i> +++ b/drivers/usb/host/ehci-pci.c</i><br>
+><i> @@ -291,6 +291,8 @@ static int ehci_pci_setup(struct usb_hcd *hcd)</i><br>
+><i>  	if (pdev->vendor == PCI_VENDOR_ID_STMICRO</i><br>
+><i>  	    && pdev->device == PCI_DEVICE_ID_STMICRO_USB_HOST)</i><br>
+><i>  		;	/* ConneXT has no sbrn register */</i><br>
+><i> +	else if (pdev->vendor == PCI_VENDOR_ID_HUAWEI)</i><br>
+><i> +		;	/* sbrn register is undefined */</i><br>
+><i>  	else</i><br>
+><i>  		pci_read_config_byte(pdev, 0x60, &ehci->sbrn);</i><br>
+><i>  </i><br>
+><i> </i><br>
+Sorry, please ignore this patch, I will resend it.<br>
+Thanks.<br>
+Longfang.<br>
+<br>
+<br>
+

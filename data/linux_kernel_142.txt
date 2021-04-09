@@ -1,0 +1,32 @@
+On SDX55 there is a separate A7 PLL which is used to provide high<br>
+frequency clock to the Cortex A7 CPU via a MUX.<br>
+<br>
+Signed-off-by: Manivannan Sadhasivam <manivannan.sadhasivam@xxxxxxxxxx><br>
+---<br>
+ arch/arm/boot/dts/qcom-sdx55.dtsi | 8 ++++++++<br>
+ 1 file changed, 8 insertions(+)<br>
+<br>
+diff --git a/arch/arm/boot/dts/qcom-sdx55.dtsi b/arch/arm/boot/dts/qcom-sdx55.dtsi<br>
+index e4180bbc4655..41c90f598359 100644<br>
+--- a/arch/arm/boot/dts/qcom-sdx55.dtsi<br>
++++ b/arch/arm/boot/dts/qcom-sdx55.dtsi<br>
+@@ -352,6 +352,14 @@ intc: interrupt-controller@17800000 {<br>
+ 			      <0x17802000 0x1000>;<br>
+ 		};<br>
+ <br>
++		a7pll: clock@17808000 {<br>
++			compatible = "qcom,sdx55-a7pll";<br>
++			reg = <0x17808000 0x1000>;<br>
++			clocks = <&rpmhcc RPMH_CXO_CLK>;<br>
++			clock-names = "bi_tcxo";<br>
++			#clock-cells = <0>;<br>
++		};<br>
++<br>
+ 		watchdog@17817000 {<br>
+ 			compatible = "qcom,apss-wdt-sdx55", "qcom,kpss-wdt";<br>
+ 			reg = <0x17817000 0x1000>;<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

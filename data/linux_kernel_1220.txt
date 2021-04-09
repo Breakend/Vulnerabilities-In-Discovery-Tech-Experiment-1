@@ -1,0 +1,172 @@
+Quoting Petr Mladek (2021-04-08 03:13:20)<br>
+><i> It helped with the vmlinux buildid. I see the following:</i><br>
+><i> </i><br>
+><i> [  551.435942][ T1803] test_printf: loaded.</i><br>
+><i> [  551.436667][ T1803] ------------[ cut here ]------------</i><br>
+><i> [  551.437561][ T1803] kernel BUG at lib/test_printf.c:689!</i><br>
+><i> [  551.438352][ T1803] invalid opcode: 0000 [#1] SMP NOPTI</i><br>
+><i> [  551.438359][ T1803] CPU: 3 PID: 1803 Comm: modprobe Kdump: loaded Tainted: G            E     5.12.0-rc6-default+ #176 e51781e52aaf4d6dfea7a18574c104c8bfd7c37f</i><br>
+><i> [  551.438363][ T1803] Hardware name: QEMU Standard PC (Q35 + ICH9, 2009), BIOS rel-1.12.0-59-gc9ba527-rebuilt.opensuse.org 04/01/2014</i><br>
+><i> [  551.438365][ T1803] RIP: 0010:test_printf_init+0x561/0xc99 [test_printf c2388ff0552611501b4d2ad58d8e5ca441d9a350]</i><br>
+<br>
+It shows it for the test module here.<br>
+<br>
+><i> [  551.443090][ T1803] Code: 00 48 c7 c7 b8 36 1b c0 e8 19 f9 ff ff b9 ab 00 00 00 48 c7 c2 93 36 1b c0 be 08 00 00 00 48 c7 c7 af 36 1b c0 e8 fc f8 ff ff <0f> 0b 8b 05 44 07 00 00 8b 35 3a 07 00 00 8b 1d 3c 07 00 00 85 c0</i><br>
+><i> [  551.443094][ T1803] RSP: 0018:ffffb62c0039bc78 EFLAGS: 00010282</i><br>
+><i> [  551.443096][ T1803] RAX: 0000000000000000 RBX: ffffb62c0039bc80 RCX: ffffd62bffc00b70</i><br>
+><i> [  551.443098][ T1803] RDX: 0000000000000000 RSI: 0000000000000000 RDI: ffffffffa0352fd5</i><br>
+><i> [  551.443099][ T1803] RBP: ffffffffc01b7367 R08: 0000000000000001 R09: 0000000000000001</i><br>
+><i> [  551.443100][ T1803] R10: 0000000000000000 R11: 0000000000000001 R12: ffff9bc08c87c820</i><br>
+><i> [  551.443101][ T1803] R13: 0000000000000001 R14: ffff9bc0d2798480 R15: ffffb62c0039be90</i><br>
+><i> [  551.443102][ T1803] FS:  00007f5767485b80(0000) GS:ffff9bc0ffc00000(0000) knlGS:0000000000000000</i><br>
+><i> [  551.443103][ T1803] CS:  0010 DS: 0000 ES: 0000 CR0: 0000000080050033</i><br>
+><i> [  551.443105][ T1803] CR2: 00007f5766b36ef0 CR3: 0000000100368004 CR4: 0000000000370ee0</i><br>
+><i> [  551.443108][ T1803] DR0: 0000000000000000 DR1: 0000000000000000 DR2: 0000000000000000</i><br>
+><i> [  551.443108][ T1803] DR3: 0000000000000000 DR6: 00000000fffe0ff0 DR7: 0000000000000400</i><br>
+><i> [  551.443109][ T1803] Call Trace:</i><br>
+><i> [  551.443113][ T1803]  ? __test+0x13c/0x149 [test_printf]</i><br>
+<br>
+But not here. I missed a place in the x86 code, printk_stack_address()<br>
+uses %pB, so I'll need to introduce %pBb to indicate that we're printing<br>
+a backtrace with a build ID, oof!<br>
+<br>
+It must be obvious by now but I didn't test on x86. Let me go scrounge<br>
+for some hardware...<br>
+<br>
+><i> [  551.443116][ T1803]  ? rcu_read_lock_sched_held+0x52/0x80</i><br>
+><i> [  551.443120][ T1803]  do_one_initcall+0x5b/0x2d0</i><br>
+><i> [  551.443125][ T1803]  do_init_module+0x5b/0x21c</i><br>
+><i> [  551.443127][ T1803]  load_module+0x1eaa/0x23c0</i><br>
+><i> [  551.443130][ T1803]  ? show_modinfo_version+0x30/0x30</i><br>
+><i> [  551.443134][ T1803]  ? __do_sys_finit_module+0xad/0x110</i><br>
+><i> [  551.443135][ T1803]  __do_sys_finit_module+0xad/0x110</i><br>
+><i> [  551.443138][ T1803]  do_syscall_64+0x33/0x40</i><br>
+><i> [  551.443139][ T1803]  entry_SYSCALL_64_after_hwframe+0x44/0xae</i><br>
+><i> [  551.443143][ T1803] RIP: 0033:0x7f5766b5b2a9</i><br>
+><i> [</i><br>
+><i> </i><br>
+><i> Note that it still does not show the build id for the module. It fails</i><br>
+><i> in the module init call and the build id should be already initialized</i><br>
+><i> at this stage.</i><br>
+><i> </i><br>
+><i> One more thing. I am not familiar with the elf-related code.</i><br>
+><i> Is it safe to access (nhdr + 1)? Do we need a check that</i><br>
+><i> it is still withing the given section?</i><br>
+<br>
+Should be safe given that the elf note header is prepended to the name buffer<br>
+and the descriptor buffer. The 'n_namesz' member of the header tells us how<br>
+many bytes after the header is reserved for the name and the 'n_descsz' member<br>
+of the header tells us how many bytes after the name is reserved for the<br>
+description (where the build ID data is). I did the nhdr + 1 thing to make the<br>
+pointer point to the name directly after the header. The name is NUL terminated<br>
+per the elf spec. See the man page[1] for elf and the section about notes:<br>
+<br>
+"""<br>
+Notes (Nhdr)<br>
+       ELF notes allow for appending arbitrary information for the<br>
+       system to use.  They are largely used by core files (e_type of<br>
+       ET_CORE), but many projects define their own set of extensions.<br>
+       For example, the GNU tool chain uses ELF notes to pass<br>
+       information from the linker to the C library.<br>
+<br>
+       Note sections contain a series of notes (see the struct<br>
+       definitions below).  Each note is followed by the name field<br>
+       (whose length is defined in n_namesz) and then by the descriptor<br>
+       field (whose length is defined in n_descsz) and whose starting<br>
+       address has a 4 byte alignment.  Neither field is defined in the<br>
+       note struct due to their arbitrary lengths.<br>
+"""<br>
+<br>
+[1] <a  rel="nofollow" href="https://man7.org/linux/man-pages/man5/elf.5.html">https://man7.org/linux/man-pages/man5/elf.5.html</a><br>
+<br>
+<br>
+Can you try this patch for x86? I'll dig up some hardware in the meantime.<br>
+<br>
+-----8<----<br>
+diff --git a/arch/x86/kernel/dumpstack.c b/arch/x86/kernel/dumpstack.c<br>
+index 7ad5eea99b2b..be2de39bf16f 100644<br>
+--- a/arch/x86/kernel/dumpstack.c<br>
++++ b/arch/x86/kernel/dumpstack.c<br>
+@@ -69,7 +69,7 @@ static void printk_stack_address(unsigned long address, int reliable,<br>
+ 				 const char *log_lvl)<br>
+ {<br>
+ 	touch_nmi_watchdog();<br>
+-	printk("%s %s%pB\n", log_lvl, reliable ? "" : "? ", (void *)address);<br>
++	printk("%s %s%pBb\n", log_lvl, reliable ? "" : "? ", (void *)address);<br>
+ }<br>
+ <br>
+ static int copy_code(struct pt_regs *regs, u8 *buf, unsigned long src,<br>
+diff --git a/include/linux/kallsyms.h b/include/linux/kallsyms.h<br>
+index 2569a4792480..f760cb839775 100644<br>
+--- a/include/linux/kallsyms.h<br>
++++ b/include/linux/kallsyms.h<br>
+@@ -96,6 +96,7 @@ extern int sprint_symbol(char *buffer, unsigned long address);<br>
+ extern int sprint_symbol_build_id(char *buffer, unsigned long address);<br>
+ extern int sprint_symbol_no_offset(char *buffer, unsigned long address);<br>
+ extern int sprint_backtrace(char *buffer, unsigned long address);<br>
++extern int sprint_backtrace_build_id(char *buffer, unsigned long address);<br>
+ <br>
+ int lookup_symbol_name(unsigned long addr, char *symname);<br>
+ int lookup_symbol_attrs(unsigned long addr, unsigned long *size, unsigned long *offset, char *modname, char *name);<br>
+@@ -149,6 +150,12 @@ static inline int sprint_backtrace(char *buffer, unsigned long addr)<br>
+ 	return 0;<br>
+ }<br>
+ <br>
++static inline int sprint_backtrace_build_id(char *buffer, unsigned long addr)<br>
++{<br>
++	*buffer = '\0';<br>
++	return 0;<br>
++}<br>
++<br>
+ static inline int lookup_symbol_name(unsigned long addr, char *symname)<br>
+ {<br>
+ 	return -ERANGE;<br>
+diff --git a/kernel/kallsyms.c b/kernel/kallsyms.c<br>
+index 74e792e0f7b8..b835992e76c2 100644<br>
+--- a/kernel/kallsyms.c<br>
++++ b/kernel/kallsyms.c<br>
+@@ -473,6 +473,26 @@ int sprint_backtrace(char *buffer, unsigned long address)<br>
+ 	return __sprint_symbol(buffer, address, -1, 1, 0);<br>
+ }<br>
+ <br>
++/**<br>
++ * sprint_backtrace_build_id - Look up a backtrace symbol and return it in a text buffer<br>
++ * @buffer: buffer to be stored<br>
++ * @address: address to lookup<br>
++ *<br>
++ * This function is for stack backtrace and does the same thing as<br>
++ * sprint_symbol() but with modified/decreased @address. If there is a<br>
++ * tail-call to the function marked "noreturn", gcc optimized out code after<br>
++ * the call so that the stack-saved return address could point outside of the<br>
++ * caller. This function ensures that kallsyms will find the original caller<br>
++ * by decreasing @address. This function also appends the module build ID to<br>
++ * the @buffer if @address is within a kernel module.<br>
++ *<br>
++ * This function returns the number of bytes stored in @buffer.<br>
++ */<br>
++int sprint_backtrace_build_id(char *buffer, unsigned long address)<br>
++{<br>
++	return __sprint_symbol(buffer, address, -1, 1, 1);<br>
++}<br>
++<br>
+ /* To avoid using get_symbol_offset for every symbol, we carry prefix along. */<br>
+ struct kallsym_iter {<br>
+ 	loff_t pos;<br>
+diff --git a/lib/vsprintf.c b/lib/vsprintf.c<br>
+index 91a70125148c..571f9aa74b89 100644<br>
+--- a/lib/vsprintf.c<br>
++++ b/lib/vsprintf.c<br>
+@@ -966,7 +966,9 @@ char *symbol_string(char *buf, char *end, void *ptr,<br>
+ 	value = (unsigned long)ptr;<br>
+ <br>
+ #ifdef CONFIG_KALLSYMS<br>
+-	if (*fmt == 'B')<br>
++	if (*fmt == 'B' && fmt[1] == 'b')<br>
++		sprint_backtrace_build_id(sym, value);<br>
++	else if (*fmt == 'B')<br>
+ 		sprint_backtrace(sym, value);<br>
+ 	else if (*fmt == 'S' && (fmt[1] == 'b' || (fmt[1] == 'R' && fmt[2] == 'b')))<br>
+ 		sprint_symbol_build_id(sym, value);<br>
+<br>
+<br>
+

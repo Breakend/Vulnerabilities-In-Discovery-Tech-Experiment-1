@@ -1,0 +1,327 @@
+bit_spinlocks are horrible on RT because there's absolutely nowhere<br>
+to put the mutex to sleep on.  They also do not participate in lockdep<br>
+because there's nowhere to put the map.<br>
+<br>
+Most (all?) bit spinlocks are actually a split lock; logically they<br>
+could be treated as a single spinlock, but for performance, we want to<br>
+split the lock over many objects.  Introduce the split_lock as somewhere<br>
+to store the lockdep map and as somewhere that the RT kernel can put<br>
+a mutex.  It may also let us store a ticket lock for better performance<br>
+on non-RT kernels in the future, but I have left the current cpu_relax()<br>
+implementation intact for now.<br>
+<br>
+The API change breaks all users except for the two which have been<br>
+converted.  This is an RFC, and I'm willing to fix all the rest.<br>
+<br>
+Signed-off-by: Matthew Wilcox (Oracle) <willy@xxxxxxxxxxxxx><br>
+---<br>
+ fs/dcache.c                  | 25 ++++++++++----------<br>
+ include/linux/bit_spinlock.h | 36 ++++++++++++++---------------<br>
+ include/linux/list_bl.h      |  9 ++++----<br>
+ include/linux/split_lock.h   | 45 ++++++++++++++++++++++++++++++++++++<br>
+ mm/slub.c                    |  6 +++--<br>
+ 5 files changed, 84 insertions(+), 37 deletions(-)<br>
+ create mode 100644 include/linux/split_lock.h<br>
+<br>
+diff --git a/fs/dcache.c b/fs/dcache.c<br>
+index 7d24ff7eb206..a3861d330001 100644<br>
+--- a/fs/dcache.c<br>
++++ b/fs/dcache.c<br>
+@@ -96,6 +96,7 @@ EXPORT_SYMBOL(slash_name);<br>
+ <br>
+ static unsigned int d_hash_shift __read_mostly;<br>
+ <br>
++static DEFINE_SPLIT_LOCK(d_hash_lock);<br>
+ static struct hlist_bl_head *dentry_hashtable __read_mostly;<br>
+ <br>
+ static inline struct hlist_bl_head *d_hash(unsigned int hash)<br>
+@@ -469,9 +470,9 @@ static void ___d_drop(struct dentry *dentry)<br>
+ 	else<br>
+ 		b = d_hash(dentry->d_name.hash);<br>
+ <br>
+-	hlist_bl_lock(b);<br>
++	hlist_bl_lock(b, &d_hash_lock);<br>
+ 	__hlist_bl_del(&dentry->d_hash);<br>
+-	hlist_bl_unlock(b);<br>
++	hlist_bl_unlock(b, &d_hash_lock);<br>
+ }<br>
+ <br>
+ void __d_drop(struct dentry *dentry)<br>
+@@ -2074,9 +2075,9 @@ static struct dentry *__d_instantiate_anon(struct dentry *dentry,<br>
+ 	__d_set_inode_and_type(dentry, inode, add_flags);<br>
+ 	hlist_add_head(&dentry->d_u.d_alias, &inode->i_dentry);<br>
+ 	if (!disconnected) {<br>
+-		hlist_bl_lock(&dentry->d_sb->s_roots);<br>
++		hlist_bl_lock(&dentry->d_sb->s_roots, &d_hash_lock);<br>
+ 		hlist_bl_add_head(&dentry->d_hash, &dentry->d_sb->s_roots);<br>
+-		hlist_bl_unlock(&dentry->d_sb->s_roots);<br>
++		hlist_bl_unlock(&dentry->d_sb->s_roots, &d_hash_lock);<br>
+ 	}<br>
+ 	spin_unlock(&dentry->d_lock);<br>
+ 	spin_unlock(&inode->i_lock);<br>
+@@ -2513,9 +2514,9 @@ static void __d_rehash(struct dentry *entry)<br>
+ {<br>
+ 	struct hlist_bl_head *b = d_hash(entry->d_name.hash);<br>
+ <br>
+-	hlist_bl_lock(b);<br>
++	hlist_bl_lock(b, &d_hash_lock);<br>
+ 	hlist_bl_add_head_rcu(&entry->d_hash, b);<br>
+-	hlist_bl_unlock(b);<br>
++	hlist_bl_unlock(b, &d_hash_lock);<br>
+ }<br>
+ <br>
+ /**<br>
+@@ -2606,9 +2607,9 @@ struct dentry *d_alloc_parallel(struct dentry *parent,<br>
+ 		goto retry;<br>
+ 	}<br>
+ <br>
+-	hlist_bl_lock(b);<br>
++	hlist_bl_lock(b, &d_hash_lock);<br>
+ 	if (unlikely(READ_ONCE(parent->d_inode->i_dir_seq) != seq)) {<br>
+-		hlist_bl_unlock(b);<br>
++		hlist_bl_unlock(b, &d_hash_lock);<br>
+ 		rcu_read_unlock();<br>
+ 		goto retry;<br>
+ 	}<br>
+@@ -2626,7 +2627,7 @@ struct dentry *d_alloc_parallel(struct dentry *parent,<br>
+ 			continue;<br>
+ 		if (!d_same_name(dentry, parent, name))<br>
+ 			continue;<br>
+-		hlist_bl_unlock(b);<br>
++		hlist_bl_unlock(b, &d_hash_lock);<br>
+ 		/* now we can try to grab a reference */<br>
+ 		if (!lockref_get_not_dead(&dentry->d_lockref)) {<br>
+ 			rcu_read_unlock();<br>
+@@ -2664,7 +2665,7 @@ struct dentry *d_alloc_parallel(struct dentry *parent,<br>
+ 	new->d_flags |= DCACHE_PAR_LOOKUP;<br>
+ 	new->d_wait = wq;<br>
+ 	hlist_bl_add_head_rcu(&new->d_u.d_in_lookup_hash, b);<br>
+-	hlist_bl_unlock(b);<br>
++	hlist_bl_unlock(b, &d_hash_lock);<br>
+ 	return new;<br>
+ mismatch:<br>
+ 	spin_unlock(&dentry->d_lock);<br>
+@@ -2677,12 +2678,12 @@ void __d_lookup_done(struct dentry *dentry)<br>
+ {<br>
+ 	struct hlist_bl_head *b = in_lookup_hash(dentry->d_parent,<br>
+ 						 dentry->d_name.hash);<br>
+-	hlist_bl_lock(b);<br>
++	hlist_bl_lock(b, &d_hash_lock);<br>
+ 	dentry->d_flags &= ~DCACHE_PAR_LOOKUP;<br>
+ 	__hlist_bl_del(&dentry->d_u.d_in_lookup_hash);<br>
+ 	wake_up_all(dentry->d_wait);<br>
+ 	dentry->d_wait = NULL;<br>
+-	hlist_bl_unlock(b);<br>
++	hlist_bl_unlock(b, &d_hash_lock);<br>
+ 	INIT_HLIST_NODE(&dentry->d_u.d_alias);<br>
+ 	INIT_LIST_HEAD(&dentry->d_lru);<br>
+ }<br>
+diff --git a/include/linux/bit_spinlock.h b/include/linux/bit_spinlock.h<br>
+index bbc4730a6505..641623d471b0 100644<br>
+--- a/include/linux/bit_spinlock.h<br>
++++ b/include/linux/bit_spinlock.h<br>
+@@ -2,6 +2,7 @@<br>
+ #ifndef __LINUX_BIT_SPINLOCK_H<br>
+ #define __LINUX_BIT_SPINLOCK_H<br>
+ <br>
++#include <linux/split_lock.h><br>
+ #include <linux/kernel.h><br>
+ #include <linux/preempt.h><br>
+ #include <linux/atomic.h><br>
+@@ -13,32 +14,23 @@<br>
+  * Don't use this unless you really need to: spin_lock() and spin_unlock()<br>
+  * are significantly faster.<br>
+  */<br>
+-static inline void bit_spin_lock(int bitnum, unsigned long *addr)<br>
++static inline void bit_spin_lock(int bitnum, unsigned long *addr,<br>
++		struct split_lock *lock)<br>
+ {<br>
+-	/*<br>
+-	 * Assuming the lock is uncontended, this never enters<br>
+-	 * the body of the outer loop. If it is contended, then<br>
+-	 * within the inner loop a non-atomic test is used to<br>
+-	 * busywait with less bus contention for a good time to<br>
+-	 * attempt to acquire the lock bit.<br>
+-	 */<br>
+ 	preempt_disable();<br>
+ #if defined(CONFIG_SMP) || defined(CONFIG_DEBUG_SPINLOCK)<br>
+-	while (unlikely(test_and_set_bit_lock(bitnum, addr))) {<br>
+-		preempt_enable();<br>
+-		do {<br>
+-			cpu_relax();<br>
+-		} while (test_bit(bitnum, addr));<br>
+-		preempt_disable();<br>
+-	}<br>
++	while (unlikely(test_and_set_bit_lock(bitnum, addr)))<br>
++		split_lock_spin(lock, bitnum, addr);<br>
+ #endif<br>
++	spin_acquire(&lock->dep_map, 0, 0, _RET_IP_);<br>
+ 	__acquire(bitlock);<br>
+ }<br>
+ <br>
+ /*<br>
+  * Return true if it was acquired<br>
+  */<br>
+-static inline int bit_spin_trylock(int bitnum, unsigned long *addr)<br>
++static inline int bit_spin_trylock(int bitnum, unsigned long *addr,<br>
++		struct split_lock *lock)<br>
+ {<br>
+ 	preempt_disable();<br>
+ #if defined(CONFIG_SMP) || defined(CONFIG_DEBUG_SPINLOCK)<br>
+@@ -47,6 +39,7 @@ static inline int bit_spin_trylock(int bitnum, unsigned long *addr)<br>
+ 		return 0;<br>
+ 	}<br>
+ #endif<br>
++	spin_acquire(&lock->dep_map, 0, 1, _RET_IP_);<br>
+ 	__acquire(bitlock);<br>
+ 	return 1;<br>
+ }<br>
+@@ -54,13 +47,16 @@ static inline int bit_spin_trylock(int bitnum, unsigned long *addr)<br>
+ /*<br>
+  *  bit-based spin_unlock()<br>
+  */<br>
+-static inline void bit_spin_unlock(int bitnum, unsigned long *addr)<br>
++static inline void bit_spin_unlock(int bitnum, unsigned long *addr,<br>
++		struct split_lock *lock)<br>
+ {<br>
+ #ifdef CONFIG_DEBUG_SPINLOCK<br>
+ 	BUG_ON(!test_bit(bitnum, addr));<br>
+ #endif<br>
++	spin_release(&lock->dep_map, _RET_IP_);<br>
+ #if defined(CONFIG_SMP) || defined(CONFIG_DEBUG_SPINLOCK)<br>
+ 	clear_bit_unlock(bitnum, addr);<br>
++	split_lock_unlock(lock, bitnum, addr);<br>
+ #endif<br>
+ 	preempt_enable();<br>
+ 	__release(bitlock);<br>
+@@ -71,13 +67,16 @@ static inline void bit_spin_unlock(int bitnum, unsigned long *addr)<br>
+  *  non-atomic version, which can be used eg. if the bit lock itself is<br>
+  *  protecting the rest of the flags in the word.<br>
+  */<br>
+-static inline void __bit_spin_unlock(int bitnum, unsigned long *addr)<br>
++static inline void __bit_spin_unlock(int bitnum, unsigned long *addr,<br>
++		struct split_lock *lock)<br>
+ {<br>
+ #ifdef CONFIG_DEBUG_SPINLOCK<br>
+ 	BUG_ON(!test_bit(bitnum, addr));<br>
+ #endif<br>
++	spin_release(&lock->dep_map, _RET_IP_);<br>
+ #if defined(CONFIG_SMP) || defined(CONFIG_DEBUG_SPINLOCK)<br>
+ 	__clear_bit_unlock(bitnum, addr);<br>
++	split_lock_unlock(lock, bitnum, addr);<br>
+ #endif<br>
+ 	preempt_enable();<br>
+ 	__release(bitlock);<br>
+@@ -98,4 +97,3 @@ static inline int bit_spin_is_locked(int bitnum, unsigned long *addr)<br>
+ }<br>
+ <br>
+ #endif /* __LINUX_BIT_SPINLOCK_H */<br>
+-<br>
+diff --git a/include/linux/list_bl.h b/include/linux/list_bl.h<br>
+index ae1b541446c9..e6c57c670358 100644<br>
+--- a/include/linux/list_bl.h<br>
++++ b/include/linux/list_bl.h<br>
+@@ -143,14 +143,15 @@ static inline void hlist_bl_del_init(struct hlist_bl_node *n)<br>
+ 	}<br>
+ }<br>
+ <br>
+-static inline void hlist_bl_lock(struct hlist_bl_head *b)<br>
++static inline void hlist_bl_lock(struct hlist_bl_head *b, struct split_lock *sl)<br>
+ {<br>
+-	bit_spin_lock(0, (unsigned long *)b);<br>
++	bit_spin_lock(0, (unsigned long *)b, sl);<br>
+ }<br>
+ <br>
+-static inline void hlist_bl_unlock(struct hlist_bl_head *b)<br>
++static inline void hlist_bl_unlock(struct hlist_bl_head *b,<br>
++		struct split_lock *sl)<br>
+ {<br>
+-	__bit_spin_unlock(0, (unsigned long *)b);<br>
++	__bit_spin_unlock(0, (unsigned long *)b, sl);<br>
+ }<br>
+ <br>
+ static inline bool hlist_bl_is_locked(struct hlist_bl_head *b)<br>
+diff --git a/include/linux/split_lock.h b/include/linux/split_lock.h<br>
+new file mode 100644<br>
+index 000000000000..d9c7816fb73c<br>
+--- /dev/null<br>
++++ b/include/linux/split_lock.h<br>
+@@ -0,0 +1,45 @@<br>
++#ifndef _LINUX_SPLIT_LOCK_H<br>
++#define _LINUX_SPLIT_LOCK_H<br>
++<br>
++#include <linux/lockdep_types.h><br>
++<br>
++struct split_lock {<br>
++#ifdef CONFIG_DEBUG_LOCK_ALLOC<br>
++	struct lockdep_map dep_map;<br>
++#endif<br>
++};<br>
++<br>
++#ifdef CONFIG_DEBUG_LOCK_ALLOC<br>
++#define SPLIT_DEP_MAP_INIT(lockname)					\<br>
++	.dep_map = {							\<br>
++		.name = #lockname,					\<br>
++		.wait_type_inner = LD_WAIT_SPIN,			\<br>
++	}<br>
++#else<br>
++#define SPLIT_DEP_MAP_INIT(lockname)<br>
++#endif<br>
++<br>
++#define DEFINE_SPLIT_LOCK(name)						\<br>
++struct split_lock name = {						\<br>
++	SPLIT_DEP_MAP_INIT(name)					\<br>
++};<br>
++<br>
++/*<br>
++ * This is only called if we're contended.  We use a non-atomic test<br>
++ * to reduce contention on the cacheline while we wait.<br>
++ */<br>
++static inline void split_lock_spin(struct split_lock *lock, int bitnum,<br>
++		unsigned long *addr)<br>
++{<br>
++	preempt_enable();<br>
++	do {<br>
++		cpu_relax();<br>
++	} while (test_bit(bitnum, addr));<br>
++	preempt_disable();<br>
++}<br>
++<br>
++static inline void split_lock_unlock(struct split_lock *lock, int bitnum,<br>
++		unsigned long *addr)<br>
++{<br>
++}<br>
++#endif /* _LINUX_SPLIT_LOCK_H */<br>
+diff --git a/mm/slub.c b/mm/slub.c<br>
+index 9c0e26ddf300..eb7c22fbc8fc 100644<br>
+--- a/mm/slub.c<br>
++++ b/mm/slub.c<br>
+@@ -346,19 +346,21 @@ static inline unsigned int oo_objects(struct kmem_cache_order_objects x)<br>
+ 	return x.x & OO_MASK;<br>
+ }<br>
+ <br>
++static DEFINE_SPLIT_LOCK(slab_split_lock);<br>
++<br>
+ /*<br>
+  * Per slab locking using the pagelock<br>
+  */<br>
+ static __always_inline void slab_lock(struct page *page)<br>
+ {<br>
+ 	VM_BUG_ON_PAGE(PageTail(page), page);<br>
+-	bit_spin_lock(PG_locked, &page->flags);<br>
++	bit_spin_lock(PG_locked, &page->flags, &slab_split_lock);<br>
+ }<br>
+ <br>
+ static __always_inline void slab_unlock(struct page *page)<br>
+ {<br>
+ 	VM_BUG_ON_PAGE(PageTail(page), page);<br>
+-	__bit_spin_unlock(PG_locked, &page->flags);<br>
++	__bit_spin_unlock(PG_locked, &page->flags, &slab_split_lock);<br>
+ }<br>
+ <br>
+ /* Interrupts must be disabled (for the fallback code to work right) */<br>
+-- <br>
+2.30.2<br>
+<br>
+<br>
+

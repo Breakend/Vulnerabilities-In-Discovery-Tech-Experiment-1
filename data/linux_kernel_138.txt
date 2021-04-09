@@ -1,0 +1,26 @@
+Add devicetree compatible for SCM present in SDX55 platform.<br>
+<br>
+Cc: Rob Herring <robh+dt@xxxxxxxxxx><br>
+Cc: devicetree@xxxxxxxxxxxxxxx<br>
+Signed-off-by: Manivannan Sadhasivam <manivannan.sadhasivam@xxxxxxxxxx><br>
+---<br>
+ Documentation/devicetree/bindings/firmware/qcom,scm.txt | 1 +<br>
+ 1 file changed, 1 insertion(+)<br>
+<br>
+diff --git a/Documentation/devicetree/bindings/firmware/qcom,scm.txt b/Documentation/devicetree/bindings/firmware/qcom,scm.txt<br>
+index a884955f861e..10281ae6e1b6 100644<br>
+--- a/Documentation/devicetree/bindings/firmware/qcom,scm.txt<br>
++++ b/Documentation/devicetree/bindings/firmware/qcom,scm.txt<br>
+@@ -21,6 +21,7 @@ Required properties:<br>
+  * "qcom,scm-msm8998"<br>
+  * "qcom,scm-sc7180"<br>
+  * "qcom,scm-sdm845"<br>
++ * "qcom,scm-sdx55"<br>
+  * "qcom,scm-sm8150"<br>
+  * "qcom,scm-sm8250"<br>
+  * "qcom,scm-sm8350"<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

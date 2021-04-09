@@ -1,0 +1,12 @@
+Hi Heiner,<br>
+<br>
+On Thu, Apr 8, 2021 at 1:49 PM Heiner Kallweit <hkallweit1@xxxxxxxxx> wrote:<br>
+><i></i><br>
+><i> Can't we use frame_length - ETH_FCS_LEN direcctly here?</i><br>
+<br>
+If the hard-coded "4" refers to ETH_FCS_LEN, then yes, good point. I'd<br>
+love to find out first why George and I need different patches to make<br>
+the driver work in our use case, though.<br>
+<br>
+<br>
+

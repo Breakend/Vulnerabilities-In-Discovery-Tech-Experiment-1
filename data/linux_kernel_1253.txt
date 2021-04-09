@@ -1,0 +1,104 @@
+On Thu, Apr 08, 2021 at 10:42:43AM +0530, Anshuman Khandual wrote:<br>
+><i> </i><br>
+><i> On 4/7/21 10:56 PM, Mike Rapoport wrote:</i><br>
+><i> > From: Mike Rapoport <rppt@xxxxxxxxxxxxx></i><br>
+><i> > </i><br>
+><i> > The arm64's version of pfn_valid() differs from the generic because of two</i><br>
+><i> > reasons:</i><br>
+><i> > </i><br>
+><i> > * Parts of the memory map are freed during boot. This makes it necessary to</i><br>
+><i> >   verify that there is actual physical memory that corresponds to a pfn</i><br>
+><i> >   which is done by querying memblock.</i><br>
+><i> > </i><br>
+><i> > * There are NOMAP memory regions. These regions are not mapped in the</i><br>
+><i> >   linear map and until the previous commit the struct pages representing</i><br>
+><i> >   these areas had default values.</i><br>
+><i> > </i><br>
+><i> > As the consequence of absence of the special treatment of NOMAP regions in</i><br>
+><i> > the memory map it was necessary to use memblock_is_map_memory() in</i><br>
+><i> > pfn_valid() and to have pfn_valid_within() aliased to pfn_valid() so that</i><br>
+><i> > generic mm functionality would not treat a NOMAP page as a normal page.</i><br>
+><i> > </i><br>
+><i> > Since the NOMAP regions are now marked as PageReserved(), pfn walkers and</i><br>
+><i> > the rest of core mm will treat them as unusable memory and thus</i><br>
+><i> > pfn_valid_within() is no longer required at all and can be disabled by</i><br>
+><i> > removing CONFIG_HOLES_IN_ZONE on arm64.</i><br>
+><i> </i><br>
+><i> But what about the memory map that are freed during boot (mentioned above).</i><br>
+><i> Would not they still cause CONFIG_HOLES_IN_ZONE to be applicable and hence</i><br>
+><i> pfn_valid_within() ?</i><br>
+<br>
+The CONFIG_HOLES_IN_ZONE name is misleading as actually pfn_valid_within()<br>
+is only required for holes within a MAX_ORDER_NR_PAGES blocks (see comment<br>
+near pfn_valid_within() definition in mmzone.h). The freeing of the memory<br>
+map during boot avoids breaking MAX_ORDER blocks and the holes for which<br>
+memory map is freed are always aligned at MAX_ORDER.<br>
+<br>
+AFAIU, the only case when there could be a hole in a MAX_ORDER block is<br>
+when EFI/ACPI reserves memory for its use and this memory becomes NOMAP in<br>
+the kernel. We still create struct pages for this memory, but they never<br>
+get values other than defaults, so core mm has no idea that this memory<br>
+should be touched, hence the need for pfn_valid_within() aliased to<br>
+pfn_valid() on arm64.<br>
+ <br>
+><i> > pfn_valid() can be slightly simplified by replacing</i><br>
+><i> > memblock_is_map_memory() with memblock_is_memory().</i><br>
+><i> </i><br>
+><i> Just to understand this better, pfn_valid() will now return true for all</i><br>
+><i> MEMBLOCK_NOMAP based memory but that is okay as core MM would still ignore</i><br>
+><i> them as unusable memory for being PageReserved().</i><br>
+<br>
+Right, pfn_valid() will return true for all memory, including<br>
+MEMBLOCK_NOMAP. Since core mm deals with PageResrved() for memory used by<br>
+the firmware, e.g. on x86, I don't see why it won't work on arm64.<br>
+><i> > </i><br>
+><i> > Signed-off-by: Mike Rapoport <rppt@xxxxxxxxxxxxx></i><br>
+><i> > ---</i><br>
+><i> >  arch/arm64/Kconfig   | 3 ---</i><br>
+><i> >  arch/arm64/mm/init.c | 4 ++--</i><br>
+><i> >  2 files changed, 2 insertions(+), 5 deletions(-)</i><br>
+><i> > </i><br>
+><i> > diff --git a/arch/arm64/Kconfig b/arch/arm64/Kconfig</i><br>
+><i> > index e4e1b6550115..58e439046d05 100644</i><br>
+><i> > --- a/arch/arm64/Kconfig</i><br>
+><i> > +++ b/arch/arm64/Kconfig</i><br>
+><i> > @@ -1040,9 +1040,6 @@ config NEED_PER_CPU_EMBED_FIRST_CHUNK</i><br>
+><i> >  	def_bool y</i><br>
+><i> >  	depends on NUMA</i><br>
+><i> >  </i><br>
+><i> > -config HOLES_IN_ZONE</i><br>
+><i> > -	def_bool y</i><br>
+><i> > -</i><br>
+><i> >  source "kernel/Kconfig.hz"</i><br>
+><i> >  </i><br>
+><i> >  config ARCH_SPARSEMEM_ENABLE</i><br>
+><i> > diff --git a/arch/arm64/mm/init.c b/arch/arm64/mm/init.c</i><br>
+><i> > index 258b1905ed4a..bb6dd406b1f0 100644</i><br>
+><i> > --- a/arch/arm64/mm/init.c</i><br>
+><i> > +++ b/arch/arm64/mm/init.c</i><br>
+><i> > @@ -243,7 +243,7 @@ int pfn_valid(unsigned long pfn)</i><br>
+><i> >  </i><br>
+><i> >  	/*</i><br>
+><i> >  	 * ZONE_DEVICE memory does not have the memblock entries.</i><br>
+><i> > -	 * memblock_is_map_memory() check for ZONE_DEVICE based</i><br>
+><i> > +	 * memblock_is_memory() check for ZONE_DEVICE based</i><br>
+><i> >  	 * addresses will always fail. Even the normal hotplugged</i><br>
+><i> >  	 * memory will never have MEMBLOCK_NOMAP flag set in their</i><br>
+><i> >  	 * memblock entries. Skip memblock search for all non early</i><br>
+><i> > @@ -254,7 +254,7 @@ int pfn_valid(unsigned long pfn)</i><br>
+><i> >  		return pfn_section_valid(ms, pfn);</i><br>
+><i> >  }</i><br>
+><i> >  #endif</i><br>
+><i> > -	return memblock_is_map_memory(addr);</i><br>
+><i> > +	return memblock_is_memory(addr);</i><br>
+><i> >  }</i><br>
+><i> >  EXPORT_SYMBOL(pfn_valid);</i><br>
+><i> >  </i><br>
+><i> > </i><br>
+<br>
+-- <br>
+Sincerely yours,<br>
+Mike.<br>
+<br>
+<br>
+

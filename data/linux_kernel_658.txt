@@ -1,0 +1,72 @@
+When retrieving emulated CPUID entries, check for an insufficient array<br>
+size if and only if KVM is actually inserting an entry.<br>
+If userspace has a priori knowledge of the exact array size,<br>
+KVM_GET_EMULATED_CPUID will incorrectly fail due to effectively requiring<br>
+an extra, unused entry.<br>
+<br>
+Fixes: 433f4ba19041 ("KVM: x86: fix out-of-bounds write in KVM_GET_EMULATED_CPUID (CVE-2019-19332)")<br>
+Signed-off-by: Emanuele Giuseppe Esposito <eesposit@xxxxxxxxxx><br>
+---<br>
+ arch/x86/kvm/cpuid.c | 33 ++++++++++++++++-----------------<br>
+ 1 file changed, 16 insertions(+), 17 deletions(-)<br>
+<br>
+diff --git a/arch/x86/kvm/cpuid.c b/arch/x86/kvm/cpuid.c<br>
+index 6bd2f8b830e4..d30194081892 100644<br>
+--- a/arch/x86/kvm/cpuid.c<br>
++++ b/arch/x86/kvm/cpuid.c<br>
+@@ -567,34 +567,33 @@ static struct kvm_cpuid_entry2 *do_host_cpuid(struct kvm_cpuid_array *array,<br>
+ <br>
+ static int __do_cpuid_func_emulated(struct kvm_cpuid_array *array, u32 func)<br>
+ {<br>
+-	struct kvm_cpuid_entry2 *entry;<br>
+-<br>
+-	if (array->nent >= array->maxnent)<br>
+-		return -E2BIG;<br>
++	struct kvm_cpuid_entry2 entry;<br>
+ <br>
+-	entry = &array->entries[array->nent];<br>
+-	entry->function = func;<br>
+-	entry->index = 0;<br>
+-	entry->flags = 0;<br>
++	memset(&entry, 0, sizeof(entry));<br>
+ <br>
+ 	switch (func) {<br>
+ 	case 0:<br>
+-		entry->eax = 7;<br>
+-		++array->nent;<br>
++		entry.eax = 7;<br>
+ 		break;<br>
+ 	case 1:<br>
+-		entry->ecx = F(MOVBE);<br>
+-		++array->nent;<br>
++		entry.ecx = F(MOVBE);<br>
+ 		break;<br>
+ 	case 7:<br>
+-		entry->flags |= KVM_CPUID_FLAG_SIGNIFCANT_INDEX;<br>
+-		entry->eax = 0;<br>
+-		entry->ecx = F(RDPID);<br>
+-		++array->nent;<br>
+-	default:<br>
++		entry.flags = KVM_CPUID_FLAG_SIGNIFCANT_INDEX;<br>
++		entry.ecx = F(RDPID);<br>
+ 		break;<br>
++	default:<br>
++		goto out;<br>
+ 	}<br>
+ <br>
++	/* This check is performed only when func is valid */<br>
++	if (array->nent >= array->maxnent)<br>
++		return -E2BIG;<br>
++<br>
++	entry.function = func;<br>
++	memcpy(&array->entries[array->nent++], &entry, sizeof(entry));<br>
++<br>
++out:<br>
+ 	return 0;<br>
+ }<br>
+ <br>
+-- <br>
+2.30.2<br>
+<br>
+<br>
+

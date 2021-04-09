@@ -1,0 +1,146 @@
+The following commit has been merged into the x86/entry branch of tip:<br>
+<br>
+Commit-ID:     68ef8735d253f3d840082b78f996bf2d89ee6e5f<br>
+Gitweb:        <a  rel="nofollow" href="https://git.kernel.org/tip/68ef8735d253f3d840082b78f996bf2d89ee6e5f">https://git.kernel.org/tip/68ef8735d253f3d840082b78f996bf2d89ee6e5f</a><br>
+Author:        Kees Cook <keescook@xxxxxxxxxxxx><br>
+AuthorDate:    Thu, 01 Apr 2021 16:23:47 -07:00<br>
+Committer:     Thomas Gleixner <tglx@xxxxxxxxxxxxx><br>
+CommitterDate: Thu, 08 Apr 2021 14:05:20 +02:00<br>
+<br>
+lkdtm: Add REPORT_STACK for checking stack offsets<br>
+<br>
+For validating the stack offset behavior, report the offset from a given<br>
+process's first seen stack address. Add s script to calculate the results<br>
+to the LKDTM kselftests.<br>
+<br>
+Signed-off-by: Kees Cook <keescook@xxxxxxxxxxxx><br>
+Signed-off-by: Thomas Gleixner <tglx@xxxxxxxxxxxxx><br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/20210401232347.2791257-7-keescook@xxxxxxxxxxxx">https://lore.kernel.org/r/20210401232347.2791257-7-keescook@xxxxxxxxxxxx</a><br>
+<br>
+---<br>
+ drivers/misc/lkdtm/bugs.c                      | 17 ++++++++-<br>
+ drivers/misc/lkdtm/core.c                      |  1 +-<br>
+ drivers/misc/lkdtm/lkdtm.h                     |  1 +-<br>
+ tools/testing/selftests/lkdtm/.gitignore       |  1 +-<br>
+ tools/testing/selftests/lkdtm/Makefile         |  1 +-<br>
+ tools/testing/selftests/lkdtm/stack-entropy.sh | 36 +++++++++++++++++-<br>
+ 6 files changed, 57 insertions(+)<br>
+ create mode 100755 tools/testing/selftests/lkdtm/stack-entropy.sh<br>
+<br>
+diff --git a/drivers/misc/lkdtm/bugs.c b/drivers/misc/lkdtm/bugs.c<br>
+index 110f5a8..0e8254d 100644<br>
+--- a/drivers/misc/lkdtm/bugs.c<br>
++++ b/drivers/misc/lkdtm/bugs.c<br>
+@@ -134,6 +134,23 @@ noinline void lkdtm_CORRUPT_STACK_STRONG(void)<br>
+ 	__lkdtm_CORRUPT_STACK((void *)&data);<br>
+ }<br>
+ <br>
++static pid_t stack_pid;<br>
++static unsigned long stack_addr;<br>
++<br>
++void lkdtm_REPORT_STACK(void)<br>
++{<br>
++	volatile uintptr_t magic;<br>
++	pid_t pid = task_pid_nr(current);<br>
++<br>
++	if (pid != stack_pid) {<br>
++		pr_info("Starting stack offset tracking for pid %d\n", pid);<br>
++		stack_pid = pid;<br>
++		stack_addr = (uintptr_t)&magic;<br>
++	}<br>
++<br>
++	pr_info("Stack offset: %d\n", (int)(stack_addr - (uintptr_t)&magic));<br>
++}<br>
++<br>
+ void lkdtm_UNALIGNED_LOAD_STORE_WRITE(void)<br>
+ {<br>
+ 	static u8 data[5] __attribute__((aligned(4))) = {1, 2, 3, 4, 5};<br>
+diff --git a/drivers/misc/lkdtm/core.c b/drivers/misc/lkdtm/core.c<br>
+index b2aff4d..8024b6a 100644<br>
+--- a/drivers/misc/lkdtm/core.c<br>
++++ b/drivers/misc/lkdtm/core.c<br>
+@@ -110,6 +110,7 @@ static const struct crashtype crashtypes[] = {<br>
+ 	CRASHTYPE(EXHAUST_STACK),<br>
+ 	CRASHTYPE(CORRUPT_STACK),<br>
+ 	CRASHTYPE(CORRUPT_STACK_STRONG),<br>
++	CRASHTYPE(REPORT_STACK),<br>
+ 	CRASHTYPE(CORRUPT_LIST_ADD),<br>
+ 	CRASHTYPE(CORRUPT_LIST_DEL),<br>
+ 	CRASHTYPE(STACK_GUARD_PAGE_LEADING),<br>
+diff --git a/drivers/misc/lkdtm/lkdtm.h b/drivers/misc/lkdtm/lkdtm.h<br>
+index 5ae48c6..99f90d3 100644<br>
+--- a/drivers/misc/lkdtm/lkdtm.h<br>
++++ b/drivers/misc/lkdtm/lkdtm.h<br>
+@@ -17,6 +17,7 @@ void lkdtm_LOOP(void);<br>
+ void lkdtm_EXHAUST_STACK(void);<br>
+ void lkdtm_CORRUPT_STACK(void);<br>
+ void lkdtm_CORRUPT_STACK_STRONG(void);<br>
++void lkdtm_REPORT_STACK(void);<br>
+ void lkdtm_UNALIGNED_LOAD_STORE_WRITE(void);<br>
+ void lkdtm_SOFTLOCKUP(void);<br>
+ void lkdtm_HARDLOCKUP(void);<br>
+diff --git a/tools/testing/selftests/lkdtm/.gitignore b/tools/testing/selftests/lkdtm/.gitignore<br>
+index f262126..d4b0be8 100644<br>
+--- a/tools/testing/selftests/lkdtm/.gitignore<br>
++++ b/tools/testing/selftests/lkdtm/.gitignore<br>
+@@ -1,2 +1,3 @@<br>
+ *.sh<br>
+ !run.sh<br>
++!stack-entropy.sh<br>
+diff --git a/tools/testing/selftests/lkdtm/Makefile b/tools/testing/selftests/lkdtm/Makefile<br>
+index 1bcc9ee..c71109c 100644<br>
+--- a/tools/testing/selftests/lkdtm/Makefile<br>
++++ b/tools/testing/selftests/lkdtm/Makefile<br>
+@@ -5,6 +5,7 @@ include ../lib.mk<br>
+ <br>
+ # NOTE: $(OUTPUT) won't get default value if used before lib.mk<br>
+ TEST_FILES := tests.txt<br>
++TEST_PROGS := stack-entropy.sh<br>
+ TEST_GEN_PROGS = $(patsubst %,$(OUTPUT)/%.sh,$(shell awk '{print $$1}' tests.txt | sed -e 's/\#//'))<br>
+ all: $(TEST_GEN_PROGS)<br>
+ <br>
+diff --git a/tools/testing/selftests/lkdtm/stack-entropy.sh b/tools/testing/selftests/lkdtm/stack-entropy.sh<br>
+new file mode 100755<br>
+index 0000000..b1b8a50<br>
+--- /dev/null<br>
++++ b/tools/testing/selftests/lkdtm/stack-entropy.sh<br>
+@@ -0,0 +1,36 @@<br>
++#!/bin/sh<br>
++# SPDX-License-Identifier: GPL-2.0<br>
++#<br>
++# Measure kernel stack entropy by sampling via LKDTM's REPORT_STACK test.<br>
++set -e<br>
++samples="${1:-1000}"<br>
++<br>
++# Capture dmesg continuously since it may fill up depending on sample size.<br>
++log=$(mktemp -t stack-entropy-XXXXXX)<br>
++dmesg --follow >"$log" & pid=$!<br>
++report=-1<br>
++for i in $(seq 1 $samples); do<br>
++        echo "REPORT_STACK" >/sys/kernel/debug/provoke-crash/DIRECT<br>
++	if [ -t 1 ]; then<br>
++		percent=$(( 100 * $i / $samples ))<br>
++		if [ "$percent" -ne "$report" ]; then<br>
++			/bin/echo -en "$percent%\r"<br>
++			report="$percent"<br>
++		fi<br>
++	fi<br>
++done<br>
++kill "$pid"<br>
++<br>
++# Count unique offsets since last run.<br>
++seen=$(tac "$log" | grep -m1 -B"$samples"0 'Starting stack offset' | \<br>
++	grep 'Stack offset' | awk '{print $NF}' | sort | uniq -c | wc -l)<br>
++bits=$(echo "obase=2; $seen" | bc | wc -L)<br>
++echo "Bits of stack entropy: $bits"<br>
++rm -f "$log"<br>
++<br>
++# We would expect any functional stack randomization to be at least 5 bits.<br>
++if [ "$bits" -lt 5 ]; then<br>
++	exit 1<br>
++else<br>
++	exit 0<br>
++fi<br>
+<br>
+<br>
+

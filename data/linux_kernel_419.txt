@@ -1,0 +1,1052 @@
+Add a pair of helper functions:<br>
+<br>
+ (*) netfs_readahead()<br>
+ (*) netfs_readpage()<br>
+<br>
+to do the work of handling a readahead or a readpage, where the page(s)<br>
+that form part of the request may be split between the local cache, the<br>
+server or just require clearing, and may be single pages and transparent<br>
+huge pages.  This is all handled within the helper.<br>
+<br>
+Note that while both will read from the cache if there is data present,<br>
+only netfs_readahead() will expand the request beyond what it was asked to<br>
+do, and only netfs_readahead() will write back to the cache.<br>
+<br>
+netfs_readpage(), on the other hand, is synchronous and only fetches the<br>
+page (which might be a THP) it is asked for.<br>
+<br>
+The netfs gives the helper parameters from the VM, the cache cookie it<br>
+wants to use (or NULL) and a table of operations (only one of which is<br>
+mandatory):<br>
+<br>
+ (*) expand_readahead() [optional]<br>
+<br>
+     Called to allow the netfs to request an expansion of a readahead<br>
+     request to meet its own alignment requirements.  This is done by<br>
+     changing rreq->start and rreq->len.<br>
+<br>
+ (*) clamp_length() [optional]<br>
+<br>
+     Called to allow the netfs to cut down a subrequest to meet its own<br>
+     boundary requirements.  If it does this, the helper will generate<br>
+     additional subrequests until the full request is satisfied.<br>
+<br>
+ (*) is_still_valid() [optional]<br>
+<br>
+     Called to find out if the data just read from the cache has been<br>
+     invalidated and must be reread from the server.<br>
+<br>
+ (*) issue_op() [required]<br>
+<br>
+     Called to ask the netfs to issue a read to the server.  The subrequest<br>
+     describes the read.  The read request holds information about the file<br>
+     being accessed.<br>
+<br>
+     The netfs can cache information in rreq->netfs_priv.<br>
+<br>
+     Upon completion, the netfs should set the error, transferred and can<br>
+     also set FSCACHE_SREQ_CLEAR_TAIL and then call<br>
+     fscache_subreq_terminated().<br>
+<br>
+ (*) done() [optional]<br>
+<br>
+     Called after the pages have been unlocked.  The read request is still<br>
+     pinning the file and mapping and may still be pinning pages with<br>
+     PG_fscache.  rreq->error indicates any error that has been<br>
+     accumulated.<br>
+<br>
+ (*) cleanup() [optional]<br>
+<br>
+     Called when the helper is disposing of a finished read request.  This<br>
+     allows the netfs to clear rreq->netfs_priv.<br>
+<br>
+Netfs support is enabled with CONFIG_NETFS_SUPPORT=y.  It will be built<br>
+even if CONFIG_FSCACHE=n and in this case much of it should be optimised<br>
+away, allowing the filesystem to use it even when caching is disabled.<br>
+<br>
+Changes:<br>
+v5:<br>
+ - Comment why netfs_readahead() is putting pages[2].<br>
+ - Use page_file_mapping() rather than page->mapping[2].<br>
+ - Use page_index() rather than page->index[2].<br>
+ - Use set_page_fscache()[3] rather then SetPageFsCache() as this takes an<br>
+   appropriate ref too[4].<br>
+<br>
+v4:<br>
+ - Folded in a kerneldoc comment fix.<br>
+ - Folded in a fix for the error handling in the case that ENOMEM occurs.<br>
+ - Added flag to netfs_subreq_terminated() to indicate that the caller may<br>
+   have been running async and stuff that might sleep needs punting to a<br>
+   workqueue (can't use in_softirq()[1]).<br>
+<br>
+Signed-off-by: David Howells <dhowells@xxxxxxxxxx><br>
+Reviewed-by: Jeff Layton <jlayton@xxxxxxxxxx><br>
+cc: Matthew Wilcox <willy@xxxxxxxxxxxxx><br>
+cc: linux-mm@xxxxxxxxx<br>
+cc: linux-cachefs@xxxxxxxxxx<br>
+cc: linux-afs@xxxxxxxxxxxxxxxxxxx<br>
+cc: linux-nfs@xxxxxxxxxxxxxxx<br>
+cc: linux-cifs@xxxxxxxxxxxxxxx<br>
+cc: ceph-devel@xxxxxxxxxxxxxxx<br>
+cc: v9fs-developer@xxxxxxxxxxxxxxxxxxxxx<br>
+cc: linux-fsdevel@xxxxxxxxxxxxxxx<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/20210216084230.GA23669@xxxxxx/">https://lore.kernel.org/r/20210216084230.GA23669@xxxxxx/</a> [1]<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/20210321014202.GF3420@xxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/20210321014202.GF3420@xxxxxxxxxxxxxxxxxxxx/</a> [2]<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/2499407.1616505440@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/2499407.1616505440@xxxxxxxxxxxxxxxxxxxxxx/</a> [3]<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/CAHk-=wh+2gbF7XEjYc=HV9w_2uVzVf7vs60BPz0gFA=+pUm3ww@xxxxxxxxxxxxxx/">https://lore.kernel.org/r/CAHk-=wh+2gbF7XEjYc=HV9w_2uVzVf7vs60BPz0gFA=+pUm3ww@xxxxxxxxxxxxxx/</a> [4]<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/160588497406.3465195.18003475695899726222.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/160588497406.3465195.18003475695899726222.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # rfc<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161118136849.1232039.8923686136144228724.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161118136849.1232039.8923686136144228724.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # rfc<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161161032290.2537118.13400578415247339173.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161161032290.2537118.13400578415247339173.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v2<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161340394873.1303470.6237319335883242536.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161340394873.1303470.6237319335883242536.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v3<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161539537375.286939.16642940088716990995.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161539537375.286939.16642940088716990995.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v4<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161653795430.2770958.4947584573720000554.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161653795430.2770958.4947584573720000554.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v5<br>
+---<br>
+<br>
+ fs/Kconfig             |    1 <br>
+ fs/Makefile            |    1 <br>
+ fs/netfs/Makefile      |    6 <br>
+ fs/netfs/internal.h    |   61 ++++<br>
+ fs/netfs/read_helper.c |  725 ++++++++++++++++++++++++++++++++++++++++++++++++<br>
+ include/linux/netfs.h  |   83 +++++<br>
+ 6 files changed, 877 insertions(+)<br>
+ create mode 100644 fs/netfs/Makefile<br>
+ create mode 100644 fs/netfs/internal.h<br>
+ create mode 100644 fs/netfs/read_helper.c<br>
+<br>
+diff --git a/fs/Kconfig b/fs/Kconfig<br>
+index a55bda4233bb..97e7b77c9309 100644<br>
+--- a/fs/Kconfig<br>
++++ b/fs/Kconfig<br>
+@@ -125,6 +125,7 @@ source "fs/overlayfs/Kconfig"<br>
+ <br>
+ menu "Caches"<br>
+ <br>
++source "fs/netfs/Kconfig"<br>
+ source "fs/fscache/Kconfig"<br>
+ source "fs/cachefiles/Kconfig"<br>
+ <br>
+diff --git a/fs/Makefile b/fs/Makefile<br>
+index 3215fe205256..9c708e1fbe8f 100644<br>
+--- a/fs/Makefile<br>
++++ b/fs/Makefile<br>
+@@ -67,6 +67,7 @@ obj-y				+= devpts/<br>
+ obj-$(CONFIG_DLM)		+= dlm/<br>
+  <br>
+ # Do not add any filesystems before this line<br>
++obj-$(CONFIG_NETFS_SUPPORT)	+= netfs/<br>
+ obj-$(CONFIG_FSCACHE)		+= fscache/<br>
+ obj-$(CONFIG_REISERFS_FS)	+= reiserfs/<br>
+ obj-$(CONFIG_EXT4_FS)		+= ext4/<br>
+diff --git a/fs/netfs/Makefile b/fs/netfs/Makefile<br>
+new file mode 100644<br>
+index 000000000000..4b4eff2ba369<br>
+--- /dev/null<br>
++++ b/fs/netfs/Makefile<br>
+@@ -0,0 +1,6 @@<br>
++# SPDX-License-Identifier: GPL-2.0<br>
++<br>
++netfs-y := \<br>
++	read_helper.o<br>
++<br>
++obj-$(CONFIG_NETFS_SUPPORT) := netfs.o<br>
+diff --git a/fs/netfs/internal.h b/fs/netfs/internal.h<br>
+new file mode 100644<br>
+index 000000000000..ee665c0e7dc8<br>
+--- /dev/null<br>
++++ b/fs/netfs/internal.h<br>
+@@ -0,0 +1,61 @@<br>
++/* SPDX-License-Identifier: GPL-2.0-or-later */<br>
++/* Internal definitions for network filesystem support<br>
++ *<br>
++ * Copyright (C) 2021 Red Hat, Inc. All Rights Reserved.<br>
++ * Written by David Howells (dhowells@xxxxxxxxxx)<br>
++ */<br>
++<br>
++#ifdef pr_fmt<br>
++#undef pr_fmt<br>
++#endif<br>
++<br>
++#define pr_fmt(fmt) "netfs: " fmt<br>
++<br>
++/*<br>
++ * read_helper.c<br>
++ */<br>
++extern unsigned int netfs_debug;<br>
++<br>
++#define netfs_stat(x) do {} while(0)<br>
++#define netfs_stat_d(x) do {} while(0)<br>
++<br>
++/*****************************************************************************/<br>
++/*<br>
++ * debug tracing<br>
++ */<br>
++#define dbgprintk(FMT, ...) \<br>
++	printk("[%-6.6s] "FMT"\n", current->comm, ##__VA_ARGS__)<br>
++<br>
++#define kenter(FMT, ...) dbgprintk("==> %s("FMT")", __func__, ##__VA_ARGS__)<br>
++#define kleave(FMT, ...) dbgprintk("<== %s()"FMT"", __func__, ##__VA_ARGS__)<br>
++#define kdebug(FMT, ...) dbgprintk(FMT, ##__VA_ARGS__)<br>
++<br>
++#ifdef __KDEBUG<br>
++#define _enter(FMT, ...) kenter(FMT, ##__VA_ARGS__)<br>
++#define _leave(FMT, ...) kleave(FMT, ##__VA_ARGS__)<br>
++#define _debug(FMT, ...) kdebug(FMT, ##__VA_ARGS__)<br>
++<br>
++#elif defined(CONFIG_NETFS_DEBUG)<br>
++#define _enter(FMT, ...)			\<br>
++do {						\<br>
++	if (netfs_debug)			\<br>
++		kenter(FMT, ##__VA_ARGS__);	\<br>
++} while (0)<br>
++<br>
++#define _leave(FMT, ...)			\<br>
++do {						\<br>
++	if (netfs_debug)			\<br>
++		kleave(FMT, ##__VA_ARGS__);	\<br>
++} while (0)<br>
++<br>
++#define _debug(FMT, ...)			\<br>
++do {						\<br>
++	if (netfs_debug)			\<br>
++		kdebug(FMT, ##__VA_ARGS__);	\<br>
++} while (0)<br>
++<br>
++#else<br>
++#define _enter(FMT, ...) no_printk("==> %s("FMT")", __func__, ##__VA_ARGS__)<br>
++#define _leave(FMT, ...) no_printk("<== %s()"FMT"", __func__, ##__VA_ARGS__)<br>
++#define _debug(FMT, ...) no_printk(FMT, ##__VA_ARGS__)<br>
++#endif<br>
+diff --git a/fs/netfs/read_helper.c b/fs/netfs/read_helper.c<br>
+new file mode 100644<br>
+index 000000000000..30d4bf6bf28a<br>
+--- /dev/null<br>
++++ b/fs/netfs/read_helper.c<br>
+@@ -0,0 +1,725 @@<br>
++// SPDX-License-Identifier: GPL-2.0-or-later<br>
++/* Network filesystem high-level read support.<br>
++ *<br>
++ * Copyright (C) 2021 Red Hat, Inc. All Rights Reserved.<br>
++ * Written by David Howells (dhowells@xxxxxxxxxx)<br>
++ */<br>
++<br>
++#include <linux/module.h><br>
++#include <linux/export.h><br>
++#include <linux/fs.h><br>
++#include <linux/mm.h><br>
++#include <linux/pagemap.h><br>
++#include <linux/slab.h><br>
++#include <linux/uio.h><br>
++#include <linux/sched/mm.h><br>
++#include <linux/task_io_accounting_ops.h><br>
++#include <linux/netfs.h><br>
++#include "internal.h"<br>
++<br>
++MODULE_DESCRIPTION("Network fs support");<br>
++MODULE_AUTHOR("Red Hat, Inc.");<br>
++MODULE_LICENSE("GPL");<br>
++<br>
++unsigned netfs_debug;<br>
++module_param_named(debug, netfs_debug, uint, S_IWUSR | S_IRUGO);<br>
++MODULE_PARM_DESC(netfs_debug, "Netfs support debugging mask");<br>
++<br>
++static void netfs_rreq_work(struct work_struct *);<br>
++static void __netfs_put_subrequest(struct netfs_read_subrequest *, bool);<br>
++<br>
++static void netfs_put_subrequest(struct netfs_read_subrequest *subreq,<br>
++				 bool was_async)<br>
++{<br>
++	if (refcount_dec_and_test(&subreq->usage))<br>
++		__netfs_put_subrequest(subreq, was_async);<br>
++}<br>
++<br>
++static struct netfs_read_request *netfs_alloc_read_request(<br>
++	const struct netfs_read_request_ops *ops, void *netfs_priv,<br>
++	struct file *file)<br>
++{<br>
++	static atomic_t debug_ids;<br>
++	struct netfs_read_request *rreq;<br>
++<br>
++	rreq = kzalloc(sizeof(struct netfs_read_request), GFP_KERNEL);<br>
++	if (rreq) {<br>
++		rreq->netfs_ops	= ops;<br>
++		rreq->netfs_priv = netfs_priv;<br>
++		rreq->inode	= file_inode(file);<br>
++		rreq->i_size	= i_size_read(rreq->inode);<br>
++		rreq->debug_id	= atomic_inc_return(&debug_ids);<br>
++		INIT_LIST_HEAD(&rreq->subrequests);<br>
++		INIT_WORK(&rreq->work, netfs_rreq_work);<br>
++		refcount_set(&rreq->usage, 1);<br>
++		__set_bit(NETFS_RREQ_IN_PROGRESS, &rreq->flags);<br>
++		ops->init_rreq(rreq, file);<br>
++	}<br>
++<br>
++	return rreq;<br>
++}<br>
++<br>
++static void netfs_get_read_request(struct netfs_read_request *rreq)<br>
++{<br>
++	refcount_inc(&rreq->usage);<br>
++}<br>
++<br>
++static void netfs_rreq_clear_subreqs(struct netfs_read_request *rreq,<br>
++				     bool was_async)<br>
++{<br>
++	struct netfs_read_subrequest *subreq;<br>
++<br>
++	while (!list_empty(&rreq->subrequests)) {<br>
++		subreq = list_first_entry(&rreq->subrequests,<br>
++					  struct netfs_read_subrequest, rreq_link);<br>
++		list_del(&subreq->rreq_link);<br>
++		netfs_put_subrequest(subreq, was_async);<br>
++	}<br>
++}<br>
++<br>
++static void netfs_free_read_request(struct work_struct *work)<br>
++{<br>
++	struct netfs_read_request *rreq =<br>
++		container_of(work, struct netfs_read_request, work);<br>
++	netfs_rreq_clear_subreqs(rreq, false);<br>
++	if (rreq->netfs_priv)<br>
++		rreq->netfs_ops->cleanup(rreq->mapping, rreq->netfs_priv);<br>
++	kfree(rreq);<br>
++}<br>
++<br>
++static void netfs_put_read_request(struct netfs_read_request *rreq, bool was_async)<br>
++{<br>
++	if (refcount_dec_and_test(&rreq->usage)) {<br>
++		if (was_async) {<br>
++			rreq->work.func = netfs_free_read_request;<br>
++			if (!queue_work(system_unbound_wq, &rreq->work))<br>
++				BUG();<br>
++		} else {<br>
++			netfs_free_read_request(&rreq->work);<br>
++		}<br>
++	}<br>
++}<br>
++<br>
++/*<br>
++ * Allocate and partially initialise an I/O request structure.<br>
++ */<br>
++static struct netfs_read_subrequest *netfs_alloc_subrequest(<br>
++	struct netfs_read_request *rreq)<br>
++{<br>
++	struct netfs_read_subrequest *subreq;<br>
++<br>
++	subreq = kzalloc(sizeof(struct netfs_read_subrequest), GFP_KERNEL);<br>
++	if (subreq) {<br>
++		INIT_LIST_HEAD(&subreq->rreq_link);<br>
++		refcount_set(&subreq->usage, 2);<br>
++		subreq->rreq = rreq;<br>
++		netfs_get_read_request(rreq);<br>
++	}<br>
++<br>
++	return subreq;<br>
++}<br>
++<br>
++static void netfs_get_read_subrequest(struct netfs_read_subrequest *subreq)<br>
++{<br>
++	refcount_inc(&subreq->usage);<br>
++}<br>
++<br>
++static void __netfs_put_subrequest(struct netfs_read_subrequest *subreq,<br>
++				   bool was_async)<br>
++{<br>
++	struct netfs_read_request *rreq = subreq->rreq;<br>
++<br>
++	kfree(subreq);<br>
++	netfs_put_read_request(rreq, was_async);<br>
++}<br>
++<br>
++/*<br>
++ * Clear the unread part of an I/O request.<br>
++ */<br>
++static void netfs_clear_unread(struct netfs_read_subrequest *subreq)<br>
++{<br>
++	struct iov_iter iter;<br>
++<br>
++	iov_iter_xarray(&iter, WRITE, &subreq->rreq->mapping->i_pages,<br>
++			subreq->start + subreq->transferred,<br>
++			subreq->len   - subreq->transferred);<br>
++	iov_iter_zero(iov_iter_count(&iter), &iter);<br>
++}<br>
++<br>
++/*<br>
++ * Fill a subrequest region with zeroes.<br>
++ */<br>
++static void netfs_fill_with_zeroes(struct netfs_read_request *rreq,<br>
++				   struct netfs_read_subrequest *subreq)<br>
++{<br>
++	__set_bit(NETFS_SREQ_CLEAR_TAIL, &subreq->flags);<br>
++	netfs_subreq_terminated(subreq, 0, false);<br>
++}<br>
++<br>
++/*<br>
++ * Ask the netfs to issue a read request to the server for us.<br>
++ *<br>
++ * The netfs is expected to read from subreq->pos + subreq->transferred to<br>
++ * subreq->pos + subreq->len - 1.  It may not backtrack and write data into the<br>
++ * buffer prior to the transferred point as it might clobber dirty data<br>
++ * obtained from the cache.<br>
++ *<br>
++ * Alternatively, the netfs is allowed to indicate one of two things:<br>
++ *<br>
++ * - NETFS_SREQ_SHORT_READ: A short read - it will get called again to try and<br>
++ *   make progress.<br>
++ *<br>
++ * - NETFS_SREQ_CLEAR_TAIL: A short read - the rest of the buffer will be<br>
++ *   cleared.<br>
++ */<br>
++static void netfs_read_from_server(struct netfs_read_request *rreq,<br>
++				   struct netfs_read_subrequest *subreq)<br>
++{<br>
++	rreq->netfs_ops->issue_op(subreq);<br>
++}<br>
++<br>
++/*<br>
++ * Release those waiting.<br>
++ */<br>
++static void netfs_rreq_completed(struct netfs_read_request *rreq, bool was_async)<br>
++{<br>
++	netfs_rreq_clear_subreqs(rreq, was_async);<br>
++	netfs_put_read_request(rreq, was_async);<br>
++}<br>
++<br>
++/*<br>
++ * Unlock the pages in a read operation.  We need to set PG_fscache on any<br>
++ * pages we're going to write back before we unlock them.<br>
++ */<br>
++static void netfs_rreq_unlock(struct netfs_read_request *rreq)<br>
++{<br>
++	struct netfs_read_subrequest *subreq;<br>
++	struct page *page;<br>
++	unsigned int iopos, account = 0;<br>
++	pgoff_t start_page = rreq->start / PAGE_SIZE;<br>
++	pgoff_t last_page = ((rreq->start + rreq->len) / PAGE_SIZE) - 1;<br>
++	bool subreq_failed = false;<br>
++	int i;<br>
++<br>
++	XA_STATE(xas, &rreq->mapping->i_pages, start_page);<br>
++<br>
++	if (test_bit(NETFS_RREQ_FAILED, &rreq->flags)) {<br>
++		__clear_bit(NETFS_RREQ_WRITE_TO_CACHE, &rreq->flags);<br>
++		list_for_each_entry(subreq, &rreq->subrequests, rreq_link) {<br>
++			__clear_bit(NETFS_SREQ_WRITE_TO_CACHE, &subreq->flags);<br>
++		}<br>
++	}<br>
++<br>
++	/* Walk through the pagecache and the I/O request lists simultaneously.<br>
++	 * We may have a mixture of cached and uncached sections and we only<br>
++	 * really want to write out the uncached sections.  This is slightly<br>
++	 * complicated by the possibility that we might have huge pages with a<br>
++	 * mixture inside.<br>
++	 */<br>
++	subreq = list_first_entry(&rreq->subrequests,<br>
++				  struct netfs_read_subrequest, rreq_link);<br>
++	iopos = 0;<br>
++	subreq_failed = (subreq->error < 0);<br>
++<br>
++	rcu_read_lock();<br>
++	xas_for_each(&xas, page, last_page) {<br>
++		unsigned int pgpos = (page->index - start_page) * PAGE_SIZE;<br>
++		unsigned int pgend = pgpos + thp_size(page);<br>
++		bool pg_failed = false;<br>
++<br>
++		for (;;) {<br>
++			if (!subreq) {<br>
++				pg_failed = true;<br>
++				break;<br>
++			}<br>
++			if (test_bit(NETFS_SREQ_WRITE_TO_CACHE, &subreq->flags))<br>
++				set_page_fscache(page);<br>
++			pg_failed |= subreq_failed;<br>
++			if (pgend < iopos + subreq->len)<br>
++				break;<br>
++<br>
++			account += subreq->transferred;<br>
++			iopos += subreq->len;<br>
++			if (!list_is_last(&subreq->rreq_link, &rreq->subrequests)) {<br>
++				subreq = list_next_entry(subreq, rreq_link);<br>
++				subreq_failed = (subreq->error < 0);<br>
++			} else {<br>
++				subreq = NULL;<br>
++				subreq_failed = false;<br>
++			}<br>
++			if (pgend == iopos)<br>
++				break;<br>
++		}<br>
++<br>
++		if (!pg_failed) {<br>
++			for (i = 0; i < thp_nr_pages(page); i++)<br>
++				flush_dcache_page(page);<br>
++			SetPageUptodate(page);<br>
++		}<br>
++<br>
++		if (!test_bit(NETFS_RREQ_DONT_UNLOCK_PAGES, &rreq->flags)) {<br>
++			if (page->index == rreq->no_unlock_page &&<br>
++			    test_bit(NETFS_RREQ_NO_UNLOCK_PAGE, &rreq->flags))<br>
++				_debug("no unlock");<br>
++			else<br>
++				unlock_page(page);<br>
++		}<br>
++	}<br>
++	rcu_read_unlock();<br>
++<br>
++	task_io_account_read(account);<br>
++	if (rreq->netfs_ops->done)<br>
++		rreq->netfs_ops->done(rreq);<br>
++}<br>
++<br>
++/*<br>
++ * Handle a short read.<br>
++ */<br>
++static void netfs_rreq_short_read(struct netfs_read_request *rreq,<br>
++				  struct netfs_read_subrequest *subreq)<br>
++{<br>
++	__clear_bit(NETFS_SREQ_SHORT_READ, &subreq->flags);<br>
++	__set_bit(NETFS_SREQ_SEEK_DATA_READ, &subreq->flags);<br>
++<br>
++	netfs_get_read_subrequest(subreq);<br>
++	atomic_inc(&rreq->nr_rd_ops);<br>
++	netfs_read_from_server(rreq, subreq);<br>
++}<br>
++<br>
++/*<br>
++ * Resubmit any short or failed operations.  Returns true if we got the rreq<br>
++ * ref back.<br>
++ */<br>
++static bool netfs_rreq_perform_resubmissions(struct netfs_read_request *rreq)<br>
++{<br>
++	struct netfs_read_subrequest *subreq;<br>
++<br>
++	WARN_ON(in_interrupt());<br>
++<br>
++	/* We don't want terminating submissions trying to wake us up whilst<br>
++	 * we're still going through the list.<br>
++	 */<br>
++	atomic_inc(&rreq->nr_rd_ops);<br>
++<br>
++	__clear_bit(NETFS_RREQ_INCOMPLETE_IO, &rreq->flags);<br>
++	list_for_each_entry(subreq, &rreq->subrequests, rreq_link) {<br>
++		if (subreq->error) {<br>
++			if (subreq->source != NETFS_READ_FROM_CACHE)<br>
++				break;<br>
++			subreq->source = NETFS_DOWNLOAD_FROM_SERVER;<br>
++			subreq->error = 0;<br>
++			netfs_get_read_subrequest(subreq);<br>
++			atomic_inc(&rreq->nr_rd_ops);<br>
++			netfs_read_from_server(rreq, subreq);<br>
++		} else if (test_bit(NETFS_SREQ_SHORT_READ, &subreq->flags)) {<br>
++			netfs_rreq_short_read(rreq, subreq);<br>
++		}<br>
++	}<br>
++<br>
++	/* If we decrement nr_rd_ops to 0, the usage ref belongs to us. */<br>
++	if (atomic_dec_and_test(&rreq->nr_rd_ops))<br>
++		return true;<br>
++<br>
++	wake_up_var(&rreq->nr_rd_ops);<br>
++	return false;<br>
++}<br>
++<br>
++/*<br>
++ * Assess the state of a read request and decide what to do next.<br>
++ *<br>
++ * Note that we could be in an ordinary kernel thread, on a workqueue or in<br>
++ * softirq context at this point.  We inherit a ref from the caller.<br>
++ */<br>
++static void netfs_rreq_assess(struct netfs_read_request *rreq, bool was_async)<br>
++{<br>
++again:<br>
++	if (!test_bit(NETFS_RREQ_FAILED, &rreq->flags) &&<br>
++	    test_bit(NETFS_RREQ_INCOMPLETE_IO, &rreq->flags)) {<br>
++		if (netfs_rreq_perform_resubmissions(rreq))<br>
++			goto again;<br>
++		return;<br>
++	}<br>
++<br>
++	netfs_rreq_unlock(rreq);<br>
++<br>
++	clear_bit_unlock(NETFS_RREQ_IN_PROGRESS, &rreq->flags);<br>
++	wake_up_bit(&rreq->flags, NETFS_RREQ_IN_PROGRESS);<br>
++<br>
++	netfs_rreq_completed(rreq, was_async);<br>
++}<br>
++<br>
++static void netfs_rreq_work(struct work_struct *work)<br>
++{<br>
++	struct netfs_read_request *rreq =<br>
++		container_of(work, struct netfs_read_request, work);<br>
++	netfs_rreq_assess(rreq, false);<br>
++}<br>
++<br>
++/*<br>
++ * Handle the completion of all outstanding I/O operations on a read request.<br>
++ * We inherit a ref from the caller.<br>
++ */<br>
++static void netfs_rreq_terminated(struct netfs_read_request *rreq,<br>
++				  bool was_async)<br>
++{<br>
++	if (test_bit(NETFS_RREQ_INCOMPLETE_IO, &rreq->flags) &&<br>
++	    was_async) {<br>
++		if (!queue_work(system_unbound_wq, &rreq->work))<br>
++			BUG();<br>
++	} else {<br>
++		netfs_rreq_assess(rreq, was_async);<br>
++	}<br>
++}<br>
++<br>
++/**<br>
++ * netfs_subreq_terminated - Note the termination of an I/O operation.<br>
++ * @subreq: The I/O request that has terminated.<br>
++ * @transferred_or_error: The amount of data transferred or an error code.<br>
++ * @was_async: The termination was asynchronous<br>
++ *<br>
++ * This tells the read helper that a contributory I/O operation has terminated,<br>
++ * one way or another, and that it should integrate the results.<br>
++ *<br>
++ * The caller indicates in @transferred_or_error the outcome of the operation,<br>
++ * supplying a positive value to indicate the number of bytes transferred, 0 to<br>
++ * indicate a failure to transfer anything that should be retried or a negative<br>
++ * error code.  The helper will look after reissuing I/O operations as<br>
++ * appropriate and writing downloaded data to the cache.<br>
++ *<br>
++ * If @was_async is true, the caller might be running in softirq or interrupt<br>
++ * context and we can't sleep.<br>
++ */<br>
++void netfs_subreq_terminated(struct netfs_read_subrequest *subreq,<br>
++			     ssize_t transferred_or_error,<br>
++			     bool was_async)<br>
++{<br>
++	struct netfs_read_request *rreq = subreq->rreq;<br>
++	int u;<br>
++<br>
++	_enter("[%u]{%llx,%lx},%zd",<br>
++	       subreq->debug_index, subreq->start, subreq->flags,<br>
++	       transferred_or_error);<br>
++<br>
++	if (IS_ERR_VALUE(transferred_or_error)) {<br>
++		subreq->error = transferred_or_error;<br>
++		goto failed;<br>
++	}<br>
++<br>
++	if (WARN(transferred_or_error > subreq->len - subreq->transferred,<br>
++		 "Subreq overread: R%x[%x] %zd > %zu - %zu",<br>
++		 rreq->debug_id, subreq->debug_index,<br>
++		 transferred_or_error, subreq->len, subreq->transferred))<br>
++		transferred_or_error = subreq->len - subreq->transferred;<br>
++<br>
++	subreq->error = 0;<br>
++	subreq->transferred += transferred_or_error;<br>
++	if (subreq->transferred < subreq->len)<br>
++		goto incomplete;<br>
++<br>
++complete:<br>
++	__clear_bit(NETFS_SREQ_NO_PROGRESS, &subreq->flags);<br>
++	if (test_bit(NETFS_SREQ_WRITE_TO_CACHE, &subreq->flags))<br>
++		set_bit(NETFS_RREQ_WRITE_TO_CACHE, &rreq->flags);<br>
++<br>
++out:<br>
++	/* If we decrement nr_rd_ops to 0, the ref belongs to us. */<br>
++	u = atomic_dec_return(&rreq->nr_rd_ops);<br>
++	if (u == 0)<br>
++		netfs_rreq_terminated(rreq, was_async);<br>
++	else if (u == 1)<br>
++		wake_up_var(&rreq->nr_rd_ops);<br>
++<br>
++	netfs_put_subrequest(subreq, was_async);<br>
++	return;<br>
++<br>
++incomplete:<br>
++	if (test_bit(NETFS_SREQ_CLEAR_TAIL, &subreq->flags)) {<br>
++		netfs_clear_unread(subreq);<br>
++		subreq->transferred = subreq->len;<br>
++		goto complete;<br>
++	}<br>
++<br>
++	if (transferred_or_error == 0) {<br>
++		if (__test_and_set_bit(NETFS_SREQ_NO_PROGRESS, &subreq->flags)) {<br>
++			subreq->error = -ENODATA;<br>
++			goto failed;<br>
++		}<br>
++	} else {<br>
++		__clear_bit(NETFS_SREQ_NO_PROGRESS, &subreq->flags);<br>
++	}<br>
++<br>
++	__set_bit(NETFS_SREQ_SHORT_READ, &subreq->flags);<br>
++	set_bit(NETFS_RREQ_INCOMPLETE_IO, &rreq->flags);<br>
++	goto out;<br>
++<br>
++failed:<br>
++	if (subreq->source == NETFS_READ_FROM_CACHE) {<br>
++		set_bit(NETFS_RREQ_INCOMPLETE_IO, &rreq->flags);<br>
++	} else {<br>
++		set_bit(NETFS_RREQ_FAILED, &rreq->flags);<br>
++		rreq->error = subreq->error;<br>
++	}<br>
++	goto out;<br>
++}<br>
++EXPORT_SYMBOL(netfs_subreq_terminated);<br>
++<br>
++static enum netfs_read_source netfs_cache_prepare_read(struct netfs_read_subrequest *subreq,<br>
++						       loff_t i_size)<br>
++{<br>
++	struct netfs_read_request *rreq = subreq->rreq;<br>
++<br>
++	if (subreq->start >= rreq->i_size)<br>
++		return NETFS_FILL_WITH_ZEROES;<br>
++	return NETFS_DOWNLOAD_FROM_SERVER;<br>
++}<br>
++<br>
++/*<br>
++ * Work out what sort of subrequest the next one will be.<br>
++ */<br>
++static enum netfs_read_source<br>
++netfs_rreq_prepare_read(struct netfs_read_request *rreq,<br>
++			struct netfs_read_subrequest *subreq)<br>
++{<br>
++	enum netfs_read_source source;<br>
++<br>
++	_enter("%llx-%llx,%llx", subreq->start, subreq->start + subreq->len, rreq->i_size);<br>
++<br>
++	source = netfs_cache_prepare_read(subreq, rreq->i_size);<br>
++	if (source == NETFS_INVALID_READ)<br>
++		goto out;<br>
++<br>
++	if (source == NETFS_DOWNLOAD_FROM_SERVER) {<br>
++		/* Call out to the netfs to let it shrink the request to fit<br>
++		 * its own I/O sizes and boundaries.  If it shinks it here, it<br>
++		 * will be called again to make simultaneous calls; if it wants<br>
++		 * to make serial calls, it can indicate a short read and then<br>
++		 * we will call it again.<br>
++		 */<br>
++		if (subreq->len > rreq->i_size - subreq->start)<br>
++			subreq->len = rreq->i_size - subreq->start;<br>
++<br>
++		if (rreq->netfs_ops->clamp_length &&<br>
++		    !rreq->netfs_ops->clamp_length(subreq)) {<br>
++			source = NETFS_INVALID_READ;<br>
++			goto out;<br>
++		}<br>
++	}<br>
++<br>
++	if (WARN_ON(subreq->len == 0))<br>
++		source = NETFS_INVALID_READ;<br>
++<br>
++out:<br>
++	subreq->source = source;<br>
++	return source;<br>
++}<br>
++<br>
++/*<br>
++ * Slice off a piece of a read request and submit an I/O request for it.<br>
++ */<br>
++static bool netfs_rreq_submit_slice(struct netfs_read_request *rreq,<br>
++				    unsigned int *_debug_index)<br>
++{<br>
++	struct netfs_read_subrequest *subreq;<br>
++	enum netfs_read_source source;<br>
++<br>
++	subreq = netfs_alloc_subrequest(rreq);<br>
++	if (!subreq)<br>
++		return false;<br>
++<br>
++	subreq->debug_index	= (*_debug_index)++;<br>
++	subreq->start		= rreq->start + rreq->submitted;<br>
++	subreq->len		= rreq->len   - rreq->submitted;<br>
++<br>
++	_debug("slice %llx,%zx,%zx", subreq->start, subreq->len, rreq->submitted);<br>
++	list_add_tail(&subreq->rreq_link, &rreq->subrequests);<br>
++<br>
++	/* Call out to the cache to find out what it can do with the remaining<br>
++	 * subset.  It tells us in subreq->flags what it decided should be done<br>
++	 * and adjusts subreq->len down if the subset crosses a cache boundary.<br>
++	 *<br>
++	 * Then when we hand the subset, it can choose to take a subset of that<br>
++	 * (the starts must coincide), in which case, we go around the loop<br>
++	 * again and ask it to download the next piece.<br>
++	 */<br>
++	source = netfs_rreq_prepare_read(rreq, subreq);<br>
++	if (source == NETFS_INVALID_READ)<br>
++		goto subreq_failed;<br>
++<br>
++	atomic_inc(&rreq->nr_rd_ops);<br>
++<br>
++	rreq->submitted += subreq->len;<br>
++<br>
++	switch (source) {<br>
++	case NETFS_FILL_WITH_ZEROES:<br>
++		netfs_fill_with_zeroes(rreq, subreq);<br>
++		break;<br>
++	case NETFS_DOWNLOAD_FROM_SERVER:<br>
++		netfs_read_from_server(rreq, subreq);<br>
++		break;<br>
++	default:<br>
++		BUG();<br>
++	}<br>
++<br>
++	return true;<br>
++<br>
++subreq_failed:<br>
++	rreq->error = subreq->error;<br>
++	netfs_put_subrequest(subreq, false);<br>
++	return false;<br>
++}<br>
++<br>
++static void netfs_rreq_expand(struct netfs_read_request *rreq,<br>
++			      struct readahead_control *ractl)<br>
++{<br>
++	/* Give the netfs a chance to change the request parameters.  The<br>
++	 * resultant request must contain the original region.<br>
++	 */<br>
++	if (rreq->netfs_ops->expand_readahead)<br>
++		rreq->netfs_ops->expand_readahead(rreq);<br>
++<br>
++	/* Expand the request if the cache wants it to start earlier.  Note<br>
++	 * that the expansion may get further extended if the VM wishes to<br>
++	 * insert THPs and the preferred start and/or end wind up in the middle<br>
++	 * of THPs.<br>
++	 *<br>
++	 * If this is the case, however, the THP size should be an integer<br>
++	 * multiple of the cache granule size, so we get a whole number of<br>
++	 * granules to deal with.<br>
++	 */<br>
++	if (rreq->start  != readahead_pos(ractl) ||<br>
++	    rreq->len != readahead_length(ractl)) {<br>
++		readahead_expand(ractl, rreq->start, rreq->len);<br>
++		rreq->start  = readahead_pos(ractl);<br>
++		rreq->len = readahead_length(ractl);<br>
++	}<br>
++}<br>
++<br>
++/**<br>
++ * netfs_readahead - Helper to manage a read request<br>
++ * @ractl: The description of the readahead request<br>
++ * @ops: The network filesystem's operations for the helper to use<br>
++ * @netfs_priv: Private netfs data to be retained in the request<br>
++ *<br>
++ * Fulfil a readahead request by drawing data from the cache if possible, or<br>
++ * the netfs if not.  Space beyond the EOF is zero-filled.  Multiple I/O<br>
++ * requests from different sources will get munged together.  If necessary, the<br>
++ * readahead window can be expanded in either direction to a more convenient<br>
++ * alighment for RPC efficiency or to make storage in the cache feasible.<br>
++ *<br>
++ * The calling netfs must provide a table of operations, only one of which,<br>
++ * issue_op, is mandatory.  It may also be passed a private token, which will<br>
++ * be retained in rreq->netfs_priv and will be cleaned up by ops->cleanup().<br>
++ *<br>
++ * This is usable whether or not caching is enabled.<br>
++ */<br>
++void netfs_readahead(struct readahead_control *ractl,<br>
++		     const struct netfs_read_request_ops *ops,<br>
++		     void *netfs_priv)<br>
++{<br>
++	struct netfs_read_request *rreq;<br>
++	struct page *page;<br>
++	unsigned int debug_index = 0;<br>
++<br>
++	_enter("%lx,%x", readahead_index(ractl), readahead_count(ractl));<br>
++<br>
++	if (readahead_count(ractl) == 0)<br>
++		goto cleanup;<br>
++<br>
++	rreq = netfs_alloc_read_request(ops, netfs_priv, ractl->file);<br>
++	if (!rreq)<br>
++		goto cleanup;<br>
++	rreq->mapping	= ractl->mapping;<br>
++	rreq->start	= readahead_pos(ractl);<br>
++	rreq->len	= readahead_length(ractl);<br>
++<br>
++	netfs_rreq_expand(rreq, ractl);<br>
++<br>
++	atomic_set(&rreq->nr_rd_ops, 1);<br>
++	do {<br>
++		if (!netfs_rreq_submit_slice(rreq, &debug_index))<br>
++			break;<br>
++<br>
++	} while (rreq->submitted < rreq->len);<br>
++<br>
++	/* Drop the refs on the pages here rather than in the cache or<br>
++	 * filesystem.  The locks will be dropped in netfs_rreq_unlock().<br>
++	 */<br>
++	while ((page = readahead_page(ractl)))<br>
++		put_page(page);<br>
++<br>
++	/* If we decrement nr_rd_ops to 0, the ref belongs to us. */<br>
++	if (atomic_dec_and_test(&rreq->nr_rd_ops))<br>
++		netfs_rreq_assess(rreq, false);<br>
++	return;<br>
++<br>
++cleanup:<br>
++	if (netfs_priv)<br>
++		ops->cleanup(ractl->mapping, netfs_priv);<br>
++	return;<br>
++}<br>
++EXPORT_SYMBOL(netfs_readahead);<br>
++<br>
++/**<br>
++ * netfs_page - Helper to manage a readpage request<br>
++ * @file: The file to read from<br>
++ * @page: The page to read<br>
++ * @ops: The network filesystem's operations for the helper to use<br>
++ * @netfs_priv: Private netfs data to be retained in the request<br>
++ *<br>
++ * Fulfil a readpage request by drawing data from the cache if possible, or the<br>
++ * netfs if not.  Space beyond the EOF is zero-filled.  Multiple I/O requests<br>
++ * from different sources will get munged together.<br>
++ *<br>
++ * The calling netfs must provide a table of operations, only one of which,<br>
++ * issue_op, is mandatory.  It may also be passed a private token, which will<br>
++ * be retained in rreq->netfs_priv and will be cleaned up by ops->cleanup().<br>
++ *<br>
++ * This is usable whether or not caching is enabled.<br>
++ */<br>
++int netfs_readpage(struct file *file,<br>
++		   struct page *page,<br>
++		   const struct netfs_read_request_ops *ops,<br>
++		   void *netfs_priv)<br>
++{<br>
++	struct netfs_read_request *rreq;<br>
++	unsigned int debug_index = 0;<br>
++	int ret;<br>
++<br>
++	_enter("%lx", page_index(page));<br>
++<br>
++	rreq = netfs_alloc_read_request(ops, netfs_priv, file);<br>
++	if (!rreq) {<br>
++		if (netfs_priv)<br>
++			ops->cleanup(netfs_priv, page_file_mapping(page));<br>
++		unlock_page(page);<br>
++		return -ENOMEM;<br>
++	}<br>
++	rreq->mapping	= page_file_mapping(page);<br>
++	rreq->start	= page_index(page) * PAGE_SIZE;<br>
++	rreq->len	= thp_size(page);<br>
++<br>
++	netfs_get_read_request(rreq);<br>
++<br>
++	atomic_set(&rreq->nr_rd_ops, 1);<br>
++	do {<br>
++		if (!netfs_rreq_submit_slice(rreq, &debug_index))<br>
++			break;<br>
++<br>
++	} while (rreq->submitted < rreq->len);<br>
++<br>
++	/* Keep nr_rd_ops incremented so that the ref always belongs to us, and<br>
++	 * the service code isn't punted off to a random thread pool to<br>
++	 * process.<br>
++	 */<br>
++	do {<br>
++		wait_var_event(&rreq->nr_rd_ops, atomic_read(&rreq->nr_rd_ops) == 1);<br>
++		netfs_rreq_assess(rreq, false);<br>
++	} while (test_bit(NETFS_RREQ_IN_PROGRESS, &rreq->flags));<br>
++<br>
++	ret = rreq->error;<br>
++	if (ret == 0 && rreq->submitted < rreq->len)<br>
++		ret = -EIO;<br>
++	netfs_put_read_request(rreq, false);<br>
++	return ret;<br>
++}<br>
++EXPORT_SYMBOL(netfs_readpage);<br>
+diff --git a/include/linux/netfs.h b/include/linux/netfs.h<br>
+index 8479d63406f7..59e926e62d2e 100644<br>
+--- a/include/linux/netfs.h<br>
++++ b/include/linux/netfs.h<br>
+@@ -14,6 +14,8 @@<br>
+ #ifndef _LINUX_NETFS_H<br>
+ #define _LINUX_NETFS_H<br>
+ <br>
++#include <linux/workqueue.h><br>
++#include <linux/fs.h><br>
+ #include <linux/pagemap.h><br>
+ <br>
+ /*<br>
+@@ -83,4 +85,85 @@ static inline int wait_on_page_fscache_killable(struct page *page)<br>
+ 	return wait_on_page_private_2_killable(page);<br>
+ }<br>
+ <br>
++enum netfs_read_source {<br>
++	NETFS_FILL_WITH_ZEROES,<br>
++	NETFS_DOWNLOAD_FROM_SERVER,<br>
++	NETFS_READ_FROM_CACHE,<br>
++	NETFS_INVALID_READ,<br>
++} __mode(byte);<br>
++<br>
++/*<br>
++ * Descriptor for a single component subrequest.<br>
++ */<br>
++struct netfs_read_subrequest {<br>
++	struct netfs_read_request *rreq;	/* Supervising read request */<br>
++	struct list_head	rreq_link;	/* Link in rreq->subrequests */<br>
++	loff_t			start;		/* Where to start the I/O */<br>
++	size_t			len;		/* Size of the I/O */<br>
++	size_t			transferred;	/* Amount of data transferred */<br>
++	refcount_t		usage;<br>
++	short			error;		/* 0 or error that occurred */<br>
++	unsigned short		debug_index;	/* Index in list (for debugging output) */<br>
++	enum netfs_read_source	source;		/* Where to read from */<br>
++	unsigned long		flags;<br>
++#define NETFS_SREQ_WRITE_TO_CACHE	0	/* Set if should write to cache */<br>
++#define NETFS_SREQ_CLEAR_TAIL		1	/* Set if the rest of the read should be cleared */<br>
++#define NETFS_SREQ_SHORT_READ		2	/* Set if there was a short read from the cache */<br>
++#define NETFS_SREQ_SEEK_DATA_READ	3	/* Set if ->read() should SEEK_DATA first */<br>
++#define NETFS_SREQ_NO_PROGRESS		4	/* Set if we didn't manage to read any data */<br>
++};<br>
++<br>
++/*<br>
++ * Descriptor for a read helper request.  This is used to make multiple I/O<br>
++ * requests on a variety of sources and then stitch the result together.<br>
++ */<br>
++struct netfs_read_request {<br>
++	struct work_struct	work;<br>
++	struct inode		*inode;		/* The file being accessed */<br>
++	struct address_space	*mapping;	/* The mapping being accessed */<br>
++	struct list_head	subrequests;	/* Requests to fetch I/O from disk or net */<br>
++	void			*netfs_priv;	/* Private data for the netfs */<br>
++	unsigned int		debug_id;<br>
++	atomic_t		nr_rd_ops;	/* Number of read ops in progress */<br>
++	size_t			submitted;	/* Amount submitted for I/O so far */<br>
++	size_t			len;		/* Length of the request */<br>
++	short			error;		/* 0 or error that occurred */<br>
++	loff_t			i_size;		/* Size of the file */<br>
++	loff_t			start;		/* Start position */<br>
++	pgoff_t			no_unlock_page;	/* Don't unlock this page after read */<br>
++	refcount_t		usage;<br>
++	unsigned long		flags;<br>
++#define NETFS_RREQ_INCOMPLETE_IO	0	/* Some ioreqs terminated short or with error */<br>
++#define NETFS_RREQ_WRITE_TO_CACHE	1	/* Need to write to the cache */<br>
++#define NETFS_RREQ_NO_UNLOCK_PAGE	2	/* Don't unlock no_unlock_page on completion */<br>
++#define NETFS_RREQ_DONT_UNLOCK_PAGES	3	/* Don't unlock the pages on completion */<br>
++#define NETFS_RREQ_FAILED		4	/* The request failed */<br>
++#define NETFS_RREQ_IN_PROGRESS		5	/* Unlocked when the request completes */<br>
++	const struct netfs_read_request_ops *netfs_ops;<br>
++};<br>
++<br>
++/*<br>
++ * Operations the network filesystem can/must provide to the helpers.<br>
++ */<br>
++struct netfs_read_request_ops {<br>
++	void (*init_rreq)(struct netfs_read_request *rreq, struct file *file);<br>
++	void (*expand_readahead)(struct netfs_read_request *rreq);<br>
++	bool (*clamp_length)(struct netfs_read_subrequest *subreq);<br>
++	void (*issue_op)(struct netfs_read_subrequest *subreq);<br>
++	bool (*is_still_valid)(struct netfs_read_request *rreq);<br>
++	void (*done)(struct netfs_read_request *rreq);<br>
++	void (*cleanup)(struct address_space *mapping, void *netfs_priv);<br>
++};<br>
++<br>
++struct readahead_control;<br>
++extern void netfs_readahead(struct readahead_control *,<br>
++			    const struct netfs_read_request_ops *,<br>
++			    void *);<br>
++extern int netfs_readpage(struct file *,<br>
++			  struct page *,<br>
++			  const struct netfs_read_request_ops *,<br>
++			  void *);<br>
++<br>
++extern void netfs_subreq_terminated(struct netfs_read_subrequest *, ssize_t, bool);<br>
++<br>
+ #endif /* _LINUX_NETFS_H */<br>
+<br>
+<br>
+<br>
+

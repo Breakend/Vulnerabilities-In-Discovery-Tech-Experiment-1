@@ -1,0 +1,54 @@
+Add SMP2P nodes for the SDX55 platform to communicate with the modem.<br>
+<br>
+Signed-off-by: Manivannan Sadhasivam <manivannan.sadhasivam@xxxxxxxxxx><br>
+---<br>
+ arch/arm/boot/dts/qcom-sdx55.dtsi | 31 +++++++++++++++++++++++++++++++<br>
+ 1 file changed, 31 insertions(+)<br>
+<br>
+diff --git a/arch/arm/boot/dts/qcom-sdx55.dtsi b/arch/arm/boot/dts/qcom-sdx55.dtsi<br>
+index 20cb2c903a91..f2805b526516 100644<br>
+--- a/arch/arm/boot/dts/qcom-sdx55.dtsi<br>
++++ b/arch/arm/boot/dts/qcom-sdx55.dtsi<br>
+@@ -148,6 +148,37 @@ smem {<br>
+ 		hwlocks = <&tcsr_mutex 3>;<br>
+ 	};<br>
+ <br>
++	smp2p-mpss {<br>
++		compatible = "qcom,smp2p";<br>
++		qcom,smem = <435>, <428>;<br>
++		interrupts = <GIC_SPI 113 IRQ_TYPE_EDGE_RISING>;<br>
++		mboxes = <&apcs 14>;<br>
++		qcom,local-pid = <0>;<br>
++		qcom,remote-pid = <1>;<br>
++<br>
++		modem_smp2p_out: master-kernel {<br>
++			qcom,entry-name = "master-kernel";<br>
++			#qcom,smem-state-cells = <1>;<br>
++		};<br>
++<br>
++		modem_smp2p_in: slave-kernel {<br>
++			qcom,entry-name = "slave-kernel";<br>
++			interrupt-controller;<br>
++			#interrupt-cells = <2>;<br>
++		};<br>
++<br>
++		ipa_smp2p_out: ipa-ap-to-modem {<br>
++			qcom,entry-name = "ipa";<br>
++			#qcom,smem-state-cells = <1>;<br>
++		};<br>
++<br>
++		ipa_smp2p_in: ipa-modem-to-ap {<br>
++			qcom,entry-name = "ipa";<br>
++			interrupt-controller;<br>
++			#interrupt-cells = <2>;<br>
++		};<br>
++	};<br>
++<br>
+ 	soc: soc {<br>
+ 		#address-cells = <1>;<br>
+ 		#size-cells = <1>;<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

@@ -1,0 +1,60 @@
+<br>
+<br>
+On 4/7/21 4:07 PM, Sean Christopherson wrote:<br>
+><i> On Wed, Apr 07, 2021, Tom Lendacky wrote:</i><br>
+><i>> On 4/7/21 3:08 PM, Sean Christopherson wrote:</i><br>
+><i>>> On Wed, Apr 07, 2021, Tom Lendacky wrote:</i><br>
+><i>>>> From: Tom Lendacky <thomas.lendacky@xxxxxxx></i><br>
+><i>>>></i><br>
+><i>>>> The sev_vcpu_deliver_sipi_vector() routine will update the GHCB to inform</i><br>
+><i>>>> the caller of the AP Reset Hold NAE event that a SIPI has been delivered.</i><br>
+><i>>>> However, if a SIPI is performed without a corresponding AP Reset Hold,</i><br>
+><i>>>> then the GHCB may not be mapped, which will result in a NULL pointer</i><br>
+><i>>>> dereference.</i><br>
+><i>>>></i><br>
+><i>>>> Check that the GHCB is mapped before attempting the update.</i><br>
+><i>>></i><br>
+><i>>> It's tempting to say the ghcb_set_*() helpers should guard against this, but</i><br>
+><i>>> that would add a lot of pollution and the vast majority of uses are very clearly</i><br>
+><i>>> in the vmgexit path.  svm_complete_emulated_msr() is the only other case that</i><br>
+><i>>> is non-obvious; would it make sense to sanity check svm->ghcb there as well?</i><br>
+><i>></i><br>
+><i>> Hmm... I'm not sure if we can get here without having taken the VMGEXIT</i><br>
+><i>> path to start, but it certainly couldn't hurt to add it.</i><br>
+><i> </i><br>
+><i> Yeah, AFAICT it should be impossible to reach the callback without a valid ghcb,</i><br>
+><i> it'd be purely be a sanity check.</i><br>
+><i>  </i><br>
+><i>> I can submit a v2 with that unless you want to submit it (with one small</i><br>
+><i>> change below).</i><br>
+><i> </i><br>
+><i> I'd say just throw it into v2.</i><br>
+><i> </i><br>
+><i>>> diff --git a/arch/x86/kvm/svm/svm.c b/arch/x86/kvm/svm/svm.c</i><br>
+><i>>> index 019ac836dcd0..abe9c765628f 100644</i><br>
+><i>>> --- a/arch/x86/kvm/svm/svm.c</i><br>
+><i>>> +++ b/arch/x86/kvm/svm/svm.c</i><br>
+><i>>> @@ -2728,7 +2728,8 @@ static int svm_get_msr(struct kvm_vcpu *vcpu, struct msr_data *msr_info)</i><br>
+><i>>>  static int svm_complete_emulated_msr(struct kvm_vcpu *vcpu, int err)</i><br>
+><i>>>  {</i><br>
+><i>>>         struct vcpu_svm *svm = to_svm(vcpu);</i><br>
+><i>>> -       if (!sev_es_guest(vcpu->kvm) || !err)</i><br>
+><i>>> +</i><br>
+><i>>> +       if (!err || !sev_es_guest(vcpu->kvm) || !WARN_ON_ONCE(svm->ghcb))</i><br>
+><i>></i><br>
+><i>> This should be WARN_ON_ONCE(!svm->ghcb), otherwise you'll get the right</i><br>
+><i>> result, but get a stack trace immediately.</i><br>
+><i> </i><br>
+><i> Doh, yep.</i><br>
+<br>
+Actually, because of the "or's", this needs to be:<br>
+<br>
+if (!err || !sev_es_guest(vcpu->kvm) || (sev_es_guest(vcpu->kvm) && WARN_ON_ONCE(!svm->ghcb)))<br>
+<br>
+Thanks,<br>
+Tom<br>
+<br>
+><i> </i><br>
+<br>
+<br>
+

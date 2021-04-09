@@ -1,0 +1,34 @@
+On 4/8/21 4:31 AM, Wang Wensheng wrote:<br>
+><i> Fix to return a negative error code from the error handling</i><br>
+><i> case instead of 0, as done elsewhere in this function.</i><br>
+><i> </i><br>
+><i> Fixes: db7683d7deb2 ("IB/srpt: Fix login-related race conditions")</i><br>
+><i> Reported-by: Hulk Robot <hulkci@xxxxxxxxxx></i><br>
+><i> Signed-off-by: Wang Wensheng <wangwensheng4@xxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  drivers/infiniband/ulp/srpt/ib_srpt.c | 1 +</i><br>
+><i>  1 file changed, 1 insertion(+)</i><br>
+><i> </i><br>
+><i> diff --git a/drivers/infiniband/ulp/srpt/ib_srpt.c b/drivers/infiniband/ulp/srpt/ib_srpt.c</i><br>
+><i> index 98a393d..ea44780 100644</i><br>
+><i> --- a/drivers/infiniband/ulp/srpt/ib_srpt.c</i><br>
+><i> +++ b/drivers/infiniband/ulp/srpt/ib_srpt.c</i><br>
+><i> @@ -2382,6 +2382,7 @@ static int srpt_cm_req_recv(struct srpt_device *const sdev,</i><br>
+><i>  		pr_info("rejected SRP_LOGIN_REQ because target %s_%d is not enabled\n",</i><br>
+><i>  			dev_name(&sdev->device->dev), port_num);</i><br>
+><i>  		mutex_unlock(&sport->mutex);</i><br>
+><i> +		ret = -EINVAL;</i><br>
+><i>  		goto reject;</i><br>
+><i>  	}</i><br>
+<br>
+Please fix the Hulk Robot. The following code occurs three lines above<br>
+the modified code:<br>
+<br>
+	ret = -EINVAL;<br>
+<br>
+Thanks,<br>
+<br>
+Bart.<br>
+<br>
+<br>
+

@@ -1,0 +1,26 @@
+The snd_soc_dai_ops structures is only stored in the ops field of a<br>
+snd_soc_dai_driver structure, so make the snd_soc_dai_ops structure<br>
+const to allow the compiler to put it in read-only memory.<br>
+<br>
+Reported-by: Hulk Robot <hulkci@xxxxxxxxxx><br>
+Signed-off-by: Ye Bin <yebin10@xxxxxxxxxx><br>
+---<br>
+ sound/soc/codecs/rt1019.c | 2 +-<br>
+ 1 file changed, 1 insertion(+), 1 deletion(-)<br>
+<br>
+diff --git a/sound/soc/codecs/rt1019.c b/sound/soc/codecs/rt1019.c<br>
+index 5138f028d9f2..f64bb7302720 100644<br>
+--- a/sound/soc/codecs/rt1019.c<br>
++++ b/sound/soc/codecs/rt1019.c<br>
+@@ -823,7 +823,7 @@ static int rt1019_probe(struct snd_soc_component *component)<br>
+ #define RT1019_FORMATS (SNDRV_PCM_FMTBIT_S16_LE | SNDRV_PCM_FMTBIT_S20_3LE | \<br>
+ 			SNDRV_PCM_FMTBIT_S24_LE | SNDRV_PCM_FMTBIT_S8)<br>
+ <br>
+-static struct snd_soc_dai_ops rt1019_aif_dai_ops = {<br>
++static const struct snd_soc_dai_ops rt1019_aif_dai_ops = {<br>
+ 	.hw_params = rt1019_hw_params,<br>
+ 	.set_fmt = rt1019_set_dai_fmt,<br>
+ 	.set_sysclk = rt1019_set_dai_sysclk,<br>
+<br>
+<br>
+

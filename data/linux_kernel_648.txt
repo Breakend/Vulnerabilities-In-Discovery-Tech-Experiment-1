@@ -1,0 +1,61 @@
+<br>
+<br>
+><i> On Apr 8, 2021, at 10:20 AM, Jiri Olsa <jolsa@xxxxxxxxxx> wrote:</i><br>
+><i> </i><br>
+><i> On Thu, Apr 08, 2021 at 04:39:33PM +0000, Song Liu wrote:</i><br>
+><i>> </i><br>
+><i>> </i><br>
+><i>>> On Apr 8, 2021, at 4:47 AM, Jiri Olsa <jolsa@xxxxxxxxxx> wrote:</i><br>
+><i>>> </i><br>
+><i>>> On Tue, Apr 06, 2021 at 05:36:01PM -0700, Song Liu wrote:</i><br>
+><i>>>> Currently, to use BPF to aggregate perf event counters, the user uses</i><br>
+><i>>>> --bpf-counters option. Enable "use bpf by default" events with a config</i><br>
+><i>>>> option, stat.bpf-counter-events. This is limited to hardware events in</i><br>
+><i>>>> evsel__hw_names.</i><br>
+><i>>>> </i><br>
+><i>>>> This also enables mixed BPF event and regular event in the same sesssion.</i><br>
+><i>>>> For example:</i><br>
+><i>>>> </i><br>
+><i>>>>  perf config stat.bpf-counter-events=instructions</i><br>
+><i>>>>  perf stat -e instructions,cs</i><br>
+><i>>>> </i><br>
+><i>>> </i><br>
+><i>>> so if we are mixing events now, how about uing modifier for bpf counters,</i><br>
+><i>>> instead of configuring .perfconfig list we could use:</i><br>
+><i>>> </i><br>
+><i>>> perf stat -e instructions:b,cs</i><br>
+><i>>> </i><br>
+><i>>> thoughts?</i><br>
+><i>>> </i><br>
+><i>>> the change below adds 'b' modifier and sets 'evsel::bpf_counter',</i><br>
+><i>>> feel free to use it</i><br>
+><i>> </i><br>
+><i>> I think we will need both 'b' modifier and .perfconfig configuration. </i><br>
+><i>> For systems with BPF-managed perf events running in the background, </i><br>
+><i> </i><br>
+><i> hum, I'm not sure I understand what that means.. you mean there</i><br>
+><i> are tools that run perf stat so you don't want to change them?</i><br>
+<br>
+We have tools that do perf_event_open(). I will change them to use <br>
+BPF managed perf events for "cycles" and "instructions". Since these <br>
+tools are running 24/7, perf-stat on the system should use BPF managed<br>
+"cycles" and "instructions" by default. <br>
+<br>
+><i> </i><br>
+><i>> .perfconfig makes sure perf-stat sessions will share PMCs with these </i><br>
+><i>> background monitoring tools. 'b' modifier, on the other hand, is useful</i><br>
+><i>> when the user knows there is opportunity to share the PMCs. </i><br>
+><i>> </i><br>
+><i>> Does this make sense? </i><br>
+><i> </i><br>
+><i> if there's reason for that then sure.. but let's not limit that just</i><br>
+><i> on HARDWARE events only.. there are RAW events with the same demand</i><br>
+><i> for this feature.. why don't we let user define any event for this?</i><br>
+<br>
+I haven't found a good way to config RAW events. I guess RAW events <br>
+could use 'b' modifier? <br>
+<br>
+Thanks,<br>
+Song<br>
+<br>
+

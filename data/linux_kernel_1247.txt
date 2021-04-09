@@ -1,0 +1,61 @@
+On Thu, Apr 08, 2021 at 10:49:02AM +0530, Anshuman Khandual wrote:<br>
+><i> Adding James here.</i><br>
+><i> </i><br>
+><i> + James Morse <james.morse@xxxxxxx></i><br>
+><i> </i><br>
+><i> On 4/7/21 10:56 PM, Mike Rapoport wrote:</i><br>
+><i> > From: Mike Rapoport <rppt@xxxxxxxxxxxxx></i><br>
+><i> > </i><br>
+><i> > Hi,</i><br>
+><i> > </i><br>
+><i> > These patches aim to remove CONFIG_HOLES_IN_ZONE and essentially hardwire</i><br>
+><i> > pfn_valid_within() to 1. </i><br>
+><i> </i><br>
+><i> That would be really great for arm64 platform as it will save CPU cycles on</i><br>
+><i> many generic MM paths, given that our pfn_valid() has been expensive.</i><br>
+><i> </i><br>
+><i> > </i><br>
+><i> > The idea is to mark NOMAP pages as reserved in the memory map and restore</i><br>
+><i> </i><br>
+><i> Though I am not really sure, would that possibly be problematic for UEFI/EFI</i><br>
+><i> use cases as it might have just treated them as normal struct pages till now.</i><br>
+<br>
+I don't think there should be a problem because now the struct pages for<br>
+UEFI/ACPI never got to be used by the core mm. They were (rightfully)<br>
+skipped by memblock_free_all() from one side and pfn_valid() and<br>
+pfn_valid_within() return false for them in various pfn walkers from the<br>
+other side.<br>
+ <br>
+><i> > the intended semantics of pfn_valid() to designate availability of struct</i><br>
+><i> > page for a pfn.</i><br>
+><i> </i><br>
+><i> Right, that would be better as the current semantics is not ideal.</i><br>
+><i> </i><br>
+><i> > </i><br>
+><i> > With this the core mm will be able to cope with the fact that it cannot use</i><br>
+><i> > NOMAP pages and the holes created by NOMAP ranges within MAX_ORDER blocks</i><br>
+><i> > will be treated correctly even without the need for pfn_valid_within.</i><br>
+><i> > </i><br>
+><i> > The patches are only boot tested on qemu-system-aarch64 so I'd really</i><br>
+><i> > appreciate memory stress tests on real hardware.</i><br>
+><i> </i><br>
+><i> Did some preliminary memory stress tests on a guest with portions of memory</i><br>
+><i> marked as MEMBLOCK_NOMAP and did not find any obvious problem. But this might</i><br>
+><i> require some testing on real UEFI environment with firmware using MEMBLOCK_NOMAP</i><br>
+><i> memory to make sure that changing these struct pages to PageReserved() is safe.</i><br>
+<br>
+I surely have no access for such machines :)<br>
+ <br>
+><i> > If this actually works we'll be one step closer to drop custom pfn_valid()</i><br>
+><i> > on arm64 altogether.</i><br>
+><i> </i><br>
+><i> Right, planning to rework and respin the RFC originally sent last month.</i><br>
+><i> </i><br>
+><i> <a  rel="nofollow" href="https://patchwork.kernel.org/project/linux-mm/patch/1615174073-10520-1-git-send-email-anshuman.khandual@xxxxxxx/">https://patchwork.kernel.org/project/linux-mm/patch/1615174073-10520-1-git-send-email-anshuman.khandual@xxxxxxx/</a></i><br>
+<br>
+-- <br>
+Sincerely yours,<br>
+Mike.<br>
+<br>
+<br>
+

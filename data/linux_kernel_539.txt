@@ -1,0 +1,56 @@
+Remove the 2 users of tty_err() and replace it with calls to dev_err()<br>
+which provides more information about the tty that has the error and<br>
+uses the standard formatting logic.<br>
+<br>
+Cc: Tetsuo Handa <penguin-kernel@xxxxxxxxxxxxxxxxxxx><br>
+Cc: Jiri Slaby <jirislaby@xxxxxxxxxx><br>
+Signed-off-by: Greg Kroah-Hartman <gregkh@xxxxxxxxxxxxxxxxxxx><br>
+---<br>
+ drivers/tty/n_tty.c  | 2 +-<br>
+ drivers/tty/tty.h    | 1 -<br>
+ drivers/tty/tty_io.c | 2 +-<br>
+ 3 files changed, 2 insertions(+), 3 deletions(-)<br>
+<br>
+diff --git a/drivers/tty/n_tty.c b/drivers/tty/n_tty.c<br>
+index ff1b3154ba0c..dbe208342258 100644<br>
+--- a/drivers/tty/n_tty.c<br>
++++ b/drivers/tty/n_tty.c<br>
+@@ -1483,7 +1483,7 @@ n_tty_receive_char_flagged(struct tty_struct *tty, unsigned char c, char flag)<br>
+ 		n_tty_receive_overrun(tty);<br>
+ 		break;<br>
+ 	default:<br>
+-		tty_err(tty, "unknown flag %d\n", flag);<br>
++		dev_err(tty->dev, "unknown flag %d\n", flag);<br>
+ 		break;<br>
+ 	}<br>
+ }<br>
+diff --git a/drivers/tty/tty.h b/drivers/tty/tty.h<br>
+index 75624d7d84ae..eda037c48317 100644<br>
+--- a/drivers/tty/tty.h<br>
++++ b/drivers/tty/tty.h<br>
+@@ -12,7 +12,6 @@<br>
+ #define tty_debug(tty, f, ...)	tty_msg(pr_debug, tty, f, ##__VA_ARGS__)<br>
+ #define tty_notice(tty, f, ...)	tty_msg(pr_notice, tty, f, ##__VA_ARGS__)<br>
+ #define tty_warn(tty, f, ...)	tty_msg(pr_warn, tty, f, ##__VA_ARGS__)<br>
+-#define tty_err(tty, f, ...)	tty_msg(pr_err, tty, f, ##__VA_ARGS__)<br>
+ <br>
+ #define tty_info_ratelimited(tty, f, ...) \<br>
+ 		tty_msg(pr_info_ratelimited, tty, f, ##__VA_ARGS__)<br>
+diff --git a/drivers/tty/tty_io.c b/drivers/tty/tty_io.c<br>
+index c95f72085cdb..f8b96f3674af 100644<br>
+--- a/drivers/tty/tty_io.c<br>
++++ b/drivers/tty/tty_io.c<br>
+@@ -1124,7 +1124,7 @@ static ssize_t file_tty_write(struct file *file, struct kiocb *iocb, struct iov_<br>
+ 			return -EIO;<br>
+ 	/* Short term debug to catch buggy drivers */<br>
+ 	if (tty->ops->write_room == NULL)<br>
+-		tty_err(tty, "missing write_room method\n");<br>
++		dev_err(tty->dev, "missing write_room method\n");<br>
+ 	ld = tty_ldisc_ref_wait(tty);<br>
+ 	if (!ld)<br>
+ 		return hung_up_tty_write(iocb, from);<br>
+-- <br>
+2.31.1<br>
+<br>
+<br>
+

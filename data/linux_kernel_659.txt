@@ -1,0 +1,41 @@
+Hi Shyam,<br>
+<br>
+On Tue, Apr 06, 2021 at 05:01:17PM +0200, Salvatore Bonaccorso wrote:<br>
+><i> Hi,</i><br>
+><i> </i><br>
+><i> On Tue, Apr 06, 2021 at 02:00:48PM +0000, Shyam Prasad wrote:</i><br>
+><i> > Hi Greg,</i><br>
+><i> > We'll need to debug this further to understand what's going on. </i><br>
+><i> </i><br>
+><i> Greg asked it the same happens with 5.4 as well, I do not know I was</i><br>
+><i> not able to test 5.4.y (yet) but only 5.10.y and 4.19.y.</i><br>
+><i> > </i><br>
+><i> > Hi Salvatore,</i><br>
+><i> > Any chance that you'll be able to provide us the cifsFYI logs from the time of mount failure?</i><br>
+><i> > <a  rel="nofollow" href="https://wiki.samba.org/index.php/LinuxCIFS_troubleshooting#Enabling_Debugging">https://wiki.samba.org/index.php/LinuxCIFS_troubleshooting#Enabling_Debugging</a></i><br>
+><i> </i><br>
+><i> Please find it attached. Is this enough information?</i><br>
+><i> </i><br>
+><i> The mentioned home DFS link 'home' is a DFS link to</i><br>
+><i> msdfs:SECONDHOST\REDACTED on a Samba host.</i><br>
+><i> </i><br>
+><i> The mount is triggered as</i><br>
+><i> </i><br>
+><i> mount -t cifs //HOSTIP/REDACTED/home /mnt --verbose -o username='REDACTED,domain=DOMAIN'</i><br>
+<br>
+So I can confirm the issue is both present in 4.19.185 and 5.4.110<br>
+upstream (without any Debian patches applied, we do not anyway apply<br>
+any cifs related one on top of the respetive upstream version).<br>
+<br>
+The issue is not present in 5.10.28.<br>
+<br>
+So I think there are commits as dependency of a738c93fb1c1 ("cifs: Set<br>
+CIFS_MOUNT_USE_PREFIX_PATH flag on setting cifs_sb->prepath.") which<br>
+are required and not applied in the released before 5.10.y which make<br>
+introducing the regression.<br>
+<br>
+Regards,<br>
+Salvatore<br>
+<br>
+<br>
+

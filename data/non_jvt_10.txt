@@ -1,0 +1,24 @@
+ From: Yiannis via GitHub <sysbot+gh@w3.org>
+Date: Tue, 02 Feb 2021 23:17:09 +0000
+To: public-webrtc@w3.org
+Message-ID: <issues.opened-799807581-1612307828-sysbot+gh@w3.org>
+
+yiannisy has just created a new issue for https://github.com/w3c/webrtc-extensions:
+
+== Network Tokens and WebRTC QoS ==
+Hi,
+
+--- I posted this on webrtc-qos and got redirected here by @alvestrand ---
+
+Not sure if this is the right place, but wanted to bring into your attention network tokens (https://networktokens.org), a new project/IETF I-D that might be relevant with WebRTC and QoS.
+
+In a nutshell: Network tokens are an open and secure method for end users and application providers to coordinate with the network about how their traffic is treated ( e.g., to access a 5G slice, a firewall whitelist, a zero-rating, or a QoS service ). Network Tokens replace complex, insecure, and privacy-invasive DPI application signatures with a deterministic and unified mechanism to build network services, and complement DSCP codepoints across network boundaries.
+
+We have a prototype implementation using network tokens as part of WebRTC, and I'd be very interested to understand what's the best way to engage with the WebRTC group and get feedback/guidance on next steps.
+
+Please view or discuss this issue at https://github.com/w3c/webrtc-extensions/issues/68 using your GitHub account
+
+
+-- 
+Sent via github-notify-ml as configured in https://github.com/w3c/github-notify-ml-config
+

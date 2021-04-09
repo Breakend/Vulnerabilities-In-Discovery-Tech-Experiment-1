@@ -1,0 +1,44 @@
+Change hierachy to hierarchy and unrechable to unreachable,<br>
+no functionality changed.<br>
+<br>
+Signed-off-by: Lu Jialin <lujialin4@xxxxxxxxxx><br>
+---<br>
+ kernel/cgroup/cpuset.c | 6 +++---<br>
+ 1 file changed, 3 insertions(+), 3 deletions(-)<br>
+<br>
+diff --git a/kernel/cgroup/cpuset.c b/kernel/cgroup/cpuset.c<br>
+index 5258b68153e0..a945504c0ae7 100644<br>
+--- a/kernel/cgroup/cpuset.c<br>
++++ b/kernel/cgroup/cpuset.c<br>
+@@ -585,7 +585,7 @@ static int validate_change(struct cpuset *cur, struct cpuset *trial)<br>
+ <br>
+ 	par = parent_cs(cur);<br>
+ <br>
+-	/* On legacy hiearchy, we must be a subset of our parent cpuset. */<br>
++	/* On legacy hierarchy, we must be a subset of our parent cpuset. */<br>
+ 	ret = -EACCES;<br>
+ 	if (!is_in_v2_mode() && !is_cpuset_subset(trial, par))<br>
+ 		goto out;<br>
+@@ -1726,7 +1726,7 @@ static void update_tasks_nodemask(struct cpuset *cs)<br>
+  * When configured nodemask is changed, the effective nodemasks of this cpuset<br>
+  * and all its descendants need to be updated.<br>
+  *<br>
+- * On legacy hiearchy, effective_mems will be the same with mems_allowed.<br>
++ * On legacy hierarchy, effective_mems will be the same with mems_allowed.<br>
+  *<br>
+  * Called with cpuset_mutex held<br>
+  */<br>
+@@ -2500,7 +2500,7 @@ static s64 cpuset_read_s64(struct cgroup_subsys_state *css, struct cftype *cft)<br>
+ 		BUG();<br>
+ 	}<br>
+ <br>
+-	/* Unrechable but makes gcc happy */<br>
++	/* Unreachable but makes gcc happy */<br>
+ 	return 0;<br>
+ }<br>
+ <br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+

@@ -1,0 +1,36 @@
+Kunpeng920's EHCI controller does not have SBRN register.<br>
+Reading the SBRN register when the controller driver is<br>
+initialized will get 0.<br>
+<br>
+When rebooting the EHCI driver, ehci_shutdown() will be called.<br>
+if the sbrn flag is 0, ehci_shutdown() will return directly.<br>
+The sbrn flag being 0 will cause the EHCI interrupt signal to<br>
+not be turned off after reboot. this interrupt that is not closed<br>
+will cause an exception to the device sharing the interrupt.<br>
+<br>
+Therefore, the EHCI controller of kunpeng920 needs to be added<br>
+to the whitelist without SBRN register.<br>
+<br>
+Signed-off-by: Longfang Liu <liulongfang@xxxxxxxxxx><br>
+---<br>
+ drivers/usb/host/ehci-pci.c | 2 ++<br>
+ 1 file changed, 2 insertions(+)<br>
+<br>
+diff --git a/drivers/usb/host/ehci-pci.c b/drivers/usb/host/ehci-pci.c<br>
+index 534e906..7bd075c 100644<br>
+--- a/drivers/usb/host/ehci-pci.c<br>
++++ b/drivers/usb/host/ehci-pci.c<br>
+@@ -53,6 +53,8 @@ static const struct usb_nosbrn_whitelist_entry {<br>
+ } usb_nosbrn_whitelist[] = {<br>
+ 	/* STMICRO ConneXT has no sbrn register */<br>
+ 	{PCI_VENDOR_ID_STMICRO, PCI_DEVICE_ID_STMICRO_USB_HOST},<br>
++	/* HUAWEI Kunpeng920 HiSilicon USB EHCI has no sbrn register */<br>
++	{PCI_VENDOR_ID_HUAWEI, 0xa239},<br>
+ 	/* End of list */<br>
+ 	{NULL, NULL}<br>
+ };<br>
+-- <br>
+2.8.1<br>
+<br>
+<br>
+

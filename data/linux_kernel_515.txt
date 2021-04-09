@@ -1,0 +1,107 @@
+On Thu, Apr 8, 2021 at 3:06 PM Gioh Kim <gi-oh.kim@xxxxxxxxx> wrote:<br>
+><i></i><br>
+><i> As the name shows, it checks if strings are equal in case insensitive</i><br>
+><i> manner.</i><br>
+><i></i><br>
+><i> For example, drivers/infiniband/ulp/rtrs/rtrs-clt-sysfs.c uses</i><br>
+><i> strncasecmp to check that the input via sysfs is "mi". But it would</i><br>
+><i> work even-if the input is "min-wrongcommand".</i><br>
+><i></i><br>
+><i> I found some more cases using strncasecmp to check the entire string</i><br>
+><i> such as rtrs-clt-sysfs.c does. drivers/pnp/interface.c checks</i><br>
+><i> "disable" command with strncasecmp but it would also work if the</i><br>
+><i> command is "disable-wrong".</i><br>
+><i></i><br>
+><i> Signed-off-by: Gioh Kim <gi-oh.kim@xxxxxxxxx></i><br>
+you should add the<br>
+Reported-by: kernel test robot <lkp@xxxxxxxxx><br>
+><i> ---</i><br>
+you can add the changelog here after the ---<br>
+v4->v3:  removed #ifdef CONFIG_SYSFS ~ #endif.<br>
+<br>
+The string comparison doesn't depends on CONFIG_SYSFS at all.<br>
+<br>
+It looks good to me.<br>
+Reviewed-by: Jack Wang <jinpu.wang@xxxxxxxxx><br>
+<br>
+<br>
+<br>
+><i>  include/linux/string.h |  1 +</i><br>
+><i>  lib/string.c           | 36 ++++++++++++++++++++++++++++--------</i><br>
+><i>  2 files changed, 29 insertions(+), 8 deletions(-)</i><br>
+><i></i><br>
+><i> diff --git a/include/linux/string.h b/include/linux/string.h</i><br>
+><i> index 4fcfb56abcf5..36d00ff8013e 100644</i><br>
+><i> --- a/include/linux/string.h</i><br>
+><i> +++ b/include/linux/string.h</i><br>
+><i> @@ -184,6 +184,7 @@ extern char **argv_split(gfp_t gfp, const char *str, int *argcp);</i><br>
+><i>  extern void argv_free(char **argv);</i><br>
+><i></i><br>
+><i>  extern bool sysfs_streq(const char *s1, const char *s2);</i><br>
+><i> +extern bool sysfs_streqcase(const char *s1, const char *s2);</i><br>
+><i>  extern int kstrtobool(const char *s, bool *res);</i><br>
+><i>  static inline int strtobool(const char *s, bool *res)</i><br>
+><i>  {</i><br>
+><i> diff --git a/lib/string.c b/lib/string.c</i><br>
+><i> index 7548eb715ddb..d0fb02efd5da 100644</i><br>
+><i> --- a/lib/string.c</i><br>
+><i> +++ b/lib/string.c</i><br>
+><i> @@ -687,6 +687,17 @@ char *strsep(char **s, const char *ct)</i><br>
+><i>  EXPORT_SYMBOL(strsep);</i><br>
+><i>  #endif</i><br>
+><i></i><br>
+><i> +static inline bool __streq_terminal(const char *s1, const char *s2)</i><br>
+><i> +{</i><br>
+><i> +       if (*s1 == *s2)</i><br>
+><i> +               return true;</i><br>
+><i> +       if (!*s1 && *s2 == '\n' && !s2[1])</i><br>
+><i> +               return true;</i><br>
+><i> +       if (*s1 == '\n' && !s1[1] && !*s2)</i><br>
+><i> +               return true;</i><br>
+><i> +       return false;</i><br>
+><i> +}</i><br>
+><i> +</i><br>
+><i>  /**</i><br>
+><i>   * sysfs_streq - return true if strings are equal, modulo trailing newline</i><br>
+><i>   * @s1: one string</i><br>
+><i> @@ -703,17 +714,26 @@ bool sysfs_streq(const char *s1, const char *s2)</i><br>
+><i>                 s1++;</i><br>
+><i>                 s2++;</i><br>
+><i>         }</i><br>
+><i> -</i><br>
+><i> -       if (*s1 == *s2)</i><br>
+><i> -               return true;</i><br>
+><i> -       if (!*s1 && *s2 == '\n' && !s2[1])</i><br>
+><i> -               return true;</i><br>
+><i> -       if (*s1 == '\n' && !s1[1] && !*s2)</i><br>
+><i> -               return true;</i><br>
+><i> -       return false;</i><br>
+><i> +       return __streq_terminal(s1, s2);</i><br>
+><i>  }</i><br>
+><i>  EXPORT_SYMBOL(sysfs_streq);</i><br>
+><i></i><br>
+><i> +/**</i><br>
+><i> + * sysfs_streqcase - same to sysfs_streq and case insensitive</i><br>
+><i> + * @s1: one string</i><br>
+><i> + * @s2: another string</i><br>
+><i> + *</i><br>
+><i> + */</i><br>
+><i> +bool sysfs_streqcase(const char *s1, const char *s2)</i><br>
+><i> +{</i><br>
+><i> +       while (*s1 && tolower(*s1) == tolower(*s2)) {</i><br>
+><i> +               s1++;</i><br>
+><i> +               s2++;</i><br>
+><i> +       }</i><br>
+><i> +       return __streq_terminal(s1, s2);</i><br>
+><i> +}</i><br>
+><i> +EXPORT_SYMBOL(sysfs_streqcase);</i><br>
+><i> +</i><br>
+><i>  /**</i><br>
+><i>   * match_string - matches given string in an array</i><br>
+><i>   * @array:     array of strings</i><br>
+><i> --</i><br>
+><i> 2.25.1</i><br>
+><i></i><br>
+<br>
+<br>
+

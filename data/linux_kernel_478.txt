@@ -1,0 +1,173 @@
+With NUMA balancing, in hint page fault handler, the faulting page<br>
+will be migrated to the accessing node if necessary.  During the<br>
+migration, TLB will be shot down on all CPUs that the process has run<br>
+on recently.  Because in the hint page fault handler, the PTE will be<br>
+made accessible before the migration is tried.  The overhead of TLB<br>
+shooting down can be high, so it's better to be avoided if possible.<br>
+In fact, if we delay mapping the page until migration, that can be<br>
+avoided.  This is what this patch doing.<br>
+<br>
+For the multiple threads applications, it's possible that a page is<br>
+accessed by multiple threads almost at the same time.  In the original<br>
+implementation, because the first thread will install the accessible<br>
+PTE before migrating the page, the other threads may access the page<br>
+directly before the page is made inaccessible again during migration.<br>
+While with the patch, the second thread will go through the page fault<br>
+handler too. And because of the PageLRU() checking in the following<br>
+code path,<br>
+<br>
+  migrate_misplaced_page()<br>
+    numamigrate_isolate_page()<br>
+      isolate_lru_page()<br>
+<br>
+the migrate_misplaced_page() will return 0, and the PTE will be made<br>
+accessible in the second thread.<br>
+<br>
+This will introduce a little more overhead.  But we think the<br>
+possibility for a page to be accessed by the multiple threads at the<br>
+same time is low, and the overhead difference isn't too large.  If<br>
+this becomes a problem in some workloads, we need to consider how to<br>
+reduce the overhead.<br>
+<br>
+To test the patch, we run a test case as follows on a 2-socket Intel<br>
+server (1 NUMA node per socket) with 128GB DRAM (64GB per socket).<br>
+<br>
+1. Run a memory eater on NUMA node 1 to use 40GB memory before running<br>
+   pmbench.<br>
+<br>
+2. Run pmbench (normal accessing pattern) with 8 processes, and 8<br>
+   threads per process, so there are 64 threads in total.  The<br>
+   working-set size of each process is 8960MB, so the total working-set<br>
+   size is 8 * 8960MB = 70GB.  The CPU of all pmbench processes is bound<br>
+   to node 1.  The pmbench processes will access some DRAM on node 0.<br>
+<br>
+3. After the pmbench processes run for 10 seconds, kill the memory<br>
+   eater.  Now, some pages will be migrated from node 0 to node 1 via<br>
+   NUMA balancing.<br>
+<br>
+Test results show that, with the patch, the pmbench throughput (page<br>
+accesses/s) increases 5.5%.  The number of the TLB shootdowns<br>
+interrupts reduces 98% (from ~4.7e7 to ~9.7e5) with about 9.2e6<br>
+pages (35.8GB) migrated.  From the perf profile, it can be found that<br>
+the CPU cycles spent by try_to_unmap() and its callees reduces from<br>
+6.02% to 0.47%.  That is, the CPU cycles spent by TLB shooting down<br>
+decreases greatly.<br>
+<br>
+Signed-off-by: "Huang, Ying" <ying.huang@xxxxxxxxx><br>
+Reviewed-by: Mel Gorman <mgorman@xxxxxxx><br>
+Cc: Peter Zijlstra <peterz@xxxxxxxxxxxxx><br>
+Cc: Peter Xu <peterx@xxxxxxxxxx><br>
+Cc: Johannes Weiner <hannes@xxxxxxxxxxx><br>
+Cc: Vlastimil Babka <vbabka@xxxxxxx><br>
+Cc: "Matthew Wilcox" <willy@xxxxxxxxxxxxx><br>
+Cc: Will Deacon <will@xxxxxxxxxx><br>
+Cc: Michel Lespinasse <walken@xxxxxxxxxx><br>
+Cc: Arjun Roy <arjunroy@xxxxxxxxxx><br>
+Cc: "Kirill A. Shutemov" <kirill.shutemov@xxxxxxxxxxxxxxx><br>
+---<br>
+ mm/memory.c | 54 +++++++++++++++++++++++++++++++----------------------<br>
+ 1 file changed, 32 insertions(+), 22 deletions(-)<br>
+<br>
+diff --git a/mm/memory.c b/mm/memory.c<br>
+index cc71a445c76c..7e9d4e55089c 100644<br>
+--- a/mm/memory.c<br>
++++ b/mm/memory.c<br>
+@@ -4159,29 +4159,17 @@ static vm_fault_t do_numa_page(struct vm_fault *vmf)<br>
+ 		goto out;<br>
+ 	}<br>
+ <br>
+-	/*<br>
+-	 * Make it present again, depending on how arch implements<br>
+-	 * non-accessible ptes, some can allow access by kernel mode.<br>
+-	 */<br>
+-	old_pte = ptep_modify_prot_start(vma, vmf->address, vmf->pte);<br>
++	/* Get the normal PTE  */<br>
++	old_pte = ptep_get(vmf->pte);<br>
+ 	pte = pte_modify(old_pte, vma->vm_page_prot);<br>
+-	pte = pte_mkyoung(pte);<br>
+-	if (was_writable)<br>
+-		pte = pte_mkwrite(pte);<br>
+-	ptep_modify_prot_commit(vma, vmf->address, vmf->pte, old_pte, pte);<br>
+-	update_mmu_cache(vma, vmf->address, vmf->pte);<br>
+ <br>
+ 	page = vm_normal_page(vma, vmf->address, pte);<br>
+-	if (!page) {<br>
+-		pte_unmap_unlock(vmf->pte, vmf->ptl);<br>
+-		return 0;<br>
+-	}<br>
++	if (!page)<br>
++		goto out_map;<br>
+ <br>
+ 	/* TODO: handle PTE-mapped THP */<br>
+-	if (PageCompound(page)) {<br>
+-		pte_unmap_unlock(vmf->pte, vmf->ptl);<br>
+-		return 0;<br>
+-	}<br>
++	if (PageCompound(page))<br>
++		goto out_map;<br>
+ <br>
+ 	/*<br>
+ 	 * Avoid grouping on RO pages in general. RO pages shouldn't hurt as<br>
+@@ -4191,7 +4179,7 @@ static vm_fault_t do_numa_page(struct vm_fault *vmf)<br>
+ 	 * pte_dirty has unpredictable behaviour between PTE scan updates,<br>
+ 	 * background writeback, dirty balancing and application behaviour.<br>
+ 	 */<br>
+-	if (!pte_write(pte))<br>
++	if (!was_writable)<br>
+ 		flags |= TNF_NO_GROUP;<br>
+ <br>
+ 	/*<br>
+@@ -4205,23 +4193,45 @@ static vm_fault_t do_numa_page(struct vm_fault *vmf)<br>
+ 	page_nid = page_to_nid(page);<br>
+ 	target_nid = numa_migrate_prep(page, vma, vmf->address, page_nid,<br>
+ 			&flags);<br>
+-	pte_unmap_unlock(vmf->pte, vmf->ptl);<br>
+ 	if (target_nid == NUMA_NO_NODE) {<br>
+ 		put_page(page);<br>
+-		goto out;<br>
++		goto out_map;<br>
+ 	}<br>
++	pte_unmap_unlock(vmf->pte, vmf->ptl);<br>
+ <br>
+ 	/* Migrate to the requested node */<br>
+ 	if (migrate_misplaced_page(page, vma, target_nid)) {<br>
+ 		page_nid = target_nid;<br>
+ 		flags |= TNF_MIGRATED;<br>
+-	} else<br>
++	} else {<br>
+ 		flags |= TNF_MIGRATE_FAIL;<br>
++		vmf->pte = pte_offset_map(vmf->pmd, vmf->address);<br>
++		spin_lock(vmf->ptl);<br>
++		if (unlikely(!pte_same(*vmf->pte, vmf->orig_pte))) {<br>
++			pte_unmap_unlock(vmf->pte, vmf->ptl);<br>
++			goto out;<br>
++		}<br>
++		goto out_map;<br>
++	}<br>
+ <br>
+ out:<br>
+ 	if (page_nid != NUMA_NO_NODE)<br>
+ 		task_numa_fault(last_cpupid, page_nid, 1, flags);<br>
+ 	return 0;<br>
++out_map:<br>
++	/*<br>
++	 * Make it present again, depending on how arch implements<br>
++	 * non-accessible ptes, some can allow access by kernel mode.<br>
++	 */<br>
++	old_pte = ptep_modify_prot_start(vma, vmf->address, vmf->pte);<br>
++	pte = pte_modify(old_pte, vma->vm_page_prot);<br>
++	pte = pte_mkyoung(pte);<br>
++	if (was_writable)<br>
++		pte = pte_mkwrite(pte);<br>
++	ptep_modify_prot_commit(vma, vmf->address, vmf->pte, old_pte, pte);<br>
++	update_mmu_cache(vma, vmf->address, vmf->pte);<br>
++	pte_unmap_unlock(vmf->pte, vmf->ptl);<br>
++	goto out;<br>
+ }<br>
+ <br>
+ static inline vm_fault_t create_huge_pmd(struct vm_fault *vmf)<br>
+-- <br>
+2.30.2<br>
+<br>
+<br>
+

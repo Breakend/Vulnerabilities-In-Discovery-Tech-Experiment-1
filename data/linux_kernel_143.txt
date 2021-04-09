@@ -1,0 +1,33 @@
+The APCS block on SDX55 acts as a mailbox controller and also provides<br>
+clock output for the Cortex A7 CPU.<br>
+<br>
+Signed-off-by: Manivannan Sadhasivam <manivannan.sadhasivam@xxxxxxxxxx><br>
+---<br>
+ arch/arm/boot/dts/qcom-sdx55.dtsi | 9 +++++++++<br>
+ 1 file changed, 9 insertions(+)<br>
+<br>
+diff --git a/arch/arm/boot/dts/qcom-sdx55.dtsi b/arch/arm/boot/dts/qcom-sdx55.dtsi<br>
+index 41c90f598359..8112a5283ce2 100644<br>
+--- a/arch/arm/boot/dts/qcom-sdx55.dtsi<br>
++++ b/arch/arm/boot/dts/qcom-sdx55.dtsi<br>
+@@ -360,6 +360,15 @@ a7pll: clock@17808000 {<br>
+ 			#clock-cells = <0>;<br>
+ 		};<br>
+ <br>
++		apcs: mailbox@17810000 {<br>
++			compatible = "qcom,sdx55-apcs-gcc", "syscon";<br>
++			reg = <0x17810000 0x2000>;<br>
++			#mbox-cells = <1>;<br>
++			clocks = <&rpmhcc RPMH_CXO_CLK>, <&a7pll>, <&gcc GPLL0>;<br>
++			clock-names = "ref", "pll", "aux";<br>
++			#clock-cells = <0>;<br>
++		};<br>
++<br>
+ 		watchdog@17817000 {<br>
+ 			compatible = "qcom,apss-wdt-sdx55", "qcom,kpss-wdt";<br>
+ 			reg = <0x17817000 0x1000>;<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

@@ -1,0 +1,125 @@
+On Wed, 7 Apr 2021 15:26:22 -0700<br>
+Ben Widawsky <ben.widawsky@xxxxxxxxx> wrote:<br>
+<br>
+><i> @cxlm.base only existed to support holding the base found in the</i><br>
+><i> register block mapping code, and pass it along to the register setup</i><br>
+><i> code. Now that the register setup function has all logic around managing</i><br>
+><i> the registers, from DVSEC to iomapping up to populating our CXL specific</i><br>
+><i> information, it is easy to turn the @base values into local variables</i><br>
+><i> and remove them from our device driver state.</i><br>
+><i> </i><br>
+><i> Signed-off-by: Ben Widawsky <ben.widawsky@xxxxxxxxx></i><br>
+<br>
+Patch is basically fine, but I do wonder if you could avoid the<br>
+nasty casting in and out of __iomem in the error paths.<br>
+<br>
+It's a common enough idiom though so I'm not htat fussed.<br>
+<br>
+Acked-by: Jonathan Cameron <Jonathan.Cameron@xxxxxxxxxx><br>
+<br>
+><i> ---</i><br>
+><i>  drivers/cxl/mem.c | 24 +++++++++++-------------</i><br>
+><i>  drivers/cxl/mem.h |  2 --</i><br>
+><i>  2 files changed, 11 insertions(+), 15 deletions(-)</i><br>
+><i> </i><br>
+><i> diff --git a/drivers/cxl/mem.c b/drivers/cxl/mem.c</i><br>
+><i> index 04b4f7445083..60b95c524c3e 100644</i><br>
+><i> --- a/drivers/cxl/mem.c</i><br>
+><i> +++ b/drivers/cxl/mem.c</i><br>
+><i> @@ -922,11 +922,10 @@ static struct cxl_mem *cxl_mem_create(struct pci_dev *pdev)</i><br>
+><i>  	return cxlm;</i><br>
+><i>  }</i><br>
+><i>  </i><br>
+><i> -static int cxl_mem_map_regblock(struct cxl_mem *cxlm, u32 reg_lo, u32 reg_hi)</i><br>
+><i> +static void __iomem *cxl_mem_map_regblock(struct cxl_mem *cxlm, u32 reg_lo, u32 reg_hi)</i><br>
+><i>  {</i><br>
+><i>  	struct pci_dev *pdev = cxlm->pdev;</i><br>
+><i>  	struct device *dev = &pdev->dev;</i><br>
+><i> -	void __iomem *regs;</i><br>
+><i>  	u64 offset;</i><br>
+><i>  	u8 bar;</i><br>
+><i>  	int rc;</i><br>
+><i> @@ -938,20 +937,18 @@ static int cxl_mem_map_regblock(struct cxl_mem *cxlm, u32 reg_lo, u32 reg_hi)</i><br>
+><i>  	if (pci_resource_len(pdev, bar) < offset) {</i><br>
+><i>  		dev_err(dev, "BAR%d: %pr: too small (offset: %#llx)\n", bar,</i><br>
+><i>  			&pdev->resource[bar], (unsigned long long)offset);</i><br>
+><i> -		return -ENXIO;</i><br>
+><i> +		return (void __iomem *)ERR_PTR(-ENXIO);</i><br>
+><i>  	}</i><br>
+><i>  </i><br>
+><i>  	rc = pcim_iomap_regions(pdev, BIT(bar), pci_name(pdev));</i><br>
+><i>  	if (rc) {</i><br>
+><i>  		dev_err(dev, "failed to map registers\n");</i><br>
+><i> -		return rc;</i><br>
+><i> +		return (void __iomem *)ERR_PTR(rc);</i><br>
+<br>
+The casting is fairly horrible, perhaps just pass in<br>
+a void __iomem ** and pass base back through that?<br>
+<br>
+><i>  	}</i><br>
+><i> -	regs = pcim_iomap_table(pdev)[bar];</i><br>
+><i> -</i><br>
+><i> -	cxlm->base = regs + offset;</i><br>
+><i>  </i><br>
+><i>  	dev_dbg(dev, "Mapped CXL Memory Device resource\n");</i><br>
+><i> -	return 0;</i><br>
+><i> +</i><br>
+><i> +	return pcim_iomap_table(pdev)[bar] + offset;</i><br>
+><i>  }</i><br>
+><i>  </i><br>
+><i>  static int cxl_mem_dvsec(struct pci_dev *pdev, int dvsec)</i><br>
+><i> @@ -993,7 +990,8 @@ static int cxl_mem_setup_regs(struct cxl_mem *cxlm)</i><br>
+><i>  	struct pci_dev *pdev = cxlm->pdev;</i><br>
+><i>  	struct device *dev = &pdev->dev;</i><br>
+><i>  	u32 regloc_size, regblocks;</i><br>
+><i> -	int rc, regloc, i;</i><br>
+><i> +	void __iomem *base;</i><br>
+><i> +	int regloc, i;</i><br>
+><i>  </i><br>
+><i>  	regloc = cxl_mem_dvsec(pdev, PCI_DVSEC_ID_CXL_REGLOC_OFFSET);</i><br>
+><i>  	if (!regloc) {</i><br>
+><i> @@ -1019,9 +1017,9 @@ static int cxl_mem_setup_regs(struct cxl_mem *cxlm)</i><br>
+><i>  		reg_type = FIELD_GET(CXL_REGLOC_RBI_MASK, reg_lo);</i><br>
+><i>  </i><br>
+><i>  		if (reg_type == CXL_REGLOC_RBI_MEMDEV) {</i><br>
+><i> -			rc = cxl_mem_map_regblock(cxlm, reg_lo, reg_hi);</i><br>
+><i> -			if (rc)</i><br>
+><i> -				return rc;</i><br>
+><i> +			base = cxl_mem_map_regblock(cxlm, reg_lo, reg_hi);</i><br>
+><i> +			if (IS_ERR(base))</i><br>
+><i> +				return PTR_ERR(base);</i><br>
+><i>  			break;</i><br>
+><i>  		}</i><br>
+><i>  	}</i><br>
+><i> @@ -1031,7 +1029,7 @@ static int cxl_mem_setup_regs(struct cxl_mem *cxlm)</i><br>
+><i>  		return -ENXIO;</i><br>
+><i>  	}</i><br>
+><i>  </i><br>
+><i> -	cxl_setup_device_regs(dev, cxlm->base, &regs->device_regs);</i><br>
+><i> +	cxl_setup_device_regs(dev, base, &regs->device_regs);</i><br>
+><i>  </i><br>
+><i>  	if (!regs->status || !regs->mbox || !regs->memdev) {</i><br>
+><i>  		dev_err(dev, "registers not found: %s%s%s\n",</i><br>
+><i> diff --git a/drivers/cxl/mem.h b/drivers/cxl/mem.h</i><br>
+><i> index 8bad7166adba..bfcfef461b16 100644</i><br>
+><i> --- a/drivers/cxl/mem.h</i><br>
+><i> +++ b/drivers/cxl/mem.h</i><br>
+><i> @@ -49,7 +49,6 @@ struct cxl_memdev {</i><br>
+><i>  /**</i><br>
+><i>   * struct cxl_mem - A CXL memory device</i><br>
+><i>   * @pdev: The PCI device associated with this CXL device.</i><br>
+><i> - * @base: IO mappings to the device's MMIO</i><br>
+><i>   * @cxlmd: Logical memory device chardev / interface</i><br>
+><i>   * @regs: Parsed register blocks</i><br>
+><i>   * @payload_size: Size of space for payload</i><br>
+><i> @@ -62,7 +61,6 @@ struct cxl_memdev {</i><br>
+><i>   */</i><br>
+><i>  struct cxl_mem {</i><br>
+><i>  	struct pci_dev *pdev;</i><br>
+><i> -	void __iomem *base;</i><br>
+><i>  	struct cxl_memdev *cxlmd;</i><br>
+><i>  </i><br>
+><i>  	struct cxl_regs regs;</i><br>
+<br>
+<br>
+

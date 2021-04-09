@@ -1,0 +1,160 @@
+On Wed, Apr 07, 2021 at 01:07:21PM -0700, Badhri Jagan Sridharan wrote:<br>
+><i> >From PD Spec:</i><br>
+><i> The Sink Shall transition to Sink Standby before a positive or</i><br>
+><i> negative voltage transition of VBUS. During Sink Standby</i><br>
+><i> the Sink Shall reduce its power draw to pSnkStdby. This allows</i><br>
+><i> the Source to manage the voltage transition as well as</i><br>
+><i> supply sufficient operating current to the Sink to maintain PD</i><br>
+><i> operation during the transition. The Sink Shall</i><br>
+><i> complete this transition to Sink Standby within tSnkStdby</i><br>
+><i> after evaluating the Accept Message from the Source. The</i><br>
+><i> transition when returning to Sink operation from Sink Standby</i><br>
+><i> Shall be completed within tSnkNewPower. The</i><br>
+><i> pSnkStdby requirement Shall only apply if the Sink power draw</i><br>
+><i> is higher than this level.</i><br>
+><i> </i><br>
+><i> The above requirement needs to be met to prevent hard resets</i><br>
+><i> from port partner.</i><br>
+><i> </i><br>
+><i> Without the patch: (5V/3A during SNK_DISCOVERY all the way through</i><br>
+><i> explicit contract)</i><br>
+><i> [   95.711984] CC1: 0 -> 0, CC2: 0 -> 5 [state TOGGLING, polarity 0, connected]</i><br>
+><i> [   95.712007] state change TOGGLING -> SNK_ATTACH_WAIT [rev3 NONE_AMS]</i><br>
+><i> [   95.712017] pending state change SNK_ATTACH_WAIT -> SNK_DEBOUNCED @ 170 ms [rev3 NONE_AMS]</i><br>
+><i> [   95.837190] VBUS on</i><br>
+><i> [   95.882075] state change SNK_ATTACH_WAIT -> SNK_DEBOUNCED [delayed 170 ms]</i><br>
+><i> [   95.882082] state change SNK_DEBOUNCED -> SNK_ATTACHED [rev3 NONE_AMS]</i><br>
+><i> [   95.882086] polarity 1</i><br>
+><i> [   95.883151] set_auto_vbus_discharge_threshold mode:0 pps_active:n vbus:5000 ret:0</i><br>
+><i> [   95.883441] enable vbus discharge ret:0</i><br>
+><i> [   95.883445] Requesting mux state 1, usb-role 2, orientation 2</i><br>
+><i> [   95.883776] state change SNK_ATTACHED -> SNK_STARTUP [rev3 NONE_AMS]</i><br>
+><i> [   95.883879] pending state change SNK_STARTUP -> SNK_DISCOVERY @ 500 ms [rev3 NONE_AMS]</i><br>
+><i> [   96.038960] VBUS on</i><br>
+><i> [   96.383939] state change SNK_STARTUP -> SNK_DISCOVERY [delayed 500 ms]</i><br>
+><i> [   96.383946] Setting voltage/current limit 5000 mV 3000 mA</i><br>
+><i> [   96.383961] vbus=0 charge:=1</i><br>
+><i> [   96.386044] state change SNK_DISCOVERY -> SNK_WAIT_CAPABILITIES [rev3 NONE_AMS]</i><br>
+><i> [   96.386309] pending state change SNK_WAIT_CAPABILITIES -> HARD_RESET_SEND @ 450 ms [rev3 NONE_AMS]</i><br>
+><i> [   96.394404] PD RX, header: 0x2161 [1]</i><br>
+><i> [   96.394408]  PDO 0: type 0, 5000 mV, 3000 mA [E]</i><br>
+><i> [   96.394410]  PDO 1: type 0, 9000 mV, 2000 mA []</i><br>
+><i> [   96.394412] state change SNK_WAIT_CAPABILITIES -> SNK_NEGOTIATE_CAPABILITIES [rev2 POWER_NEGOTIATION]</i><br>
+><i> [   96.394416] Setting usb_comm capable false</i><br>
+><i> [   96.395083] cc=0 cc1=0 cc2=5 vbus=0 vconn=sink polarity=1</i><br>
+><i> [   96.395089] Requesting PDO 1: 9000 mV, 2000 mA</i><br>
+><i> [   96.395093] PD TX, header: 0x1042</i><br>
+><i> [   96.397404] PD TX complete, status: 0</i><br>
+><i> [   96.397424] pending state change SNK_NEGOTIATE_CAPABILITIES -> HARD_RESET_SEND @ 60 ms [rev2 POWER_NEGOTIATION]</i><br>
+><i> [   96.400826] PD RX, header: 0x363 [1]</i><br>
+><i> [   96.400829] state change SNK_NEGOTIATE_CAPABILITIES -> SNK_TRANSITION_SINK [rev2 POWER_NEGOTIATION]</i><br>
+><i> [   96.400832] pending state change SNK_TRANSITION_SINK -> HARD_RESET_SEND @ 500 ms [rev2 POWER_NEGOTIATION]</i><br>
+><i> [   96.577315] PD RX, header: 0x566 [1]</i><br>
+><i> [   96.577321] Setting voltage/current limit 9000 mV 2000 mA</i><br>
+><i> [   96.578363] set_auto_vbus_discharge_threshold mode:3 pps_active:n vbus:9000 ret:0</i><br>
+><i> [   96.578370] state change SNK_TRANSITION_SINK -> SNK_READY [rev2 POWER_NEGOTIATION]</i><br>
+><i> </i><br>
+><i> With the patch:</i><br>
+><i> [  168.398573] CC1: 0 -> 0, CC2: 0 -> 5 [state TOGGLING, polarity 0, connected]</i><br>
+><i> [  168.398605] state change TOGGLING -> SNK_ATTACH_WAIT [rev3 NONE_AMS]</i><br>
+><i> [  168.398619] pending state change SNK_ATTACH_WAIT -> SNK_DEBOUNCED @ 170 ms [rev3 NONE_AMS]</i><br>
+><i> [  168.522348] VBUS on</i><br>
+><i> [  168.568676] state change SNK_ATTACH_WAIT -> SNK_DEBOUNCED [delayed 170 ms]</i><br>
+><i> [  168.568684] state change SNK_DEBOUNCED -> SNK_ATTACHED [rev3 NONE_AMS]</i><br>
+><i> [  168.568688] polarity 1</i><br>
+><i> [  168.569867] set_auto_vbus_discharge_threshold mode:0 pps_active:n vbus:5000 ret:0</i><br>
+><i> [  168.570158] enable vbus discharge ret:0</i><br>
+><i> [  168.570161] Requesting mux state 1, usb-role 2, orientation 2</i><br>
+><i> [  168.570504] state change SNK_ATTACHED -> SNK_STARTUP [rev3 NONE_AMS]</i><br>
+><i> [  168.570634] pending state change SNK_STARTUP -> SNK_DISCOVERY @ 500 ms [rev3 NONE_AMS]</i><br>
+><i> [  169.070689] state change SNK_STARTUP -> SNK_DISCOVERY [delayed 500 ms]</i><br>
+><i> [  169.070695] Setting voltage/current limit 5000 mV 3000 mA</i><br>
+><i> [  169.070702] vbus=0 charge:=1</i><br>
+><i> [  169.072719] state change SNK_DISCOVERY -> SNK_WAIT_CAPABILITIES [rev3 NONE_AMS]</i><br>
+><i> [  169.073145] pending state change SNK_WAIT_CAPABILITIES -> HARD_RESET_SEND @ 450 ms [rev3 NONE_AMS]</i><br>
+><i> [  169.077162] PD RX, header: 0x2161 [1]</i><br>
+><i> [  169.077172]  PDO 0: type 0, 5000 mV, 3000 mA [E]</i><br>
+><i> [  169.077178]  PDO 1: type 0, 9000 mV, 2000 mA []</i><br>
+><i> [  169.077183] state change SNK_WAIT_CAPABILITIES -> SNK_NEGOTIATE_CAPABILITIES [rev2 POWER_NEGOTIATION]</i><br>
+><i> [  169.077191] Setting usb_comm capable false</i><br>
+><i> [  169.077753] cc=0 cc1=0 cc2=5 vbus=0 vconn=sink polarity=1</i><br>
+><i> [  169.077759] Requesting PDO 1: 9000 mV, 2000 mA</i><br>
+><i> [  169.077762] PD TX, header: 0x1042</i><br>
+><i> [  169.079990] PD TX complete, status: 0</i><br>
+><i> [  169.080013] pending state change SNK_NEGOTIATE_CAPABILITIES -> HARD_RESET_SEND @ 60 ms [rev2 POWER_NEGOTIATION]</i><br>
+><i> [  169.083183] VBUS on</i><br>
+><i> [  169.084195] PD RX, header: 0x363 [1]</i><br>
+><i> [  169.084200] state change SNK_NEGOTIATE_CAPABILITIES -> SNK_TRANSITION_SINK [rev2 POWER_NEGOTIATION]</i><br>
+><i> [  169.084206] Setting standby current 5000 mV @ 500 mA</i><br>
+><i> [  169.084209] Setting voltage/current limit 5000 mV 500 mA</i><br>
+><i> [  169.084220] pending state change SNK_TRANSITION_SINK -> HARD_RESET_SEND @ 500 ms [rev2 POWER_NEGOTIATION]</i><br>
+><i> [  169.260222] PD RX, header: 0x566 [1]</i><br>
+><i> [  169.260227] Setting voltage/current limit 9000 mV 2000 mA</i><br>
+><i> [  169.261315] set_auto_vbus_discharge_threshold mode:3 pps_active:n vbus:9000 ret:0</i><br>
+><i> [  169.261321] state change SNK_TRANSITION_SINK -> SNK_READY [rev2 POWER_NEGOTIATION]</i><br>
+><i> [  169.261570] AMS POWER_NEGOTIATION finished</i><br>
+><i> </i><br>
+><i> Fixes: f0690a25a140b ("staging: typec: USB Type-C Port Manager (tcpm)")</i><br>
+><i> Signed-off-by: Badhri Jagan Sridharan <badhri@xxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  drivers/usb/typec/tcpm/tcpm.c | 17 +++++++++++++++++</i><br>
+><i>  include/linux/usb/pd.h        |  2 ++</i><br>
+><i>  2 files changed, 19 insertions(+)</i><br>
+><i> </i><br>
+><i> diff --git a/drivers/usb/typec/tcpm/tcpm.c b/drivers/usb/typec/tcpm/tcpm.c</i><br>
+><i> index d1d03ee90d8f..770b2edd9a04 100644</i><br>
+><i> --- a/drivers/usb/typec/tcpm/tcpm.c</i><br>
+><i> +++ b/drivers/usb/typec/tcpm/tcpm.c</i><br>
+><i> @@ -4131,6 +4131,23 @@ static void run_state_machine(struct tcpm_port *port)</i><br>
+><i>  		}</i><br>
+><i>  		break;</i><br>
+><i>  	case SNK_TRANSITION_SINK:</i><br>
+><i> +		/* From the USB PD spec:</i><br>
+><i> +		 * "The Sink Shall transition to Sink Standby before a positive or</i><br>
+><i> +		 * negative voltage transition of VBUS. During Sink Standby</i><br>
+><i> +		 * the Sink Shall reduce its power draw to pSnkStdby."</i><br>
+><i> +		 *</i><br>
+><i> +		 * This is not applicable to PPS though as the port can continue</i><br>
+><i> +		 * to draw negotiated power without switching to standby.</i><br>
+><i> +		 */</i><br>
+><i> +		if (port->supply_voltage != port->req_supply_voltage && !port->pps_data.active &&</i><br>
+><i> +		    port->current_limit * port->supply_voltage / 1000 > PD_P_SNK_STDBY_MW) {</i><br>
+><i> +			u32 stdby_ma = port->supply_voltage ? PD_P_SNK_STDBY_MW * 1000 /</i><br>
+><i> +				port->supply_voltage : 0;</i><br>
+<br>
+Looks like unnecessary condition to me. The first condition can not be<br>
+true if port->supply_voltage == 0. So I think that should be just:<br>
+<br>
+                        u32 stdby_ma = PD_P_SNK_STDBY_MW * 1000 / port->supply_voltage;<br>
+<br>
+Or did I miss something?<br>
+<br>
+><i> +			tcpm_log(port, "Setting standby current %u mV @ %u mA",</i><br>
+><i> +				 port->supply_voltage, stdby_ma);</i><br>
+><i> +			tcpm_set_current_limit(port, stdby_ma, port->supply_voltage);</i><br>
+><i> +		}</i><br>
+><i> +		fallthrough;</i><br>
+><i>  	case SNK_TRANSITION_SINK_VBUS:</i><br>
+><i>  		tcpm_set_state(port, hard_reset_state(port),</i><br>
+><i>  			       PD_T_PS_TRANSITION);</i><br>
+><i> diff --git a/include/linux/usb/pd.h b/include/linux/usb/pd.h</i><br>
+><i> index 70d681918d01..bf00259493e0 100644</i><br>
+><i> --- a/include/linux/usb/pd.h</i><br>
+><i> +++ b/include/linux/usb/pd.h</i><br>
+><i> @@ -493,4 +493,6 @@ static inline unsigned int rdo_max_power(u32 rdo)</i><br>
+><i>  #define PD_N_CAPS_COUNT		(PD_T_NO_RESPONSE / PD_T_SEND_SOURCE_CAP)</i><br>
+><i>  #define PD_N_HARD_RESET_COUNT	2</i><br>
+><i>  </i><br>
+><i> +#define PD_P_SNK_STDBY_MW	2500	/* 2500 mW */</i><br>
+><i> +</i><br>
+><i>  #endif /* __LINUX_USB_PD_H */</i><br>
+><i> -- </i><br>
+><i> 2.31.1.295.g9ea45b61b8-goog</i><br>
+<br>
+thanks,<br>
+<br>
+-- <br>
+heikki<br>
+<br>
+<br>
+

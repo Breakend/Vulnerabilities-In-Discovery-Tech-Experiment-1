@@ -1,0 +1,52 @@
+Mel Gorman <mgorman@xxxxxxx> writes:<br>
+<br>
+><i> On Fri, Apr 02, 2021 at 04:27:17PM +0800, Huang Ying wrote:</i><br>
+><i>> With NUMA balancing, in hint page fault handler, the faulting page</i><br>
+><i>> will be migrated to the accessing node if necessary.  During the</i><br>
+><i>> migration, TLB will be shot down on all CPUs that the process has run</i><br>
+><i>> on recently.  Because in the hint page fault handler, the PTE will be</i><br>
+><i>> made accessible before the migration is tried.  The overhead of TLB</i><br>
+><i>> shooting down can be high, so it's better to be avoided if possible.</i><br>
+><i>> In fact, if we delay mapping the page until migration, that can be</i><br>
+><i>> avoided.  This is what this patch doing.</i><br>
+><i>> </i><br>
+><i>> <SNIP></i><br>
+><i>></i><br>
+><i></i><br>
+><i> Thanks, I think this is ok for Andrew to pick up to see if anything</i><br>
+><i> bisects to this commit but it's a low risk.</i><br>
+><i></i><br>
+><i> Reviewed-by: Mel Gorman <mgorman@xxxxxxx></i><br>
+><i></i><br>
+><i> More notes;</i><br>
+><i></i><br>
+><i> This is not a universal win given that not all workloads exhibit the</i><br>
+><i> pattern where accesses occur in parallel threads between when a page</i><br>
+><i> is marked accessible and when it is migrated. The impact of the patch</i><br>
+><i> appears to be neutral for those workloads. For workloads that do exhibit</i><br>
+><i> the pattern, there is a small gain with a reduction in interrupts as</i><br>
+><i> advertised unlike v1 of the patch. Further tests are running to confirm</i><br>
+><i> the reduction is in TLB shootdown interrupts but I'm reasonably confident</i><br>
+><i> that will be the case. Gains are typically small and the load described in</i><br>
+><i> the changelog appears to be a best case scenario but a 1-5% gain in some</i><br>
+><i> other workloads is still an improvement. There is still the possibility</i><br>
+><i> that some workloads will unnecessarily stall as a result of the patch</i><br>
+><i> for slightly longer periods of time but that is a relatively low risk</i><br>
+><i> and will be difficult to detect. If I'm wrong, a bisection will find it.</i><br>
+<br>
+Hi, Mel,<br>
+<br>
+Thanks!<br>
+<br>
+Hi, Andrew,<br>
+<br>
+I found that V2 cannot apply on top of latest mmotm, so I send V3 as<br>
+follows.  In case you need it.<br>
+<br>
+<a  rel="nofollow" href="https://lore.kernel.org/lkml/20210408132236.1175607-1-ying.huang@xxxxxxxxx/">https://lore.kernel.org/lkml/20210408132236.1175607-1-ying.huang@xxxxxxxxx/</a><br>
+<br>
+Best Regards,<br>
+Huang, Ying<br>
+<br>
+<br>
+

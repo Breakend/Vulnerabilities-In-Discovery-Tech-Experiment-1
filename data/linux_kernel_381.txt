@@ -1,0 +1,247 @@
+Provides a "cpus" interface to the hardware latency detector. By<br>
+default, it lists all CPUs, allowing hwlatd threads to run on any online<br>
+CPU of the system.<br>
+<br>
+It serves to restrict the execution of hwlatd to the set of CPUs writing<br>
+via this interface. Note that hwlatd also respects the "tracing_cpumask."<br>
+Hence, hwlatd threads will run only on the set of CPUs allowed here AND<br>
+on "tracing_cpumask."<br>
+<br>
+Why not keep just "tracing_cpumask"? Because the user might be interested<br>
+in tracing what is running on other CPUs. For instance, one might run<br>
+hwlatd in one HT CPU while observing what is running on the sibling HT<br>
+CPU. The cpu list format is also more intuitive.<br>
+<br>
+Also in preparation to the per-cpu mode.<br>
+<br>
+Cc: Jonathan Corbet <corbet@xxxxxxx><br>
+Cc: Steven Rostedt <rostedt@xxxxxxxxxxx><br>
+Cc: Ingo Molnar <mingo@xxxxxxxxxx><br>
+Cc: Peter Zijlstra <peterz@xxxxxxxxxxxxx><br>
+Cc: Thomas Gleixner <tglx@xxxxxxxxxxxxx><br>
+Cc: Alexandre Chartre <alexandre.chartre@xxxxxxxxxx><br>
+Cc: Clark Willaims <williams@xxxxxxxxxx><br>
+Cc: John Kacur <jkacur@xxxxxxxxxx><br>
+Cc: Juri Lelli <juri.lelli@xxxxxxxxxx><br>
+Cc: linux-doc@xxxxxxxxxxxxxxx<br>
+Cc: linux-kernel@xxxxxxxxxxxxxxx<br>
+Signed-off-by: Daniel Bristot de Oliveira <bristot@xxxxxxxxxx><br>
+---<br>
+ Documentation/trace/hwlat_detector.rst |  14 +--<br>
+ kernel/trace/trace_hwlat.c             | 125 ++++++++++++++++++++++++-<br>
+ 2 files changed, 131 insertions(+), 8 deletions(-)<br>
+<br>
+diff --git a/Documentation/trace/hwlat_detector.rst b/Documentation/trace/hwlat_detector.rst<br>
+index 5739349649c8..86f973a7763c 100644<br>
+--- a/Documentation/trace/hwlat_detector.rst<br>
++++ b/Documentation/trace/hwlat_detector.rst<br>
+@@ -73,11 +73,13 @@ in /sys/kernel/tracing:<br>
+ <br>
+  - tracing_threshold	- minimum latency value to be considered (usecs)<br>
+  - tracing_max_latency	- maximum hardware latency actually observed (usecs)<br>
+- - tracing_cpumask	- the CPUs to move the hwlat thread across<br>
+- - hwlat_detector/width	- specified amount of time to spin within window (usecs)<br>
+- - hwlat_detector/window	- amount of time between (width) runs (usecs)<br>
++ - hwlat_detector/width - specified amount of time to spin within window (usecs)<br>
++ - hwlat_detector/window        - amount of time between (width) runs (usecs)<br>
++ - hwlat_detector/cpus  - the CPUs to move the hwlat thread across<br>
+ <br>
+ The hwlat detector's kernel thread will migrate across each CPU specified in<br>
+-tracing_cpumask between each window. To limit the migration, either modify<br>
+-tracing_cpumask, or modify the hwlat kernel thread (named [hwlatd]) CPU<br>
+-affinity directly, and the migration will stop.<br>
++cpus list between each window. The hwlat detector will also obey the<br>
++tracing_cpumask, so the thread will migrate on the set of cpus that is<br>
++both on its cpus list and in the global tracing_cpumask file.<br>
++To limit the migration, either modify cpumask, or modify the hwlat kernel<br>
++thread (named [hwlatd]) CPU affinity directly, and the migration will stop.<br>
+diff --git a/kernel/trace/trace_hwlat.c b/kernel/trace/trace_hwlat.c<br>
+index 34dc1a712dcb..deecb93f97f2 100644<br>
+--- a/kernel/trace/trace_hwlat.c<br>
++++ b/kernel/trace/trace_hwlat.c<br>
+@@ -59,6 +59,7 @@ static struct task_struct *hwlat_kthread;<br>
+ <br>
+ static struct dentry *hwlat_sample_width;	/* sample width us */<br>
+ static struct dentry *hwlat_sample_window;	/* sample window us */<br>
++static struct dentry *hwlat_cpumask_dentry;	/* hwlat cpus allowed */<br>
+ <br>
+ /* Save the previous tracing_thresh value */<br>
+ static unsigned long save_tracing_thresh;<br>
+@@ -272,6 +273,7 @@ static int get_sample(void)<br>
+ 	return ret;<br>
+ }<br>
+ <br>
++static struct cpumask hwlat_cpumask;<br>
+ static struct cpumask save_cpumask;<br>
+ static bool disable_migrate;<br>
+ <br>
+@@ -292,7 +294,14 @@ static void move_to_next_cpu(void)<br>
+ 		goto disable;<br>
+ <br>
+ 	get_online_cpus();<br>
+-	cpumask_and(current_mask, cpu_online_mask, tr->tracing_cpumask);<br>
++	/*<br>
++	 * Run only on CPUs in which trace and hwlat are allowed to run.<br>
++	 */<br>
++	cpumask_and(current_mask, tr->tracing_cpumask, &hwlat_cpumask);<br>
++	/*<br>
++	 * And the CPU is online.<br>
++	 */<br>
++	cpumask_and(current_mask, cpu_online_mask, current_mask);<br>
+ 	next_cpu = cpumask_next(smp_processor_id(), current_mask);<br>
+ 	put_online_cpus();<br>
+ <br>
+@@ -368,7 +377,14 @@ static int start_kthread(struct trace_array *tr)<br>
+ <br>
+ 	/* Just pick the first CPU on first iteration */<br>
+ 	get_online_cpus();<br>
+-	cpumask_and(current_mask, cpu_online_mask, tr->tracing_cpumask);<br>
++	/*<br>
++	 * Run only on CPUs in which trace and hwlat are allowed to run.<br>
++	 */<br>
++	cpumask_and(current_mask, tr->tracing_cpumask, &hwlat_cpumask);<br>
++	/*<br>
++	 * And the CPU is online.<br>
++	 */<br>
++	cpumask_and(current_mask, cpu_online_mask, current_mask);<br>
+ 	put_online_cpus();<br>
+ 	next_cpu = cpumask_first(current_mask);<br>
+ <br>
+@@ -402,6 +418,94 @@ static void stop_kthread(void)<br>
+ 	hwlat_kthread = NULL;<br>
+ }<br>
+ <br>
++/*<br>
++ * hwlat_cpus_read - Read function for reading the "cpus" file<br>
++ * @filp: The active open file structure<br>
++ * @ubuf: The userspace provided buffer to read value into<br>
++ * @cnt: The maximum number of bytes to read<br>
++ * @ppos: The current "file" position<br>
++ *<br>
++ * Prints the "cpus" output into the user-provided buffer.<br>
++ */<br>
++static ssize_t<br>
++hwlat_cpus_read(struct file *filp, char __user *ubuf, size_t count,<br>
++		   loff_t *ppos)<br>
++{<br>
++	char *mask_str;<br>
++	int len;<br>
++<br>
++	len = snprintf(NULL, 0, "%*pbl\n",<br>
++		       cpumask_pr_args(&hwlat_cpumask)) + 1;<br>
++	mask_str = kmalloc(len, GFP_KERNEL);<br>
++	if (!mask_str)<br>
++		return -ENOMEM;<br>
++<br>
++	len = snprintf(mask_str, len, "%*pbl\n",<br>
++		       cpumask_pr_args(&hwlat_cpumask));<br>
++	if (len >= count) {<br>
++		count = -EINVAL;<br>
++		goto out_err;<br>
++	}<br>
++	count = simple_read_from_buffer(ubuf, count, ppos, mask_str, len);<br>
++<br>
++out_err:<br>
++	kfree(mask_str);<br>
++<br>
++	return count;<br>
++}<br>
++<br>
++/**<br>
++ * hwlat_cpus_write - Write function for "cpus" entry<br>
++ * @filp: The active open file structure<br>
++ * @ubuf: The user buffer that contains the value to write<br>
++ * @cnt: The maximum number of bytes to write to "file"<br>
++ * @ppos: The current position in @file<br>
++ *<br>
++ * This function provides a write implementation for the "cpus"<br>
++ * interface to the hardware latency detector. By default, it lists all<br>
++ * CPUs, in this way, allowing hwlatd threads to run on any online CPU<br>
++ * of the system. It serves to restrict the execution of hwlatd to the<br>
++ * set of CPUs writing via this interface. Note that hwlatd also<br>
++ * respects the "tracing_cpumask." Hence, hwlatd threads will run only<br>
++ * on the set of CPUs allowed here AND on "tracing_cpumask." Why not<br>
++ * have just "tracing_cpumask?" Because the user might be interested<br>
++ * in tracing what is running on other CPUs. For instance, one might<br>
++ * run hwlatd in one HT CPU while observing what is running on the<br>
++ * sibling HT CPU.<br>
++ */<br>
++static ssize_t<br>
++hwlat_cpus_write(struct file *filp, const char __user *ubuf, size_t count,<br>
++		    loff_t *ppos)<br>
++{<br>
++	cpumask_var_t hwlat_cpumask_new;<br>
++	char buf[256];<br>
++	int err;<br>
++<br>
++	if (count >= 256)<br>
++		return -EINVAL;<br>
++<br>
++	if (copy_from_user(buf, ubuf, count))<br>
++		return -EFAULT;<br>
++<br>
++	if (!zalloc_cpumask_var(&hwlat_cpumask_new, GFP_KERNEL))<br>
++		return -ENOMEM;<br>
++<br>
++	err = cpulist_parse(buf, hwlat_cpumask_new);<br>
++	if (err)<br>
++		goto err_free;<br>
++<br>
++	cpumask_copy(&hwlat_cpumask, hwlat_cpumask_new);<br>
++<br>
++	free_cpumask_var(hwlat_cpumask_new);<br>
++<br>
++	return count;<br>
++<br>
++err_free:<br>
++	free_cpumask_var(hwlat_cpumask_new);<br>
++<br>
++	return err;<br>
++}<br>
++<br>
+ /*<br>
+  * hwlat_read - Wrapper read function for reading both window and width<br>
+  * @filp: The active open file structure<br>
+@@ -523,6 +627,14 @@ static const struct file_operations window_fops = {<br>
+ 	.write		= hwlat_window_write,<br>
+ };<br>
+ <br>
++static const struct file_operations cpus_fops = {<br>
++	.open		= tracing_open_generic,<br>
++	.read		= hwlat_cpus_read,<br>
++	.write		= hwlat_cpus_write,<br>
++	.llseek		= generic_file_llseek,<br>
++};<br>
++<br>
++<br>
+ /**<br>
+  * init_tracefs - A function to initialize the tracefs interface files<br>
+  *<br>
+@@ -558,6 +670,13 @@ static int init_tracefs(void)<br>
+ 	if (!hwlat_sample_width)<br>
+ 		goto err;<br>
+ <br>
++	hwlat_cpumask_dentry = trace_create_file("cpus", 0644,<br>
++						 top_dir,<br>
++						 NULL,<br>
++						 &cpus_fops);<br>
++	if (!hwlat_cpumask_dentry)<br>
++		goto err;<br>
++<br>
+ 	return 0;<br>
+ <br>
+  err:<br>
+@@ -637,6 +756,8 @@ __init static int init_hwlat_tracer(void)<br>
+ 	if (ret)<br>
+ 		return ret;<br>
+ <br>
++	cpumask_copy(&hwlat_cpumask, cpu_all_mask);<br>
++<br>
+ 	init_tracefs();<br>
+ <br>
+ 	return 0;<br>
+-- <br>
+2.30.2<br>
+<br>
+<br>
+

@@ -1,0 +1,232 @@
+Changelog:<br>
+v13:<br>
+	- Fixed a hang on ThunderX2, thank you Pingfan Liu for reporting<br>
+	  the problem. In relocation function we need civac not ivac, we<br>
+	  need to clean data in addition to invalidating it.<br>
+	  Since I was using ThunderX2 machine I also measured the new<br>
+	  performance data on this large ARM64 server. The MMU improves<br>
+	  kexec relocation 190 times on this machine! (see below for<br>
+	  raw data). Saves 7.5s during CentOS kexec reboot.<br>
+v12:<br>
+	- A major change compared to previous version. Instead of using<br>
+	  contiguous VA range a copy of linear map is now used to perform<br>
+	  copying of segments during relocation as it was agreed in the<br>
+	  discussion of version 11 of this project.<br>
+	- In addition to using linear map, I also took several ideas from<br>
+	  James Morse to better organize the kexec relocation:<br>
+	  	1. skip relocation function entirely if that is not needed<br>
+		2. remove the PoC flushing function since it is not needed<br>
+		   anymore with MMU enabled.<br>
+v11:<br>
+	- Fixed missing KEXEC_CORE dependency for trans_pgd.c<br>
+	- Removed useless "if(rc) return rc" statement (thank you Tyler Hicks)<br>
+	- Another 12 patches were accepted into maintainer's get.<br>
+	  Re-based patches against:<br>
+	  <a  rel="nofollow" href="https://git.kernel.org/pub/scm/linux/kernel/git/arm64/linux.git">https://git.kernel.org/pub/scm/linux/kernel/git/arm64/linux.git</a><br>
+	  Branch: for-next/kexec<br>
+v10:<br>
+	- Addressed a lot of comments form James Morse and from  Marc Zyngier<br>
+	- Added review-by's<br>
+	- Synchronized with mainline<br>
+<br>
+v9:	- 9 patches from previous series landed in upstream, so now series<br>
+	  is smaller<br>
+	- Added two patches from James Morse to address idmap issues for machines<br>
+	  with high physical addresses.<br>
+	- Addressed comments from Selin Dag about compiling issues. He also tested<br>
+	  my series and got similar performance results: ~60 ms instead of ~580 ms<br>
+	  with an initramfs size of ~120MB.<br>
+v8:<br>
+	- Synced with mainline to keep series up-to-date<br>
+v7:<br>
+	-- Addressed comments from James Morse<br>
+	- arm64: hibernate: pass the allocated pgdp to ttbr0<br>
+	  Removed "Fixes" tag, and added Added Reviewed-by: James Morse<br>
+	- arm64: hibernate: check pgd table allocation<br>
+	  Sent out as a standalone patch so it can be sent to stable<br>
+	  Series applies on mainline + this patch<br>
+	- arm64: hibernate: add trans_pgd public functions<br>
+	  Remove second allocation of tmp_pg_dir in swsusp_arch_resume<br>
+	  Added Reviewed-by: James Morse <james.morse@xxxxxxx><br>
+	- arm64: kexec: move relocation function setup and clean up<br>
+	  Fixed typo in commit log<br>
+	  Changed kern_reloc to phys_addr_t types.<br>
+	  Added explanation why kern_reloc is needed.<br>
+	  Split into four patches:<br>
+	  arm64: kexec: make dtb_mem always enabled<br>
+	  arm64: kexec: remove unnecessary debug prints<br>
+	  arm64: kexec: call kexec_image_info only once<br>
+	  arm64: kexec: move relocation function setup<br>
+	- arm64: kexec: add expandable argument to relocation function<br>
+	  Changed types of new arguments from unsigned long to phys_addr_t.<br>
+	  Changed offset prefix to KEXEC_*<br>
+	  Split into four patches:<br>
+	  arm64: kexec: cpu_soft_restart change argument types<br>
+	  arm64: kexec: arm64_relocate_new_kernel clean-ups<br>
+	  arm64: kexec: arm64_relocate_new_kernel don't use x0 as temp<br>
+	  arm64: kexec: add expandable argument to relocation function<br>
+	- arm64: kexec: configure trans_pgd page table for kexec<br>
+	  Added invalid entries into EL2 vector table<br>
+	  Removed KEXEC_EL2_VECTOR_TABLE_SIZE and KEXEC_EL2_VECTOR_TABLE_OFFSET<br>
+	  Copy relocation functions and table into separate pages<br>
+	  Changed types in kern_reloc_arg.<br>
+	  Split into three patches:<br>
+	  arm64: kexec: offset for relocation function<br>
+	  arm64: kexec: kexec EL2 vectors<br>
+	  arm64: kexec: configure trans_pgd page table for kexec<br>
+	- arm64: kexec: enable MMU during kexec relocation<br>
+	  Split into two patches:<br>
+	  arm64: kexec: enable MMU during kexec relocation<br>
+	  arm64: kexec: remove head from relocation argument<br>
+v6:<br>
+	- Sync with mainline tip<br>
+	- Added Acked's from Dave Young<br>
+v5:<br>
+	- Addressed comments from Matthias Brugger: added review-by's, improved<br>
+	  comments, and made cleanups to swsusp_arch_resume() in addition to<br>
+	  create_safe_exec_page().<br>
+	- Synced with mainline tip.<br>
+v4:<br>
+	- Addressed comments from James Morse.<br>
+	- Split "check pgd table allocation" into two patches, and moved to<br>
+	  the beginning of series  for simpler backport of the fixes.<br>
+	  Added "Fixes:" tags to commit logs.<br>
+	- Changed "arm64, hibernate:" to "arm64: hibernate:"<br>
+	- Added Reviewed-by's<br>
+	- Moved "add PUD_SECT_RDONLY" earlier in series to be with other<br>
+	  clean-ups<br>
+	- Added "Derived from:" to arch/arm64/mm/trans_pgd.c<br>
+	- Removed "flags" from trans_info<br>
+	- Changed .trans_alloc_page assumption to return zeroed page.<br>
+	- Simplify changes to trans_pgd_map_page(), by keeping the old<br>
+	  code.<br>
+	- Simplify changes to trans_pgd_create_copy, by keeping the old<br>
+	  code.<br>
+	- Removed: "add trans_pgd_create_empty"<br>
+	- replace init_mm with NULL, and keep using non "__" version of<br>
+	  populate functions.<br>
+v3:<br>
+	- Split changes to create_safe_exec_page() into several patches for<br>
+	  easier review as request by Mark Rutland. This is why this series<br>
+	  has 3 more patches.<br>
+	- Renamed trans_table to tans_pgd as agreed with Mark. The header<br>
+	  comment in trans_pgd.c explains that trans stands for<br>
+	  transitional page tables. Meaning they are used in transition<br>
+	  between two kernels.<br>
+v2:<br>
+	- Fixed hibernate bug reported by James Morse<br>
+	- Addressed comments from James Morse:<br>
+	  * More incremental changes to trans_table<br>
+	  * Removed TRANS_FORCEMAP<br>
+	  * Added kexec reboot data for image with 380M in size.<br>
+<br>
+Enable MMU during kexec relocation in order to improve reboot performance.<br>
+<br>
+If kexec functionality is used for a fast system update, with a minimal<br>
+downtime, the relocation of kernel + initramfs takes a significant portion<br>
+of reboot.<br>
+<br>
+The reason for slow relocation is because it is done without MMU, and thus<br>
+not benefiting from D-Cache.<br>
+<br>
+Performance data<br>
+----------------<br>
+<br>
+Cavium ThunderX2:<br>
+Kernel Image size: 38M Iniramfs size: 46M Total relocation size: 84M<br>
+MMU-disabled:<br>
+relocation	7.489539915s<br>
+MMU-enabled:<br>
+relocation	0.03946095s<br>
+<br>
+Relocation performance is improved 190 times.<br>
+<br>
+Broadcom Stingray:<br>
+For this experiment, the size of kernel plus initramfs is small, only 25M.<br>
+If initramfs was larger, than the improvements would be greater, as time<br>
+spent in relocation is proportional to the size of relocation.<br>
+<br>
+MMU-disabled::<br>
+kernel shutdown	0.022131328s<br>
+relocation	0.440510736s<br>
+kernel startup	0.294706768s<br>
+<br>
+Relocation was taking: 58.2% of reboot time<br>
+<br>
+MMU-enabled:<br>
+kernel shutdown	0.032066576s<br>
+relocation	0.022158152s<br>
+kernel startup	0.296055880s<br>
+<br>
+Now: Relocation takes 6.3% of reboot time<br>
+<br>
+Total reboot is x2.16 times faster.<br>
+<br>
+With bigger userland (fitImage 380M), the reboot time is improved by 3.57s,<br>
+and is reduced from 3.9s down to 0.33s<br>
+<br>
+Previous approaches and discussions<br>
+-----------------------------------<br>
+v12: <a  rel="nofollow" href="https://lore.kernel.org/lkml/20210303002230.1083176-1-pasha.tatashin@xxxxxxxxxx">https://lore.kernel.org/lkml/20210303002230.1083176-1-pasha.tatashin@xxxxxxxxxx</a><br>
+v11: <a  rel="nofollow" href="https://lore.kernel.org/lkml/20210127172706.617195-1-pasha.tatashin@xxxxxxxxxx">https://lore.kernel.org/lkml/20210127172706.617195-1-pasha.tatashin@xxxxxxxxxx</a><br>
+v10: <a  rel="nofollow" href="https://lore.kernel.org/linux-arm-kernel/20210125191923.1060122-1-pasha.tatashin@xxxxxxxxxx">https://lore.kernel.org/linux-arm-kernel/20210125191923.1060122-1-pasha.tatashin@xxxxxxxxxx</a><br>
+v9: <a  rel="nofollow" href="https://lore.kernel.org/lkml/20200326032420.27220-1-pasha.tatashin@xxxxxxxxxx">https://lore.kernel.org/lkml/20200326032420.27220-1-pasha.tatashin@xxxxxxxxxx</a><br>
+v8: <a  rel="nofollow" href="https://lore.kernel.org/lkml/20191204155938.2279686-1-pasha.tatashin@xxxxxxxxxx">https://lore.kernel.org/lkml/20191204155938.2279686-1-pasha.tatashin@xxxxxxxxxx</a><br>
+v7: <a  rel="nofollow" href="https://lore.kernel.org/lkml/20191016200034.1342308-1-pasha.tatashin@xxxxxxxxxx">https://lore.kernel.org/lkml/20191016200034.1342308-1-pasha.tatashin@xxxxxxxxxx</a><br>
+v6: <a  rel="nofollow" href="https://lore.kernel.org/lkml/20191004185234.31471-1-pasha.tatashin@xxxxxxxxxx">https://lore.kernel.org/lkml/20191004185234.31471-1-pasha.tatashin@xxxxxxxxxx</a><br>
+v5: <a  rel="nofollow" href="https://lore.kernel.org/lkml/20190923203427.294286-1-pasha.tatashin@xxxxxxxxxx">https://lore.kernel.org/lkml/20190923203427.294286-1-pasha.tatashin@xxxxxxxxxx</a><br>
+v4: <a  rel="nofollow" href="https://lore.kernel.org/lkml/20190909181221.309510-1-pasha.tatashin@xxxxxxxxxx">https://lore.kernel.org/lkml/20190909181221.309510-1-pasha.tatashin@xxxxxxxxxx</a><br>
+v3: <a  rel="nofollow" href="https://lore.kernel.org/lkml/20190821183204.23576-1-pasha.tatashin@xxxxxxxxxx">https://lore.kernel.org/lkml/20190821183204.23576-1-pasha.tatashin@xxxxxxxxxx</a><br>
+v2: <a  rel="nofollow" href="https://lore.kernel.org/lkml/20190817024629.26611-1-pasha.tatashin@xxxxxxxxxx">https://lore.kernel.org/lkml/20190817024629.26611-1-pasha.tatashin@xxxxxxxxxx</a><br>
+v1: <a  rel="nofollow" href="https://lore.kernel.org/lkml/20190801152439.11363-1-pasha.tatashin@xxxxxxxxxx">https://lore.kernel.org/lkml/20190801152439.11363-1-pasha.tatashin@xxxxxxxxxx</a><br>
+<br>
+James Morse (4):<br>
+  arm64: hyp-stub: Check the size of the HYP stub's vectors<br>
+  arm64: hyp-stub: Move invalid vector entries into the vectors<br>
+  arm64: hyp-stub: Move el1_sync into the vectors<br>
+  arm64: kexec: Use dcache ops macros instead of open-coding<br>
+<br>
+Pavel Tatashin (13):<br>
+  arm64: kernel: add helper for booted at EL2 and not VHE<br>
+  arm64: trans_pgd: hibernate: Add trans_pgd_copy_el2_vectors<br>
+  arm64: hibernate: abstract ttrb0 setup function<br>
+  arm64: kexec: flush image and lists during kexec load time<br>
+  arm64: kexec: skip relocation code for inplace kexec<br>
+  arm64: kexec: pass kimage as the only argument to relocation function<br>
+  arm64: kexec: kexec may require EL2 vectors<br>
+  arm64: kexec: relocate in EL1 mode<br>
+  arm64: kexec: use ld script for relocation function<br>
+  arm64: kexec: install a copy of the linear-map<br>
+  arm64: kexec: keep MMU enabled during kexec relocation<br>
+  arm64: kexec: remove the pre-kexec PoC maintenance<br>
+  arm64: kexec: Remove cpu-reset.h<br>
+<br>
+Pingfan Liu (1):<br>
+  arm64/mm: remove useless trans_pgd_map_page()<br>
+<br>
+ arch/arm64/Kconfig                   |   2 +-<br>
+ arch/arm64/include/asm/assembler.h   |  31 ++++-<br>
+ arch/arm64/include/asm/kexec.h       |  12 ++<br>
+ arch/arm64/include/asm/mmu_context.h |  24 ++++<br>
+ arch/arm64/include/asm/sections.h    |   1 +<br>
+ arch/arm64/include/asm/trans_pgd.h   |   8 +-<br>
+ arch/arm64/include/asm/virt.h        |   8 ++<br>
+ arch/arm64/kernel/asm-offsets.c      |  11 ++<br>
+ arch/arm64/kernel/cpu-reset.S        |   7 +-<br>
+ arch/arm64/kernel/cpu-reset.h        |  32 -----<br>
+ arch/arm64/kernel/hibernate-asm.S    |  20 ----<br>
+ arch/arm64/kernel/hibernate.c        |  56 +++------<br>
+ arch/arm64/kernel/hyp-stub.S         |  95 +++++++--------<br>
+ arch/arm64/kernel/machine_kexec.c    | 168 +++++++++++++++------------<br>
+ arch/arm64/kernel/relocate_kernel.S  |  72 ++++++------<br>
+ arch/arm64/kernel/sdei.c             |   2 +-<br>
+ arch/arm64/kernel/vmlinux.lds.S      |  19 +++<br>
+ arch/arm64/mm/trans_pgd.c            |  77 ++++--------<br>
+ 18 files changed, 315 insertions(+), 330 deletions(-)<br>
+ delete mode 100644 arch/arm64/kernel/cpu-reset.h<br>
+<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

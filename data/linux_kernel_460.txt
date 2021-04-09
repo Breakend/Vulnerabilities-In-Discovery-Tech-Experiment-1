@@ -1,0 +1,530 @@
+From: SeongJae Park <sjpark@xxxxxxxxx><br>
+<br>
+Changes from Previous Version (v26)<br>
+===================================<br>
+<br>
+- Rebase on latest -mm tree (v5.12-rc6-mmots-2021-04-06-22-33)<br>
+- Check kmalloc() failures in dbgfs init (Greg KH)<br>
+- Fix a typo: s/stollen/stolen/ (Stefan Nuernberger)<br>
+- Update document for updated user space tool path<br>
+<br>
+Introduction<br>
+============<br>
+<br>
+DAMON is a data access monitoring framework for the Linux kernel.  The core<br>
+mechanisms of DAMON called 'region based sampling' and 'adaptive regions<br>
+adjustment' (refer to 'mechanisms.rst' in the 11th patch of this patchset for<br>
+the detail) make it<br>
+<br>
+ - accurate (The monitored information is useful for DRAM level memory<br>
+   management. It might not appropriate for Cache-level accuracy, though.),<br>
+ - light-weight (The monitoring overhead is low enough to be applied online<br>
+   while making no impact on the performance of the target workloads.), and<br>
+ - scalable (the upper-bound of the instrumentation overhead is controllable<br>
+   regardless of the size of target workloads.).<br>
+<br>
+Using this framework, therefore, several memory management mechanisms such as<br>
+reclamation and THP can be optimized to aware real data access patterns.<br>
+Experimental access pattern aware memory management optimization works that<br>
+incurring high instrumentation overhead will be able to have another try.<br>
+<br>
+Though DAMON is for kernel subsystems, it can be easily exposed to the user<br>
+space by writing a DAMON-wrapper kernel subsystem.  Then, user space users who<br>
+have some special workloads will be able to write personalized tools or<br>
+applications for deeper understanding and specialized optimizations of their<br>
+systems.<br>
+<br>
+Long-term Plan<br>
+--------------<br>
+<br>
+DAMON is a part of a project called Data Access-aware Operating System (DAOS).<br>
+As the name implies, I want to improve the performance and efficiency of<br>
+systems using fine-grained data access patterns.  The optimizations are for<br>
+both kernel and user spaces.  I will therefore modify or create kernel<br>
+subsystems, export some of those to user space and implement user space library<br>
+/ tools.  Below shows the layers and components for the project.<br>
+<br>
+    ---------------------------------------------------------------------------<br>
+    Primitives:     PTE Accessed bit, PG_idle, rmap, (Intel CMT), ...<br>
+    Framework:      DAMON<br>
+    Features:       DAMOS, virtual addr, physical addr, ...<br>
+    Applications:   DAMON-debugfs, (DARC), ...<br>
+    ^^^^^^^^^^^^^^^^^^^^^^^    KERNEL SPACE    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^<br>
+<br>
+    Raw Interface:  debugfs, (sysfs), (damonfs), tracepoints, (sys_damon), ...<br>
+<br>
+    vvvvvvvvvvvvvvvvvvvvvvv    USER SPACE      vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv<br>
+    Library:        (libdamon), ...<br>
+    Tools:          DAMO, (perf), ...<br>
+    ---------------------------------------------------------------------------<br>
+<br>
+The components in parentheses or marked as '...' are not implemented yet but in<br>
+the future plan.  IOW, those are the TODO tasks of DAOS project.  For more<br>
+detail, please refer to the plans:<br>
+<a  rel="nofollow" href="https://lore.kernel.org/linux-mm/20201202082731.24828-1-sjpark@xxxxxxxxxx/">https://lore.kernel.org/linux-mm/20201202082731.24828-1-sjpark@xxxxxxxxxx/</a><br>
+<br>
+Evaluations<br>
+===========<br>
+<br>
+We evaluated DAMON's overhead, monitoring quality and usefulness using 24<br>
+realistic workloads on my QEMU/KVM based virtual machine running a kernel that<br>
+v24 DAMON patchset is applied.<br>
+<br>
+DAMON is lightweight.  It increases system memory usage by 0.39% and slows<br>
+target workloads down by 1.16%.<br>
+<br>
+DAMON is accurate and useful for memory management optimizations.  An<br>
+experimental DAMON-based operation scheme for THP, namely 'ethp', removes<br>
+76.15% of THP memory overheads while preserving 51.25% of THP speedup.  Another<br>
+experimental DAMON-based 'proactive reclamation' implementation, 'prcl',<br>
+reduces 93.38% of residential sets and 23.63% of system memory footprint while<br>
+incurring only 1.22% runtime overhead in the best case (parsec3/freqmine).<br>
+<br>
+NOTE that the experimental THP optimization and proactive reclamation are not<br>
+for production but only for proof of concepts.<br>
+<br>
+Please refer to the official document[1] or "Documentation/admin-guide/mm: Add<br>
+a document for DAMON" patch in this patchset for detailed evaluation setup and<br>
+results.<br>
+<br>
+[1] <a  rel="nofollow" href="https://damonitor.github.io/doc/html/latest-damon/admin-guide/mm/damon/eval.html">https://damonitor.github.io/doc/html/latest-damon/admin-guide/mm/damon/eval.html</a><br>
+<br>
+Real-world User Story<br>
+=====================<br>
+<br>
+In summary, DAMON has used on production systems and proved its usefulness.<br>
+<br>
+DAMON as a profiler<br>
+-------------------<br>
+<br>
+We analyzed characteristics of a large scale production systems of our<br>
+customers using DAMON.  The systems utilize 70GB DRAM and 36 CPUs.  From this,<br>
+we were able to find interesting things below.<br>
+<br>
+There were obviously different access pattern under idle workload and active<br>
+workload.  Under the idle workload, it accessed large memory regions with low<br>
+frequency, while the active workload accessed small memory regions with high<br>
+freuqnecy.<br>
+<br>
+DAMON found a 7GB memory region that showing obviously high access frequency<br>
+under the active workload.  We believe this is the performance-effective<br>
+working set and need to be protected.<br>
+<br>
+There was a 4KB memory region that showing highest access frequency under not<br>
+only active but also idle workloads.  We think this must be a hottest code<br>
+section like thing that should never be paged out.<br>
+<br>
+For this analysis, DAMON used only 0.3-1% of single CPU time.  Because we used<br>
+recording-based analysis, it consumed about 3-12 MB of disk space per 20<br>
+minutes.  This is only small amount of disk space, but we can further reduce<br>
+the disk usage by using non-recording-based DAMON features.  I'd like to argue<br>
+that only DAMON can do such detailed analysis (finding 4KB highest region in<br>
+70GB memory) with the light overhead.<br>
+<br>
+DAMON as a system optimization tool<br>
+-----------------------------------<br>
+<br>
+We also found below potential performance problems on the systems and made<br>
+DAMON-based solutions.<br>
+<br>
+The system doesn't want to make the workload suffer from the page reclamation<br>
+and thus it utilizes enough DRAM but no swap device.  However, we found the<br>
+system is actively reclaiming file-backed pages, because the system has<br>
+intensive file IO.  The file IO turned out to be not performance critical for<br>
+the workload, but the customer wanted to ensure performance critical<br>
+file-backed pages like code section to not mistakenly be evicted.<br>
+<br>
+Using direct IO should or `mlock()` would be a straightforward solution, but<br>
+modifying the user space code is not easy for the customer.  Alternatively, we<br>
+could use DAMON-based operation scheme[1].  By using it, we can ask DAMON to<br>
+track access frequency of each region and make<br>
+'process_madvise(MADV_WILLNEED)[2]' call for regions having specific size and<br>
+access frequency for a time interval.<br>
+<br>
+We also found the system is having high number of TLB misses.  We tried<br>
+'always' THP enabled policy and it greatly reduced TLB misses, but the page<br>
+reclamation also been more frequent due to the THP internal fragmentation<br>
+caused memory bloat.  We could try another DAMON-based operation scheme that<br>
+applies 'MADV_HUGEPAGE' to memory regions having >=2MB size and high access<br>
+frequency, while applying 'MADV_NOHUGEPAGE' to regions having <2MB size and low<br>
+access frequency.<br>
+<br>
+We do not own the systems so we only reported the analysis results and possible<br>
+optimization solutions to the customers.  The customers satisfied about the<br>
+analysis results and promised to try the optimization guides.<br>
+<br>
+[1] <a  rel="nofollow" href="https://lore.kernel.org/linux-mm/20201006123931.5847-1-sjpark@xxxxxxxxxx/">https://lore.kernel.org/linux-mm/20201006123931.5847-1-sjpark@xxxxxxxxxx/</a><br>
+[2] <a  rel="nofollow" href="https://lore.kernel.org/linux-api/20200622192900.22757-4-minchan@xxxxxxxxxx/">https://lore.kernel.org/linux-api/20200622192900.22757-4-minchan@xxxxxxxxxx/</a><br>
+<br>
+Comparison with Idle Page Tracking<br>
+==================================<br>
+<br>
+Idle Page Tracking allows users to set and read idleness of pages using a<br>
+bitmap file which represents each page with each bit of the file.  One<br>
+recommended usage of it is working set size detection.  Users can do that by<br>
+<br>
+    1. find PFN of each page for workloads in interest,<br>
+    2. set all the pages as idle by doing writes to the bitmap file,<br>
+    3. wait until the workload accesses its working set, and<br>
+    4. read the idleness of the pages again and count pages became not idle.<br>
+<br>
+NOTE: While Idle Page Tracking is for user space users, DAMON is primarily<br>
+designed for kernel subsystems though it can easily exposed to the user space.<br>
+Hence, this section only assumes such user space use of DAMON.<br>
+<br>
+For what use cases Idle Page Tracking would be better?<br>
+------------------------------------------------------<br>
+<br>
+1. Flexible usecases other than hotness monitoring.<br>
+<br>
+Because Idle Page Tracking allows users to control the primitive (Page<br>
+idleness) by themselves, Idle Page Tracking users can do anything they want.<br>
+Meanwhile, DAMON is primarily designed to monitor the hotness of each memory<br>
+region.  For this, DAMON asks users to provide sampling interval and<br>
+aggregation interval.  For the reason, there could be some use case that using<br>
+Idle Page Tracking is simpler.<br>
+<br>
+2. Physical memory monitoring.<br>
+<br>
+Idle Page Tracking receives PFN range as input, so natively supports physical<br>
+memory monitoring.<br>
+<br>
+DAMON is designed to be extensible for multiple address spaces and use cases by<br>
+implementing and using primitives for the given use case.  Therefore, by<br>
+theory, DAMON has no limitation in the type of target address space as long as<br>
+primitives for the given address space exists.  However, the default primitives<br>
+introduced by this patchset supports only virtual address spaces.<br>
+<br>
+Therefore, for physical memory monitoring, you should implement your own<br>
+primitives and use it, or simply use Idle Page Tracking.<br>
+<br>
+Nonetheless, RFC patchsets[1] for the physical memory address space primitives<br>
+is already available.  It also supports user memory same to Idle Page Tracking.<br>
+<br>
+[1] <a  rel="nofollow" href="https://lore.kernel.org/linux-mm/20200831104730.28970-1-sjpark@xxxxxxxxxx/">https://lore.kernel.org/linux-mm/20200831104730.28970-1-sjpark@xxxxxxxxxx/</a><br>
+<br>
+For what use cases DAMON is better?<br>
+-----------------------------------<br>
+<br>
+1. Hotness Monitoring.<br>
+<br>
+Idle Page Tracking let users know only if a page frame is accessed or not.  For<br>
+hotness check, the user should write more code and use more memory.  DAMON do<br>
+that by itself.<br>
+<br>
+2. Low Monitoring Overhead<br>
+<br>
+DAMON receives user's monitoring request with one step and then provide the<br>
+results.  So, roughly speaking, DAMON require only O(1) user/kernel context<br>
+switches.<br>
+<br>
+In case of Idle Page Tracking, however, because the interface receives<br>
+contiguous page frames, the number of user/kernel context switches increases as<br>
+the monitoring target becomes complex and huge.  As a result, the context<br>
+switch overhead could be not negligible.<br>
+<br>
+Moreover, DAMON is born to handle with the monitoring overhead.  Because the<br>
+core mechanism is pure logical, Idle Page Tracking users might be able to<br>
+implement the mechanism on thier own, but it would be time consuming and the<br>
+user/kernel context switching will still more frequent than that of DAMON.<br>
+Also, the kernel subsystems cannot use the logic in this case.<br>
+<br>
+3. Page granularity working set size detection.<br>
+<br>
+Until v22 of this patchset, this was categorized as the thing Idle Page<br>
+Tracking could do better, because DAMON basically maintains additional metadata<br>
+for each of the monitoring target regions.  So, in the page granularity working<br>
+set size detection use case, DAMON would incur (number of monitoring target<br>
+pages * size of metadata) memory overhead.  Size of the single metadata item is<br>
+about 54 bytes, so assuming 4KB pages, about 1.3% of monitoring target pages<br>
+will be additionally used.<br>
+<br>
+All essential metadata for Idle Page Tracking are embedded in 'struct page' and<br>
+page table entries.  Therefore, in this use case, only one counter variable for<br>
+working set size accounting is required if Idle Page Tracking is used.<br>
+<br>
+There are more details to consider, but roughly speaking, this is true in most<br>
+cases.<br>
+<br>
+However, the situation changed from v23.  Now DAMON supports arbitrary types of<br>
+monitoring targets, which don't use the metadata.  Using that, DAMON can do the<br>
+working set size detection with no additional space overhead but less<br>
+user-kernel context switch.  A first draft for the implementation of monitoring<br>
+primitives for this usage is available in a DAMON development tree[1].  An RFC<br>
+patchset for it based on this patchset will also be available soon.<br>
+<br>
+><i>From v24, the arbitrary type support is dropped from this patchset because this</i><br>
+patchset doesn't introduce real use of the type.  You can still get it from the<br>
+DAMON development tree[2], though.<br>
+<br>
+[1] <a  rel="nofollow" href="https://github.com/sjp38/linux/tree/damon/pgidle_hack">https://github.com/sjp38/linux/tree/damon/pgidle_hack</a><br>
+[2] <a  rel="nofollow" href="https://github.com/sjp38/linux/tree/damon/master">https://github.com/sjp38/linux/tree/damon/master</a><br>
+<br>
+4. More future usecases<br>
+<br>
+While Idle Page Tracking has tight coupling with base primitives (PG_Idle and<br>
+page table Accessed bits), DAMON is designed to be extensible for many use<br>
+cases and address spaces.  If you need some special address type or want to use<br>
+special h/w access check primitives, you can write your own primitives for that<br>
+and configure DAMON to use those.  Therefore, if your use case could be changed<br>
+a lot in future, using DAMON could be better.<br>
+<br>
+Can I use both Idle Page Tracking and DAMON?<br>
+--------------------------------------------<br>
+<br>
+Yes, though using them concurrently for overlapping memory regions could result<br>
+in interference to each other.  Nevertheless, such use case would be rare or<br>
+makes no sense at all.  Even in the case, the noise would bot be really<br>
+significant.  So, you can choose whatever you want depending on the<br>
+characteristics of your use cases.<br>
+<br>
+More Information<br>
+================<br>
+<br>
+We prepared a showcase web site[1] that you can get more information.  There<br>
+are<br>
+<br>
+- the official documentations[2],<br>
+- the heatmap format dynamic access pattern of various realistic workloads for<br>
+  heap area[3], mmap()-ed area[4], and stack[5] area,<br>
+- the dynamic working set size distribution[6] and chronological working set<br>
+  size changes[7], and<br>
+- the latest performance test results[8].<br>
+<br>
+[1] <a  rel="nofollow" href="https://damonitor.github.io/_index">https://damonitor.github.io/_index</a><br>
+[2] <a  rel="nofollow" href="https://damonitor.github.io/doc/html/latest-damon">https://damonitor.github.io/doc/html/latest-damon</a><br>
+[3] <a  rel="nofollow" href="https://damonitor.github.io/test/result/visual/latest/rec.heatmap.0.png.html">https://damonitor.github.io/test/result/visual/latest/rec.heatmap.0.png.html</a><br>
+[4] <a  rel="nofollow" href="https://damonitor.github.io/test/result/visual/latest/rec.heatmap.1.png.html">https://damonitor.github.io/test/result/visual/latest/rec.heatmap.1.png.html</a><br>
+[5] <a  rel="nofollow" href="https://damonitor.github.io/test/result/visual/latest/rec.heatmap.2.png.html">https://damonitor.github.io/test/result/visual/latest/rec.heatmap.2.png.html</a><br>
+[6] <a  rel="nofollow" href="https://damonitor.github.io/test/result/visual/latest/rec.wss_sz.png.html">https://damonitor.github.io/test/result/visual/latest/rec.wss_sz.png.html</a><br>
+[7] <a  rel="nofollow" href="https://damonitor.github.io/test/result/visual/latest/rec.wss_time.png.html">https://damonitor.github.io/test/result/visual/latest/rec.wss_time.png.html</a><br>
+[8] <a  rel="nofollow" href="https://damonitor.github.io/test/result/perf/latest/html/index.html">https://damonitor.github.io/test/result/perf/latest/html/index.html</a><br>
+<br>
+Baseline and Complete Git Trees<br>
+===============================<br>
+<br>
+The patches are based on the -mm tree.  More specifically,<br>
+v5.12-rc6-mmots-2021-04-06-22-33 of <a  rel="nofollow" href="https://github.com/hnaz/linux-mm">https://github.com/hnaz/linux-mm</a>.  You can<br>
+also clone the complete git tree:<br>
+<br>
+    $ git clone git://github.com/sjp38/linux -b damon/patches/v27<br>
+<br>
+The web is also available:<br>
+<a  rel="nofollow" href="https://github.com/sjp38/linux/releases/tag/damon/patches/v27">https://github.com/sjp38/linux/releases/tag/damon/patches/v27</a><br>
+<br>
+Development Trees<br>
+-----------------<br>
+<br>
+There are a couple of trees for entire DAMON patchset series and<br>
+features for future release.<br>
+<br>
+- For latest release: <a  rel="nofollow" href="https://github.com/sjp38/linux/tree/damon/master">https://github.com/sjp38/linux/tree/damon/master</a><br>
+- For next release: <a  rel="nofollow" href="https://github.com/sjp38/linux/tree/damon/next">https://github.com/sjp38/linux/tree/damon/next</a><br>
+<br>
+Long-term Support Trees<br>
+-----------------------<br>
+<br>
+For people who want to test DAMON but using LTS kernels, there are another<br>
+couple of trees based on two latest LTS kernels respectively and containing the<br>
+'damon/master' backports.<br>
+<br>
+- For v5.4.y: <a  rel="nofollow" href="https://github.com/sjp38/linux/tree/damon/for-v5.4.y">https://github.com/sjp38/linux/tree/damon/for-v5.4.y</a><br>
+- For v5.10.y: <a  rel="nofollow" href="https://github.com/sjp38/linux/tree/damon/for-v5.10.y">https://github.com/sjp38/linux/tree/damon/for-v5.10.y</a><br>
+<br>
+Sequence Of Patches<br>
+===================<br>
+<br>
+First three patches implement the core logics of DAMON.  The 1st patch<br>
+introduces basic sampling based hotness monitoring for arbitrary types of<br>
+targets.  Following two patches implement the core mechanisms for control of<br>
+overhead and accuracy, namely regions based sampling (patch 2) and adaptive<br>
+regions adjustment (patch 3).<br>
+<br>
+Now the essential parts of DAMON is complete, but it cannot work unless someone<br>
+provides monitoring primitives for a specific use case.  The following two<br>
+patches make it just work for virtual address spaces monitoring.  The 4th patch<br>
+makes 'PG_idle' can be used by DAMON and the 5th patch implements the virtual<br>
+memory address space specific monitoring primitives using page table Accessed<br>
+bits and the 'PG_idle' page flag.<br>
+<br>
+Now DAMON just works for virtual address space monitoring via the kernel space<br>
+api.  To let the user space users can use DAMON, following four patches add<br>
+interfaces for them.  The 6th patch adds a tracepoint for monitoring results.<br>
+The 7th patch implements a DAMON application kernel module, namely damon-dbgfs,<br>
+that simply wraps DAMON and exposes DAMON interface to the user space via the<br>
+debugfs interface.  The 8th patch further exports pid of monitoring thread<br>
+(kdamond) to user space for easier cpu usage accounting, and the 9th patch<br>
+makes the debugfs interface to support multiple contexts.<br>
+<br>
+Three patches for maintainability follows.  The 10th patch adds documentations<br>
+for both the user space and the kernel space.  The 11th patch provides unit<br>
+tests (based on the kunit) while the 12th patch adds user space tests (based on<br>
+the kselftest).<br>
+<br>
+Finally, the last patch (13th) updates the MAINTAINERS file.<br>
+<br>
+Patch History<br>
+=============<br>
+<br>
+Changes from v26<br>
+(<a  rel="nofollow" href="https://lore.kernel.org/linux-mm/20210330090537.12143-1-sj38.park@xxxxxxxxx/">https://lore.kernel.org/linux-mm/20210330090537.12143-1-sj38.park@xxxxxxxxx/</a>)<br>
+- Rebase on latest -mm tree (v5.12-rc6-mmots-2021-04-06-22-33)<br>
+- Check kmalloc() failures in dbgfs init (Greg KH)<br>
+- Fix a typo: s/stollen/stolen/ (Stefan Nuernberger)<br>
+- Update document for updated user space tool path<br>
+<br>
+Changes from v25<br>
+(<a  rel="nofollow" href="https://lore.kernel.org/linux-mm/20210318100856.34715-1-sj38.park@xxxxxxxxx/">https://lore.kernel.org/linux-mm/20210318100856.34715-1-sj38.park@xxxxxxxxx/</a>)<br>
+- Rebase on latest -mm tree (v5.12-rc4-mmots-2021-03-28-16-40)<br>
+- Remove unnecessary test code that dependent on record feature<br>
+- Handle special mappings having no corresponding 'struct page' (Guoju Fang)<br>
+<br>
+Changes from v24<br>
+(<a  rel="nofollow" href="https://lore.kernel.org/linux-mm/20210204153150.15948-1-sjpark@xxxxxxxxxx/">https://lore.kernel.org/linux-mm/20210204153150.15948-1-sjpark@xxxxxxxxxx/</a>)<br>
+- Rebase on latest -mm tree (v5.12-rc3-mmots-2021-03-17-22-26)<br>
+- Ignore 'debugfs_create_{file|dir}()' return values (Greg KH)<br>
+- Remove 'recording' feature (Shakeel Butt)<br>
+- Remove user space tool and recording description in the documentation<br>
+<br>
+Changes from v23<br>
+(<a  rel="nofollow" href="https://lore.kernel.org/linux-mm/20201215115448.25633-1-sjpark@xxxxxxxxxx/">https://lore.kernel.org/linux-mm/20201215115448.25633-1-sjpark@xxxxxxxxxx/</a>)<br>
+- Wordsmith commit messages (Shakeel Butt)<br>
+- Call missed mmu_notifier_test_young() (Shakeel Butt)<br>
+- Add one 'Reviewed-by' tag for PG_Idle reuse patch (Shakeel Butt)<br>
+- Rename core code to be region-neutral (Shakeel Butt)<br>
+- Add missed null check of 'damon_new_region()' return value (Coverity SAST)<br>
+- Put pids in dbgfs error cases (Shakeel Butt)<br>
+- Move arbitrary target type support out of DAMON patchset series (Shakeel Butt)<br>
+- Move user space tool patch out of DAMON patchset series<br>
+- Update evaluation result with DAMOOS-tuned prcl schemes<br>
+<br>
+Changes from v22<br>
+(<a  rel="nofollow" href="https://lore.kernel.org/linux-mm/20201020085940.13875-1-sjpark@xxxxxxxxxx/">https://lore.kernel.org/linux-mm/20201020085940.13875-1-sjpark@xxxxxxxxxx/</a>)<br>
+- Support arbitrary targets; now DAMON incurs only zero space overhead for page<br>
+  granularity idleness monitoring<br>
+- Reorder patches for easier review (Shakeel Butt)<br>
+  - Introduce arbitrary targets with sampling first, then the overhead-accuracy<br>
+    control logic<br>
+  - Introduce data structure manipulation functions when it really used.<br>
+- Call callbacks explicitly, without macro (Shakeel Butt)<br>
+- Rename DAMON_PRIMITIVES to DAMON_VADDR (Shakeel Butt)<br>
+- Remove 'page_idle_lock' patch (Shakeel Butt)<br>
+- Drop pidfd support in debugfs (Shakeel Butt)<br>
+<br>
+Changes from v21<br>
+(<a  rel="nofollow" href="https://lore.kernel.org/linux-doc/20201005105522.23841-1-sjpark@xxxxxxxxxx/">https://lore.kernel.org/linux-doc/20201005105522.23841-1-sjpark@xxxxxxxxxx/</a>)<br>
+- Fix build warnings and errors (kernel test robot)<br>
+- Fix a memory leak (kmemleak)<br>
+- Respect KUNIT_ALL_TESTS<br>
+- Rebase on v5.9<br>
+- Update the evaluation results<br>
+<br>
+Changes from v20<br>
+(<a  rel="nofollow" href="https://lore.kernel.org/linux-mm/20200817105137.19296-1-sjpark@xxxxxxxxxx/">https://lore.kernel.org/linux-mm/20200817105137.19296-1-sjpark@xxxxxxxxxx/</a>)<br>
+- s/snprintf()/scnprintf() (Marco Elver)<br>
+- Support multiple contexts for user space users (Shakeel Butt)<br>
+- Export pid of monitoring thread to user space (Shakeel Butt)<br>
+- Let coexistable with Idle Page Tracking<br>
+- Place three parts of DAMON (core, primitives, and dbgfs) in different files<br>
+<br>
+Changes from v19<br>
+(<a  rel="nofollow" href="https://lore.kernel.org/linux-mm/20200804091416.31039-1-sjpark@xxxxxxxxxx/">https://lore.kernel.org/linux-mm/20200804091416.31039-1-sjpark@xxxxxxxxxx/</a>)<br>
+- Place 'CREATE_TRACE_POINTS' after '#include' statements (Steven Rostedt)<br>
+- Support large record file (Alkaid)<br>
+- Place 'put_pid()' of virtual monitoring targets in 'cleanup' callback<br>
+- Avoid conflict between concurrent DAMON users<br>
+- Update evaluation result document<br>
+<br>
+Changes from v18<br>
+(<a  rel="nofollow" href="https://lore.kernel.org/linux-mm/20200713084144.4430-1-sjpark@xxxxxxxxxx/">https://lore.kernel.org/linux-mm/20200713084144.4430-1-sjpark@xxxxxxxxxx/</a>)<br>
+- Drop loadable module support (Mike Rapoport)<br>
+- Select PAGE_EXTENSION if !64BIT for 'set_page_young()'<br>
+- Take care of the MMU notification subscribers (Shakeel Butt)<br>
+- Substitute 'struct damon_task' with 'struct damon_target' for better abstract<br>
+- Use 'struct pid' instead of 'pid_t' as the target (Shakeel Butt)<br>
+- Support pidfd from the debugfs interface (Shakeel Butt)<br>
+- Fix typos (Greg Thelen)<br>
+- Properly isolate DAMON from other pmd/pte Accessed bit users (Greg Thelen)<br>
+- Rebase on v5.8<br>
+<br>
+Please refer to the v18 patchset to get older history.<br>
+<br>
+SeongJae Park (13):<br>
+  mm: Introduce Data Access MONitor (DAMON)<br>
+  mm/damon/core: Implement region-based sampling<br>
+  mm/damon: Adaptively adjust regions<br>
+  mm/idle_page_tracking: Make PG_idle reusable<br>
+  mm/damon: Implement primitives for the virtual memory address spaces<br>
+  mm/damon: Add a tracepoint<br>
+  mm/damon: Implement a debugfs-based user space interface<br>
+  mm/damon/dbgfs: Export kdamond pid to the user space<br>
+  mm/damon/dbgfs: Support multiple contexts<br>
+  Documentation: Add documents for DAMON<br>
+  mm/damon: Add kunit tests<br>
+  mm/damon: Add user space selftests<br>
+  MAINTAINERS: Update for DAMON<br>
+<br>
+ Documentation/admin-guide/mm/damon/guide.rst  | 158 ++++<br>
+ Documentation/admin-guide/mm/damon/index.rst  |  15 +<br>
+ Documentation/admin-guide/mm/damon/plans.rst  |  29 +<br>
+ Documentation/admin-guide/mm/damon/start.rst  | 114 +++<br>
+ Documentation/admin-guide/mm/damon/usage.rst  | 112 +++<br>
+ Documentation/admin-guide/mm/index.rst        |   1 +<br>
+ Documentation/vm/damon/api.rst                |  20 +<br>
+ Documentation/vm/damon/design.rst             | 166 ++++<br>
+ Documentation/vm/damon/eval.rst               | 232 ++++++<br>
+ Documentation/vm/damon/faq.rst                |  58 ++<br>
+ Documentation/vm/damon/index.rst              |  31 +<br>
+ Documentation/vm/index.rst                    |   1 +<br>
+ MAINTAINERS                                   |  12 +<br>
+ include/linux/damon.h                         | 265 +++++++<br>
+ include/linux/page-flags.h                    |   4 +-<br>
+ include/linux/page_ext.h                      |   2 +-<br>
+ include/linux/page_idle.h                     |   6 +-<br>
+ include/trace/events/damon.h                  |  43 ++<br>
+ include/trace/events/mmflags.h                |   2 +-<br>
+ mm/Kconfig                                    |  11 +<br>
+ mm/Makefile                                   |   1 +<br>
+ mm/damon/Kconfig                              |  69 ++<br>
+ mm/damon/Makefile                             |   5 +<br>
+ mm/damon/core-test.h                          | 253 ++++++<br>
+ mm/damon/core.c                               | 718 ++++++++++++++++++<br>
+ mm/damon/dbgfs-test.h                         | 126 +++<br>
+ mm/damon/dbgfs.c                              | 617 +++++++++++++++<br>
+ mm/damon/vaddr-test.h                         | 328 ++++++++<br>
+ mm/damon/vaddr.c                              | 623 +++++++++++++++<br>
+ mm/page_ext.c                                 |  12 +-<br>
+ mm/page_idle.c                                |  10 -<br>
+ tools/testing/selftests/damon/Makefile        |   7 +<br>
+ .../selftests/damon/_chk_dependency.sh        |  28 +<br>
+ .../testing/selftests/damon/debugfs_attrs.sh  |  98 +++<br>
+ 34 files changed, 4159 insertions(+), 18 deletions(-)<br>
+ create mode 100644 Documentation/admin-guide/mm/damon/guide.rst<br>
+ create mode 100644 Documentation/admin-guide/mm/damon/index.rst<br>
+ create mode 100644 Documentation/admin-guide/mm/damon/plans.rst<br>
+ create mode 100644 Documentation/admin-guide/mm/damon/start.rst<br>
+ create mode 100644 Documentation/admin-guide/mm/damon/usage.rst<br>
+ create mode 100644 Documentation/vm/damon/api.rst<br>
+ create mode 100644 Documentation/vm/damon/design.rst<br>
+ create mode 100644 Documentation/vm/damon/eval.rst<br>
+ create mode 100644 Documentation/vm/damon/faq.rst<br>
+ create mode 100644 Documentation/vm/damon/index.rst<br>
+ create mode 100644 include/linux/damon.h<br>
+ create mode 100644 include/trace/events/damon.h<br>
+ create mode 100644 mm/damon/Kconfig<br>
+ create mode 100644 mm/damon/Makefile<br>
+ create mode 100644 mm/damon/core-test.h<br>
+ create mode 100644 mm/damon/core.c<br>
+ create mode 100644 mm/damon/dbgfs-test.h<br>
+ create mode 100644 mm/damon/dbgfs.c<br>
+ create mode 100644 mm/damon/vaddr-test.h<br>
+ create mode 100644 mm/damon/vaddr.c<br>
+ create mode 100644 tools/testing/selftests/damon/Makefile<br>
+ create mode 100644 tools/testing/selftests/damon/_chk_dependency.sh<br>
+ create mode 100755 tools/testing/selftests/damon/debugfs_attrs.sh<br>
+<br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+

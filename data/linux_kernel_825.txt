@@ -1,0 +1,40 @@
+When core is in partial power down state and an external<br>
+hub is connected, upper layer sends URB enqueue request,<br>
+which results in port reset issue.<br>
+<br>
+Added exit from partial power down state to avoid port<br>
+reset issue and process upper layer request correctly.<br>
+<br>
+Signed-off-by: Artur Petrosyan <Arthur.Petrosyan@xxxxxxxxxxxx><br>
+---<br>
+ Changes in v3:<br>
+ - None<br>
+ Changes in v2:<br>
+ - None<br>
+<br>
+ drivers/usb/dwc2/hcd.c | 7 +++++++<br>
+ 1 file changed, 7 insertions(+)<br>
+<br>
+diff --git a/drivers/usb/dwc2/hcd.c b/drivers/usb/dwc2/hcd.c<br>
+index 9529e9839961..cb52bc41bfb8 100644<br>
+--- a/drivers/usb/dwc2/hcd.c<br>
++++ b/drivers/usb/dwc2/hcd.c<br>
+@@ -4633,6 +4633,13 @@ static int _dwc2_hcd_urb_enqueue(struct usb_hcd *hcd, struct urb *urb,<br>
+ 		dwc2_dump_urb_info(hcd, urb, "urb_enqueue");<br>
+ 	}<br>
+ <br>
++	if (hsotg->in_ppd) {<br>
++		retval = dwc2_exit_partial_power_down(hsotg, 0, true);<br>
++		if (retval)<br>
++			dev_err(hsotg->dev,<br>
++				"exit partial_power_down failed\n");<br>
++	}<br>
++<br>
+ 	if (!ep)<br>
+ 		return -EINVAL;<br>
+ <br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

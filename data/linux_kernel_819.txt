@@ -1,0 +1,51 @@
+When dwc2 core is in partial power down mode<br>
+loading driver again causes driver fail. Because in<br>
+that mode registers are not accessible.<br>
+<br>
+Added a flow of exiting the partial power down mode<br>
+to avoid the driver reload failure.<br>
+<br>
+Signed-off-by: Artur Petrosyan <Arthur.Petrosyan@xxxxxxxxxxxx><br>
+---<br>
+ Changes in v3:<br>
+ - None<br>
+ Changes in v2:<br>
+ - None<br>
+<br>
+ drivers/usb/dwc2/platform.c | 11 ++++++++++-<br>
+ 1 file changed, 10 insertions(+), 1 deletion(-)<br>
+<br>
+diff --git a/drivers/usb/dwc2/platform.c b/drivers/usb/dwc2/platform.c<br>
+index 5f18acac7406..b28b8cd45799 100644<br>
+--- a/drivers/usb/dwc2/platform.c<br>
++++ b/drivers/usb/dwc2/platform.c<br>
+@@ -316,6 +316,15 @@ static int dwc2_lowlevel_hw_init(struct dwc2_hsotg *hsotg)<br>
+ static int dwc2_driver_remove(struct platform_device *dev)<br>
+ {<br>
+ 	struct dwc2_hsotg *hsotg = platform_get_drvdata(dev);<br>
++	int ret = 0;<br>
++<br>
++	/* Exit Partial Power Down when driver is removed. */<br>
++	if (hsotg->in_ppd) {<br>
++		ret = dwc2_exit_partial_power_down(hsotg, 0, true);<br>
++		if (ret)<br>
++			dev_err(hsotg->dev,<br>
++				"exit partial_power_down failed\n");<br>
++	}<br>
+ <br>
+ 	dwc2_debugfs_exit(hsotg);<br>
+ 	if (hsotg->hcd_enabled)<br>
+@@ -334,7 +343,7 @@ static int dwc2_driver_remove(struct platform_device *dev)<br>
+ 	reset_control_assert(hsotg->reset);<br>
+ 	reset_control_assert(hsotg->reset_ecc);<br>
+ <br>
+-	return 0;<br>
++	return ret;<br>
+ }<br>
+ <br>
+ /**<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

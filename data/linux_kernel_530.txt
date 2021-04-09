@@ -1,0 +1,42 @@
+Remove the one user of tty_info_ratelimited() and replace it with a<br>
+calls to dev_info_ratelimited() which provides more information about<br>
+the tty that has the error and uses the standard formatting logic.<br>
+<br>
+Cc: Tetsuo Handa <penguin-kernel@xxxxxxxxxxxxxxxxxxx><br>
+Cc: Jiri Slaby <jirislaby@xxxxxxxxxx><br>
+Signed-off-by: Greg Kroah-Hartman <gregkh@xxxxxxxxxxxxxxxxxxx><br>
+---<br>
+ drivers/tty/tty.h    | 3 ---<br>
+ drivers/tty/tty_io.c | 2 +-<br>
+ 2 files changed, 1 insertion(+), 4 deletions(-)<br>
+<br>
+diff --git a/drivers/tty/tty.h b/drivers/tty/tty.h<br>
+index 45b15cc250e8..a2084b58d4f3 100644<br>
+--- a/drivers/tty/tty.h<br>
++++ b/drivers/tty/tty.h<br>
+@@ -11,7 +11,4 @@<br>
+ <br>
+ #define tty_debug(tty, f, ...)	tty_msg(pr_debug, tty, f, ##__VA_ARGS__)<br>
+ <br>
+-#define tty_info_ratelimited(tty, f, ...) \<br>
+-		tty_msg(pr_info_ratelimited, tty, f, ##__VA_ARGS__)<br>
+-<br>
+ #endif<br>
+diff --git a/drivers/tty/tty_io.c b/drivers/tty/tty_io.c<br>
+index 2c3efa854ba5..91062fcc6667 100644<br>
+--- a/drivers/tty/tty_io.c<br>
++++ b/drivers/tty/tty_io.c<br>
+@@ -1477,7 +1477,7 @@ struct tty_struct *tty_init_dev(struct tty_driver *driver, int idx)<br>
+ 	/* call the tty release_tty routine to clean out this slot */<br>
+ err_release_tty:<br>
+ 	tty_ldisc_unlock(tty);<br>
+-	tty_info_ratelimited(tty, "ldisc open failed (%d), clearing slot %d\n",<br>
++	dev_info_ratelimited(tty->dev, "ldisc open failed (%d), clearing slot %d\n",<br>
+ 			     retval, idx);<br>
+ err_release_lock:<br>
+ 	tty_unlock(tty);<br>
+-- <br>
+2.31.1<br>
+<br>
+<br>
+

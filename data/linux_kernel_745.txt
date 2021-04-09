@@ -1,0 +1,65 @@
+On Mon, Mar 29, 2021 at 09:23:35PM +0300, Imre Deak wrote:<br>
+><i> Hi Stephen,</i><br>
+><i> </i><br>
+><i> thanks for the report.</i><br>
+><i> </i><br>
+><i> On Mon, Mar 29, 2021 at 09:01:17AM +1100, Stephen Rothwell wrote:</i><br>
+><i> > Hi all,</i><br>
+><i> > </i><br>
+><i> > On Fri, 26 Mar 2021 19:58:38 +1100 Stephen Rothwell <sfr@xxxxxxxxxxxxxxxx> wrote:</i><br>
+><i> > ></i><br>
+><i> > > After merging the drm-intel-fixes tree, today's linux-next build</i><br>
+><i> > > (htmldocs) produced this warning:</i><br>
+><i> > > </i><br>
+><i> > > Documentation/gpu/i915:22: /drivers/gpu/drm/i915/intel_runtime_pm.c:423: WARNING: Inline strong start-string without end-string.</i><br>
+><i> </i><br>
+><i> The problem seems to be the</i><br>
+><i> </i><br>
+><i> 	@ignore_usecount=true</i><br>
+><i> </i><br>
+><i> part in __intel_runtime_pm_get_if_active()'s docbook documentation. I</i><br>
+><i> can't see the problem with it, it was meant as a reference to the</i><br>
+><i> function parameter, granted I'm not sure what's the proper markup syntax</i><br>
+><i> for this.</i><br>
+><i> </i><br>
+><i> I will follow up with the following change which suppresses the warning</i><br>
+><i> and renders the html as expected unless someone can suggest a better</i><br>
+><i> way:</i><br>
+><i> </i><br>
+><i> - * If @ignore_usecount=true, a reference will be acquired even if there is no</i><br>
+><i> + * If @ignore_usecount is true, a reference will be acquired even if there is no</i><br>
+<br>
+Yeah you can't just use most pseudo-code in kerneldoc because it's<br>
+interpreted as raw .rst. So would need some .rst quoting of some sorts to<br>
+make it render correctly.<br>
+<br>
+Usually for pseudo-code I go with blockquotes (started with :: at the end<br>
+of the previous line, plus indenting), that gives you also a nice<br>
+fixed-width font and everything.<br>
+<br>
+Aside from the hyperlink stuff plain English works best in the text parts.<br>
+-Daniel<br>
+<br>
+><i> </i><br>
+><i> --Imre</i><br>
+><i> </i><br>
+><i> > > </i><br>
+><i> > > Introduced by commit</i><br>
+><i> > > </i><br>
+><i> > >   8840e3bd981f ("drm/i915: Fix the GT fence revocation runtime PM logic")</i><br>
+><i> > </i><br>
+><i> > This warning now exists in Linus' tree.</i><br>
+><i> > </i><br>
+><i> > -- </i><br>
+><i> > Cheers,</i><br>
+><i> > Stephen Rothwell</i><br>
+><i> </i><br>
+><i> </i><br>
+<br>
+-- <br>
+Daniel Vetter<br>
+Software Engineer, Intel Corporation<br>
+<a  rel="nofollow" href="http://blog.ffwll.ch">http://blog.ffwll.ch</a><br>
+<br>
+<br>
+

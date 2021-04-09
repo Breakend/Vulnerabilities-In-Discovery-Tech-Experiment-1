@@ -1,0 +1,92 @@
+08.04.2021 16:06, Thierry Reding пишет:<br>
+><i> On Thu, Apr 08, 2021 at 02:25:19AM +0300, Dmitry Osipenko wrote:</i><br>
+><i>> 08.04.2021 02:00, Sowjanya Komatineni пишет:</i><br>
+><i>>></i><br>
+><i>>> On 4/7/21 3:57 PM, Sowjanya Komatineni wrote:</i><br>
+><i>>>></i><br>
+><i>>>> On 4/7/21 2:36 PM, Dmitry Osipenko wrote:</i><br>
+><i>>>>> 07.04.2021 04:25, Sowjanya Komatineni пишет:</i><br>
+><i>>>>>> +    if (!tegra->pdev->dev.pm_domain) {</i><br>
+><i>>>>>> +        ret = tegra_powergate_sequence_power_up(TEGRA_POWERGATE_SATA,</i><br>
+><i>>>>>> +                            tegra->sata_clk,</i><br>
+><i>>>>>> +                            tegra->sata_rst);</i><br>
+><i>>>>>> +        if (ret)</i><br>
+><i>>>>>> +            goto disable_regulators;</i><br>
+><i>>>>>> +    }</i><br>
+><i>>>>> Hi,</i><br>
+><i>>>>></i><br>
+><i>>>>> Why you haven't added condition for tegra_powergate_power_off()? I think</i><br>
+><i>>>>> it should break GENPD and legacy PD API isn't not supported by T186</i><br>
+><i>>>>> at all.</i><br>
+><i>>>>></i><br>
+><i>>>>> I'm also not sure whether the power up/down sequence is correct using</i><br>
+><i>>>>> GENPD.</i><br>
+><i>>>>></i><br>
+><i>>>>> Moreover the driver doesn't support runtime PM, so GENPD should be</i><br>
+><i>>>>> always off?</i><br>
+><i>>>></i><br>
+><i>>>> This driver already using legacy PD API's so thought its supported and</i><br>
+><i>>>> added power domain device check during powergate_sequence_power_up and</i><br>
+><i>>>> yes same should apply for powergate_power_off as well. But if legacy</i><br>
+><i>>>> PD is not supported by T186 then not sure why original driver even</i><br>
+><i>>>> using these API's.</i><br>
+><i>>>></i><br>
+><i>>>></i><br>
+><i>>> Sorry just took a look and driver supports T210 and prior tegra as well.</i><br>
+><i>>> T210 and prior supports legacy PD and this check is applicable for</i><br>
+><i>>> those. So we should add power domain device check for power off as well.</i><br>
+><i>></i><br>
+><i>> You could fix it with a follow up patch. Please try to test that</i><br>
+><i>> power-off works properly, at least try to unload the driver module and</i><br>
+><i>> re-load it.</i><br>
+><i> </i><br>
+><i> Agreed, this should have the same check as above for</i><br>
+><i> tegra_powergate_power_off(). It currently works fine because on Tegra186</i><br>
+><i> tegra_powergate_power_off() (and all the other legacy APIs for that</i><br>
+><i> matter) will abort early since no power gates are implemented. The AHCI</i><br>
+><i> driver doesn't check for errors, so this will just fail silently. It's</i><br>
+><i> better to be symmetric, though, and add the check in both paths.</i><br>
+<br>
+I missed that tegra_powergate_power_off() usage isn't fatal if GENPD is<br>
+used, thank you for the clarification.<br>
+<br>
+><i>>> But for T186, we should have GENPD working once we add runtime PM</i><br>
+><i>>> support to driver.</i><br>
+><i>>></i><br>
+><i>>> Preetham/Thierry, Can you confirm where SATA is un powergated prior to</i><br>
+><i>>> kernel?</i><br>
+><i>>></i><br>
+><i>>></i><br>
+><i>>>> But as RPM is not implemented yet for this driver, GENPD will be OFF</i><br>
+><i>>>> but SATA is not in power-gate by the time kernel starts and</i><br>
+><i>>>> functionally works.</i><br>
+><i>>>></i><br>
+><i>>>> But with RPM implementation, I guess we can do proper power gate on/off.</i><br>
+><i>>>></i><br>
+><i>></i><br>
+><i>> I now recalled that GENPD turns ON all domains by default and then turns</i><br>
+><i>> them OFF only when driver entered into the RPM-suspended state. This</i><br>
+><i>> means that AHCI GENPD should be always-ON for T186, which should be okay</i><br>
+><i>> if this doesn't break power sequences.</i><br>
+><i> </i><br>
+><i> Yeah, the generic PM domain will just stay enabled after probe and until</i><br>
+><i> remove. This does not impact the power sequences because they have to be</i><br>
+><i> completely implemented in the power domains code anyway. With the legacy</i><br>
+><i> API we used to need more rigorous sequences in the individual drivers,</i><br>
+><i> but with generic PM domains none of that should be necessary, though it</i><br>
+><i> also doesn't hurt, so some of the unnecessary clock enablement code is</i><br>
+><i> kept for simplicity.</i><br>
+><i> </i><br>
+><i> To be honest, I'm not sure if it's worth adding runtime PM support for</i><br>
+><i> this driver. If this top-level layer has a way of getting notification</i><br>
+><i> when no device was detected, then it might make some sense to turn off</i><br>
+><i> the power domain and the regulators again, but I'm not sure if that's</i><br>
+><i> the case. tegra_ahci_host_stop() seems like it might be usable for that</i><br>
+><i> so yeah, that might work. We currently do turn off the powergate in that</i><br>
+><i> case, so extending that power optimization to Tegra186 using runtime PM</i><br>
+><i> makes sense.</i><br>
+<br>
+Alright, then this all should be good as-is.<br>
+<br>
+<br>
+

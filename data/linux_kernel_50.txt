@@ -1,0 +1,47 @@
+With CONFIG_CFI_CLANG, the compiler replaces function pointers with<br>
+jump table addresses, which results in __pa_symbol returning the<br>
+physical address of the jump table entry. As the jump table contains<br>
+an immediate jump to an EL1 virtual address, this typically won't<br>
+work as intended. Use function_nocfi to get the actual address of<br>
+cpu_resume.<br>
+<br>
+Signed-off-by: Sami Tolvanen <samitolvanen@xxxxxxxxxx><br>
+Reviewed-by: Kees Cook <keescook@xxxxxxxxxxxx><br>
+Acked-by: Mark Rutland <mark.rutland@xxxxxxx><br>
+Tested-by: Nathan Chancellor <nathan@xxxxxxxxxx><br>
+---<br>
+ drivers/firmware/psci/psci.c | 7 +++++--<br>
+ 1 file changed, 5 insertions(+), 2 deletions(-)<br>
+<br>
+diff --git a/drivers/firmware/psci/psci.c b/drivers/firmware/psci/psci.c<br>
+index f5fc429cae3f..64344e84bd63 100644<br>
+--- a/drivers/firmware/psci/psci.c<br>
++++ b/drivers/firmware/psci/psci.c<br>
+@@ -325,8 +325,9 @@ static int __init psci_features(u32 psci_func_id)<br>
+ static int psci_suspend_finisher(unsigned long state)<br>
+ {<br>
+ 	u32 power_state = state;<br>
++	phys_addr_t pa_cpu_resume = __pa_symbol(function_nocfi(cpu_resume));<br>
+ <br>
+-	return psci_ops.cpu_suspend(power_state, __pa_symbol(cpu_resume));<br>
++	return psci_ops.cpu_suspend(power_state, pa_cpu_resume);<br>
+ }<br>
+ <br>
+ int psci_cpu_suspend_enter(u32 state)<br>
+@@ -344,8 +345,10 @@ int psci_cpu_suspend_enter(u32 state)<br>
+ <br>
+ static int psci_system_suspend(unsigned long unused)<br>
+ {<br>
++	phys_addr_t pa_cpu_resume = __pa_symbol(function_nocfi(cpu_resume));<br>
++<br>
+ 	return invoke_psci_fn(PSCI_FN_NATIVE(1_0, SYSTEM_SUSPEND),<br>
+-			      __pa_symbol(cpu_resume), 0, 0);<br>
++			      pa_cpu_resume, 0, 0);<br>
+ }<br>
+ <br>
+ static int psci_system_suspend_enter(suspend_state_t state)<br>
+-- <br>
+2.31.1.295.g9ea45b61b8-goog<br>
+<br>
+<br>
+

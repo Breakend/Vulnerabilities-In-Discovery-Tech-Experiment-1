@@ -1,0 +1,38 @@
+BPF dispatcher functions are patched at runtime to perform direct<br>
+instead of indirect calls. Disable CFI for the dispatcher functions to<br>
+avoid conflicts.<br>
+<br>
+Signed-off-by: Sami Tolvanen <samitolvanen@xxxxxxxxxx><br>
+Reviewed-by: Kees Cook <keescook@xxxxxxxxxxxx><br>
+Tested-by: Nathan Chancellor <nathan@xxxxxxxxxx><br>
+---<br>
+ include/linux/bpf.h | 4 ++--<br>
+ 1 file changed, 2 insertions(+), 2 deletions(-)<br>
+<br>
+diff --git a/include/linux/bpf.h b/include/linux/bpf.h<br>
+index 3625f019767d..2f46f98479e1 100644<br>
+--- a/include/linux/bpf.h<br>
++++ b/include/linux/bpf.h<br>
+@@ -650,7 +650,7 @@ struct bpf_dispatcher {<br>
+ 	struct bpf_ksym ksym;<br>
+ };<br>
+ <br>
+-static __always_inline unsigned int bpf_dispatcher_nop_func(<br>
++static __always_inline __nocfi unsigned int bpf_dispatcher_nop_func(<br>
+ 	const void *ctx,<br>
+ 	const struct bpf_insn *insnsi,<br>
+ 	unsigned int (*bpf_func)(const void *,<br>
+@@ -678,7 +678,7 @@ void bpf_trampoline_put(struct bpf_trampoline *tr);<br>
+ }<br>
+ <br>
+ #define DEFINE_BPF_DISPATCHER(name)					\<br>
+-	noinline unsigned int bpf_dispatcher_##name##_func(		\<br>
++	noinline __nocfi unsigned int bpf_dispatcher_##name##_func(	\<br>
+ 		const void *ctx,					\<br>
+ 		const struct bpf_insn *insnsi,				\<br>
+ 		unsigned int (*bpf_func)(const void *,			\<br>
+-- <br>
+2.31.1.295.g9ea45b61b8-goog<br>
+<br>
+<br>
+

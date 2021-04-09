@@ -1,0 +1,48 @@
+pm_runtime_get_sync will increment pm usage counter even it failed.<br>
+Forgetting to putting operation will result in reference leak here.<br>
+Fix it by replacing it with pm_runtime_resume_and_get to keep usage<br>
+counter balanced.<br>
+<br>
+Signed-off-by: Shixin Liu <liushixin2@xxxxxxxxxx><br>
+---<br>
+ drivers/crypto/omap-aes.c | 7 +++----<br>
+ 1 file changed, 3 insertions(+), 4 deletions(-)<br>
+<br>
+diff --git a/drivers/crypto/omap-aes.c b/drivers/crypto/omap-aes.c<br>
+index a45bdcf3026d..0dd4c6b157de 100644<br>
+--- a/drivers/crypto/omap-aes.c<br>
++++ b/drivers/crypto/omap-aes.c<br>
+@@ -103,9 +103,8 @@ static int omap_aes_hw_init(struct omap_aes_dev *dd)<br>
+ 		dd->err = 0;<br>
+ 	}<br>
+ <br>
+-	err = pm_runtime_get_sync(dd->dev);<br>
++	err = pm_runtime_resume_and_get(dd->dev);<br>
+ 	if (err < 0) {<br>
+-		pm_runtime_put_noidle(dd->dev);<br>
+ 		dev_err(dd->dev, "failed to get sync: %d\n", err);<br>
+ 		return err;<br>
+ 	}<br>
+@@ -1134,7 +1133,7 @@ static int omap_aes_probe(struct platform_device *pdev)<br>
+ 	pm_runtime_set_autosuspend_delay(dev, DEFAULT_AUTOSUSPEND_DELAY);<br>
+ <br>
+ 	pm_runtime_enable(dev);<br>
+-	err = pm_runtime_get_sync(dev);<br>
++	err = pm_runtime_resume_and_get(dev);<br>
+ 	if (err < 0) {<br>
+ 		dev_err(dev, "%s: failed to get_sync(%d)\n",<br>
+ 			__func__, err);<br>
+@@ -1303,7 +1302,7 @@ static int omap_aes_suspend(struct device *dev)<br>
+ <br>
+ static int omap_aes_resume(struct device *dev)<br>
+ {<br>
+-	pm_runtime_get_sync(dev);<br>
++	pm_runtime_resume_and_get(dev);<br>
+ 	return 0;<br>
+ }<br>
+ #endif<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

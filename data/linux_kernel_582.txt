@@ -1,0 +1,42 @@
+Let the caller check whether it can pass MHP_MEMMAP_ON_MEMORY by<br>
+checking mhp_supports_memmap_on_memory().<br>
+MHP_MEMMAP_ON_MEMORY can only be set in case<br>
+ARCH_MHP_MEMMAP_ON_MEMORY_ENABLE is enabled, the architecture supports<br>
+altmap, and the range to be added spans a single memory block.<br>
+<br>
+Signed-off-by: Oscar Salvador <osalvador@xxxxxxx><br>
+Reviewed-by: David Hildenbrand <david@xxxxxxxxxx><br>
+Acked-by: Michal Hocko <mhocko@xxxxxxxx><br>
+---<br>
+ drivers/acpi/acpi_memhotplug.c | 5 ++++-<br>
+ 1 file changed, 4 insertions(+), 1 deletion(-)<br>
+<br>
+diff --git a/drivers/acpi/acpi_memhotplug.c b/drivers/acpi/acpi_memhotplug.c<br>
+index b02fd51e5589..8cc195c4c861 100644<br>
+--- a/drivers/acpi/acpi_memhotplug.c<br>
++++ b/drivers/acpi/acpi_memhotplug.c<br>
+@@ -171,6 +171,7 @@ static int acpi_memory_enable_device(struct acpi_memory_device *mem_device)<br>
+ 	acpi_handle handle = mem_device->device->handle;<br>
+ 	int result, num_enabled = 0;<br>
+ 	struct acpi_memory_info *info;<br>
++	mhp_t mhp_flags = MHP_NONE;<br>
+ 	int node;<br>
+ <br>
+ 	node = acpi_get_node(handle);<br>
+@@ -194,8 +195,10 @@ static int acpi_memory_enable_device(struct acpi_memory_device *mem_device)<br>
+ 		if (node < 0)<br>
+ 			node = memory_add_physaddr_to_nid(info->start_addr);<br>
+ <br>
++		if (mhp_supports_memmap_on_memory(info->length))<br>
++			mhp_flags |= MHP_MEMMAP_ON_MEMORY;<br>
+ 		result = __add_memory(node, info->start_addr, info->length,<br>
+-				      MHP_NONE);<br>
++				      mhp_flags);<br>
+ <br>
+ 		/*<br>
+ 		 * If the memory block has been used by the kernel, add_memory()<br>
+-- <br>
+2.16.3<br>
+<br>
+<br>
+

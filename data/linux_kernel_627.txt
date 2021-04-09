@@ -1,0 +1,93 @@
+Punch hole on a reflinked file needs dax_copy_edge() too.  Otherwise,<br>
+data in not aligned area will be not correct.  So, add the srcmap to<br>
+dax_iomap_zero() and replace memset() as dax_copy_edge().<br>
+<br>
+Signed-off-by: Shiyang Ruan <ruansy.fnst@xxxxxxxxxxx><br>
+Reviewed-by: Ritesh Harjani <riteshh@xxxxxxxxxxxxx><br>
+---<br>
+ fs/dax.c               | 25 +++++++++++++++----------<br>
+ fs/iomap/buffered-io.c |  2 +-<br>
+ include/linux/dax.h    |  3 ++-<br>
+ 3 files changed, 18 insertions(+), 12 deletions(-)<br>
+<br>
+diff --git a/fs/dax.c b/fs/dax.c<br>
+index e6c1354b27a8..fcd1e932716e 100644<br>
+--- a/fs/dax.c<br>
++++ b/fs/dax.c<br>
+@@ -1186,7 +1186,8 @@ static vm_fault_t dax_pmd_load_hole(struct xa_state *xas, struct vm_fault *vmf,<br>
+ }<br>
+ #endif /* CONFIG_FS_DAX_PMD */<br>
+ <br>
+-s64 dax_iomap_zero(loff_t pos, u64 length, struct iomap *iomap)<br>
++s64 dax_iomap_zero(loff_t pos, u64 length, struct iomap *iomap,<br>
++		struct iomap *srcmap)<br>
+ {<br>
+ 	sector_t sector = iomap_sector(iomap, pos & PAGE_MASK);<br>
+ 	pgoff_t pgoff;<br>
+@@ -1208,19 +1209,23 @@ s64 dax_iomap_zero(loff_t pos, u64 length, struct iomap *iomap)<br>
+ <br>
+ 	if (page_aligned)<br>
+ 		rc = dax_zero_page_range(iomap->dax_dev, pgoff, 1);<br>
+-	else<br>
++	else {<br>
+ 		rc = dax_direct_access(iomap->dax_dev, pgoff, 1, &kaddr, NULL);<br>
+-	if (rc < 0) {<br>
+-		dax_read_unlock(id);<br>
+-		return rc;<br>
+-	}<br>
+-<br>
+-	if (!page_aligned) {<br>
+-		memset(kaddr + offset, 0, size);<br>
++		if (rc < 0)<br>
++			goto out;<br>
++		if (iomap->addr != srcmap->addr) {<br>
++			rc = dax_iomap_cow_copy(offset, size, PAGE_SIZE, srcmap,<br>
++						kaddr);<br>
++			if (rc < 0)<br>
++				goto out;<br>
++		} else<br>
++			memset(kaddr + offset, 0, size);<br>
+ 		dax_flush(iomap->dax_dev, kaddr + offset, size);<br>
+ 	}<br>
++<br>
++out:<br>
+ 	dax_read_unlock(id);<br>
+-	return size;<br>
++	return rc < 0 ? rc : size;<br>
+ }<br>
+ <br>
+ static loff_t<br>
+diff --git a/fs/iomap/buffered-io.c b/fs/iomap/buffered-io.c<br>
+index 414769a6ad11..67936e9967b8 100644<br>
+--- a/fs/iomap/buffered-io.c<br>
++++ b/fs/iomap/buffered-io.c<br>
+@@ -933,7 +933,7 @@ static loff_t iomap_zero_range_actor(struct inode *inode, loff_t pos,<br>
+ 		s64 bytes;<br>
+ <br>
+ 		if (IS_DAX(inode))<br>
+-			bytes = dax_iomap_zero(pos, length, iomap);<br>
++			bytes = dax_iomap_zero(pos, length, iomap, srcmap);<br>
+ 		else<br>
+ 			bytes = iomap_zero(inode, pos, length, iomap, srcmap);<br>
+ 		if (bytes < 0)<br>
+diff --git a/include/linux/dax.h b/include/linux/dax.h<br>
+index b52f084aa643..3275e01ed33d 100644<br>
+--- a/include/linux/dax.h<br>
++++ b/include/linux/dax.h<br>
+@@ -237,7 +237,8 @@ vm_fault_t dax_finish_sync_fault(struct vm_fault *vmf,<br>
+ int dax_delete_mapping_entry(struct address_space *mapping, pgoff_t index);<br>
+ int dax_invalidate_mapping_entry_sync(struct address_space *mapping,<br>
+ 				      pgoff_t index);<br>
+-s64 dax_iomap_zero(loff_t pos, u64 length, struct iomap *iomap);<br>
++s64 dax_iomap_zero(loff_t pos, u64 length, struct iomap *iomap,<br>
++		struct iomap *srcmap);<br>
+ static inline bool dax_mapping(struct address_space *mapping)<br>
+ {<br>
+ 	return mapping->host && IS_DAX(mapping->host);<br>
+-- <br>
+2.31.0<br>
+<br>
+<br>
+<br>
+<br>
+

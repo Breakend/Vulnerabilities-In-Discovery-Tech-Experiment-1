@@ -1,0 +1,96 @@
+Currently, during kexec load we are copying relocation function and<br>
+flushing it. However, we can also flush kexec relocation buffers and<br>
+if new kernel image is already in place (i.e. crash kernel), we can<br>
+also flush the new kernel image itself.<br>
+<br>
+Signed-off-by: Pavel Tatashin <pasha.tatashin@xxxxxxxxxx><br>
+---<br>
+ arch/arm64/kernel/machine_kexec.c | 49 +++++++++++++++----------------<br>
+ 1 file changed, 23 insertions(+), 26 deletions(-)<br>
+<br>
+diff --git a/arch/arm64/kernel/machine_kexec.c b/arch/arm64/kernel/machine_kexec.c<br>
+index 90a335c74442..3a034bc25709 100644<br>
+--- a/arch/arm64/kernel/machine_kexec.c<br>
++++ b/arch/arm64/kernel/machine_kexec.c<br>
+@@ -59,23 +59,6 @@ void machine_kexec_cleanup(struct kimage *kimage)<br>
+ 	/* Empty routine needed to avoid build errors. */<br>
+ }<br>
+ <br>
+-int machine_kexec_post_load(struct kimage *kimage)<br>
+-{<br>
+-	void *reloc_code = page_to_virt(kimage->control_code_page);<br>
+-<br>
+-	memcpy(reloc_code, arm64_relocate_new_kernel,<br>
+-	       arm64_relocate_new_kernel_size);<br>
+-	kimage->arch.kern_reloc = __pa(reloc_code);<br>
+-	kexec_image_info(kimage);<br>
+-<br>
+-	/* Flush the reloc_code in preparation for its execution. */<br>
+-	__flush_dcache_area(reloc_code, arm64_relocate_new_kernel_size);<br>
+-	flush_icache_range((uintptr_t)reloc_code, (uintptr_t)reloc_code +<br>
+-			   arm64_relocate_new_kernel_size);<br>
+-<br>
+-	return 0;<br>
+-}<br>
+-<br>
+ /**<br>
+  * machine_kexec_prepare - Prepare for a kexec reboot.<br>
+  *<br>
+@@ -152,6 +135,29 @@ static void kexec_segment_flush(const struct kimage *kimage)<br>
+ 	}<br>
+ }<br>
+ <br>
++int machine_kexec_post_load(struct kimage *kimage)<br>
++{<br>
++	void *reloc_code = page_to_virt(kimage->control_code_page);<br>
++<br>
++	/* If in place flush new kernel image, else flush lists and buffers */<br>
++	if (kimage->head & IND_DONE)<br>
++		kexec_segment_flush(kimage);<br>
++	else<br>
++		kexec_list_flush(kimage);<br>
++<br>
++	memcpy(reloc_code, arm64_relocate_new_kernel,<br>
++	       arm64_relocate_new_kernel_size);<br>
++	kimage->arch.kern_reloc = __pa(reloc_code);<br>
++	kexec_image_info(kimage);<br>
++<br>
++	/* Flush the reloc_code in preparation for its execution. */<br>
++	__flush_dcache_area(reloc_code, arm64_relocate_new_kernel_size);<br>
++	flush_icache_range((uintptr_t)reloc_code, (uintptr_t)reloc_code +<br>
++			   arm64_relocate_new_kernel_size);<br>
++<br>
++	return 0;<br>
++}<br>
++<br>
+ /**<br>
+  * machine_kexec - Do the kexec reboot.<br>
+  *<br>
+@@ -169,13 +175,6 @@ void machine_kexec(struct kimage *kimage)<br>
+ 	WARN(in_kexec_crash && (stuck_cpus || smp_crash_stop_failed()),<br>
+ 		"Some CPUs may be stale, kdump will be unreliable.\n");<br>
+ <br>
+-	/* Flush the kimage list and its buffers. */<br>
+-	kexec_list_flush(kimage);<br>
+-<br>
+-	/* Flush the new image if already in place. */<br>
+-	if ((kimage != kexec_crash_image) && (kimage->head & IND_DONE))<br>
+-		kexec_segment_flush(kimage);<br>
+-<br>
+ 	pr_info("Bye!\n");<br>
+ <br>
+ 	local_daif_mask();<br>
+@@ -250,8 +249,6 @@ void arch_kexec_protect_crashkres(void)<br>
+ {<br>
+ 	int i;<br>
+ <br>
+-	kexec_segment_flush(kexec_crash_image);<br>
+-<br>
+ 	for (i = 0; i < kexec_crash_image->nr_segments; i++)<br>
+ 		set_memory_valid(<br>
+ 			__phys_to_virt(kexec_crash_image->segment[i].mem),<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

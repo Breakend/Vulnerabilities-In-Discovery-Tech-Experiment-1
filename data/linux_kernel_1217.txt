@@ -1,0 +1,12 @@
+Michael,<br>
+<br>
+Would you please resend this patch, together with the mtd-utils<br>
+and the SPI NOR patch in a single patch set? You'll help us all<br>
+having all in a single place.<br>
+<br>
+For the new ioctl we'll need acks from all the mtd maintainers<br>
+and at least a tested-by tag.<br>
+<br>
+Cheers,<br>
+ta<br>
+

@@ -1,0 +1,16 @@
+On Tue, Mar 30, 2021 at 10:39 AM angkery <angkery@xxxxxxx> wrote:<br>
+<br>
+><i> From: Junlin Yang <yangjunlin@xxxxxxxxxx></i><br>
+><i></i><br>
+><i> when devm_kcalloc fails, use -ENOMEM instead of -EINVAL,</i><br>
+><i> and consistent with other devm_kcalloc return values.</i><br>
+><i></i><br>
+><i> Signed-off-by: Junlin Yang <yangjunlin@xxxxxxxxxx></i><br>
+<br>
+Patch applied.<br>
+<br>
+Yours,<br>
+Linus Walleij<br>
+<br>
+<br>
+

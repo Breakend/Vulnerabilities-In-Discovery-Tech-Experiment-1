@@ -1,0 +1,36 @@
+Fix the following gcc warning:<br>
+<br>
+drivers/staging/ks7010/ks_hostif.c:929:19: warning: variable ‘noise’ set<br>
+but not used [-Wunused-but-set-variable].<br>
+<br>
+Reported-by: Abaci Robot <abaci@xxxxxxxxxxxxxxxxx><br>
+Signed-off-by: Jiapeng Chong <jiapeng.chong@xxxxxxxxxxxxxxxxx><br>
+---<br>
+ drivers/staging/ks7010/ks_hostif.c | 3 +--<br>
+ 1 file changed, 1 insertion(+), 2 deletions(-)<br>
+<br>
+diff --git a/drivers/staging/ks7010/ks_hostif.c b/drivers/staging/ks7010/ks_hostif.c<br>
+index 8bc3b7d..499161d 100644<br>
+--- a/drivers/staging/ks7010/ks_hostif.c<br>
++++ b/drivers/staging/ks7010/ks_hostif.c<br>
+@@ -926,14 +926,13 @@ void hostif_bss_scan_confirm(struct ks_wlan_private *priv)<br>
+ void hostif_phy_information_confirm(struct ks_wlan_private *priv)<br>
+ {<br>
+ 	struct iw_statistics *wstats = &priv->wstats;<br>
+-	u8 rssi, signal, noise;<br>
++	u8 rssi, signal;<br>
+ 	u8 link_speed;<br>
+ 	u32 transmitted_frame_count, received_fragment_count;<br>
+ 	u32 failed_count, fcs_error_count;<br>
+ <br>
+ 	rssi = get_byte(priv);<br>
+ 	signal = get_byte(priv);<br>
+-	noise = get_byte(priv);<br>
+ 	link_speed = get_byte(priv);<br>
+ 	transmitted_frame_count = get_dword(priv);<br>
+ 	received_fragment_count = get_dword(priv);<br>
+-- <br>
+1.8.3.1<br>
+<br>
+<br>
+

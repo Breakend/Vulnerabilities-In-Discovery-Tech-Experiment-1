@@ -1,0 +1,154 @@
+Provide a function, readahead_expand(), that expands the set of pages<br>
+specified by a readahead_control object to encompass a revised area with a<br>
+proposed size and length.<br>
+<br>
+The proposed area must include all of the old area and may be expanded yet<br>
+more by this function so that the edges align on (transparent huge) page<br>
+boundaries as allocated.<br>
+<br>
+The expansion will be cut short if a page already exists in either of the<br>
+areas being expanded into.  Note that any expansion made in such a case is<br>
+not rolled back.<br>
+<br>
+This will be used by fscache so that reads can be expanded to cache granule<br>
+boundaries, thereby allowing whole granules to be stored in the cache, but<br>
+there are other potential users also.<br>
+<br>
+Changes:<br>
+v6:<br>
+- Fold in a patch from Matthew Wilcox to tell the ondemand readahead<br>
+  algorithm about the expansion so that the next readahead starts at the<br>
+  right place[2].<br>
+<br>
+v4:<br>
+- Moved the declaration of readahead_expand() to a better place[1].<br>
+<br>
+Suggested-by: Matthew Wilcox (Oracle) <willy@xxxxxxxxxxxxx><br>
+Signed-off-by: David Howells <dhowells@xxxxxxxxxx><br>
+cc: Matthew Wilcox (Oracle) <willy@xxxxxxxxxxxxx><br>
+cc: Alexander Viro <viro@xxxxxxxxxxxxxxxxxx><br>
+cc: Christoph Hellwig <hch@xxxxxx><br>
+cc: Mike Marshall <hubcap@xxxxxxxxxxxx><br>
+cc: linux-mm@xxxxxxxxx<br>
+cc: linux-cachefs@xxxxxxxxxx<br>
+cc: linux-afs@xxxxxxxxxxxxxxxxxxx<br>
+cc: linux-nfs@xxxxxxxxxxxxxxx<br>
+cc: linux-cifs@xxxxxxxxxxxxxxx<br>
+cc: ceph-devel@xxxxxxxxxxxxxxx<br>
+cc: v9fs-developer@xxxxxxxxxxxxxxxxxxxxx<br>
+cc: linux-fsdevel@xxxxxxxxxxxxxxx<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/20210217161358.GM2858050@xxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/20210217161358.GM2858050@xxxxxxxxxxxxxxxxxxxx/</a> [1]<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/159974633888.2094769.8326206446358128373.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/159974633888.2094769.8326206446358128373.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a><br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/160588479816.3465195.553952688795241765.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/160588479816.3465195.553952688795241765.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # rfc<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161118131787.1232039.4863969952441067985.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161118131787.1232039.4863969952441067985.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # rfc<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161161028670.2537118.13831420617039766044.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161161028670.2537118.13831420617039766044.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v2<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161340389201.1303470.14353807284546854878.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161340389201.1303470.14353807284546854878.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v3<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161539530488.286939.18085961677838089157.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161539530488.286939.18085961677838089157.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v4<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161653789422.2770958.2108046612147345000.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161653789422.2770958.2108046612147345000.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v5<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/20210407201857.3582797-4-willy@xxxxxxxxxxxxx/">https://lore.kernel.org/r/20210407201857.3582797-4-willy@xxxxxxxxxxxxx/</a> [2]<br>
+---<br>
+<br>
+ include/linux/pagemap.h |    2 +<br>
+ mm/readahead.c          |   75 +++++++++++++++++++++++++++++++++++++++++++++++<br>
+ 2 files changed, 77 insertions(+)<br>
+<br>
+diff --git a/include/linux/pagemap.h b/include/linux/pagemap.h<br>
+index 9a9e558ce4c7..ef511364cc0c 100644<br>
+--- a/include/linux/pagemap.h<br>
++++ b/include/linux/pagemap.h<br>
+@@ -838,6 +838,8 @@ void page_cache_ra_unbounded(struct readahead_control *,<br>
+ void page_cache_sync_ra(struct readahead_control *, unsigned long req_count);<br>
+ void page_cache_async_ra(struct readahead_control *, struct page *,<br>
+ 		unsigned long req_count);<br>
++void readahead_expand(struct readahead_control *ractl,<br>
++		      loff_t new_start, size_t new_len);<br>
+ <br>
+ /**<br>
+  * page_cache_sync_readahead - generic file readahead<br>
+diff --git a/mm/readahead.c b/mm/readahead.c<br>
+index 2088569a947e..f02dbebf1cef 100644<br>
+--- a/mm/readahead.c<br>
++++ b/mm/readahead.c<br>
+@@ -638,3 +638,78 @@ SYSCALL_DEFINE3(readahead, int, fd, loff_t, offset, size_t, count)<br>
+ {<br>
+ 	return ksys_readahead(fd, offset, count);<br>
+ }<br>
++<br>
++/**<br>
++ * readahead_expand - Expand a readahead request<br>
++ * @ractl: The request to be expanded<br>
++ * @new_start: The revised start<br>
++ * @new_len: The revised size of the request<br>
++ *<br>
++ * Attempt to expand a readahead request outwards from the current size to the<br>
++ * specified size by inserting locked pages before and after the current window<br>
++ * to increase the size to the new window.  This may involve the insertion of<br>
++ * THPs, in which case the window may get expanded even beyond what was<br>
++ * requested.<br>
++ *<br>
++ * The algorithm will stop if it encounters a conflicting page already in the<br>
++ * pagecache and leave a smaller expansion than requested.<br>
++ *<br>
++ * The caller must check for this by examining the revised @ractl object for a<br>
++ * different expansion than was requested.<br>
++ */<br>
++void readahead_expand(struct readahead_control *ractl,<br>
++		      loff_t new_start, size_t new_len)<br>
++{<br>
++	struct address_space *mapping = ractl->mapping;<br>
++	struct file_ra_state *ra = ractl->ra;<br>
++	pgoff_t new_index, new_nr_pages;<br>
++	gfp_t gfp_mask = readahead_gfp_mask(mapping);<br>
++<br>
++	new_index = new_start / PAGE_SIZE;<br>
++<br>
++	/* Expand the leading edge downwards */<br>
++	while (ractl->_index > new_index) {<br>
++		unsigned long index = ractl->_index - 1;<br>
++		struct page *page = xa_load(&mapping->i_pages, index);<br>
++<br>
++		if (page && !xa_is_value(page))<br>
++			return; /* Page apparently present */<br>
++<br>
++		page = __page_cache_alloc(gfp_mask);<br>
++		if (!page)<br>
++			return;<br>
++		if (add_to_page_cache_lru(page, mapping, index, gfp_mask) < 0) {<br>
++			put_page(page);<br>
++			return;<br>
++		}<br>
++<br>
++		ractl->_nr_pages++;<br>
++		ractl->_index = page->index;<br>
++	}<br>
++<br>
++	new_len += new_start - readahead_pos(ractl);<br>
++	new_nr_pages = DIV_ROUND_UP(new_len, PAGE_SIZE);<br>
++<br>
++	/* Expand the trailing edge upwards */<br>
++	while (ractl->_nr_pages < new_nr_pages) {<br>
++		unsigned long index = ractl->_index + ractl->_nr_pages;<br>
++		struct page *page = xa_load(&mapping->i_pages, index);<br>
++<br>
++		if (page && !xa_is_value(page))<br>
++			return; /* Page apparently present */<br>
++<br>
++		page = __page_cache_alloc(gfp_mask);<br>
++		if (!page)<br>
++			return;<br>
++		if (add_to_page_cache_lru(page, mapping, index, gfp_mask) < 0) {<br>
++			put_page(page);<br>
++			return;<br>
++		}<br>
++		ractl->_nr_pages++;<br>
++		if (ra) {<br>
++			ra->size++;<br>
++			ra->async_size++;<br>
++		}<br>
++	}<br>
++}<br>
++EXPORT_SYMBOL(readahead_expand);<br>
+<br>
+<br>
+<br>
+

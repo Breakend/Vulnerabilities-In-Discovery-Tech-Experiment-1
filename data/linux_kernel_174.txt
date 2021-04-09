@@ -1,0 +1,19 @@
+On Wed, Apr 07, 2021 at 09:24:12PM +0100, Mel Gorman wrote:<br>
+><i> Why local_lock? PREEMPT_RT considers the following sequence to be unsafe</i><br>
+><i> as documented in Documentation/locking/locktypes.rst</i><br>
+><i> </i><br>
+><i>    local_irq_disable();</i><br>
+><i>    raw_spin_lock(&lock);</i><br>
+<br>
+Almost, the above is actually OK on RT. The problematic one is:<br>
+<br>
+	local_irq_disable();<br>
+	spin_lock(&lock);<br>
+<br>
+That doesn't work on RT since spin_lock() turns into a PI-mutex which<br>
+then obviously explodes if it tries to block with IRQs disabled.<br>
+<br>
+And it so happens, that's exactly the one at hand.<br>
+<br>
+<br>
+

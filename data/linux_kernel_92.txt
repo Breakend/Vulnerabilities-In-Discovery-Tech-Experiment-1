@@ -1,0 +1,40 @@
+This fixes commit 334872a09198 ("x86/traps: Attempt to fixup exceptions<br>
+in vDSO before signaling") which added return statements without calling<br>
+cond_local_irq_disable(). According to commit ca4c6a9858c2<br>
+("x86/traps: Make interrupt enable/disable symmetric in C code"),<br>
+cond_local_irq_disable() is needed because the ASM return code no<br>
+longer disables interrupts. Follow the existing code as an example to<br>
+use "goto exit" instead of "return" statement.<br>
+<br>
+Signed-off-by: Thomas Tai <thomas.tai@xxxxxxxxxx><br>
+---<br>
+ arch/x86/kernel/traps.c | 4 ++--<br>
+ 1 file changed, 2 insertions(+), 2 deletions(-)<br>
+<br>
+diff --git a/arch/x86/kernel/traps.c b/arch/x86/kernel/traps.c<br>
+index ac1874a..651e3e5 100644<br>
+--- a/arch/x86/kernel/traps.c<br>
++++ b/arch/x86/kernel/traps.c<br>
+@@ -556,7 +556,7 @@ static enum kernel_gp_hint get_kernel_gp_address(struct pt_regs *regs,<br>
+ 		tsk->thread.trap_nr = X86_TRAP_GP;<br>
+ <br>
+ 		if (fixup_vdso_exception(regs, X86_TRAP_GP, error_code, 0))<br>
+-			return;<br>
++			goto exit;<br>
+ <br>
+ 		show_signal(tsk, SIGSEGV, "", desc, regs, error_code);<br>
+ 		force_sig(SIGSEGV);<br>
+@@ -1057,7 +1057,7 @@ static void math_error(struct pt_regs *regs, int trapnr)<br>
+ 		goto exit;<br>
+ <br>
+ 	if (fixup_vdso_exception(regs, trapnr, 0, 0))<br>
+-		return;<br>
++		goto exit;<br>
+ <br>
+ 	force_sig_fault(SIGFPE, si_code,<br>
+ 			(void __user *)uprobe_get_trap_addr(regs));<br>
+-- <br>
+1.8.3.1<br>
+<br>
+<br>
+

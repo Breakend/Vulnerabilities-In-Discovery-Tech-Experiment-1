@@ -1,0 +1,89 @@
+PG_fscache is going to be used to indicate that a page is being written to<br>
+the cache, and that the page should not be modified or released until it's<br>
+finished.<br>
+<br>
+Make afs_invalidatepage() and afs_releasepage() wait for it.<br>
+<br>
+Signed-off-by: David Howells <dhowells@xxxxxxxxxx><br>
+cc: linux-afs@xxxxxxxxxxxxxxxxxxx<br>
+cc: linux-cachefs@xxxxxxxxxx<br>
+cc: linux-fsdevel@xxxxxxxxxxxxxxx<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/158861253957.340223.7465334678444521655.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/158861253957.340223.7465334678444521655.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # rfc<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/159465832417.1377938.3571599385208729791.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/159465832417.1377938.3571599385208729791.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a><br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/160588536286.3465195.13231895135369807920.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/160588536286.3465195.13231895135369807920.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # rfc<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161118153708.1232039.3535103645871176749.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161118153708.1232039.3535103645871176749.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # rfc<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161161049369.2537118.11591934943429117060.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161161049369.2537118.11591934943429117060.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v2<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161340412903.1303470.6424701655031380012.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161340412903.1303470.6424701655031380012.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v3<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161539556890.286939.5873470593519458598.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161539556890.286939.5873470593519458598.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v4<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161653812726.2770958.18167145829938766503.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161653812726.2770958.18167145829938766503.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v5<br>
+---<br>
+<br>
+ fs/afs/file.c  |    9 +++++++++<br>
+ fs/afs/write.c |   10 ++++++++++<br>
+ 2 files changed, 19 insertions(+)<br>
+<br>
+diff --git a/fs/afs/file.c b/fs/afs/file.c<br>
+index 4a34ffaf6de4..f1e30b89e41c 100644<br>
+--- a/fs/afs/file.c<br>
++++ b/fs/afs/file.c<br>
+@@ -593,6 +593,7 @@ static void afs_invalidatepage(struct page *page, unsigned int offset,<br>
+ 	if (PagePrivate(page))<br>
+ 		afs_invalidate_dirty(page, offset, length);<br>
+ <br>
++	wait_on_page_fscache(page);<br>
+ 	_leave("");<br>
+ }<br>
+ <br>
+@@ -610,6 +611,14 @@ static int afs_releasepage(struct page *page, gfp_t gfp_flags)<br>
+ <br>
+ 	/* deny if page is being written to the cache and the caller hasn't<br>
+ 	 * elected to wait */<br>
++#ifdef CONFIG_AFS_FSCACHE<br>
++	if (PageFsCache(page)) {<br>
++		if (!(gfp_flags & __GFP_DIRECT_RECLAIM) || !(gfp_flags & __GFP_FS))<br>
++			return false;<br>
++		wait_on_page_fscache(page);<br>
++	}<br>
++#endif<br>
++<br>
+ 	if (PagePrivate(page)) {<br>
+ 		detach_page_private(page);<br>
+ 		trace_afs_page_dirty(vnode, tracepoint_string("rel"), page);<br>
+diff --git a/fs/afs/write.c b/fs/afs/write.c<br>
+index 6e41b982c71b..1b8cabf5ac92 100644<br>
+--- a/fs/afs/write.c<br>
++++ b/fs/afs/write.c<br>
+@@ -117,6 +117,10 @@ int afs_write_begin(struct file *file, struct address_space *mapping,<br>
+ 		SetPageUptodate(page);<br>
+ 	}<br>
+ <br>
++#ifdef CONFIG_AFS_FSCACHE<br>
++	wait_on_page_fscache(page);<br>
++#endif<br>
++<br>
+ try_again:<br>
+ 	/* See if this page is already partially written in a way that we can<br>
+ 	 * merge the new write with.<br>
+@@ -857,6 +861,11 @@ vm_fault_t afs_page_mkwrite(struct vm_fault *vmf)<br>
+ 	/* Wait for the page to be written to the cache before we allow it to<br>
+ 	 * be modified.  We then assume the entire page will need writing back.<br>
+ 	 */<br>
++#ifdef CONFIG_AFS_FSCACHE<br>
++	if (PageFsCache(vmf->page) &&<br>
++	    wait_on_page_bit_killable(vmf->page, PG_fscache) < 0)<br>
++		return VM_FAULT_RETRY;<br>
++#endif<br>
+ <br>
+ 	if (wait_on_page_writeback_killable(vmf->page))<br>
+ 		return VM_FAULT_RETRY;<br>
+@@ -947,5 +956,6 @@ int afs_launder_page(struct page *page)<br>
+ <br>
+ 	detach_page_private(page);<br>
+ 	trace_afs_page_dirty(vnode, tracepoint_string("laundered"), page);<br>
++	wait_on_page_fscache(page);<br>
+ 	return ret;<br>
+ }<br>
+<br>
+<br>
+<br>
+

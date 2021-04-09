@@ -1,0 +1,27 @@
+Fix to return a negative error code from the error handling<br>
+case instead of 0, as done elsewhere in this function.<br>
+<br>
+Fixes: db7683d7deb2 ("IB/srpt: Fix login-related race conditions")<br>
+Reported-by: Hulk Robot <hulkci@xxxxxxxxxx><br>
+Signed-off-by: Wang Wensheng <wangwensheng4@xxxxxxxxxx><br>
+---<br>
+ drivers/infiniband/ulp/srpt/ib_srpt.c | 1 +<br>
+ 1 file changed, 1 insertion(+)<br>
+<br>
+diff --git a/drivers/infiniband/ulp/srpt/ib_srpt.c b/drivers/infiniband/ulp/srpt/ib_srpt.c<br>
+index 98a393d..ea44780 100644<br>
+--- a/drivers/infiniband/ulp/srpt/ib_srpt.c<br>
++++ b/drivers/infiniband/ulp/srpt/ib_srpt.c<br>
+@@ -2382,6 +2382,7 @@ static int srpt_cm_req_recv(struct srpt_device *const sdev,<br>
+ 		pr_info("rejected SRP_LOGIN_REQ because target %s_%d is not enabled\n",<br>
+ 			dev_name(&sdev->device->dev), port_num);<br>
+ 		mutex_unlock(&sport->mutex);<br>
++		ret = -EINVAL;<br>
+ 		goto reject;<br>
+ 	}<br>
+ <br>
+-- <br>
+2.9.4<br>
+<br>
+<br>
+

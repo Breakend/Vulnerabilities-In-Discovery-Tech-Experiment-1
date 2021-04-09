@@ -1,0 +1,42 @@
+pm_runtime_get_sync will increment pm usage counter even it failed.<br>
+Forgetting to putting operation will result in reference leak here.<br>
+Fix it by replacing it with pm_runtime_resume_and_get to keep usage<br>
+counter balanced.<br>
+<br>
+Signed-off-by: Shixin Liu <liushixin2@xxxxxxxxxx><br>
+---<br>
+ drivers/crypto/allwinner/sun8i-ss/sun8i-ss-cipher.c | 2 +-<br>
+ drivers/crypto/allwinner/sun8i-ss/sun8i-ss-core.c   | 2 +-<br>
+ 2 files changed, 2 insertions(+), 2 deletions(-)<br>
+<br>
+diff --git a/drivers/crypto/allwinner/sun8i-ss/sun8i-ss-cipher.c b/drivers/crypto/allwinner/sun8i-ss/sun8i-ss-cipher.c<br>
+index f945750b65d9..9ef1c85c4aaa 100644<br>
+--- a/drivers/crypto/allwinner/sun8i-ss/sun8i-ss-cipher.c<br>
++++ b/drivers/crypto/allwinner/sun8i-ss/sun8i-ss-cipher.c<br>
+@@ -354,7 +354,7 @@ int sun8i_ss_cipher_init(struct crypto_tfm *tfm)<br>
+ 	op->enginectx.op.prepare_request = NULL;<br>
+ 	op->enginectx.op.unprepare_request = NULL;<br>
+ <br>
+-	err = pm_runtime_get_sync(op->ss->dev);<br>
++	err = pm_runtime_resume_and_get(op->ss->dev);<br>
+ 	if (err < 0) {<br>
+ 		dev_err(op->ss->dev, "pm error %d\n", err);<br>
+ 		goto error_pm;<br>
+diff --git a/drivers/crypto/allwinner/sun8i-ss/sun8i-ss-core.c b/drivers/crypto/allwinner/sun8i-ss/sun8i-ss-core.c<br>
+index e0ddc684798d..80e89066dbd1 100644<br>
+--- a/drivers/crypto/allwinner/sun8i-ss/sun8i-ss-core.c<br>
++++ b/drivers/crypto/allwinner/sun8i-ss/sun8i-ss-core.c<br>
+@@ -753,7 +753,7 @@ static int sun8i_ss_probe(struct platform_device *pdev)<br>
+ 	if (err)<br>
+ 		goto error_alg;<br>
+ <br>
+-	err = pm_runtime_get_sync(ss->dev);<br>
++	err = pm_runtime_resume_and_get(ss->dev);<br>
+ 	if (err < 0)<br>
+ 		goto error_alg;<br>
+ <br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

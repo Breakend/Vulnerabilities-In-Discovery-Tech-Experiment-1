@@ -1,0 +1,22 @@
+On Tue, Mar 30, 2021 at 10:57 AM Álvaro Fernández Rojas<br>
+<noltari@xxxxxxxxx> wrote:<br>
+<br>
+><i> > Now, what about a patch set for the IRQ support? :)</i><br>
+><i></i><br>
+><i> If you could give me some guidance on that matter it would be much</i><br>
+><i> appreciated, because your comments [1] are now outdated since I switched</i><br>
+><i> to GPIO_REGMAP</i><br>
+><i> [1]</i><br>
+><i> <a  rel="nofollow" href="http://patchwork.ozlabs.org/project/linux-gpio/patch/20210225164216.21124-3-noltari@xxxxxxxxx/">http://patchwork.ozlabs.org/project/linux-gpio/patch/20210225164216.21124-3-noltari@xxxxxxxxx/</a></i><br>
+<br>
+I think it mostly holds: GPIOLIB_IRQCHIP should always be used if there<br>
+is a reasonably straight-forward interrupts whether cascaded or hierarchical.<br>
+Very few exceptions there. If there is one IRQ line per GPIO<br>
+line, the hierarchical support should be used as outlined. GPIO_REGMAP<br>
+should be mostly (famous last words) orthogonal.<br>
+<br>
+Yours,<br>
+Linus Walleij<br>
+<br>
+<br>
+

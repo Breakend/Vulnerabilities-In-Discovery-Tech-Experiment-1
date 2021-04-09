@@ -1,0 +1,42 @@
+On Thu, Apr 08, 2021 at 01:34:37PM +0100, Jon Hunter wrote:<br>
+><i> </i><br>
+><i> On 08/04/2021 08:26, Dinghao Liu wrote:</i><br>
+><i> > pm_runtime_get_sync() will increase the runtime PM counter</i><br>
+><i> > even it returns an error. Thus a pairing decrement is needed</i><br>
+><i> > to prevent refcount leak. Fix this by replacing this API with</i><br>
+><i> > pm_runtime_resume_and_get(), which will not change the runtime</i><br>
+><i> > PM counter on error.</i><br>
+><i> > </i><br>
+><i> > Signed-off-by: Dinghao Liu <dinghao.liu@xxxxxxxxxx></i><br>
+><i> > ---</i><br>
+><i> >  drivers/pci/controller/dwc/pcie-tegra194.c | 2 +-</i><br>
+><i> >  1 file changed, 1 insertion(+), 1 deletion(-)</i><br>
+><i> > </i><br>
+><i> > diff --git a/drivers/pci/controller/dwc/pcie-tegra194.c b/drivers/pci/controller/dwc/pcie-tegra194.c</i><br>
+><i> > index 6fa216e52d14..0e94190ca4e8 100644</i><br>
+><i> > --- a/drivers/pci/controller/dwc/pcie-tegra194.c</i><br>
+><i> > +++ b/drivers/pci/controller/dwc/pcie-tegra194.c</i><br>
+><i> > @@ -1645,7 +1645,7 @@ static void pex_ep_event_pex_rst_deassert(struct tegra_pcie_dw *pcie)</i><br>
+><i> >  	if (pcie->ep_state == EP_STATE_ENABLED)</i><br>
+><i> >  		return;</i><br>
+><i> >  </i><br>
+><i> > -	ret = pm_runtime_get_sync(dev);</i><br>
+><i> > +	ret = pm_runtime_resume_and_get(dev);</i><br>
+><i> >  	if (ret < 0) {</i><br>
+><i> >  		dev_err(dev, "Failed to get runtime sync for PCIe dev: %d\n",</i><br>
+><i> >  			ret);</i><br>
+><i> > </i><br>
+><i> </i><br>
+><i> There are two places in the driver where pm_runtime_get_sync() is called.</i><br>
+<br>
+It looks like the second callsite has the proper cleanup code. Although<br>
+it might be nice to use pm_runtime_resume_and_get() there as well, and<br>
+adjust the cleanup path, to make this consistent.<br>
+<br>
+In any case, this looks good to me:<br>
+<br>
+Acked-by: Thierry Reding <treding@xxxxxxxxxx><br>
+<p><strong>Attachment:
+<a href="00624/signature.asc" ><tt>signature.asc</tt></a></strong><br>
+<em>Description:</em> PGP signature</p>
+

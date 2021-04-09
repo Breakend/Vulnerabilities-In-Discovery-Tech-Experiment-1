@@ -1,0 +1,175 @@
+On Thu, 2021-04-08 at 15:32 +0200, Rafael J. Wysocki wrote:<br>
+><i> On Thu, Apr 8, 2021 at 3:15 PM Chris von Recklinghausen</i><br>
+><i> <crecklin@xxxxxxxxxx> wrote:</i><br>
+><i> > Suspend fails on a system in fips mode because md5 is used for the e820</i><br>
+><i> > integrity check and is not available. Use crc32 instead.</i><br>
+><i> > </i><br>
+><i> > This patch changes the integrity check algorithm from md5 to</i><br>
+><i> > crc32. This integrity check is used only to verify accidental</i><br>
+><i> > corruption of the hybernation data</i><br>
+><i> </i><br>
+><i> It isn't used for that.</i><br>
+><i> </i><br>
+><i> In fact, it is used to detect differences between the memory map used</i><br>
+><i> before hibernation and the one made available by the BIOS during the</i><br>
+><i> subsequent resume.  And the check is there, because it is generally</i><br>
+><i> unsafe to load the hibernation image into memory if the current memory</i><br>
+><i> map doesn't match the one used when the image was created.</i><br>
+><i> </i><br>
+><i> > and is not intended as a cryptographic integrity check.</i><br>
+><i> </i><br>
+><i> But this is true nevertheless, so I would write:</i><br>
+><i> </i><br>
+><i> "The purpose of the integrity check is to detect possible differences</i><br>
+><i> between the memory map used at the time when the hibernation image is</i><br>
+><i> about to be loaded into memory and the memory map used at the image</i><br>
+><i> creation time, because it is generally unsafe to load the image if the</i><br>
+><i> current memory map doesn't match the one used when it was created. so</i><br>
+><i> it is not intended as a cryptographic integrity check."</i><br>
+><i> </i><br>
+><i> And please make the md5 spelling consistent.</i><br>
+<br>
+This sounds much better thanks, feel free to add my Acked-by as well if<br>
+it is useful.<br>
+<br>
+Simo.<br>
+<br>
+><i> > Md5 is overkill in this case and also disabled in FIPS mode because it</i><br>
+><i> > is known to be broken for cryptographic purposes.</i><br>
+><i> > </i><br>
+><i> > Fixes: 62a03defeabd ("PM / hibernate: Verify the consistent of e820 memory map</i><br>
+><i> >        by md5 digest")</i><br>
+><i> > </i><br>
+><i> > Tested-by: Dexuan Cui <decui@xxxxxxxxxxxxx></i><br>
+><i> > Reviewed-by: Dexuan Cui <decui@xxxxxxxxxxxxx></i><br>
+><i> > Signed-off-by: Chris von Recklinghausen <crecklin@xxxxxxxxxx></i><br>
+><i> > ---</i><br>
+><i> > v1 -> v2</i><br>
+><i> >    bump up RESTORE_MAGIC</i><br>
+><i> > v2 -> v3</i><br>
+><i> >    move embelishment from cover letter to commit comments (no code change)</i><br>
+><i> > v3 -> v4</i><br>
+><i> >    add note to comments that md5 isn't used for encryption here.</i><br>
+><i> > v4 -> v5</i><br>
+><i> >    reword comment per Simo's suggestion</i><br>
+><i> > </i><br>
+><i> >  arch/x86/power/hibernate.c | 35 +++++++++++++++++++----------------</i><br>
+><i> >  1 file changed, 19 insertions(+), 16 deletions(-)</i><br>
+><i> > </i><br>
+><i> > diff --git a/arch/x86/power/hibernate.c b/arch/x86/power/hibernate.c</i><br>
+><i> > index cd3914fc9f3d..b56172553275 100644</i><br>
+><i> > --- a/arch/x86/power/hibernate.c</i><br>
+><i> > +++ b/arch/x86/power/hibernate.c</i><br>
+><i> > @@ -55,31 +55,31 @@ int pfn_is_nosave(unsigned long pfn)</i><br>
+><i> >  }</i><br>
+><i> > </i><br>
+><i> > </i><br>
+><i> > -#define MD5_DIGEST_SIZE 16</i><br>
+><i> > +#define CRC32_DIGEST_SIZE 16</i><br>
+><i> > </i><br>
+><i> >  struct restore_data_record {</i><br>
+><i> >         unsigned long jump_address;</i><br>
+><i> >         unsigned long jump_address_phys;</i><br>
+><i> >         unsigned long cr3;</i><br>
+><i> >         unsigned long magic;</i><br>
+><i> > -       u8 e820_digest[MD5_DIGEST_SIZE];</i><br>
+><i> > +       u8 e820_digest[CRC32_DIGEST_SIZE];</i><br>
+><i> >  };</i><br>
+><i> > </i><br>
+><i> > -#if IS_BUILTIN(CONFIG_CRYPTO_MD5)</i><br>
+><i> > +#if IS_BUILTIN(CONFIG_CRYPTO_CRC32)</i><br>
+><i> >  /**</i><br>
+><i> > - * get_e820_md5 - calculate md5 according to given e820 table</i><br>
+><i> > + * get_e820_crc32 - calculate crc32 according to given e820 table</i><br>
+><i> >   *</i><br>
+><i> >   * @table: the e820 table to be calculated</i><br>
+><i> > - * @buf: the md5 result to be stored to</i><br>
+><i> > + * @buf: the crc32 result to be stored to</i><br>
+><i> >   */</i><br>
+><i> > -static int get_e820_md5(struct e820_table *table, void *buf)</i><br>
+><i> > +static int get_e820_crc32(struct e820_table *table, void *buf)</i><br>
+><i> >  {</i><br>
+><i> >         struct crypto_shash *tfm;</i><br>
+><i> >         struct shash_desc *desc;</i><br>
+><i> >         int size;</i><br>
+><i> >         int ret = 0;</i><br>
+><i> > </i><br>
+><i> > -       tfm = crypto_alloc_shash("md5", 0, 0);</i><br>
+><i> > +       tfm = crypto_alloc_shash("crc32", 0, 0);</i><br>
+><i> >         if (IS_ERR(tfm))</i><br>
+><i> >                 return -ENOMEM;</i><br>
+><i> > </i><br>
+><i> > @@ -107,24 +107,24 @@ static int get_e820_md5(struct e820_table *table, void *buf)</i><br>
+><i> > </i><br>
+><i> >  static int hibernation_e820_save(void *buf)</i><br>
+><i> >  {</i><br>
+><i> > -       return get_e820_md5(e820_table_firmware, buf);</i><br>
+><i> > +       return get_e820_crc32(e820_table_firmware, buf);</i><br>
+><i> >  }</i><br>
+><i> > </i><br>
+><i> >  static bool hibernation_e820_mismatch(void *buf)</i><br>
+><i> >  {</i><br>
+><i> >         int ret;</i><br>
+><i> > -       u8 result[MD5_DIGEST_SIZE];</i><br>
+><i> > +       u8 result[CRC32_DIGEST_SIZE];</i><br>
+><i> > </i><br>
+><i> > -       memset(result, 0, MD5_DIGEST_SIZE);</i><br>
+><i> > +       memset(result, 0, CRC32_DIGEST_SIZE);</i><br>
+><i> >         /* If there is no digest in suspend kernel, let it go. */</i><br>
+><i> > -       if (!memcmp(result, buf, MD5_DIGEST_SIZE))</i><br>
+><i> > +       if (!memcmp(result, buf, CRC32_DIGEST_SIZE))</i><br>
+><i> >                 return false;</i><br>
+><i> > </i><br>
+><i> > -       ret = get_e820_md5(e820_table_firmware, result);</i><br>
+><i> > +       ret = get_e820_crc32(e820_table_firmware, result);</i><br>
+><i> >         if (ret)</i><br>
+><i> >                 return true;</i><br>
+><i> > </i><br>
+><i> > -       return memcmp(result, buf, MD5_DIGEST_SIZE) ? true : false;</i><br>
+><i> > +       return memcmp(result, buf, CRC32_DIGEST_SIZE) ? true : false;</i><br>
+><i> >  }</i><br>
+><i> >  #else</i><br>
+><i> >  static int hibernation_e820_save(void *buf)</i><br>
+><i> > @@ -134,15 +134,15 @@ static int hibernation_e820_save(void *buf)</i><br>
+><i> > </i><br>
+><i> >  static bool hibernation_e820_mismatch(void *buf)</i><br>
+><i> >  {</i><br>
+><i> > -       /* If md5 is not builtin for restore kernel, let it go. */</i><br>
+><i> > +       /* If crc32 is not builtin for restore kernel, let it go. */</i><br>
+><i> >         return false;</i><br>
+><i> >  }</i><br>
+><i> >  #endif</i><br>
+><i> > </i><br>
+><i> >  #ifdef CONFIG_X86_64</i><br>
+><i> > -#define RESTORE_MAGIC  0x23456789ABCDEF01UL</i><br>
+><i> > +#define RESTORE_MAGIC  0x23456789ABCDEF02UL</i><br>
+><i> >  #else</i><br>
+><i> > -#define RESTORE_MAGIC  0x12345678UL</i><br>
+><i> > +#define RESTORE_MAGIC  0x12345679UL</i><br>
+><i> >  #endif</i><br>
+><i> > </i><br>
+><i> >  /**</i><br>
+><i> > @@ -160,6 +160,9 @@ int arch_hibernation_header_save(void *addr, unsigned int max_size)</i><br>
+><i> >         rdr->jump_address = (unsigned long)restore_registers;</i><br>
+><i> >         rdr->jump_address_phys = __pa_symbol(restore_registers);</i><br>
+><i> > </i><br>
+><i> > +       /* crc32 digest size is 4 but digest buffer size is 16 so zero it all */</i><br>
+><i> > +       memset(rdr->e820_digest, 0, CRC32_DIGEST_SIZE);</i><br>
+><i> > +</i><br>
+><i> >         /*</i><br>
+><i> >          * The restore code fixes up CR3 and CR4 in the following sequence:</i><br>
+><i> >          *</i><br>
+><i> > --</i><br>
+><i> > 2.18.1</i><br>
+><i> > </i><br>
+<br>
+-- <br>
+Simo Sorce<br>
+RHEL Crypto Team<br>
+Red Hat, Inc<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+

@@ -1,0 +1,37 @@
+From: SeongJae Park <sjpark@xxxxxxxxx><br>
+<br>
+This commit updates MAINTAINERS file for DAMON related files.<br>
+<br>
+Signed-off-by: SeongJae Park <sjpark@xxxxxxxxx><br>
+---<br>
+ MAINTAINERS | 12 ++++++++++++<br>
+ 1 file changed, 12 insertions(+)<br>
+<br>
+diff --git a/MAINTAINERS b/MAINTAINERS<br>
+index ad650102f950..0df746019eb9 100644<br>
+--- a/MAINTAINERS<br>
++++ b/MAINTAINERS<br>
+@@ -5003,6 +5003,18 @@ F:	net/ax25/ax25_out.c<br>
+ F:	net/ax25/ax25_timer.c<br>
+ F:	net/ax25/sysctl_net_ax25.c<br>
+ <br>
++DATA ACCESS MONITOR<br>
++M:	SeongJae Park <sjpark@xxxxxxxxx><br>
++L:	linux-mm@xxxxxxxxx<br>
++S:	Maintained<br>
++F:	Documentation/admin-guide/mm/damon/*<br>
++F:	Documentation/vm/damon/*<br>
++F:	include/linux/damon.h<br>
++F:	include/trace/events/damon.h<br>
++F:	mm/damon/*<br>
++F:	tools/damon/*<br>
++F:	tools/testing/selftests/damon/*<br>
++<br>
+ DAVICOM FAST ETHERNET (DMFE) NETWORK DRIVER<br>
+ L:	netdev@xxxxxxxxxxxxxxx<br>
+ S:	Orphan<br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+

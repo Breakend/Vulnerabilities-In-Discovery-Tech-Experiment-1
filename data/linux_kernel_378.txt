@@ -1,0 +1,30 @@
+Daniel Bristot de Oliveira <bristot@xxxxxxxxxx> writes:<br>
+<br>
+A quick nit:<br>
+<br>
+><i>  Documentation/trace/osnoise_tracer.rst |  149 ++</i><br>
+><i>  include/linux/ftrace_irq.h             |   16 +</i><br>
+><i>  include/trace/events/osnoise.h         |  141 ++</i><br>
+><i>  kernel/trace/Kconfig                   |   34 +</i><br>
+><i>  kernel/trace/Makefile                  |    1 +</i><br>
+><i>  kernel/trace/trace.h                   |    9 +-</i><br>
+><i>  kernel/trace/trace_entries.h           |   27 +</i><br>
+><i>  kernel/trace/trace_osnoise.c           | 1714 ++++++++++++++++++++++++</i><br>
+><i>  kernel/trace/trace_output.c            |   72 +-</i><br>
+><i>  9 files changed, 2159 insertions(+), 4 deletions(-)</i><br>
+><i>  create mode 100644 Documentation/trace/osnoise_tracer.rst</i><br>
+><i>  create mode 100644 include/trace/events/osnoise.h</i><br>
+><i>  create mode 100644 kernel/trace/trace_osnoise.c</i><br>
+<br>
+When you create a new RST file, you need to add it to an index.rst (or<br>
+similar) file so that it gets incorporated into the docs build.<br>
+<br>
+The document itself looks good on a quick read.  If you're making<br>
+another pass over it, you might consider reducing the ``markup noise`` a<br>
+bit; we try to keep that to a minimum in the kernel docs.  But otherwise<br>
+thanks for writing it!<br>
+<br>
+jon<br>
+<br>
+<br>
+

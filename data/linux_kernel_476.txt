@@ -1,0 +1,73 @@
+On Thu, Apr 08, 2021 at 03:25:52PM +0200, Michal Koutný wrote:<br>
+><i> On Wed, Apr 07, 2021 at 08:34:24PM +0200, Peter Zijlstra <peterz@xxxxxxxxxxxxx> wrote:</i><br>
+><i> > IMO as long as cgroups have that tasks file, you get to support people</i><br>
+><i> > using it. That means that tasks joining your cgroup need to 'inherit'</i><br>
+><i> > cgroup properties.</i><br>
+><i> The tasks file is consequence of binding this to cgroups, I'm one step</i><br>
+><i> back. Why to make "core isolation" a cgroup property?</i><br>
+<br>
+Yeah, dunno, people asked for it. I'm just proposing an implementation<br>
+that, when given the need, seems to make sense and is internally<br>
+consistent.<br>
+<br>
+><i> (I understand this could help "visualize" what the common domains are if</i><br>
+><i> cgroups were the only API but with prctl the structure can be</i><br>
+><i> arbitrarily modified anyway.)</i><br>
+><i> </i><br>
+><i> </i><br>
+><i> > Given something like:</i><br>
+><i> > </i><br>
+><i> >         R</i><br>
+><i> >        / \</i><br>
+><i> >       A   B</i><br>
+><i> >          / \</i><br>
+><i> >         C   D</i><br>
+><i> Thanks for the example. </i><br>
+><i> </i><br>
+><i> > B group can set core_sched=1 and then all its (and its decendants) tasks</i><br>
+><i> > get to have the same (group) cookie and cannot share with others.</i><br>
+><i> The same could be achieved with the first task of group B allocating its</i><br>
+><i> new cookie which would be inherited in its descednants.</i><br>
+<br>
+Except then the task can CLEAR its own cookie and escape the constraint.<br>
+<br>
+><i> > In that scenario the D subtree is a restriction (doesn't share) with the</i><br>
+><i> > B subtree.</i><br>
+><i> This implies D's isolation from everything else too, not just B's</i><br>
+><i> members, no?</i><br>
+<br>
+Correct. Look at it as a contraint on co-scheduling, you can never,<br>
+whatever you do, share an SMT sibling with someone outside your subtree.<br>
+<br>
+><i> > And all of B is a restriction on all its tasks, including the Real-Time</i><br>
+><i> > task that set a task cookie, in that none of them can share with tasks</i><br>
+><i> > outside of B (including system tasks which are in R), irrespective of</i><br>
+><i> > what they do with their task cookie.</i><br>
+><i> IIUC, the equivalent restriction could be achieved with the PTRACE-like</i><br>
+><i> check in the prctl API too (with respectively divided uids).</i><br>
+<br>
+I'm not sure I understand; if tasks in A and B are of the same user,<br>
+then ptrace will not help anything. And per the above, you always have<br>
+ptrace on yourself so you can escape your constraint per the above.<br>
+<br>
+><i> I'm curious whether the cgroup API actually simplifies things that are</i><br>
+><i> possible with the clone/prctl API or allows anything that wouldn't be</i><br>
+><i> otherwise possible.</i><br>
+<br>
+With the cgroup API it is impossible for a task to escape the cgroup<br>
+constraint. It can never share a core with anything not in the subtree.<br>
+<br>
+This is not possible with just the task interface.<br>
+<br>
+If this is actually needed I've no clue, IMO all of cgroups is not<br>
+needed :-) Clearly other people feel differently about that.<br>
+<br>
+<br>
+Much of this would go away if CLEAR were not possible I suppose. But<br>
+IIRC the idea was to let a task isolate itself temporarily, while doing<br>
+some sensitive thing (eg. encrypt an email) but otherwise not be<br>
+constrained. But I'm not sure I can remember all the various things<br>
+people wanted this crud for :/<br>
+<br>
+<br>
+

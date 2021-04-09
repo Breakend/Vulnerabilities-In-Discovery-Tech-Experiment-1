@@ -1,0 +1,41 @@
+On Thu, Apr 08, 2021 at 09:57:12AM +0000, Flavio Suligoi wrote:<br>
+><i> > > > On Thu, Mar 25, 2021 at 07:34:07PM +0200, Andy Shevchenko wrote:</i><br>
+><i> > > > > The series provides one fix (patch 1) for GPIO to be able to wait for</i><br>
+><i> > > > > the GPIO driver to appear. This is separated from the conversion to</i><br>
+><i> > > > > the GPIO descriptors (patch 2) in order to have a possibility for</i><br>
+><i> > > > > backporting. Patches 3 and 4 fix a minor warnings from Sparse while</i><br>
+><i> > > > > moving to a new APIs. Patch 5 is MODULE_VERSION() clean up.</i><br>
+><i> > > > ></i><br>
+><i> > > > > Tested on Intel Minnowboard (v1).</i><br>
+><i> > > ></i><br>
+><i> > > > Anything should I do here?</i><br>
+><i> > ></i><br>
+><i> > > it's ok for me</i><br>
+><i> > </i><br>
+><i> > Thanks!</i><br>
+><i> > Who may apply them?</i><br>
+><i> </i><br>
+><i> I used your patches on kernel net-next 5.12.0-rc2, on a board with an</i><br>
+><i> Intel(R) Atom(TM) CPU E640   @ 1.00GHz and an EG20T PCH.</i><br>
+><i> I used the built-in OKI gigabit ethernet controller:</i><br>
+><i> </i><br>
+><i> 02:00.1 Ethernet controller: Intel Corporation Platform Controller Hub EG20T Gigabit Ethernet Controller (rev 02)</i><br>
+><i> 	Kernel driver in use: pch_gbe</i><br>
+><i> </i><br>
+><i> with a simple iperf test and all works fine:</i><br>
+<br>
+><i> I hope this can help you.</i><br>
+<br>
+><i> Tested-by: Flavio Suligoi <f.suligoi@xxxxxxx></i><br>
+<br>
+Thank you, Flavio, very much!<br>
+<br>
+Jesse, Jakub, David. can this be applied, please?<br>
+<br>
+-- <br>
+With Best Regards,<br>
+Andy Shevchenko<br>
+<br>
+<br>
+<br>
+

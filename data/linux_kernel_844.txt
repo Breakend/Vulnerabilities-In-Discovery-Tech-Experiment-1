@@ -1,0 +1,66 @@
+This patch set fixes and improves the Partial Power Down mode for<br>
+dwc2 core.<br>
+It adds support for the following cases<br>
+    1. Entering and exiting partial power down when a port is<br>
+       suspended, resumed, port reset is asserted.<br>
+    2. Exiting the partial power down mode before removing driver.<br>
+    3. Exiting partial power down in wakeup detected interrupt handler.<br>
+    4. Exiting from partial power down mode when connector ID.<br>
+       status changes to "connId B<br>
+<br>
+It updates and fixes the implementation of dwc2 entering and<br>
+exiting partial power down mode when the system (PC) is suspended.<br>
+<br>
+The patch set also improves the implementation of function handlers<br>
+for entering and exiting host or device partial power down.<br>
+<br>
+NOTE: This is the second patch set in the power saving mode fixes<br>
+series.<br>
+This patch set is part of multiple series and is continuation<br>
+of the "usb: dwc2: Fix and improve power saving modes" patch set.<br>
+(Patch set link: <a  rel="nofollow" href="https://marc.info/?l=linux-usb&m=160379622403975&w=2">https://marc.info/?l=linux-usb&m=160379622403975&w=2</a>).<br>
+The patches that were included in the "usb: dwc2:<br>
+Fix and improve power saving modes" which was submitted<br>
+earlier was too large and needed to be split up into<br>
+smaller patch sets.<br>
+<br>
+Changes since V2:<br>
+No changes in the patches or the source code.<br>
+Assuming that the issue due to which the patches are not reaching to<br>
+vger.kernel.org is a comma in the end of To: or Cc: lists removed<br>
+commas in the end of those lists in each email of patches.<br>
+<br>
+<br>
+Artur Petrosyan (14):<br>
+  usb: dwc2: Add device partial power down functions<br>
+  usb: dwc2: Add host partial power down functions<br>
+  usb: dwc2: Update enter and exit partial power down functions<br>
+  usb: dwc2: Add partial power down exit flow in wakeup intr.<br>
+  usb: dwc2: Update port suspend/resume function definitions.<br>
+  usb: dwc2: Add enter partial power down when port is suspended<br>
+  usb: dwc2: Add exit partial power down when port is resumed<br>
+  usb: dwc2: Add exit partial power down when port reset is asserted<br>
+  usb: dwc2: Add part. power down exit from<br>
+    dwc2_conn_id_status_change().<br>
+  usb: dwc2: Allow exit partial power down in urb enqueue<br>
+  usb: dwc2: Fix session request interrupt handler<br>
+  usb: dwc2: Update partial power down entering by system suspend<br>
+  usb: dwc2: Fix partial power down exiting by system resume<br>
+  usb: dwc2: Add exit partial power down before removing driver<br>
+<br>
+ drivers/usb/dwc2/core.c      | 113 ++-------<br>
+ drivers/usb/dwc2/core.h      |  27 ++-<br>
+ drivers/usb/dwc2/core_intr.c |  46 ++--<br>
+ drivers/usb/dwc2/gadget.c    | 148 ++++++++++-<br>
+ drivers/usb/dwc2/hcd.c       | 458 +++++++++++++++++++++++++----------<br>
+ drivers/usb/dwc2/hw.h        |   1 +<br>
+ drivers/usb/dwc2/platform.c  |  11 +-<br>
+ 7 files changed, 558 insertions(+), 246 deletions(-)<br>
+<br>
+<br>
+base-commit: e9fcb07704fcef6fa6d0333fd2b3a62442eaf45b<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

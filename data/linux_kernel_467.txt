@@ -1,0 +1,18 @@
+><i> What I'm still unclear on, does this new version address that</i><br>
+><i> "mysterious" hang or panic which the validation team triggered or you</i><br>
+><i> haven't checked yet?</i><br>
+<br>
+No :-(<br>
+<br>
+They are triggering some case where multiple threads in a process hit the same<br>
+poison, and somehow memory_failure() fails to complete offlining the page. At this<br>
+point any other threads that hit that page get the early return from memory_failure<br>
+(because the page flags say it is poisoned) ... and so we loop.<br>
+<br>
+But the "recover from cases where multiple machine checks happen<br>
+simultaneously" case is orthogonal to the "do the right thing to recover<br>
+when the kernel touches poison at a user address". So I think we can<br>
+tackle them separately<br>
+<br>
+-Tony<br>
+

@@ -1,0 +1,38 @@
+On Thu, Apr 08, 2021 at 03:38:13PM +0000, Wei Liu wrote:<br>
+><i> On Thu, Apr 08, 2021 at 05:30:26PM +0200, Paolo Bonzini wrote:</i><br>
+><i> > On 08/04/21 17:28, Wei Liu wrote:</i><br>
+><i> > > > Although the Hyper-v TLFS mentions that a guest cannot use this feature</i><br>
+><i> > > > unless the hypervisor advertises support for it, some hypercalls which</i><br>
+><i> > > > we plan on upstreaming in future uses them anyway.</i><br>
+><i> > ></i><br>
+><i> > > No, please don't do this. Check the feature bit(s) before you issue</i><br>
+><i> > > hypercalls which rely on the extended interface.</i><br>
+><i> ></i><br>
+><i> > Perhaps Siddharth should clarify this, but I read it as Hyper-V being buggy</i><br>
+><i> > and using XMM arguments unconditionally.</i><br>
+><i> ></i><br>
+><i> </i><br>
+><i> There is no code in upstream Linux that uses the XMM fast hypercall</i><br>
+><i> interface at the moment.</i><br>
+><i> </i><br>
+><i> If there is such code, it has bugs in it and should be fixed. :-)</i><br>
+<br>
+None of the existing hypercalls are buggy. These are some hypercalls we<br>
+are working on (and planning on upstreaming in the near future). <br>
+<br>
+~ Sid.<br>
+<br>
+<br>
+<br>
+Amazon Development Center Germany GmbH<br>
+Krausenstr. 38<br>
+10117 Berlin<br>
+Geschaeftsfuehrung: Christian Schlaeger, Jonathan Weiss<br>
+Eingetragen am Amtsgericht Charlottenburg unter HRB 149173 B<br>
+Sitz: Berlin<br>
+Ust-ID: DE 289 237 879<br>
+<br>
+<br>
+<br>
+<br>
+

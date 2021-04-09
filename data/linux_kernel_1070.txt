@@ -1,0 +1,13 @@
+Thus wrote Greg Kroah-Hartman (gregkh@xxxxxxxxxxxxxxxxxxx):<br>
+<br>
+><i> Wow, that's there for a really old kernel version and should not be</i><br>
+><i> needed anymore at all.  I'll take this, but please remove the other ones</i><br>
+><i> here, they are not necessary.</i><br>
+<br>
+Ok, I see what you mean. New patch is on the way.<br>
+<br>
+Best regards,<br>
+Martin<br>
+<br>
+<br>
+

@@ -1,0 +1,164 @@
+On Tue, 6 Apr 2021 at 12:57, Vlastimil Babka <vbabka@xxxxxxx> wrote:<br>
+><i></i><br>
+><i></i><br>
+><i> On 4/1/21 11:24 PM, Marco Elver wrote:</i><br>
+><i> > On Thu, 1 Apr 2021 at 21:04, Daniel Latypov <dlatypov@xxxxxxxxxx> wrote:</i><br>
+><i> >> >         }</i><br>
+><i> >> >         #else</i><br>
+><i> >> >         static inline bool slab_add_kunit_errors(void) { return false; }</i><br>
+><i> >> >         #endif</i><br>
+><i> >> ></i><br>
+><i> >> > And anywhere you want to increase the error count, you'd call</i><br>
+><i> >> > slab_add_kunit_errors().</i><br>
+><i> >> ></i><br>
+><i> >> > Another benefit of this approach is that if KUnit is disabled, there is</i><br>
+><i> >> > zero overhead and no additional code generated (vs. the current</i><br>
+><i> >> > approach).</i><br>
+><i> >></i><br>
+><i> >> The resource approach looks really good, but...</i><br>
+><i> >> You'd be picking up a dependency on</i><br>
+><i> >> <a  rel="nofollow" href="https://lore.kernel.org/linux-kselftest/20210311152314.3814916-2-dlatypov@xxxxxxxxxx/">https://lore.kernel.org/linux-kselftest/20210311152314.3814916-2-dlatypov@xxxxxxxxxx/</a></i><br>
+><i> >> current->kunit_test will always be NULL unless CONFIG_KASAN=y &&</i><br>
+><i> >> CONFIG_KUNIT=y at the moment.</i><br>
+><i> >> My patch drops the CONFIG_KASAN requirement and opens it up to all tests.</i><br>
+><i> ></i><br>
+><i> > Oh, that's a shame, but hopefully it'll be in -next soon.</i><br>
+><i> ></i><br>
+><i> >> At the moment, it's just waiting another look over from Brendan or David.</i><br>
+><i> >> Any ETA on that, folks? :)</i><br>
+><i> >></i><br>
+><i> >> So if you don't want to get blocked on that for now, I think it's fine to add:</i><br>
+><i> >>   #ifdef CONFIG_SLUB_KUNIT_TEST</i><br>
+><i> >>   int errors;</i><br>
+><i> >>   #endif</i><br>
+><i> ></i><br>
+><i> > Until kunit fixes setting current->kunit_test, a cleaner workaround</i><br>
+><i> > that would allow to do the patch with kunit_resource, is to just have</i><br>
+><i> > an .init/.exit function that sets it ("current->kunit_test = test;").</i><br>
+><i> > And then perhaps add a note ("FIXME: ...") to remove it once the above</i><br>
+><i> > patch has landed.</i><br>
+><i> ></i><br>
+><i> > At least that way we get the least intrusive change for mm/slub.c, and</i><br>
+><i> > the test is the only thing that needs a 2-line patch to clean up</i><br>
+><i> > later.</i><br>
+><i></i><br>
+><i> So when testing internally Oliver's new version with your suggestions (thanks</i><br>
+><i> again for those), I got lockdep splats because slab_add_kunit_errors is called</i><br>
+><i> also from irq disabled contexts, and kunit_find_named_resource will call</i><br>
+><i> spin_lock(&test->lock) that's not irq safe. Can we make the lock irq safe? I</i><br>
+><i> tried the change below and it makde the problem go away. If you agree, the</i><br>
+><i> question is how to proceed - make it part of Oliver's patch series and let</i><br>
+><i> Andrew pick it all with eventually kunit team's acks on this patch, or whatnot.</i><br>
+<br>
+><i>From what I can tell it should be fine to make it irq safe (ack for</i><br>
+your patch below). Regarding patch logistics, I'd probably add it to<br>
+the series. If that ends up not working, we'll find out sooner or<br>
+later.<br>
+<br>
+(FYI, the prerequisite patch for current->kunit_test is in -next now.)<br>
+<br>
+KUnit maintainers, do you have any preferences?<br>
+<br>
+><i> ----8<----</i><br>
+><i></i><br>
+><i> commit ab28505477892e9824c57ac338c88aec2ec0abce</i><br>
+><i> Author: Vlastimil Babka <vbabka@xxxxxxx></i><br>
+><i> Date:   Tue Apr 6 12:28:07 2021 +0200</i><br>
+><i></i><br>
+><i>     kunit: make test->lock irq safe</i><br>
+><i></i><br>
+><i> diff --git a/include/kunit/test.h b/include/kunit/test.h</i><br>
+><i> index 49601c4b98b8..524d4789af22 100644</i><br>
+><i> --- a/include/kunit/test.h</i><br>
+><i> +++ b/include/kunit/test.h</i><br>
+><i> @@ -515,8 +515,9 @@ kunit_find_resource(struct kunit *test,</i><br>
+><i>                     void *match_data)</i><br>
+><i>  {</i><br>
+><i>         struct kunit_resource *res, *found = NULL;</i><br>
+><i> +       unsigned long flags;</i><br>
+><i></i><br>
+><i> -       spin_lock(&test->lock);</i><br>
+><i> +       spin_lock_irqsave(&test->lock, flags);</i><br>
+><i></i><br>
+><i>         list_for_each_entry_reverse(res, &test->resources, node) {</i><br>
+><i>                 if (match(test, res, (void *)match_data)) {</i><br>
+><i> @@ -526,7 +527,7 @@ kunit_find_resource(struct kunit *test,</i><br>
+><i>                 }</i><br>
+><i>         }</i><br>
+><i></i><br>
+><i> -       spin_unlock(&test->lock);</i><br>
+><i> +       spin_unlock_irqrestore(&test->lock, flags);</i><br>
+><i></i><br>
+><i>         return found;</i><br>
+><i>  }</i><br>
+><i> diff --git a/lib/kunit/test.c b/lib/kunit/test.c</i><br>
+><i> index ec9494e914ef..2c62eeb45b82 100644</i><br>
+><i> --- a/lib/kunit/test.c</i><br>
+><i> +++ b/lib/kunit/test.c</i><br>
+><i> @@ -442,6 +442,7 @@ int kunit_add_resource(struct kunit *test,</i><br>
+><i>                        void *data)</i><br>
+><i>  {</i><br>
+><i>         int ret = 0;</i><br>
+><i> +       unsigned long flags;</i><br>
+><i></i><br>
+><i>         res->free = free;</i><br>
+><i>         kref_init(&res->refcount);</i><br>
+><i> @@ -454,10 +455,10 @@ int kunit_add_resource(struct kunit *test,</i><br>
+><i>                 res->data = data;</i><br>
+><i>         }</i><br>
+><i></i><br>
+><i> -       spin_lock(&test->lock);</i><br>
+><i> +       spin_lock_irqsave(&test->lock, flags);</i><br>
+><i>         list_add_tail(&res->node, &test->resources);</i><br>
+><i>         /* refcount for list is established by kref_init() */</i><br>
+><i> -       spin_unlock(&test->lock);</i><br>
+><i> +       spin_unlock_irqrestore(&test->lock, flags);</i><br>
+><i></i><br>
+><i>         return ret;</i><br>
+><i>  }</i><br>
+><i> @@ -515,9 +516,11 @@ EXPORT_SYMBOL_GPL(kunit_alloc_and_get_resource);</i><br>
+><i></i><br>
+><i>  void kunit_remove_resource(struct kunit *test, struct kunit_resource *res)</i><br>
+><i>  {</i><br>
+><i> -       spin_lock(&test->lock);</i><br>
+><i> +       unsigned long flags;</i><br>
+><i> +</i><br>
+><i> +       spin_lock_irqsave(&test->lock, flags);</i><br>
+><i>         list_del(&res->node);</i><br>
+><i> -       spin_unlock(&test->lock);</i><br>
+><i> +       spin_unlock_irqrestore(&test->lock, flags);</i><br>
+><i>         kunit_put_resource(res);</i><br>
+><i>  }</i><br>
+><i>  EXPORT_SYMBOL_GPL(kunit_remove_resource);</i><br>
+><i> @@ -597,6 +600,7 @@ EXPORT_SYMBOL_GPL(kunit_kfree);</i><br>
+><i>  void kunit_cleanup(struct kunit *test)</i><br>
+><i>  {</i><br>
+><i>         struct kunit_resource *res;</i><br>
+><i> +       unsigned long flags;</i><br>
+><i></i><br>
+><i>         /*</i><br>
+><i>          * test->resources is a stack - each allocation must be freed in the</i><br>
+><i> @@ -608,9 +612,9 @@ void kunit_cleanup(struct kunit *test)</i><br>
+><i>          * protect against the current node being deleted, not the next.</i><br>
+><i>          */</i><br>
+><i>         while (true) {</i><br>
+><i> -               spin_lock(&test->lock);</i><br>
+><i> +               spin_lock_irqsave(&test->lock, flags);</i><br>
+><i>                 if (list_empty(&test->resources)) {</i><br>
+><i> -                       spin_unlock(&test->lock);</i><br>
+><i> +                       spin_unlock_irqrestore(&test->lock, flags);</i><br>
+><i>                         break;</i><br>
+><i>                 }</i><br>
+><i>                 res = list_last_entry(&test->resources,</i><br>
+><i> @@ -621,7 +625,7 @@ void kunit_cleanup(struct kunit *test)</i><br>
+><i>                  * resource, and this can't happen if the test->lock</i><br>
+><i>                  * is held.</i><br>
+><i>                  */</i><br>
+><i> -               spin_unlock(&test->lock);</i><br>
+><i> +               spin_unlock_irqrestore(&test->lock, flags);</i><br>
+><i>                 kunit_remove_resource(test, res);</i><br>
+><i>         }</i><br>
+><i>  #if (IS_ENABLED(CONFIG_KASAN) && IS_ENABLED(CONFIG_KUNIT))</i><br>
+<br>
+<br>
+

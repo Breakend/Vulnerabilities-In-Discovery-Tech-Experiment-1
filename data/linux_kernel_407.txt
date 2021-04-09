@@ -1,0 +1,1002 @@
+afs_extract_data() sets up a temporary iov_iter and passes it to AF_RXRPC<br>
+each time it is called to describe the remaining buffer to be filled.<br>
+<br>
+Instead:<br>
+<br>
+ (1) Put an iterator in the afs_call struct.<br>
+<br>
+ (2) Set the iterator for each marshalling stage to load data into the<br>
+     appropriate places.  A number of convenience functions are provided to<br>
+     this end (eg. afs_extract_to_buf()).<br>
+<br>
+     This iterator is then passed to afs_extract_data().<br>
+<br>
+ (3) Use the new ITER_XARRAY iterator when reading data to load directly<br>
+     into the inode's pages without needing to create a list of them.<br>
+<br>
+This will allow O_DIRECT calls to be supported in future patches.<br>
+<br>
+Signed-off-by: David Howells <dhowells@xxxxxxxxxx><br>
+cc: linux-afs@xxxxxxxxxxxxxxxxxxx<br>
+cc: linux-cachefs@xxxxxxxxxx<br>
+cc: linux-fsdevel@xxxxxxxxxxxxxxx<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/152898380012.11616.12094591785228251717.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/152898380012.11616.12094591785228251717.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a><br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/153685394431.14766.3178466345696987059.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/153685394431.14766.3178466345696987059.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a><br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/153999787395.866.11218209749223643998.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/153999787395.866.11218209749223643998.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a><br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/154033911195.12041.3882700371848894587.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/154033911195.12041.3882700371848894587.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v2<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/158861250059.340223.1248231474865140653.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/158861250059.340223.1248231474865140653.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # rfc<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/159465827399.1377938.11181327349704960046.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/159465827399.1377938.11181327349704960046.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a><br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/160588533776.3465195.3612752083351956948.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/160588533776.3465195.3612752083351956948.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # rfc<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161118151238.1232039.17015723405750601161.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161118151238.1232039.17015723405750601161.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # rfc<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161161047240.2537118.14721975104810564022.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161161047240.2537118.14721975104810564022.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v2<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161340410333.1303470.16260122230371140878.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161340410333.1303470.16260122230371140878.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v3<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161539554187.286939.15305559004905459852.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161539554187.286939.15305559004905459852.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v4<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161653810525.2770958.4630666029125411789.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161653810525.2770958.4630666029125411789.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v5<br>
+---<br>
+<br>
+ fs/afs/dir.c       |  222 +++++++++++++++++++++++++++++++++++-----------------<br>
+ fs/afs/file.c      |  190 ++++++++++++++++++++++++++-------------------<br>
+ fs/afs/fsclient.c  |   54 +++----------<br>
+ fs/afs/internal.h  |   16 ++--<br>
+ fs/afs/write.c     |   27 ++++--<br>
+ fs/afs/yfsclient.c |   54 +++----------<br>
+ 6 files changed, 314 insertions(+), 249 deletions(-)<br>
+<br>
+diff --git a/fs/afs/dir.c b/fs/afs/dir.c<br>
+index d8825ce63eba..8c093bfff8b6 100644<br>
+--- a/fs/afs/dir.c<br>
++++ b/fs/afs/dir.c<br>
+@@ -102,6 +102,35 @@ struct afs_lookup_cookie {<br>
+ 	struct afs_fid		fids[50];<br>
+ };<br>
+ <br>
++/*<br>
++ * Drop the refs that we're holding on the pages we were reading into.  We've<br>
++ * got refs on the first nr_pages pages.<br>
++ */<br>
++static void afs_dir_read_cleanup(struct afs_read *req)<br>
++{<br>
++	struct address_space *mapping = req->vnode->vfs_inode.i_mapping;<br>
++	struct page *page;<br>
++	pgoff_t last = req->nr_pages - 1;<br>
++<br>
++	XA_STATE(xas, &mapping->i_pages, 0);<br>
++<br>
++	if (unlikely(!req->nr_pages))<br>
++		return;<br>
++<br>
++	rcu_read_lock();<br>
++	xas_for_each(&xas, page, last) {<br>
++		if (xas_retry(&xas, page))<br>
++			continue;<br>
++		BUG_ON(xa_is_value(page));<br>
++		BUG_ON(PageCompound(page));<br>
++		ASSERTCMP(page->mapping, ==, mapping);<br>
++<br>
++		put_page(page);<br>
++	}<br>
++<br>
++	rcu_read_unlock();<br>
++}<br>
++<br>
+ /*<br>
+  * check that a directory page is valid<br>
+  */<br>
+@@ -127,7 +156,7 @@ static bool afs_dir_check_page(struct afs_vnode *dvnode, struct page *page,<br>
+ 	qty /= sizeof(union afs_xdr_dir_block);<br>
+ <br>
+ 	/* check them */<br>
+-	dbuf = kmap(page);<br>
++	dbuf = kmap_atomic(page);<br>
+ 	for (tmp = 0; tmp < qty; tmp++) {<br>
+ 		if (dbuf->blocks[tmp].hdr.magic != AFS_DIR_MAGIC) {<br>
+ 			printk("kAFS: %s(%lx): bad magic %d/%d is %04hx\n",<br>
+@@ -146,7 +175,7 @@ static bool afs_dir_check_page(struct afs_vnode *dvnode, struct page *page,<br>
+ 		((u8 *)&dbuf->blocks[tmp])[AFS_DIR_BLOCK_SIZE - 1] = 0;<br>
+ 	}<br>
+ <br>
+-	kunmap(page);<br>
++	kunmap_atomic(dbuf);<br>
+ <br>
+ checked:<br>
+ 	afs_stat_v(dvnode, n_read_dir);<br>
+@@ -157,35 +186,74 @@ static bool afs_dir_check_page(struct afs_vnode *dvnode, struct page *page,<br>
+ }<br>
+ <br>
+ /*<br>
+- * Check the contents of a directory that we've just read.<br>
++ * Dump the contents of a directory.<br>
+  */<br>
+-static bool afs_dir_check_pages(struct afs_vnode *dvnode, struct afs_read *req)<br>
++static void afs_dir_dump(struct afs_vnode *dvnode, struct afs_read *req)<br>
+ {<br>
+ 	struct afs_xdr_dir_page *dbuf;<br>
+-	unsigned int i, j, qty = PAGE_SIZE / sizeof(union afs_xdr_dir_block);<br>
++	struct address_space *mapping = dvnode->vfs_inode.i_mapping;<br>
++	struct page *page;<br>
++	unsigned int i, qty = PAGE_SIZE / sizeof(union afs_xdr_dir_block);<br>
++	pgoff_t last = req->nr_pages - 1;<br>
+ <br>
+-	for (i = 0; i < req->nr_pages; i++)<br>
+-		if (!afs_dir_check_page(dvnode, req->pages[i], req->actual_len))<br>
+-			goto bad;<br>
+-	return true;<br>
++	XA_STATE(xas, &mapping->i_pages, 0);<br>
+ <br>
+-bad:<br>
+-	pr_warn("DIR %llx:%llx f=%llx l=%llx al=%llx r=%llx\n",<br>
++	pr_warn("DIR %llx:%llx f=%llx l=%llx al=%llx\n",<br>
+ 		dvnode->fid.vid, dvnode->fid.vnode,<br>
+-		req->file_size, req->len, req->actual_len, req->remain);<br>
+-	pr_warn("DIR %llx %x %x %x\n",<br>
+-		req->pos, req->index, req->nr_pages, req->offset);<br>
++		req->file_size, req->len, req->actual_len);<br>
++	pr_warn("DIR %llx %x %zx %zx\n",<br>
++		req->pos, req->nr_pages,<br>
++		req->iter->iov_offset,  iov_iter_count(req->iter));<br>
+ <br>
+-	for (i = 0; i < req->nr_pages; i++) {<br>
+-		dbuf = kmap(req->pages[i]);<br>
+-		for (j = 0; j < qty; j++) {<br>
+-			union afs_xdr_dir_block *block = &dbuf->blocks[j];<br>
++	xas_for_each(&xas, page, last) {<br>
++		if (xas_retry(&xas, page))<br>
++			continue;<br>
++<br>
++		BUG_ON(PageCompound(page));<br>
++		BUG_ON(page->mapping != mapping);<br>
++<br>
++		dbuf = kmap_atomic(page);<br>
++		for (i = 0; i < qty; i++) {<br>
++			union afs_xdr_dir_block *block = &dbuf->blocks[i];<br>
+ <br>
+-			pr_warn("[%02x] %32phN\n", i * qty + j, block);<br>
++			pr_warn("[%02lx] %32phN\n", page->index * qty + i, block);<br>
+ 		}<br>
+-		kunmap(req->pages[i]);<br>
++		kunmap_atomic(dbuf);<br>
+ 	}<br>
+-	return false;<br>
++}<br>
++<br>
++/*<br>
++ * Check all the pages in a directory.  All the pages are held pinned.<br>
++ */<br>
++static int afs_dir_check(struct afs_vnode *dvnode, struct afs_read *req)<br>
++{<br>
++	struct address_space *mapping = dvnode->vfs_inode.i_mapping;<br>
++	struct page *page;<br>
++	pgoff_t last = req->nr_pages - 1;<br>
++	int ret = 0;<br>
++<br>
++	XA_STATE(xas, &mapping->i_pages, 0);<br>
++<br>
++	if (unlikely(!req->nr_pages))<br>
++		return 0;<br>
++<br>
++	rcu_read_lock();<br>
++	xas_for_each(&xas, page, last) {<br>
++		if (xas_retry(&xas, page))<br>
++			continue;<br>
++<br>
++		BUG_ON(PageCompound(page));<br>
++		BUG_ON(page->mapping != mapping);<br>
++<br>
++		if (!afs_dir_check_page(dvnode, page, req->file_size)) {<br>
++			afs_dir_dump(dvnode, req);<br>
++			ret = -EIO;<br>
++			break;<br>
++		}<br>
++	}<br>
++<br>
++	rcu_read_unlock();<br>
++	return ret;<br>
+ }<br>
+ <br>
+ /*<br>
+@@ -214,58 +282,57 @@ static struct afs_read *afs_read_dir(struct afs_vnode *dvnode, struct key *key)<br>
+ {<br>
+ 	struct afs_read *req;<br>
+ 	loff_t i_size;<br>
+-	int nr_pages, nr_inline, i, n;<br>
+-	int ret = -ENOMEM;<br>
++	int nr_pages, i, n;<br>
++	int ret;<br>
++<br>
++	_enter("");<br>
+ <br>
+-retry:<br>
++	req = kzalloc(sizeof(*req), GFP_KERNEL);<br>
++	if (!req)<br>
++		return ERR_PTR(-ENOMEM);<br>
++<br>
++	refcount_set(&req->usage, 1);<br>
++	req->vnode = dvnode;<br>
++	req->key = key_get(key);<br>
++	req->cleanup = afs_dir_read_cleanup;<br>
++<br>
++expand:<br>
+ 	i_size = i_size_read(&dvnode->vfs_inode);<br>
+-	if (i_size < 2048)<br>
+-		return ERR_PTR(afs_bad(dvnode, afs_file_error_dir_small));<br>
++	if (i_size < 2048) {<br>
++		ret = afs_bad(dvnode, afs_file_error_dir_small);<br>
++		goto error;<br>
++	}<br>
+ 	if (i_size > 2048 * 1024) {<br>
+ 		trace_afs_file_error(dvnode, -EFBIG, afs_file_error_dir_big);<br>
+-		return ERR_PTR(-EFBIG);<br>
++		ret = -EFBIG;<br>
++		goto error;<br>
+ 	}<br>
+ <br>
+ 	_enter("%llu", i_size);<br>
+ <br>
+-	/* Get a request record to hold the page list.  We want to hold it<br>
+-	 * inline if we can, but we don't want to make an order 1 allocation.<br>
+-	 */<br>
+ 	nr_pages = (i_size + PAGE_SIZE - 1) / PAGE_SIZE;<br>
+-	nr_inline = nr_pages;<br>
+-	if (nr_inline > (PAGE_SIZE - sizeof(*req)) / sizeof(struct page *))<br>
+-		nr_inline = 0;<br>
+ <br>
+-	req = kzalloc(struct_size(req, array, nr_inline), GFP_KERNEL);<br>
+-	if (!req)<br>
+-		return ERR_PTR(-ENOMEM);<br>
+-<br>
+-	refcount_set(&req->usage, 1);<br>
+-	req->key = key_get(key);<br>
+-	req->nr_pages = nr_pages;<br>
+ 	req->actual_len = i_size; /* May change */<br>
+ 	req->len = nr_pages * PAGE_SIZE; /* We can ask for more than there is */<br>
+ 	req->data_version = dvnode->status.data_version; /* May change */<br>
+-	if (nr_inline > 0) {<br>
+-		req->pages = req->array;<br>
+-	} else {<br>
+-		req->pages = kcalloc(nr_pages, sizeof(struct page *),<br>
+-				     GFP_KERNEL);<br>
+-		if (!req->pages)<br>
+-			goto error;<br>
+-	}<br>
++	iov_iter_xarray(&req->def_iter, READ, &dvnode->vfs_inode.i_mapping->i_pages,<br>
++			0, i_size);<br>
++	req->iter = &req->def_iter;<br>
+ <br>
+-	/* Get a list of all the pages that hold or will hold the directory<br>
+-	 * content.  We need to fill in any gaps that we might find where the<br>
+-	 * memory reclaimer has been at work.  If there are any gaps, we will<br>
++	/* Fill in any gaps that we might find where the memory reclaimer has<br>
++	 * been at work and pin all the pages.  If there are any gaps, we will<br>
+ 	 * need to reread the entire directory contents.<br>
+ 	 */<br>
+-	i = 0;<br>
+-	do {<br>
++	i = req->nr_pages;<br>
++	while (i < nr_pages) {<br>
++		struct page *pages[8], *page;<br>
++<br>
+ 		n = find_get_pages_contig(dvnode->vfs_inode.i_mapping, i,<br>
+-					  req->nr_pages - i,<br>
+-					  req->pages + i);<br>
+-		_debug("find %u at %u/%u", n, i, req->nr_pages);<br>
++					  min_t(unsigned int, nr_pages - i,<br>
++						ARRAY_SIZE(pages)),<br>
++					  pages);<br>
++		_debug("find %u at %u/%u", n, i, nr_pages);<br>
++<br>
+ 		if (n == 0) {<br>
+ 			gfp_t gfp = dvnode->vfs_inode.i_mapping->gfp_mask;<br>
+ <br>
+@@ -273,22 +340,24 @@ static struct afs_read *afs_read_dir(struct afs_vnode *dvnode, struct key *key)<br>
+ 				afs_stat_v(dvnode, n_inval);<br>
+ <br>
+ 			ret = -ENOMEM;<br>
+-			req->pages[i] = __page_cache_alloc(gfp);<br>
+-			if (!req->pages[i])<br>
++			page = __page_cache_alloc(gfp);<br>
++			if (!page)<br>
+ 				goto error;<br>
+-			ret = add_to_page_cache_lru(req->pages[i],<br>
++			ret = add_to_page_cache_lru(page,<br>
+ 						    dvnode->vfs_inode.i_mapping,<br>
+ 						    i, gfp);<br>
+ 			if (ret < 0)<br>
+ 				goto error;<br>
+ <br>
+-			attach_page_private(req->pages[i], (void *)1);<br>
+-			unlock_page(req->pages[i]);<br>
++			attach_page_private(page, (void *)1);<br>
++			unlock_page(page);<br>
++			req->nr_pages++;<br>
+ 			i++;<br>
+ 		} else {<br>
++			req->nr_pages += n;<br>
+ 			i += n;<br>
+ 		}<br>
+-	} while (i < req->nr_pages);<br>
++	}<br>
+ <br>
+ 	/* If we're going to reload, we need to lock all the pages to prevent<br>
+ 	 * races.<br>
+@@ -312,12 +381,17 @@ static struct afs_read *afs_read_dir(struct afs_vnode *dvnode, struct key *key)<br>
+ <br>
+ 		task_io_account_read(PAGE_SIZE * req->nr_pages);<br>
+ <br>
+-		if (req->len < req->file_size)<br>
+-			goto content_has_grown;<br>
++		if (req->len < req->file_size) {<br>
++			/* The content has grown, so we need to expand the<br>
++			 * buffer.<br>
++			 */<br>
++			up_write(&dvnode->validate_lock);<br>
++			goto expand;<br>
++		}<br>
+ <br>
+ 		/* Validate the data we just read. */<br>
+-		ret = -EIO;<br>
+-		if (!afs_dir_check_pages(dvnode, req))<br>
++		ret = afs_dir_check(dvnode, req);<br>
++		if (ret < 0)<br>
+ 			goto error_unlock;<br>
+ <br>
+ 		// TODO: Trim excess pages<br>
+@@ -335,11 +409,6 @@ static struct afs_read *afs_read_dir(struct afs_vnode *dvnode, struct key *key)<br>
+ 	afs_put_read(req);<br>
+ 	_leave(" = %d", ret);<br>
+ 	return ERR_PTR(ret);<br>
+-<br>
+-content_has_grown:<br>
+-	up_write(&dvnode->validate_lock);<br>
+-	afs_put_read(req);<br>
+-	goto retry;<br>
+ }<br>
+ <br>
+ /*<br>
+@@ -449,6 +518,7 @@ static int afs_dir_iterate(struct inode *dir, struct dir_context *ctx,<br>
+ 	struct afs_read *req;<br>
+ 	struct page *page;<br>
+ 	unsigned blkoff, limit;<br>
++	void __rcu **slot;<br>
+ 	int ret;<br>
+ <br>
+ 	_enter("{%lu},%u,,", dir->i_ino, (unsigned)ctx->pos);<br>
+@@ -473,9 +543,15 @@ static int afs_dir_iterate(struct inode *dir, struct dir_context *ctx,<br>
+ 		blkoff = ctx->pos & ~(sizeof(union afs_xdr_dir_block) - 1);<br>
+ <br>
+ 		/* Fetch the appropriate page from the directory and re-add it<br>
+-		 * to the LRU.<br>
++		 * to the LRU.  We have all the pages pinned with an extra ref.<br>
+ 		 */<br>
+-		page = req->pages[blkoff / PAGE_SIZE];<br>
++		rcu_read_lock();<br>
++		page = NULL;<br>
++		slot = radix_tree_lookup_slot(&dvnode->vfs_inode.i_mapping->i_pages,<br>
++					      blkoff / PAGE_SIZE);<br>
++		if (slot)<br>
++			page = radix_tree_deref_slot(slot);<br>
++		rcu_read_unlock();<br>
+ 		if (!page) {<br>
+ 			ret = afs_bad(dvnode, afs_file_error_dir_missing_page);<br>
+ 			break;<br>
+diff --git a/fs/afs/file.c b/fs/afs/file.c<br>
+index af6471defec3..4a34ffaf6de4 100644<br>
+--- a/fs/afs/file.c<br>
++++ b/fs/afs/file.c<br>
+@@ -183,21 +183,72 @@ int afs_release(struct inode *inode, struct file *file)<br>
+ 	return ret;<br>
+ }<br>
+ <br>
++/*<br>
++ * Handle completion of a read operation.<br>
++ */<br>
++static void afs_file_read_done(struct afs_read *req)<br>
++{<br>
++	struct afs_vnode *vnode = req->vnode;<br>
++	struct page *page;<br>
++	pgoff_t index = req->pos >> PAGE_SHIFT;<br>
++	pgoff_t last = index + req->nr_pages - 1;<br>
++<br>
++	XA_STATE(xas, &vnode->vfs_inode.i_mapping->i_pages, index);<br>
++<br>
++	if (iov_iter_count(req->iter) > 0) {<br>
++		/* The read was short - clear the excess buffer. */<br>
++		_debug("afterclear %zx %zx %llx/%llx",<br>
++		       req->iter->iov_offset,<br>
++		       iov_iter_count(req->iter),<br>
++		       req->actual_len, req->len);<br>
++		iov_iter_zero(iov_iter_count(req->iter), req->iter);<br>
++	}<br>
++<br>
++	rcu_read_lock();<br>
++	xas_for_each(&xas, page, last) {<br>
++		page_endio(page, false, 0);<br>
++		put_page(page);<br>
++	}<br>
++	rcu_read_unlock();<br>
++<br>
++	task_io_account_read(req->len);<br>
++	req->cleanup = NULL;<br>
++}<br>
++<br>
++/*<br>
++ * Dispose of our locks and refs on the pages if the read failed.<br>
++ */<br>
++static void afs_file_read_cleanup(struct afs_read *req)<br>
++{<br>
++	struct page *page;<br>
++	pgoff_t index = req->pos >> PAGE_SHIFT;<br>
++	pgoff_t last = index + req->nr_pages - 1;<br>
++<br>
++	if (req->iter) {<br>
++		XA_STATE(xas, &req->vnode->vfs_inode.i_mapping->i_pages, index);<br>
++<br>
++		_enter("%lu,%u,%zu", index, req->nr_pages, iov_iter_count(req->iter));<br>
++<br>
++		rcu_read_lock();<br>
++		xas_for_each(&xas, page, last) {<br>
++			BUG_ON(xa_is_value(page));<br>
++			BUG_ON(PageCompound(page));<br>
++<br>
++			page_endio(page, false, req->error);<br>
++			put_page(page);<br>
++		}<br>
++		rcu_read_unlock();<br>
++	}<br>
++}<br>
++<br>
+ /*<br>
+  * Dispose of a ref to a read record.<br>
+  */<br>
+ void afs_put_read(struct afs_read *req)<br>
+ {<br>
+-	int i;<br>
+-<br>
+ 	if (refcount_dec_and_test(&req->usage)) {<br>
+-		if (req->pages) {<br>
+-			for (i = 0; i < req->nr_pages; i++)<br>
+-				if (req->pages[i])<br>
+-					put_page(req->pages[i]);<br>
+-			if (req->pages != req->array)<br>
+-				kfree(req->pages);<br>
+-		}<br>
++		if (req->cleanup)<br>
++			req->cleanup(req);<br>
+ 		key_put(req->key);<br>
+ 		kfree(req);<br>
+ 	}<br>
+@@ -215,6 +266,7 @@ static void afs_fetch_data_success(struct afs_operation *op)<br>
+ <br>
+ static void afs_fetch_data_put(struct afs_operation *op)<br>
+ {<br>
++	op->fetch.req->error = op->error;<br>
+ 	afs_put_read(op->fetch.req);<br>
+ }<br>
+ <br>
+@@ -254,12 +306,11 @@ int afs_fetch_data(struct afs_vnode *vnode, struct afs_read *req)<br>
+ /*<br>
+  * read page from file, directory or symlink, given a key to use<br>
+  */<br>
+-int afs_page_filler(void *data, struct page *page)<br>
++static int afs_page_filler(struct key *key, struct page *page)<br>
+ {<br>
+ 	struct inode *inode = page->mapping->host;<br>
+ 	struct afs_vnode *vnode = AFS_FS_I(inode);<br>
+ 	struct afs_read *req;<br>
+-	struct key *key = data;<br>
+ 	int ret;<br>
+ <br>
+ 	_enter("{%x},{%lu},{%lu}", key_serial(key), inode->i_ino, page->index);<br>
+@@ -270,53 +321,52 @@ int afs_page_filler(void *data, struct page *page)<br>
+ 	if (test_bit(AFS_VNODE_DELETED, &vnode->flags))<br>
+ 		goto error;<br>
+ <br>
+-	req = kzalloc(struct_size(req, array, 1), GFP_KERNEL);<br>
++	req = kzalloc(sizeof(struct afs_read), GFP_KERNEL);<br>
+ 	if (!req)<br>
+ 		goto enomem;<br>
+ <br>
+-	/* We request a full page.  If the page is a partial one at the<br>
+-	 * end of the file, the server will return a short read and the<br>
+-	 * unmarshalling code will clear the unfilled space.<br>
+-	 */<br>
+ 	refcount_set(&req->usage, 1);<br>
+-	req->key = key_get(key);<br>
+-	req->pos = (loff_t)page->index << PAGE_SHIFT;<br>
+-	req->len = PAGE_SIZE;<br>
+-	req->nr_pages = 1;<br>
+-	req->pages = req->array;<br>
+-	req->pages[0] = page;<br>
++	req->vnode		= vnode;<br>
++	req->key		= key_get(key);<br>
++	req->pos		= (loff_t)page->index << PAGE_SHIFT;<br>
++	req->len		= PAGE_SIZE;<br>
++	req->nr_pages		= 1;<br>
++	req->done		= afs_file_read_done;<br>
++	req->cleanup		= afs_file_read_cleanup;<br>
++<br>
+ 	get_page(page);<br>
++	iov_iter_xarray(&req->def_iter, READ, &page->mapping->i_pages,<br>
++			req->pos, req->len);<br>
++	req->iter = &req->def_iter;<br>
+ <br>
+-	/* read the contents of the file from the server into the<br>
+-	 * page */<br>
+ 	ret = afs_fetch_data(vnode, req);<br>
+-	afs_put_read(req);<br>
+-<br>
+-	if (ret < 0) {<br>
+-		if (ret == -ENOENT) {<br>
+-			_debug("got NOENT from server"<br>
+-			       " - marking file deleted and stale");<br>
+-			set_bit(AFS_VNODE_DELETED, &vnode->flags);<br>
+-			ret = -ESTALE;<br>
+-		}<br>
+-<br>
+-		if (ret == -EINTR ||<br>
+-		    ret == -ENOMEM ||<br>
+-		    ret == -ERESTARTSYS ||<br>
+-		    ret == -EAGAIN)<br>
+-			goto error;<br>
+-		goto io_error;<br>
+-	}<br>
+-<br>
+-	SetPageUptodate(page);<br>
+-	unlock_page(page);<br>
++	if (ret < 0)<br>
++		goto fetch_error;<br>
+ <br>
++	afs_put_read(req);<br>
+ 	_leave(" = 0");<br>
+ 	return 0;<br>
+ <br>
+-io_error:<br>
+-	SetPageError(page);<br>
+-	goto error;<br>
++fetch_error:<br>
++	switch (ret) {<br>
++	case -EINTR:<br>
++	case -ENOMEM:<br>
++	case -ERESTARTSYS:<br>
++	case -EAGAIN:<br>
++		afs_put_read(req);<br>
++		goto error;<br>
++	case -ENOENT:<br>
++		_debug("got NOENT from server - marking file deleted and stale");<br>
++		set_bit(AFS_VNODE_DELETED, &vnode->flags);<br>
++		ret = -ESTALE;<br>
++		/* Fall through */<br>
++	default:<br>
++		page_endio(page, false, ret);<br>
++		afs_put_read(req);<br>
++		_leave(" = %d", ret);<br>
++		return ret;<br>
++	}<br>
++<br>
+ enomem:<br>
+ 	ret = -ENOMEM;<br>
+ error:<br>
+@@ -351,19 +401,6 @@ static int afs_readpage(struct file *file, struct page *page)<br>
+ 	return ret;<br>
+ }<br>
+ <br>
+-/*<br>
+- * Make pages available as they're filled.<br>
+- */<br>
+-static void afs_readpages_page_done(struct afs_read *req)<br>
+-{<br>
+-	struct page *page = req->pages[req->index];<br>
+-<br>
+-	req->pages[req->index] = NULL;<br>
+-	SetPageUptodate(page);<br>
+-	unlock_page(page);<br>
+-	put_page(page);<br>
+-}<br>
+-<br>
+ /*<br>
+  * Read a contiguous set of pages.<br>
+  */<br>
+@@ -375,7 +412,7 @@ static int afs_readpages_one(struct file *file, struct address_space *mapping,<br>
+ 	struct list_head *p;<br>
+ 	struct page *first, *page;<br>
+ 	pgoff_t index;<br>
+-	int ret, n, i;<br>
++	int ret, n;<br>
+ <br>
+ 	/* Count the number of contiguous pages at the front of the list.  Note<br>
+ 	 * that the list goes prev-wards rather than next-wards.<br>
+@@ -391,21 +428,20 @@ static int afs_readpages_one(struct file *file, struct address_space *mapping,<br>
+ 		n++;<br>
+ 	}<br>
+ <br>
+-	req = kzalloc(struct_size(req, array, n), GFP_NOFS);<br>
++	req = kzalloc(sizeof(struct afs_read), GFP_NOFS);<br>
+ 	if (!req)<br>
+ 		return -ENOMEM;<br>
+ <br>
+ 	refcount_set(&req->usage, 1);<br>
+ 	req->vnode = vnode;<br>
+ 	req->key = key_get(afs_file_key(file));<br>
+-	req->page_done = afs_readpages_page_done;<br>
++	req->done = afs_file_read_done;<br>
++	req->cleanup = afs_file_read_cleanup;<br>
+ 	req->pos = first->index;<br>
+ 	req->pos <<= PAGE_SHIFT;<br>
+-	req->pages = req->array;<br>
+ <br>
+-	/* Transfer the pages to the request.  We add them in until one fails<br>
+-	 * to add to the LRU and then we stop (as that'll make a hole in the<br>
+-	 * contiguous run.<br>
++	/* Add pages to the LRU until it fails.  We keep the pages ref'd and<br>
++	 * locked until the read is complete.<br>
+ 	 *<br>
+ 	 * Note that it's possible for the file size to change whilst we're<br>
+ 	 * doing this, but we rely on the server returning less than we asked<br>
+@@ -422,8 +458,7 @@ static int afs_readpages_one(struct file *file, struct address_space *mapping,<br>
+ 			break;<br>
+ 		}<br>
+ <br>
+-		req->pages[req->nr_pages++] = page;<br>
+-		req->len += PAGE_SIZE;<br>
++		req->nr_pages++;<br>
+ 	} while (req->nr_pages < n);<br>
+ <br>
+ 	if (req->nr_pages == 0) {<br>
+@@ -431,30 +466,25 @@ static int afs_readpages_one(struct file *file, struct address_space *mapping,<br>
+ 		return 0;<br>
+ 	}<br>
+ <br>
++	req->len = req->nr_pages * PAGE_SIZE;<br>
++	iov_iter_xarray(&req->def_iter, READ, &file->f_mapping->i_pages,<br>
++			req->pos, req->len);<br>
++	req->iter = &req->def_iter;<br>
++<br>
+ 	ret = afs_fetch_data(vnode, req);<br>
+ 	if (ret < 0)<br>
+ 		goto error;<br>
+ <br>
+-	task_io_account_read(PAGE_SIZE * req->nr_pages);<br>
+ 	afs_put_read(req);<br>
+ 	return 0;<br>
+ <br>
+ error:<br>
+ 	if (ret == -ENOENT) {<br>
+-		_debug("got NOENT from server"<br>
+-		       " - marking file deleted and stale");<br>
++		_debug("got NOENT from server - marking file deleted and stale");<br>
+ 		set_bit(AFS_VNODE_DELETED, &vnode->flags);<br>
+ 		ret = -ESTALE;<br>
+ 	}<br>
+ <br>
+-	for (i = 0; i < req->nr_pages; i++) {<br>
+-		page = req->pages[i];<br>
+-		if (page) {<br>
+-			SetPageError(page);<br>
+-			unlock_page(page);<br>
+-		}<br>
+-	}<br>
+-<br>
+ 	afs_put_read(req);<br>
+ 	return ret;<br>
+ }<br>
+diff --git a/fs/afs/fsclient.c b/fs/afs/fsclient.c<br>
+index 4a57c6c6f12b..897b37301851 100644<br>
+--- a/fs/afs/fsclient.c<br>
++++ b/fs/afs/fsclient.c<br>
+@@ -302,7 +302,6 @@ static int afs_deliver_fs_fetch_data(struct afs_call *call)<br>
+ 	struct afs_vnode_param *vp = &op->file[0];<br>
+ 	struct afs_read *req = op->fetch.req;<br>
+ 	const __be32 *bp;<br>
+-	unsigned int size;<br>
+ 	int ret;<br>
+ <br>
+ 	_enter("{%u,%zu,%zu/%llu}",<br>
+@@ -312,8 +311,6 @@ static int afs_deliver_fs_fetch_data(struct afs_call *call)<br>
+ 	switch (call->unmarshall) {<br>
+ 	case 0:<br>
+ 		req->actual_len = 0;<br>
+-		req->index = 0;<br>
+-		req->offset = req->pos & (PAGE_SIZE - 1);<br>
+ 		call->unmarshall++;<br>
+ 		if (call->operation_ID == FSFETCHDATA64) {<br>
+ 			afs_extract_to_tmp64(call);<br>
+@@ -323,7 +320,10 @@ static int afs_deliver_fs_fetch_data(struct afs_call *call)<br>
+ 		}<br>
+ 		fallthrough;<br>
+ <br>
+-		/* extract the returned data length */<br>
++		/* Extract the returned data length into<br>
++		 * ->actual_len.  This may indicate more or less data than was<br>
++		 * requested will be returned.<br>
++		 */<br>
+ 	case 1:<br>
+ 		_debug("extract data length");<br>
+ 		ret = afs_extract_data(call, true);<br>
+@@ -332,45 +332,25 @@ static int afs_deliver_fs_fetch_data(struct afs_call *call)<br>
+ <br>
+ 		req->actual_len = be64_to_cpu(call->tmp64);<br>
+ 		_debug("DATA length: %llu", req->actual_len);<br>
+-		req->remain = min(req->len, req->actual_len);<br>
+-		if (req->remain == 0)<br>
++<br>
++		if (req->actual_len == 0)<br>
+ 			goto no_more_data;<br>
+ <br>
++		call->iter = req->iter;<br>
++		call->iov_len = min(req->actual_len, req->len);<br>
+ 		call->unmarshall++;<br>
+-<br>
+-	begin_page:<br>
+-		ASSERTCMP(req->index, <, req->nr_pages);<br>
+-		if (req->remain > PAGE_SIZE - req->offset)<br>
+-			size = PAGE_SIZE - req->offset;<br>
+-		else<br>
+-			size = req->remain;<br>
+-		call->iov_len = size;<br>
+-		call->bvec[0].bv_len = size;<br>
+-		call->bvec[0].bv_offset = req->offset;<br>
+-		call->bvec[0].bv_page = req->pages[req->index];<br>
+-		iov_iter_bvec(&call->def_iter, READ, call->bvec, 1, size);<br>
+-		ASSERTCMP(size, <=, PAGE_SIZE);<br>
+ 		fallthrough;<br>
+ <br>
+ 		/* extract the returned data */<br>
+ 	case 2:<br>
+ 		_debug("extract data %zu/%llu",<br>
+-		       iov_iter_count(call->iter), req->remain);<br>
++		       iov_iter_count(call->iter), req->actual_len);<br>
+ <br>
+ 		ret = afs_extract_data(call, true);<br>
+ 		if (ret < 0)<br>
+ 			return ret;<br>
+-		req->remain -= call->bvec[0].bv_len;<br>
+-		req->offset += call->bvec[0].bv_len;<br>
+-		ASSERTCMP(req->offset, <=, PAGE_SIZE);<br>
+-		if (req->offset == PAGE_SIZE) {<br>
+-			req->offset = 0;<br>
+-			req->index++;<br>
+-			if (req->remain > 0)<br>
+-				goto begin_page;<br>
+-		}<br>
+ <br>
+-		ASSERTCMP(req->remain, ==, 0);<br>
++		call->iter = &call->def_iter;<br>
+ 		if (req->actual_len <= req->len)<br>
+ 			goto no_more_data;<br>
+ <br>
+@@ -412,16 +392,8 @@ static int afs_deliver_fs_fetch_data(struct afs_call *call)<br>
+ 		break;<br>
+ 	}<br>
+ <br>
+-	for (; req->index < req->nr_pages; req->index++) {<br>
+-		if (req->offset < PAGE_SIZE)<br>
+-			zero_user_segment(req->pages[req->index],<br>
+-					  req->offset, PAGE_SIZE);<br>
+-		req->offset = 0;<br>
+-	}<br>
+-<br>
+-	if (req->page_done)<br>
+-		for (req->index = 0; req->index < req->nr_pages; req->index++)<br>
+-			req->page_done(req);<br>
++	if (req->done)<br>
++		req->done(req);<br>
+ <br>
+ 	_leave(" = 0 [done]");<br>
+ 	return 0;<br>
+@@ -496,6 +468,8 @@ void afs_fs_fetch_data(struct afs_operation *op)<br>
+ 	if (!call)<br>
+ 		return afs_op_nomem(op);<br>
+ <br>
++	req->call_debug_id = call->debug_id;<br>
++<br>
+ 	/* marshall the parameters */<br>
+ 	bp = call->request;<br>
+ 	bp[0] = htonl(FSFETCHDATA);<br>
+diff --git a/fs/afs/internal.h b/fs/afs/internal.h<br>
+index 7b8306d8e81e..83f9f5a540e5 100644<br>
+--- a/fs/afs/internal.h<br>
++++ b/fs/afs/internal.h<br>
+@@ -31,6 +31,7 @@<br>
+ <br>
+ struct pagevec;<br>
+ struct afs_call;<br>
++struct afs_vnode;<br>
+ <br>
+ /*<br>
+  * Partial file-locking emulation mode.  (The problem being that AFS3 only<br>
+@@ -203,18 +204,18 @@ struct afs_read {<br>
+ 	loff_t			pos;		/* Where to start reading */<br>
+ 	loff_t			len;		/* How much we're asking for */<br>
+ 	loff_t			actual_len;	/* How much we're actually getting */<br>
+-	loff_t			remain;		/* Amount remaining */<br>
+ 	loff_t			file_size;	/* File size returned by server */<br>
+ 	struct key		*key;		/* The key to use to reissue the read */<br>
++	struct afs_vnode	*vnode;		/* The file being read into. */<br>
+ 	afs_dataversion_t	data_version;	/* Version number returned by server */<br>
+ 	refcount_t		usage;<br>
+-	unsigned int		index;		/* Which page we're reading into */<br>
++	unsigned int		call_debug_id;<br>
+ 	unsigned int		nr_pages;<br>
+-	unsigned int		offset;		/* offset into current page */<br>
+-	struct afs_vnode	*vnode;<br>
+-	void (*page_done)(struct afs_read *);<br>
+-	struct page		**pages;<br>
+-	struct page		*array[];<br>
++	int			error;<br>
++	void (*done)(struct afs_read *);<br>
++	void (*cleanup)(struct afs_read *);<br>
++	struct iov_iter		*iter;		/* Iterator representing the buffer */<br>
++	struct iov_iter		def_iter;	/* Default iterator */<br>
+ };<br>
+ <br>
+ /*<br>
+@@ -1048,7 +1049,6 @@ extern void afs_put_wb_key(struct afs_wb_key *);<br>
+ extern int afs_open(struct inode *, struct file *);<br>
+ extern int afs_release(struct inode *, struct file *);<br>
+ extern int afs_fetch_data(struct afs_vnode *, struct afs_read *);<br>
+-extern int afs_page_filler(void *, struct page *);<br>
+ extern void afs_put_read(struct afs_read *);<br>
+ <br>
+ static inline struct afs_read *afs_get_read(struct afs_read *req)<br>
+diff --git a/fs/afs/write.c b/fs/afs/write.c<br>
+index a91da2e680da..cb24f849e592 100644<br>
+--- a/fs/afs/write.c<br>
++++ b/fs/afs/write.c<br>
+@@ -22,6 +22,16 @@ int afs_set_page_dirty(struct page *page)<br>
+ 	return __set_page_dirty_nobuffers(page);<br>
+ }<br>
+ <br>
++/*<br>
++ * Handle completion of a read operation to fill a page.<br>
++ */<br>
++static void afs_fill_hole(struct afs_read *req)<br>
++{<br>
++	if (iov_iter_count(req->iter) > 0)<br>
++		/* The read was short - clear the excess buffer. */<br>
++		iov_iter_zero(iov_iter_count(req->iter), req->iter);<br>
++}<br>
++<br>
+ /*<br>
+  * partly or wholly fill a page that's under preparation for writing<br>
+  */<br>
+@@ -45,18 +55,19 @@ static int afs_fill_page(struct file *file,<br>
+ 		return 0;<br>
+ 	}<br>
+ <br>
+-	req = kzalloc(struct_size(req, array, 1), GFP_KERNEL);<br>
++	req = kzalloc(sizeof(struct afs_read), GFP_KERNEL);<br>
+ 	if (!req)<br>
+ 		return -ENOMEM;<br>
+ <br>
+ 	refcount_set(&req->usage, 1);<br>
+-	req->key = key_get(afs_file_key(file));<br>
+-	req->pos = pos;<br>
+-	req->len = len;<br>
+-	req->nr_pages = 1;<br>
+-	req->pages = req->array;<br>
+-	req->pages[0] = page;<br>
+-	get_page(page);<br>
++	req->vnode	= vnode;<br>
++	req->done	= afs_fill_hole;<br>
++	req->key	= key_get(afs_file_key(file));<br>
++	req->pos	= pos;<br>
++	req->len	= len;<br>
++	req->nr_pages	= 1;<br>
++	req->iter	= &req->def_iter;<br>
++	iov_iter_xarray(&req->def_iter, READ, &file->f_mapping->i_pages, pos, len);<br>
+ <br>
+ 	ret = afs_fetch_data(vnode, req);<br>
+ 	afs_put_read(req);<br>
+diff --git a/fs/afs/yfsclient.c b/fs/afs/yfsclient.c<br>
+index 6c45d32da13c..abcec145db4b 100644<br>
+--- a/fs/afs/yfsclient.c<br>
++++ b/fs/afs/yfsclient.c<br>
+@@ -360,7 +360,6 @@ static int yfs_deliver_fs_fetch_data64(struct afs_call *call)<br>
+ 	struct afs_vnode_param *vp = &op->file[0];<br>
+ 	struct afs_read *req = op->fetch.req;<br>
+ 	const __be32 *bp;<br>
+-	unsigned int size;<br>
+ 	int ret;<br>
+ <br>
+ 	_enter("{%u,%zu, %zu/%llu}",<br>
+@@ -370,13 +369,14 @@ static int yfs_deliver_fs_fetch_data64(struct afs_call *call)<br>
+ 	switch (call->unmarshall) {<br>
+ 	case 0:<br>
+ 		req->actual_len = 0;<br>
+-		req->index = 0;<br>
+-		req->offset = req->pos & (PAGE_SIZE - 1);<br>
+ 		afs_extract_to_tmp64(call);<br>
+ 		call->unmarshall++;<br>
+ 		fallthrough;<br>
+ <br>
+-		/* extract the returned data length */<br>
++		/* Extract the returned data length into ->actual_len.  This<br>
++		 * may indicate more or less data than was requested will be<br>
++		 * returned.<br>
++		 */<br>
+ 	case 1:<br>
+ 		_debug("extract data length");<br>
+ 		ret = afs_extract_data(call, true);<br>
+@@ -385,45 +385,25 @@ static int yfs_deliver_fs_fetch_data64(struct afs_call *call)<br>
+ <br>
+ 		req->actual_len = be64_to_cpu(call->tmp64);<br>
+ 		_debug("DATA length: %llu", req->actual_len);<br>
+-		req->remain = min(req->len, req->actual_len);<br>
+-		if (req->remain == 0)<br>
++<br>
++		if (req->actual_len == 0)<br>
+ 			goto no_more_data;<br>
+ <br>
++		call->iter = req->iter;<br>
++		call->iov_len = min(req->actual_len, req->len);<br>
+ 		call->unmarshall++;<br>
+-<br>
+-	begin_page:<br>
+-		ASSERTCMP(req->index, <, req->nr_pages);<br>
+-		if (req->remain > PAGE_SIZE - req->offset)<br>
+-			size = PAGE_SIZE - req->offset;<br>
+-		else<br>
+-			size = req->remain;<br>
+-		call->iov_len = size;<br>
+-		call->bvec[0].bv_len = size;<br>
+-		call->bvec[0].bv_offset = req->offset;<br>
+-		call->bvec[0].bv_page = req->pages[req->index];<br>
+-		iov_iter_bvec(&call->def_iter, READ, call->bvec, 1, size);<br>
+-		ASSERTCMP(size, <=, PAGE_SIZE);<br>
+ 		fallthrough;<br>
+ <br>
+ 		/* extract the returned data */<br>
+ 	case 2:<br>
+ 		_debug("extract data %zu/%llu",<br>
+-		       iov_iter_count(call->iter), req->remain);<br>
++		       iov_iter_count(call->iter), req->actual_len);<br>
+ <br>
+ 		ret = afs_extract_data(call, true);<br>
+ 		if (ret < 0)<br>
+ 			return ret;<br>
+-		req->remain -= call->bvec[0].bv_len;<br>
+-		req->offset += call->bvec[0].bv_len;<br>
+-		ASSERTCMP(req->offset, <=, PAGE_SIZE);<br>
+-		if (req->offset == PAGE_SIZE) {<br>
+-			req->offset = 0;<br>
+-			req->index++;<br>
+-			if (req->remain > 0)<br>
+-				goto begin_page;<br>
+-		}<br>
+ <br>
+-		ASSERTCMP(req->remain, ==, 0);<br>
++		call->iter = &call->def_iter;<br>
+ 		if (req->actual_len <= req->len)<br>
+ 			goto no_more_data;<br>
+ <br>
+@@ -469,16 +449,8 @@ static int yfs_deliver_fs_fetch_data64(struct afs_call *call)<br>
+ 		break;<br>
+ 	}<br>
+ <br>
+-	for (; req->index < req->nr_pages; req->index++) {<br>
+-		if (req->offset < PAGE_SIZE)<br>
+-			zero_user_segment(req->pages[req->index],<br>
+-					  req->offset, PAGE_SIZE);<br>
+-		req->offset = 0;<br>
+-	}<br>
+-<br>
+-	if (req->page_done)<br>
+-		for (req->index = 0; req->index < req->nr_pages; req->index++)<br>
+-			req->page_done(req);<br>
++	if (req->done)<br>
++		req->done(req);<br>
+ <br>
+ 	_leave(" = 0 [done]");<br>
+ 	return 0;<br>
+@@ -518,6 +490,8 @@ void yfs_fs_fetch_data(struct afs_operation *op)<br>
+ 	if (!call)<br>
+ 		return afs_op_nomem(op);<br>
+ <br>
++	req->call_debug_id = call->debug_id;<br>
++<br>
+ 	/* marshall the parameters */<br>
+ 	bp = call->request;<br>
+ 	bp = xdr_encode_u32(bp, YFSFETCHDATA64);<br>
+<br>
+<br>
+<br>
+

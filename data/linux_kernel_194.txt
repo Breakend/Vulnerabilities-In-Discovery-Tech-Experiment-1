@@ -1,0 +1,60 @@
+
+Hi Arnd,<br>
+<br>
+On 08/04/2021 at 17:24, Arnd Bergmann wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+From: Arnd Bergmann <arnd@xxxxxxxx><br>
+<br>
+On Wed, 7 Apr 2021 13:44:15 +0200, nicolas.ferre@xxxxxxxxxxxxx wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+Arnd, Olof,<br>
+<br>
+Here is first batch of dt changes for 5.13. Please pull.<br>
+<br>
+Thanks, best regards,<br>
+   Nicolas<br>
+<br>
+The following changes since commit a38fd8748464831584a19438cbb3082b5a2dab15:<br>
+<br>
+[...]<br>
+</blockquote>
+<br>
+Merged into arm/dt, thanks!<br>
+<br>
+I saw two new warnings from 'make dtbs_check W=1':<br>
+<br>
+arch/arm/boot/dts/at91-sama5d2_ptc_ek.dt.yaml: /: 'etm@73C000' does not match any of the regexes: '@(0|[1-9a-f][0-9a-f]*)$', '^[^@]+$', 'pinctrl-[0-9]+'<br>
+arch/arm/boot/dts/at91-kizbox3-hs.dt.yaml: /: 'etm@73C000' does not match any of the regexes: '@(0|[1-9a-f][0-9a-f]*)$', '^[^@]+$', 'pinctrl-[0-9]+'<br>
+</blockquote>
+<br>
+Oh, got it: it's the upper case letter withing the etm hex address. I 
+used this one to mach what was done in the reg property. I'm fixing both 
+of them and sending the patch to the ml right now.
+<br>
+<br>
+Tell me if I add it to a subsequent pull-request or if you prefer to 
+take it the soonest in order to not generate additional warnings upstream.
+<br>
+<br>
+BTW, I now have a dtschema at the proper level of support for running 
+"make dtbs_check W=1" and will do it before sending pull-requests in the 
+future.
+<br>
+<br>
+Thanks for the heads-up. Best regards,<br>
+  Nicolas<br>
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+<br>
+merge commit: e2b064fec8e49112f7dac779fcec12ded40728c2<br>
+<br>
+        Arnd<br>
+<br>
+</blockquote>
+<br>
+<br>
+--<br>
+Nicolas Ferre<br>
+<br>
+<br>
+

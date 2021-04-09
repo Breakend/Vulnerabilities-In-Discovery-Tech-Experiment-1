@@ -1,0 +1,135 @@
+Added flow of exiting Partial Power Down in<br>
+"dwc2_port_resume()" function when core receives resume.<br>
+<br>
+NOTE: Switch case statement is used for hibernation partial<br>
+power down and clock gating mode determination. In this patch<br>
+only Partial Power Down is implemented the Hibernation and<br>
+clock gating implementations are planned to be added.<br>
+<br>
+Signed-off-by: Artur Petrosyan <Arthur.Petrosyan@xxxxxxxxxxxx><br>
+---<br>
+ Changes in v3:<br>
+ - None<br>
+ Changes in v2:<br>
+ - None<br>
+<br>
+ drivers/usb/dwc2/core.h |  5 ++--<br>
+ drivers/usb/dwc2/hcd.c  | 61 ++++++++++++++++++++++++++---------------<br>
+ 2 files changed, 42 insertions(+), 24 deletions(-)<br>
+<br>
+diff --git a/drivers/usb/dwc2/core.h b/drivers/usb/dwc2/core.h<br>
+index 76807abd753b..5a7850482e57 100644<br>
+--- a/drivers/usb/dwc2/core.h<br>
++++ b/drivers/usb/dwc2/core.h<br>
+@@ -1471,7 +1471,7 @@ void dwc2_hcd_disconnect(struct dwc2_hsotg *hsotg, bool force);<br>
+ void dwc2_hcd_start(struct dwc2_hsotg *hsotg);<br>
+ int dwc2_core_init(struct dwc2_hsotg *hsotg, bool initial_setup);<br>
+ int dwc2_port_suspend(struct dwc2_hsotg *hsotg, u16 windex);<br>
+-void dwc2_port_resume(struct dwc2_hsotg *hsotg);<br>
++int dwc2_port_resume(struct dwc2_hsotg *hsotg);<br>
+ int dwc2_backup_host_registers(struct dwc2_hsotg *hsotg);<br>
+ int dwc2_restore_host_registers(struct dwc2_hsotg *hsotg);<br>
+ int dwc2_host_enter_hibernation(struct dwc2_hsotg *hsotg);<br>
+@@ -1497,7 +1497,8 @@ static inline int dwc2_core_init(struct dwc2_hsotg *hsotg, bool initial_setup)<br>
+ { return 0; }<br>
+ static inline int dwc2_port_suspend(struct dwc2_hsotg *hsotg, u16 windex)<br>
+ { return 0; }<br>
+-static inline void dwc2_port_resume(struct dwc2_hsotg *hsotg) {}<br>
++static inline int dwc2_port_resume(struct dwc2_hsotg *hsotg)<br>
++{ return 0; }<br>
+ static inline int dwc2_hcd_init(struct dwc2_hsotg *hsotg)<br>
+ { return 0; }<br>
+ static inline int dwc2_backup_host_registers(struct dwc2_hsotg *hsotg)<br>
+diff --git a/drivers/usb/dwc2/hcd.c b/drivers/usb/dwc2/hcd.c<br>
+index e7fb0d5940bc..720354df014b 100644<br>
+--- a/drivers/usb/dwc2/hcd.c<br>
++++ b/drivers/usb/dwc2/hcd.c<br>
+@@ -3353,44 +3353,61 @@ int dwc2_port_suspend(struct dwc2_hsotg *hsotg, u16 windex)<br>
+  *<br>
+  * @hsotg: Programming view of the DWC_otg controller<br>
+  *<br>
++ * Return: non-zero if failed to exit suspend mode for host.<br>
++ *<br>
+  * This function is for exiting Host mode suspend.<br>
+  * Must NOT be called with interrupt disabled or spinlock held.<br>
+  */<br>
+-void dwc2_port_resume(struct dwc2_hsotg *hsotg)<br>
++int dwc2_port_resume(struct dwc2_hsotg *hsotg)<br>
+ {<br>
+ 	unsigned long flags;<br>
+ 	u32 hprt0;<br>
+ 	u32 pcgctl;<br>
++	int ret = 0;<br>
+ <br>
+ 	spin_lock_irqsave(&hsotg->lock, flags);<br>
+ <br>
+-	/*<br>
+-	 * If power_down is supported, Phy clock is already resumed<br>
+-	 * after registers restore.<br>
+-	 */<br>
+-	if (!hsotg->params.power_down) {<br>
+-		pcgctl = dwc2_readl(hsotg, PCGCTL);<br>
+-		pcgctl &= ~PCGCTL_STOPPCLK;<br>
+-		dwc2_writel(hsotg, pcgctl, PCGCTL);<br>
++	switch (hsotg->params.power_down) {<br>
++	case DWC2_POWER_DOWN_PARAM_PARTIAL:<br>
++		ret = dwc2_exit_partial_power_down(hsotg, 0, true);<br>
++		if (ret)<br>
++			dev_err(hsotg->dev,<br>
++				"exit partial_power_down failed.\n");<br>
++		break;<br>
++	case DWC2_POWER_DOWN_PARAM_HIBERNATION:<br>
++	case DWC2_POWER_DOWN_PARAM_NONE:<br>
++	default:<br>
++		/*<br>
++		 * If power_down is supported, Phy clock is already resumed<br>
++		 * after registers restore.<br>
++		 */<br>
++		if (!hsotg->params.power_down) {<br>
++			pcgctl = dwc2_readl(hsotg, PCGCTL);<br>
++			pcgctl &= ~PCGCTL_STOPPCLK;<br>
++			dwc2_writel(hsotg, pcgctl, PCGCTL);<br>
++			spin_unlock_irqrestore(&hsotg->lock, flags);<br>
++			msleep(20);<br>
++			spin_lock_irqsave(&hsotg->lock, flags);<br>
++		}<br>
++<br>
++		hprt0 = dwc2_read_hprt0(hsotg);<br>
++		hprt0 |= HPRT0_RES;<br>
++		hprt0 &= ~HPRT0_SUSP;<br>
++		dwc2_writel(hsotg, hprt0, HPRT0);<br>
+ 		spin_unlock_irqrestore(&hsotg->lock, flags);<br>
+-		msleep(20);<br>
++<br>
++		msleep(USB_RESUME_TIMEOUT);<br>
++<br>
+ 		spin_lock_irqsave(&hsotg->lock, flags);<br>
++		hprt0 = dwc2_read_hprt0(hsotg);<br>
++		hprt0 &= ~(HPRT0_RES | HPRT0_SUSP);<br>
++		dwc2_writel(hsotg, hprt0, HPRT0);<br>
++		hsotg->bus_suspended = false;<br>
+ 	}<br>
+ <br>
+-	hprt0 = dwc2_read_hprt0(hsotg);<br>
+-	hprt0 |= HPRT0_RES;<br>
+-	hprt0 &= ~HPRT0_SUSP;<br>
+-	dwc2_writel(hsotg, hprt0, HPRT0);<br>
+ 	spin_unlock_irqrestore(&hsotg->lock, flags);<br>
+ <br>
+-	msleep(USB_RESUME_TIMEOUT);<br>
+-<br>
+-	spin_lock_irqsave(&hsotg->lock, flags);<br>
+-	hprt0 = dwc2_read_hprt0(hsotg);<br>
+-	hprt0 &= ~(HPRT0_RES | HPRT0_SUSP);<br>
+-	dwc2_writel(hsotg, hprt0, HPRT0);<br>
+-	hsotg->bus_suspended = false;<br>
+-	spin_unlock_irqrestore(&hsotg->lock, flags);<br>
++	return ret;<br>
+ }<br>
+ <br>
+ /* Handles hub class-specific requests */<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

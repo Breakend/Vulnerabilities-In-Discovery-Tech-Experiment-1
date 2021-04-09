@@ -1,0 +1,190 @@
+Hi Rob,<br>
+<br>
+I had a git hiccup, this is not the version I meant to send.  v3 coming shortly.<br>
+<br>
+-Frank<br>
+<br>
+On 4/8/21 9:43 AM, frowand.list@xxxxxxxxx wrote:<br>
+><i> From: Frank Rowand <frank.rowand@xxxxxxxx></i><br>
+><i> </i><br>
+><i> The Devicetree standard specifies an 8 byte alignment of the FDT.</i><br>
+><i> Code in libfdt expects this alignment for an FDT image in memory.</i><br>
+><i> kmemdup() returns 4 byte alignment on openrisc.  Replace kmemdup()</i><br>
+><i> with kmalloc(), align pointer, memcpy() to get proper alignment.</i><br>
+><i> </i><br>
+><i> The 4 byte alignment exposed a related bug which triggered a crash</i><br>
+><i> on openrisc with:</i><br>
+><i> commit 79edff12060f ("scripts/dtc: Update to upstream version v1.6.0-51-g183df9e9c2b9")</i><br>
+><i> as reported in:</i><br>
+><i> <a  rel="nofollow" href="https://lore.kernel.org/lkml/20210327224116.69309-1-linux@xxxxxxxxxxxx/">https://lore.kernel.org/lkml/20210327224116.69309-1-linux@xxxxxxxxxxxx/</a></i><br>
+><i> </i><br>
+><i> Reported-by: Guenter Roeck <linux@xxxxxxxxxxxx></i><br>
+><i> Signed-off-by: Frank Rowand <frank.rowand@xxxxxxxx></i><br>
+><i> </i><br>
+><i> ---</i><br>
+><i> </i><br>
+><i> Please review carefully, I am not yet fully awake...</i><br>
+><i> </i><br>
+><i> changes since version 1:</i><br>
+><i>   - use pointer from kmalloc() for kfree() instead of using pointer that</i><br>
+><i>     has been modified for FDT alignment</i><br>
+><i> </i><br>
+><i>  drivers/of/of_private.h |  2 ++</i><br>
+><i>  drivers/of/overlay.c    | 28 +++++++++++++++++-----------</i><br>
+><i>  drivers/of/unittest.c   | 12 +++++++++---</i><br>
+><i>  3 files changed, 28 insertions(+), 14 deletions(-)</i><br>
+><i> </i><br>
+><i> diff --git a/drivers/of/of_private.h b/drivers/of/of_private.h</i><br>
+><i> index d9e6a324de0a..d717efbd637d 100644</i><br>
+><i> --- a/drivers/of/of_private.h</i><br>
+><i> +++ b/drivers/of/of_private.h</i><br>
+><i> @@ -8,6 +8,8 @@</i><br>
+><i>   * Copyright (C) 1996-2005 Paul Mackerras.</i><br>
+><i>   */</i><br>
+><i>  </i><br>
+><i> +#define FDT_ALIGN_SIZE 8</i><br>
+><i> +</i><br>
+><i>  /**</i><br>
+><i>   * struct alias_prop - Alias property in 'aliases' node</i><br>
+><i>   * @link:	List node to link the structure in aliases_lookup list</i><br>
+><i> diff --git a/drivers/of/overlay.c b/drivers/of/overlay.c</i><br>
+><i> index 50bbe0edf538..e0397d70d531 100644</i><br>
+><i> --- a/drivers/of/overlay.c</i><br>
+><i> +++ b/drivers/of/overlay.c</i><br>
+><i> @@ -57,7 +57,7 @@ struct fragment {</i><br>
+><i>   * struct overlay_changeset</i><br>
+><i>   * @id:			changeset identifier</i><br>
+><i>   * @ovcs_list:		list on which we are located</i><br>
+><i> - * @fdt:		FDT that was unflattened to create @overlay_tree</i><br>
+><i> + * @fdt:		base of memory allocated to hold aligned FDT that was unflattened to create @overlay_tree</i><br>
+><i>   * @overlay_tree:	expanded device tree that contains the fragment nodes</i><br>
+><i>   * @count:		count of fragment structures</i><br>
+><i>   * @fragments:		fragment nodes in the overlay expanded device tree</i><br>
+><i> @@ -719,8 +719,8 @@ static struct device_node *find_target(struct device_node *info_node)</i><br>
+><i>  /**</i><br>
+><i>   * init_overlay_changeset() - initialize overlay changeset from overlay tree</i><br>
+><i>   * @ovcs:	Overlay changeset to build</i><br>
+><i> - * @fdt:	the FDT that was unflattened to create @tree</i><br>
+><i> - * @tree:	Contains all the overlay fragments and overlay fixup nodes</i><br>
+><i> + * @fdt:	base of memory allocated to hold aligned FDT that was unflattened to create @tree</i><br>
+><i> + * @tree:	Contains the overlay fragments and overlay fixup nodes</i><br>
+><i>   *</i><br>
+><i>   * Initialize @ovcs.  Populate @ovcs->fragments with node information from</i><br>
+><i>   * the top level of @tree.  The relevant top level nodes are the fragment</i><br>
+><i> @@ -873,7 +873,8 @@ static void free_overlay_changeset(struct overlay_changeset *ovcs)</i><br>
+><i>   * internal documentation</i><br>
+><i>   *</i><br>
+><i>   * of_overlay_apply() - Create and apply an overlay changeset</i><br>
+><i> - * @fdt:	the FDT that was unflattened to create @tree</i><br>
+><i> + * @fdt_align:	the FDT that was unflattened to create @tree, aligned</i><br>
+><i> + * @fdt:	base of memory allocated to hold *@fdt_align</i><br>
+><i>   * @tree:	Expanded overlay device tree</i><br>
+><i>   * @ovcs_id:	Pointer to overlay changeset id</i><br>
+><i>   *</i><br>
+><i> @@ -912,8 +913,8 @@ static void free_overlay_changeset(struct overlay_changeset *ovcs)</i><br>
+><i>   * id is returned to *ovcs_id.</i><br>
+><i>   */</i><br>
+><i>  </i><br>
+><i> -static int of_overlay_apply(const void *fdt, struct device_node *tree,</i><br>
+><i> -		int *ovcs_id)</i><br>
+><i> +static int of_overlay_apply(const void *fdt_align, const void *fdt,</i><br>
+><i> +		struct device_node *tree, int *ovcs_id)</i><br>
+><i>  {</i><br>
+><i>  	struct overlay_changeset *ovcs;</i><br>
+><i>  	int ret = 0, ret_revert, ret_tmp;</i><br>
+><i> @@ -953,7 +954,7 @@ static int of_overlay_apply(const void *fdt, struct device_node *tree,</i><br>
+><i>  	/*</i><br>
+><i>  	 * after overlay_notify(), ovcs->overlay_tree related pointers may have</i><br>
+><i>  	 * leaked to drivers, so can not kfree() tree, aka ovcs->overlay_tree;</i><br>
+><i> -	 * and can not free fdt, aka ovcs->fdt</i><br>
+><i> +	 * and can not free memory containing aligned fdt, aka ovcs->fdt</i><br>
+><i>  	 */</i><br>
+><i>  	ret = overlay_notify(ovcs, OF_OVERLAY_PRE_APPLY);</i><br>
+><i>  	if (ret) {</i><br>
+><i> @@ -1014,7 +1015,8 @@ static int of_overlay_apply(const void *fdt, struct device_node *tree,</i><br>
+><i>  int of_overlay_fdt_apply(const void *overlay_fdt, u32 overlay_fdt_size,</i><br>
+><i>  			 int *ovcs_id)</i><br>
+><i>  {</i><br>
+><i> -	const void *new_fdt;</i><br>
+><i> +	void *new_fdt;</i><br>
+><i> +	void *new_fdt_align;</i><br>
+><i>  	int ret;</i><br>
+><i>  	u32 size;</i><br>
+><i>  	struct device_node *overlay_root;</i><br>
+><i> @@ -1036,18 +1038,22 @@ int of_overlay_fdt_apply(const void *overlay_fdt, u32 overlay_fdt_size,</i><br>
+><i>  	 * Must create permanent copy of FDT because of_fdt_unflatten_tree()</i><br>
+><i>  	 * will create pointers to the passed in FDT in the unflattened tree.</i><br>
+><i>  	 */</i><br>
+><i> -	new_fdt = kmemdup(overlay_fdt, size, GFP_KERNEL);</i><br>
+><i> +	size += FDT_ALIGN_SIZE;</i><br>
+><i> +	new_fdt = kmalloc(size, GFP_KERNEL);</i><br>
+><i>  	if (!new_fdt)</i><br>
+><i>  		return -ENOMEM;</i><br>
+><i>  </i><br>
+><i> -	of_fdt_unflatten_tree(new_fdt, NULL, &overlay_root);</i><br>
+><i> +	new_fdt_align = PTR_ALIGN(new_fdt, FDT_ALIGN_SIZE);</i><br>
+><i> +	memcpy(new_fdt_align, overlay_fdt, size);</i><br>
+><i> +</i><br>
+><i> +	of_fdt_unflatten_tree(new_fdt_align, NULL, &overlay_root);</i><br>
+><i>  	if (!overlay_root) {</i><br>
+><i>  		pr_err("unable to unflatten overlay_fdt\n");</i><br>
+><i>  		ret = -EINVAL;</i><br>
+><i>  		goto out_free_new_fdt;</i><br>
+><i>  	}</i><br>
+><i>  </i><br>
+><i> -	ret = of_overlay_apply(new_fdt, overlay_root, ovcs_id);</i><br>
+><i> +	ret = of_overlay_apply(new_fdt_align, new_fdt, overlay_root, ovcs_id);</i><br>
+><i>  	if (ret < 0) {</i><br>
+><i>  		/*</i><br>
+><i>  		 * new_fdt and overlay_root now belong to the overlay</i><br>
+><i> diff --git a/drivers/of/unittest.c b/drivers/of/unittest.c</i><br>
+><i> index eb100627c186..29081a8b32e6 100644</i><br>
+><i> --- a/drivers/of/unittest.c</i><br>
+><i> +++ b/drivers/of/unittest.c</i><br>
+><i> @@ -22,6 +22,7 @@</i><br>
+><i>  #include <linux/slab.h></i><br>
+><i>  #include <linux/device.h></i><br>
+><i>  #include <linux/platform_device.h></i><br>
+><i> +#include <linux/kernel.h></i><br>
+><i>  </i><br>
+><i>  #include <linux/i2c.h></i><br>
+><i>  #include <linux/i2c-mux.h></i><br>
+><i> @@ -1408,6 +1409,7 @@ static void attach_node_and_children(struct device_node *np)</i><br>
+><i>  static int __init unittest_data_add(void)</i><br>
+><i>  {</i><br>
+><i>  	void *unittest_data;</i><br>
+><i> +	void *unittest_data_align;</i><br>
+><i>  	struct device_node *unittest_data_node, *np;</i><br>
+><i>  	/*</i><br>
+><i>  	 * __dtb_testcases_begin[] and __dtb_testcases_end[] are magically</i><br>
+><i> @@ -1415,7 +1417,7 @@ static int __init unittest_data_add(void)</i><br>
+><i>  	 */</i><br>
+><i>  	extern uint8_t __dtb_testcases_begin[];</i><br>
+><i>  	extern uint8_t __dtb_testcases_end[];</i><br>
+><i> -	const int size = __dtb_testcases_end - __dtb_testcases_begin;</i><br>
+><i> +	u32 size = __dtb_testcases_end - __dtb_testcases_begin;</i><br>
+><i>  	int rc;</i><br>
+><i>  </i><br>
+><i>  	if (!size) {</i><br>
+><i> @@ -1425,11 +1427,15 @@ static int __init unittest_data_add(void)</i><br>
+><i>  	}</i><br>
+><i>  </i><br>
+><i>  	/* creating copy */</i><br>
+><i> -	unittest_data = kmemdup(__dtb_testcases_begin, size, GFP_KERNEL);</i><br>
+><i> +	size += FDT_ALIGN_SIZE;</i><br>
+><i> +	unittest_data = kmalloc(size, GFP_KERNEL);</i><br>
+><i>  	if (!unittest_data)</i><br>
+><i>  		return -ENOMEM;</i><br>
+><i>  </i><br>
+><i> -	of_fdt_unflatten_tree(unittest_data, NULL, &unittest_data_node);</i><br>
+><i> +	unittest_data_align = PTR_ALIGN(unittest_data, FDT_ALIGN_SIZE);</i><br>
+><i> +	memcpy(unittest_data_align, __dtb_testcases_begin, size);</i><br>
+><i> +</i><br>
+><i> +	of_fdt_unflatten_tree(unittest_data_align, NULL, &unittest_data_node);</i><br>
+><i>  	if (!unittest_data_node) {</i><br>
+><i>  		pr_warn("%s: No tree to attach; not running tests\n", __func__);</i><br>
+><i>  		kfree(unittest_data);</i><br>
+><i> </i><br>
+<br>
+<br>
+

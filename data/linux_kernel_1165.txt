@@ -1,0 +1,38 @@
+Fixes the following W=1 kernel build warning:<br>
+<br>
+drivers/message/fusion/mptctl.c: In function ‘mptctl_do_taskmgmt:<br>
+drivers/message/fusion/mptctl.c:324:17: warning: variable ‘time_count’ set but not used [-Wunused-but-set-variable]<br>
+<br>
+Fixes: 7d757f185540 ("[SCSI] mptfusion: Updated SCSI IO IOCTL error handling.")<br>
+Reported-by: Hulk Robot <hulkci@xxxxxxxxxx><br>
+Signed-off-by: Zhen Lei <thunder.leizhen@xxxxxxxxxx><br>
+---<br>
+ drivers/message/fusion/mptctl.c | 2 --<br>
+ 1 file changed, 2 deletions(-)<br>
+<br>
+diff --git a/drivers/message/fusion/mptctl.c b/drivers/message/fusion/mptctl.c<br>
+index 24aebad60366..0a9321239e76 100644<br>
+--- a/drivers/message/fusion/mptctl.c<br>
++++ b/drivers/message/fusion/mptctl.c<br>
+@@ -321,7 +321,6 @@ mptctl_do_taskmgmt(MPT_ADAPTER *ioc, u8 tm_type, u8 bus_id, u8 target_id)<br>
+ 	int		 ii;<br>
+ 	int		 retval;<br>
+ 	unsigned long	 timeout;<br>
+-	unsigned long	 time_count;<br>
+ 	u16		 iocstatus;<br>
+ <br>
+ <br>
+@@ -383,7 +382,6 @@ mptctl_do_taskmgmt(MPT_ADAPTER *ioc, u8 tm_type, u8 bus_id, u8 target_id)<br>
+ 		ioc->name, tm_type, timeout));<br>
+ <br>
+ 	INITIALIZE_MGMT_STATUS(ioc->taskmgmt_cmds.status)<br>
+-	time_count = jiffies;<br>
+ 	if ((ioc->facts.IOCCapabilities & MPI_IOCFACTS_CAPABILITY_HIGH_PRI_Q) &&<br>
+ 	    (ioc->facts.MsgVersion >= MPI_VERSION_01_05))<br>
+ 		mpt_put_msg_frame_hi_pri(mptctl_taskmgmt_id, ioc, mf);<br>
+-- <br>
+2.21.1<br>
+<br>
+<br>
+<br>
+

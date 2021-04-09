@@ -1,0 +1,61 @@
+On 17:24-20210408, Arnd Bergmann wrote:<br>
+><i> From: Arnd Bergmann <arnd@xxxxxxxx></i><br>
+><i> </i><br>
+><i> On Mon, 5 Apr 2021 10:53:36 -0500, Nishanth Menon wrote:</i><br>
+><i> > Please pull the following device tree changes for v5.13 cycle.</i><br>
+><i> > </i><br>
+><i> > The following changes since commit a38fd8748464831584a19438cbb3082b5a2dab15:</i><br>
+><i> > </i><br>
+><i> >   Linux 5.12-rc2 (2021-03-05 17:33:41 -0800)</i><br>
+><i> > </i><br>
+><i> > are available in the Git repository at:</i><br>
+><i> > </i><br>
+><i> > [...]</i><br>
+><i> </i><br>
+><i> Merged into arm/dt, thanks!</i><br>
+<br>
+Thanks.<br>
+><i> </i><br>
+><i> There are a couple added warnings from 'make W=1 dtbs_check' though:</i><br>
+><i> </i><br>
+><i> ti/k3-am64-main.dtsi:376.40-385.4: Warning (simple_bus_reg): /bus@f4000/interrupt-controller0: missing or empty reg/ranges property</i><br>
+><i> ti/k3-am64-main.dtsi:45.13-135.4: Warning (simple_bus_reg): /bus@f4000/dmss: missing or empty reg/ranges property</i><br>
+><i> ti/k3-am64-mcu.dtsi:77.39-86.4: Warning (simple_bus_reg): /bus@f4000/bus@4000000/interrupt-controller1: missing or empty reg/ranges property</i><br>
+><i> </i><br>
+><i> ti/k3-am642-evm.dt.yaml: bus@4000000: interrupt-controller1: {'type': 'object'} is not allowed for {'compatible': ['ti,sci-intr'], 'ti,intr-trigger-type': [[1]], 'interrupt-controller': True, 'interrupt-parent': [[1]], '#interrupt-cells': [[1]], 'ti,sci': [[4]], 'ti,sci-dev-id': [[5]], 'ti,interrupt-ranges': [[0, 104, 4]], 'phandle': [[5]]}</i><br>
+><i> ti/k3-am642-evm.dt.yaml: bus@f4000: dmss: {'type': 'object'} is not allowed for {'compatible': ['simple-mfd'], '#address-cells': [[2]], '#size-cells': [[2]], 'dma-ranges': True, 'ranges':  'phandle': [[7]]}}</i><br>
+><i> ti/k3-am642-evm.dt.yaml: bus@f4000: interrupt-controller0: {'type': 'object'} is not allowed for {'compatible': ['ti,sci-intr'], 'ti,intr-trigger-type': [[1]], 'interrupt-controller': True, 'interrupt-parent': [[1]], '#interrupt-cells': [[1]], 'ti,sci': [[4]], 'ti,sci-dev-id': [[3]], 'ti,interrupt-ranges': [[0, 32, 16]], 'phandle': [[15]]}</i><br>
+><i> ti/k3-am642-evm.dt.yaml: flash@0: 'cdns,read-delay', 'cdns,tchsh-ns', 'cdns,tsd2d-ns', 'cdns,tshsl-ns', 'cdns,tslch-ns' do not match any of the regexes: '^partition@', 'pinctrl-[0-9]+'</i><br>
+><i> ti/k3-am642-sk.dt.yaml: bus@4000000: interrupt-controller1: {'type': 'object'} is not allowed for {'compatible': ['ti,sci-intr'], 'ti,intr-trigger-type': [[1]], ...</i><br>
+><i> ti/k3-am642-sk.dt.yaml: bus@f4000: dmss: {'type': 'object'} is not allowed for {'compatible': ['simple-mfd'], ...</i><br>
+><i> ti/k3-am642-sk.dt.yaml: bus@f4000: interrupt-controller0: {'type': 'object'} is not allowed for {'compatible': ['ti,sci-intr'], 'ti,intr-trigger-type': [[1]], 'interrupt-controller': True, 'interrupt-parent': [[1]], '#interrupt-cells': [[1]], 'ti,sci': [[4]], 'ti,sci-dev-id': [[3]], 'ti,interrupt-ranges': [[0, 32, 16]], 'phandle': [[11]]}</i><br>
+><i> ti/k3-am642-sk.dt.yaml: flash@0: 'cdns,read-delay', 'cdns,tchsh-ns', 'cdns,tsd2d-ns', 'cdns,tshsl-ns', 'cdns,tslch-ns' do not match any of the regexes: '^partition@', 'pinctrl-[0-9]+'</i><br>
+><i> ti/k3-j7200-common-proc-board.dt.yaml: flash@0: 'cdns,read-delay', 'cdns,tchsh-ns', 'cdns,tsd2d-ns', 'cdns,tshsl-ns', 'cdns,tslch-ns' do not match any of the regexes: '^partition@', 'pinctrl-[0-9]+'</i><br>
+><i> </i><br>
+><i> </i><br>
+><i> merge commit: 4b8cf90637f295ff1cb1f4bdfde134dab1196296</i><br>
+<br>
+<br>
+We have a bunch of problems with interrupt controller definitions -<br>
+attempts in [1] [2] did'nt seem to come to any form of conclusion yet.<br>
+<br>
+Cdns is a convert from txt to yaml and is queued on Marks' tree[3]<br>
+<br>
+These issues pre-existed in existing definitions and/or convertion<br>
+from txt and we are already working to make sure we try and reach a<br>
+conclusion soon[4]. I am guessing from your note that it is high time we<br>
+put our foot down on txt bindings and clean yamls, I will ensure we<br>
+follow up on that.<br>
+<br>
+<br>
+[1] <a  rel="nofollow" href="https://lore.kernel.org/linux-devicetree/CAL_Jsq++DyiKG9smQGx9FAPDJnVrezcXNb0Y5uh-5_2GBzTQpQ@xxxxxxxxxxxxxx/#t">https://lore.kernel.org/linux-devicetree/CAL_Jsq++DyiKG9smQGx9FAPDJnVrezcXNb0Y5uh-5_2GBzTQpQ@xxxxxxxxxxxxxx/#t</a><br>
+[2] <a  rel="nofollow" href="https://lore.kernel.org/linux-arm-kernel/20210311215914.pgpz2yymmfqlainl@episode/">https://lore.kernel.org/linux-arm-kernel/20210311215914.pgpz2yymmfqlainl@episode/</a> <br>
+[3] <a  rel="nofollow" href="https://lore.kernel.org/linux-arm-kernel/161726952255.2486.16196604421904035265.b4-ty@xxxxxxxxxx/">https://lore.kernel.org/linux-arm-kernel/161726952255.2486.16196604421904035265.b4-ty@xxxxxxxxxx/</a><br>
+[4] <a  rel="nofollow" href="https://lore.kernel.org/linux-arm-kernel/20210311134908.jsh2lywtwzvlyvbc@finally/">https://lore.kernel.org/linux-arm-kernel/20210311134908.jsh2lywtwzvlyvbc@finally/</a><br>
+-- <br>
+Regards,<br>
+Nishanth Menon<br>
+Key (0xDDB5849D1736249D) / Fingerprint: F8A2 8693 54EB 8232 17A3  1A34 DDB5 849D 1736 249D<br>
+<br>
+<br>
+

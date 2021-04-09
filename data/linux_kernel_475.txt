@@ -1,0 +1,49 @@
+On 2021/4/7 18:25, Greg KH wrote:<br>
+><i> On Wed, Apr 07, 2021 at 06:03:11PM +0800, Yicong Yang wrote:</i><br>
+><i>> On 2021/4/6 21:49, Greg KH wrote:</i><br>
+><i>>> On Tue, Apr 06, 2021 at 08:45:50PM +0800, Yicong Yang wrote:</i><br>
+><i>>>> HiSilicon PCIe tune and trace device(PTT) is a PCIe Root Complex</i><br>
+><i>>>> integrated Endpoint(RCiEP) device, providing the capability</i><br>
+><i>>>> to dynamically monitor and tune the PCIe traffic(tune),</i><br>
+><i>>>> and trace the TLP headers(trace). The driver exposes the user</i><br>
+><i>>>> interface through debugfs, so no need for extra user space tools.</i><br>
+><i>>>> The usage is described in the document.</i><br>
+><i>>></i><br>
+><i>>> Why use debugfs and not the existing perf tools for debugging?</i><br>
+><i>>></i><br>
+><i>></i><br>
+><i>> The perf doesn't match our device as we've analyzed.</i><br>
+><i>></i><br>
+><i>> For the tune function it doesn't do the sampling at all.</i><br>
+><i>> User specifys one link parameter and reads its current value or set</i><br>
+><i>> the desired one. The process is static. We didn't find a</i><br>
+><i>> way to adapt to perf.</i><br>
+><i>></i><br>
+><i>> For the trace function, we may barely adapt to the perf framework</i><br>
+><i>> but it doesn't seems like a better choice. We have our own format</i><br>
+><i>> of data and don't need perf doing the parsing, and we'll get extra</i><br>
+><i>> information added by perf as well. The settings through perf tools</i><br>
+><i>> won't satisfy our needs, we cannot present available settings</i><br>
+><i>> (filter BDF number, TLP types, buffer controls) to</i><br>
+><i>> the user and user cannot set in a friendly way. For example,</i><br>
+><i>> we cannot count on perf to decode the usual format BDF number like</i><br>
+><i>> <domain>:<bus>:<dev>.<fn>, which user can use filter the TLP</i><br>
+><i>> headers.</i><br>
+><i> </i><br>
+><i> Please work with the perf developers to come up with a solution.  I find</i><br>
+><i> it hard to believe that your hardware is so different than all the other</i><br>
+><i> hardware that perf currently supports.  I would need their agreement</i><br>
+><i> that you can not use perf before accepting this patchset.</i><br>
+><i> </i><br>
+<br>
+Sure. I'll resend this series with more detailed information and with perf list<br>
+and developers cc'ed to collect more suggestions on this device and driver.<br>
+<br>
+Thanks,<br>
+Yicong<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+

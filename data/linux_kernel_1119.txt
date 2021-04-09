@@ -1,0 +1,34 @@
+On Thu, Apr 08, 2021 at 03:44:57PM +0200, Jessica Yu wrote:<br>
+><i> +++ Stephen Boyd [30/03/21 20:05 -0700]:</i><br>
+<br>
+...<br>
+<br>
+><i> > +static void init_build_id(struct module *mod, const struct load_info *info)</i><br>
+><i> > +{</i><br>
+><i> > +	const Elf_Shdr *sechdr;</i><br>
+><i> > +	unsigned int i;</i><br>
+><i> > +</i><br>
+><i> > +	for (i = 0; i < info->hdr->e_shnum; i++) {</i><br>
+><i> > +		sechdr = &info->sechdrs[i];</i><br>
+><i> > +		if (!sect_empty(sechdr) && sechdr->sh_type == SHT_NOTE &&</i><br>
+><i> > +		    !build_id_parse_buf((void *)sechdr->sh_addr, mod->build_id,</i><br>
+><i> > +					sechdr->sh_size))</i><br>
+><i> > +			break;</i><br>
+><i> > +	}</i><br>
+><i> > +}</i><br>
+><i> </i><br>
+><i> Why not just look for the .note.gnu.build-id section instead of trying</i><br>
+><i> to parse each note section? Doesn't it always contain the build id? At</i><br>
+><i> least the ld man page seems to suggest this section name should be</i><br>
+><i> consistent.</i><br>
+<br>
+Interesting idea (in positive way!), I'm wondering what Clang does in such<br>
+case.<br>
+<br>
+-- <br>
+With Best Regards,<br>
+Andy Shevchenko<br>
+<br>
+<br>
+<br>
+

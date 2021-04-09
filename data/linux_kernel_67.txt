@@ -1,0 +1,76 @@
+The CRC calculation done by genksyms is triggered when the parser hits<br>
+EXPORT_SYMBOL*() macros. At this point, genksyms recursively expands the<br>
+types, and uses that as the input for the CRC calculation. In the case<br>
+of forward-declared structs, the type expands to 'UNKNOWN'. Next, the<br>
+result of the expansion of each type is cached, and is re-used when/if<br>
+the same type is seen again for another exported symbol in the file.<br>
+<br>
+Unfortunately, this can cause CRC 'stability' issues when a struct<br>
+definition becomes visible in the middle of a C file. For example, let's<br>
+assume code with the following pattern:<br>
+<br>
+    struct foo;<br>
+<br>
+    int bar(struct foo *arg)<br>
+    {<br>
+	/* Do work ... */<br>
+    }<br>
+    EXPORT_SYMBOL_GPL(bar);<br>
+<br>
+    /* This contains struct foo's definition */<br>
+    #include "foo.h"<br>
+<br>
+    int baz(struct foo *arg)<br>
+    {<br>
+	/* Do more work ... */<br>
+    }<br>
+    EXPORT_SYMBOL_GPL(baz);<br>
+<br>
+Here, baz's CRC will be computed using the expansion of struct foo that<br>
+was cached after bar's CRC calculation ('UNKOWN' here). But if<br>
+EXPORT_SYMBOL_GPL(bar) is removed from the file (because of e.g. symbol<br>
+trimming using CONFIG_TRIM_UNUSED_KSYMS), struct foo will be expanded<br>
+late, during baz's CRC calculation, which now has visibility over the<br>
+full struct definition, hence resulting in a different CRC for baz.<br>
+<br>
+This can cause annoying issues for distro kernel (such as the Android<br>
+Generic Kernel Image) which use CONFIG_UNUSED_KSYMS_WHITELIST. Indeed,<br>
+as per the above, adding a symbol to the whitelist can change the CRC of<br>
+symbols that are already kept exported. As such, modules built against a<br>
+kernel with a trimmed ABI may not load against the same kernel built<br>
+with an extended whitelist, even though they are still strictly binary<br>
+compatible. While rebuilding the modules would obviously solve the<br>
+issue, I believe this classifies as an odd genksyms corner case, and it<br>
+gets in the way of kernel updates in the GKI context.<br>
+<br>
+To work around the issue, make sure to keep issuing the<br>
+__GENKSYMS_EXPORT_SYMBOL macros for all trimmed symbols, hence making<br>
+the genksyms parsing insensitive to symbol trimming.<br>
+<br>
+Signed-off-by: Quentin Perret <qperret@xxxxxxxxxx><br>
+---<br>
+ include/linux/export.h | 5 +++++<br>
+ 1 file changed, 5 insertions(+)<br>
+<br>
+diff --git a/include/linux/export.h b/include/linux/export.h<br>
+index 6271a5d9c988..27d848712b90 100644<br>
+--- a/include/linux/export.h<br>
++++ b/include/linux/export.h<br>
+@@ -140,7 +140,12 @@ struct kernel_symbol {<br>
+ #define ___cond_export_sym(sym, sec, ns, enabled)			\<br>
+ 	__cond_export_sym_##enabled(sym, sec, ns)<br>
+ #define __cond_export_sym_1(sym, sec, ns) ___EXPORT_SYMBOL(sym, sec, ns)<br>
++<br>
++#ifdef __GENKSYMS__<br>
++#define __cond_export_sym_0(sym, sec, ns) __GENKSYMS_EXPORT_SYMBOL(sym)<br>
++#else<br>
+ #define __cond_export_sym_0(sym, sec, ns) /* nothing */<br>
++#endif<br>
+ <br>
+ #else<br>
+ <br>
+-- <br>
+2.31.0.208.g409f899ff0-goog<br>
+<br>
+<br>
+

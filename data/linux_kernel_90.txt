@@ -1,0 +1,56 @@
+On Wed, 7 Apr 2021 15:26:23 -0700<br>
+Ben Widawsky <ben.widawsky@xxxxxxxxx> wrote:<br>
+<br>
+><i> Support expansion of register block types that the driver will attempt</i><br>
+><i> to recognize by pulling the code up into the register block scanning</i><br>
+><i> loop. Subsequent code can easily add in new register block types with</i><br>
+><i> this.</i><br>
+><i> </i><br>
+><i> Signed-off-by: Ben Widawsky <ben.widawsky@xxxxxxxxx></i><br>
+<br>
+Acked-by: Jonathan Cameron <Jonathan.Cameron@xxxxxxxxxx>><br>
+<br>
+><i> ---</i><br>
+><i>  drivers/cxl/mem.c | 19 +++++++++----------</i><br>
+><i>  1 file changed, 9 insertions(+), 10 deletions(-)</i><br>
+><i> </i><br>
+><i> diff --git a/drivers/cxl/mem.c b/drivers/cxl/mem.c</i><br>
+><i> index 60b95c524c3e..49f651694cb0 100644</i><br>
+><i> --- a/drivers/cxl/mem.c</i><br>
+><i> +++ b/drivers/cxl/mem.c</i><br>
+><i> @@ -1020,6 +1020,15 @@ static int cxl_mem_setup_regs(struct cxl_mem *cxlm)</i><br>
+><i>  			base = cxl_mem_map_regblock(cxlm, reg_lo, reg_hi);</i><br>
+><i>  			if (IS_ERR(base))</i><br>
+><i>  				return PTR_ERR(base);</i><br>
+><i> +</i><br>
+><i> +			cxl_setup_device_regs(dev, base, &regs->device_regs);</i><br>
+><i> +			if (!regs->status || !regs->mbox || !regs->memdev) {</i><br>
+><i> +				dev_err(dev, "registers not found: %s%s%s\n",</i><br>
+><i> +						!regs->status ? "status " : "",</i><br>
+><i> +						!regs->mbox ? "mbox " : "",</i><br>
+><i> +						!regs->memdev ? "memdev" : "");</i><br>
+><i> +				return -ENXIO;</i><br>
+><i> +			}</i><br>
+><i>  			break;</i><br>
+><i>  		}</i><br>
+><i>  	}</i><br>
+><i> @@ -1029,16 +1038,6 @@ static int cxl_mem_setup_regs(struct cxl_mem *cxlm)</i><br>
+><i>  		return -ENXIO;</i><br>
+><i>  	}</i><br>
+><i>  </i><br>
+><i> -	cxl_setup_device_regs(dev, base, &regs->device_regs);</i><br>
+><i> -</i><br>
+><i> -	if (!regs->status || !regs->mbox || !regs->memdev) {</i><br>
+><i> -		dev_err(dev, "registers not found: %s%s%s\n",</i><br>
+><i> -			!regs->status ? "status " : "",</i><br>
+><i> -			!regs->mbox ? "mbox " : "",</i><br>
+><i> -			!regs->memdev ? "memdev" : "");</i><br>
+><i> -		return -ENXIO;</i><br>
+><i> -	}</i><br>
+><i> -</i><br>
+><i>  	return 0;</i><br>
+><i>  }</i><br>
+><i>  </i><br>
+<br>
+<br>
+

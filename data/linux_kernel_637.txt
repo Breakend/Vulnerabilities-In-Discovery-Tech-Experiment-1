@@ -1,0 +1,142 @@
+On Wed 07-04-21 15:33:26, Tim Chen wrote:<br>
+><i> </i><br>
+><i> </i><br>
+><i> On 4/6/21 2:08 AM, Michal Hocko wrote:</i><br>
+><i> > On Mon 05-04-21 10:08:24, Tim Chen wrote:</i><br>
+><i> > [...]</i><br>
+><i> >> To make fine grain cgroup based management of the precious top tier</i><br>
+><i> >> DRAM memory possible, this patchset adds a few new features:</i><br>
+><i> >> 1. Provides memory monitors on the amount of top tier memory used per cgroup </i><br>
+><i> >>    and by the system as a whole.</i><br>
+><i> >> 2. Applies soft limits on the top tier memory each cgroup uses </i><br>
+><i> >> 3. Enables kswapd to demote top tier pages from cgroup with excess top</i><br>
+><i> >>    tier memory usages.</i><br>
+><i> > </i><br>
+><i> </i><br>
+><i> Michal,</i><br>
+><i> </i><br>
+><i> Thanks for giving your feedback.  Much appreciated.</i><br>
+><i> </i><br>
+><i> > Could you be more specific on how this interface is supposed to be used?</i><br>
+><i> </i><br>
+><i> We created a README section on the cgroup control part of this patchset:</i><br>
+><i> <a  rel="nofollow" href="https://git.kernel.org/pub/scm/linux/kernel/git/vishal/tiering.git/commit/?h=tiering-0.71&id=20f20be02671384470c7cd8f66b56a9061a4071f">https://git.kernel.org/pub/scm/linux/kernel/git/vishal/tiering.git/commit/?h=tiering-0.71&id=20f20be02671384470c7cd8f66b56a9061a4071f</a></i><br>
+><i> to illustrate how this interface should be used.</i><br>
+<br>
+I have to confess I didn't get to look at demotion patches yet.<br>
+<br>
+><i> The top tier memory used is reported in</i><br>
+><i> </i><br>
+><i> memory.toptier_usage_in_bytes</i><br>
+><i> </i><br>
+><i> The amount of top tier memory usable by each cgroup without</i><br>
+><i> triggering page reclaim is controlled by the</i><br>
+><i> </i><br>
+><i> memory.toptier_soft_limit_in_bytes </i><br>
+<br>
+Are you trying to say that soft limit acts as some sort of guarantee?<br>
+Does that mean that if the memcg is under memory pressure top tiear<br>
+memory is opted out from any reclaim if the usage is not in excess?<br>
+<br>
+><i>From you previous email it sounds more like the limit is evaluated on</i><br>
+the global memory pressure to balance specific memcgs which are in<br>
+excess when trying to reclaim/demote a toptier numa node.<br>
+<br>
+Soft limit reclaim has several problems. Those are historical and<br>
+therefore the behavior cannot be changed. E.g. go after the biggest<br>
+excessed memcg (with priority 0 - aka potential full LRU scan) and then<br>
+continue with a normal reclaim. This can be really disruptive to the top<br>
+user.<br>
+<br>
+So you can likely define a more sane semantic. E.g. push back memcgs<br>
+proporitional to their excess but then we have two different soft limits<br>
+behavior which is bad as well. I am not really sure there is a sensible<br>
+way out by (ab)using soft limit here.<br>
+<br>
+Also I am not really sure how this is going to be used in practice.<br>
+There is no soft limit by default. So opting in would effectivelly<br>
+discriminate those memcgs. There has been a similar problem with the<br>
+soft limit we have in general. Is this really what you are looing for?<br>
+What would be a typical usecase?<br>
+<br>
+[...]<br>
+><i> >> The patchset is based on cgroup v1 interface. One shortcoming of the v1</i><br>
+><i> >> interface is the limit on the cgroup is a soft limit, so a cgroup can</i><br>
+><i> >> exceed the limit quite a bit before reclaim before page demotion reins</i><br>
+><i> >> it in. </i><br>
+><i> > </i><br>
+><i> > I have to say that I dislike abusing soft limit reclaim for this. In the</i><br>
+><i> > past we have learned that the existing implementation is unfixable and</i><br>
+><i> > changing the existing semantic impossible due to backward compatibility.</i><br>
+><i> > So I would really prefer the soft limit just find its rest rather than</i><br>
+><i> > see new potential usecases.</i><br>
+><i> </i><br>
+><i> Do you think we can reuse some of the existing soft reclaim machinery</i><br>
+><i> for the v2 interface?</i><br>
+><i> </i><br>
+><i> More particularly, can we treat memory_toptier.high in cgroup v2 as a soft limit?</i><br>
+<br>
+No, you should follow existing limits semantics. High limit acts as a<br>
+allocation throttling interface.<br>
+<br>
+><i> We sort how much each mem cgroup exceeds memory_toptier.high and</i><br>
+><i> go after the cgroup that have largest excess first for page demotion.</i><br>
+><i> Will appreciate if you can shed some insights on what could go wrong</i><br>
+><i> with such an approach. </i><br>
+<br>
+This cannot work as a thorttling interface.<br>
+ <br>
+><i> > I haven't really looked into details of this patchset but from a cursory</i><br>
+><i> > look it seems like you are actually introducing a NUMA aware limits into</i><br>
+><i> > memcg that would control consumption from some nodes differently than</i><br>
+><i> > other nodes. This would be rather alien concept to the existing memcg</i><br>
+><i> > infrastructure IMO. It looks like it is fusing borders between memcg and</i><br>
+><i> > cputset controllers.</i><br>
+><i> </i><br>
+><i> Want to make sure I understand what you mean by NUMA aware limits.</i><br>
+><i> Yes, in the patch set, it does treat the NUMA nodes differently.</i><br>
+><i> We are putting constraint on the "top tier" RAM nodes vs the lower</i><br>
+><i> tier PMEM nodes.  Is this what you mean?</i><br>
+<br>
+What I am trying to say (and I have brought that up when demotion has been<br>
+discussed at LSFMM) is that the implementation shouldn't be PMEM aware.<br>
+The specific technology shouldn't be imprinted into the interface.<br>
+Fundamentally you are trying to balance memory among NUMA nodes as we do<br>
+not have other abstraction to use. So rather than talking about top,<br>
+secondary, nth tier we have different NUMA nodes with different<br>
+characteristics and you want to express your "priorities" for them.<br>
+<br>
+><i> I can see it does has</i><br>
+><i> some flavor of cpuset controller.  In this case, it doesn't explicitly</i><br>
+><i> set a node as allowed or forbidden as in cpuset, but put some constraints</i><br>
+><i> on the usage of a group of nodes.  </i><br>
+><i> </i><br>
+><i> Do you have suggestions on alternative controller for allocating tiered memory resource?</i><br>
+ <br>
+I am not really sure what would be the best interface to be honest.<br>
+Maybe we want to carve this into memcg in some form of node priorities<br>
+for the reclaim. Any of the existing limits is numa aware so far. Maybe<br>
+we want to say hammer this node more than others if there is a memory<br>
+pressure. Not sure that would help you particular usecase though.<br>
+<br>
+><i> > You also seem to be basing the interface on the very specific usecase.</i><br>
+><i> > Can we expect that there will be many different tiers requiring their</i><br>
+><i> > own balancing?</i><br>
+><i> > </i><br>
+><i> </i><br>
+><i> You mean more than two tiers of memory? We did think a bit about system</i><br>
+><i> that has stuff like high bandwidth memory that's faster than DRAM.</i><br>
+><i> Our thought is usage and freeing of those memory will require </i><br>
+><i> explicit assignment (not used by default), so will be outside the</i><br>
+><i> realm of auto balancing.  So at this point, we think two tiers will be good.</i><br>
+<br>
+Please keep in mind that once there is an interface it will be<br>
+impossible to change in the future. So do not bind yourself to the 2<br>
+tier setups that you have in hands right now.<br>
+<br>
+-- <br>
+Michal Hocko<br>
+SUSE Labs<br>
+<br>
+<br>
+

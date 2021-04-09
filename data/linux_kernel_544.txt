@@ -1,0 +1,95 @@
+The flow change and restricted_tty_write() logic is internal to the tty<br>
+core only, so move it out of the include/linux/tty.h file.<br>
+<br>
+Cc: Jiri Slaby <jirislaby@xxxxxxxxxx><br>
+Signed-off-by: Greg Kroah-Hartman <gregkh@xxxxxxxxxxxxxxxxxxx><br>
+---<br>
+ drivers/tty/tty.h       | 17 +++++++++++++++++<br>
+ drivers/tty/tty_ioctl.c |  1 +<br>
+ include/linux/tty.h     | 16 ----------------<br>
+ 3 files changed, 18 insertions(+), 16 deletions(-)<br>
+<br>
+diff --git a/drivers/tty/tty.h b/drivers/tty/tty.h<br>
+index ff904e947483..b0d78bfdbd8c 100644<br>
+--- a/drivers/tty/tty.h<br>
++++ b/drivers/tty/tty.h<br>
+@@ -29,6 +29,21 @@ enum {<br>
+ 	TTY_LOCK_SLAVE,<br>
+ };<br>
+ <br>
++/* Values for tty->flow_change */<br>
++#define TTY_THROTTLE_SAFE	1<br>
++#define TTY_UNTHROTTLE_SAFE	2<br>
++<br>
++static inline void __tty_set_flow_change(struct tty_struct *tty, int val)<br>
++{<br>
++	tty->flow_change = val;<br>
++}<br>
++<br>
++static inline void tty_set_flow_change(struct tty_struct *tty, int val)<br>
++{<br>
++	tty->flow_change = val;<br>
++	smp_mb();<br>
++}<br>
++<br>
+ int tty_ldisc_lock(struct tty_struct *tty, unsigned long timeout);<br>
+ void tty_ldisc_unlock(struct tty_struct *tty);<br>
+ <br>
+@@ -46,4 +61,6 @@ static inline void tty_audit_tiocsti(struct tty_struct *tty, char ch)<br>
+ }<br>
+ #endif<br>
+ <br>
++ssize_t redirected_tty_write(struct kiocb *, struct iov_iter *);<br>
++<br>
+ #endif<br>
+diff --git a/drivers/tty/tty_ioctl.c b/drivers/tty/tty_ioctl.c<br>
+index 053290ab5cb8..70972344946e 100644<br>
+--- a/drivers/tty/tty_ioctl.c<br>
++++ b/drivers/tty/tty_ioctl.c<br>
+@@ -21,6 +21,7 @@<br>
+ #include <linux/bitops.h><br>
+ #include <linux/mutex.h><br>
+ #include <linux/compat.h><br>
++#include "tty.h"<br>
+ <br>
+ #include <asm/io.h><br>
+ #include <linux/uaccess.h><br>
+diff --git a/include/linux/tty.h b/include/linux/tty.h<br>
+index 1b6f5dc3dcb2..777887d8bd6d 100644<br>
+--- a/include/linux/tty.h<br>
++++ b/include/linux/tty.h<br>
+@@ -349,21 +349,6 @@ struct tty_file_private {<br>
+ #define TTY_LDISC_CHANGING	20	/* Change pending - non-block IO */<br>
+ #define TTY_LDISC_HALTED	22	/* Line discipline is halted */<br>
+ <br>
+-/* Values for tty->flow_change */<br>
+-#define TTY_THROTTLE_SAFE 1<br>
+-#define TTY_UNTHROTTLE_SAFE 2<br>
+-<br>
+-static inline void __tty_set_flow_change(struct tty_struct *tty, int val)<br>
+-{<br>
+-	tty->flow_change = val;<br>
+-}<br>
+-<br>
+-static inline void tty_set_flow_change(struct tty_struct *tty, int val)<br>
+-{<br>
+-	tty->flow_change = val;<br>
+-	smp_mb();<br>
+-}<br>
+-<br>
+ static inline bool tty_io_nonblock(struct tty_struct *tty, struct file *file)<br>
+ {<br>
+ 	return file->f_flags & O_NONBLOCK ||<br>
+@@ -395,7 +380,6 @@ extern struct tty_struct *tty_kopen_exclusive(dev_t device);<br>
+ extern struct tty_struct *tty_kopen_shared(dev_t device);<br>
+ extern void tty_kclose(struct tty_struct *tty);<br>
+ extern int tty_dev_name_to_number(const char *name, dev_t *number);<br>
+-extern ssize_t redirected_tty_write(struct kiocb *, struct iov_iter *);<br>
+ #else<br>
+ static inline void tty_kref_put(struct tty_struct *tty)<br>
+ { }<br>
+-- <br>
+2.31.1<br>
+<br>
+<br>
+

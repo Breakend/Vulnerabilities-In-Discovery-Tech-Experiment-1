@@ -1,0 +1,171 @@
+From: Bharat Jauhari <bjauhari@xxxxxxxxx><br>
+<br>
+DRAM scrubbing can take time hence it adds to latency during allocation.<br>
+To minimize latency during initialization, scrubbing is moved to release<br>
+call.<br>
+In case scrubbing fails it means the device is in a bad state,<br>
+hence HARD reset is initiated.<br>
+<br>
+Signed-off-by: Bharat Jauhari <bjauhari@xxxxxxxxx><br>
+Reviewed-by: Oded Gabbay <ogabbay@xxxxxxxxxx><br>
+Signed-off-by: Oded Gabbay <ogabbay@xxxxxxxxxx><br>
+---<br>
+ drivers/misc/habanalabs/common/memory.c | 87 ++++++++++++++-----------<br>
+ 1 file changed, 48 insertions(+), 39 deletions(-)<br>
+<br>
+diff --git a/drivers/misc/habanalabs/common/memory.c b/drivers/misc/habanalabs/common/memory.c<br>
+index 6530fddbbc21..2938cbbafbbc 100644<br>
+--- a/drivers/misc/habanalabs/common/memory.c<br>
++++ b/drivers/misc/habanalabs/common/memory.c<br>
+@@ -81,16 +81,6 @@ static int alloc_device_memory(struct hl_ctx *ctx, struct hl_mem_in *args,<br>
+ 				num_pgs, total_size);<br>
+ 			return -ENOMEM;<br>
+ 		}<br>
+-<br>
+-		if (hdev->memory_scrub) {<br>
+-			rc = hdev->asic_funcs->scrub_device_mem(hdev, paddr,<br>
+-					total_size);<br>
+-			if (rc) {<br>
+-				dev_err(hdev->dev,<br>
+-					"Failed to scrub contiguous device memory\n");<br>
+-				goto pages_pack_err;<br>
+-			}<br>
+-		}<br>
+ 	}<br>
+ <br>
+ 	phys_pg_pack = kzalloc(sizeof(*phys_pg_pack), GFP_KERNEL);<br>
+@@ -128,17 +118,6 @@ static int alloc_device_memory(struct hl_ctx *ctx, struct hl_mem_in *args,<br>
+ 				goto page_err;<br>
+ 			}<br>
+ <br>
+-			if (hdev->memory_scrub) {<br>
+-				rc = hdev->asic_funcs->scrub_device_mem(hdev,<br>
+-						phys_pg_pack->pages[i],<br>
+-						page_size);<br>
+-				if (rc) {<br>
+-					dev_err(hdev->dev,<br>
+-						"Failed to scrub device memory\n");<br>
+-					goto page_err;<br>
+-				}<br>
+-			}<br>
+-<br>
+ 			num_curr_pgs++;<br>
+ 		}<br>
+ 	}<br>
+@@ -280,37 +259,67 @@ static void dram_pg_pool_do_release(struct kref *ref)<br>
+  * @phys_pg_pack: physical page pack to free.<br>
+  *<br>
+  * This function does the following:<br>
+- * - For DRAM memory only, iterate over the pack and free each physical block<br>
+- *   structure by returning it to the general pool.<br>
++ * - For DRAM memory only<br>
++ *   - iterate over the pack, scrub and free each physical block structure by<br>
++ *     returning it to the general pool.<br>
++ *     In case of error during scrubbing, initiate hard reset.<br>
++ *     Once hard reset is triggered, scrubbing is bypassed while freeing the<br>
++ *     memory continues.<br>
+  * - Free the hl_vm_phys_pg_pack structure.<br>
+  */<br>
+-static void free_phys_pg_pack(struct hl_device *hdev,<br>
++static int free_phys_pg_pack(struct hl_device *hdev,<br>
+ 				struct hl_vm_phys_pg_pack *phys_pg_pack)<br>
+ {<br>
+ 	struct hl_vm *vm = &hdev->vm;<br>
+ 	u64 i;<br>
++	int rc = 0;<br>
++<br>
++	if (phys_pg_pack->created_from_userptr)<br>
++		goto end;<br>
+ <br>
+-	if (!phys_pg_pack->created_from_userptr) {<br>
+-		if (phys_pg_pack->contiguous) {<br>
+-			gen_pool_free(vm->dram_pg_pool, phys_pg_pack->pages[0],<br>
++	if (phys_pg_pack->contiguous) {<br>
++		if (hdev->memory_scrub && !hdev->disabled) {<br>
++			rc = hdev->asic_funcs->scrub_device_mem(hdev,<br>
++					phys_pg_pack->pages[0],<br>
+ 					phys_pg_pack->total_size);<br>
++			if (rc)<br>
++				dev_err(hdev->dev,<br>
++					"Failed to scrub contiguous device memory\n");<br>
++		}<br>
+ <br>
+-			for (i = 0; i < phys_pg_pack->npages ; i++)<br>
+-				kref_put(&vm->dram_pg_pool_refcount,<br>
+-					dram_pg_pool_do_release);<br>
+-		} else {<br>
+-			for (i = 0 ; i < phys_pg_pack->npages ; i++) {<br>
+-				gen_pool_free(vm->dram_pg_pool,<br>
++		gen_pool_free(vm->dram_pg_pool, phys_pg_pack->pages[0],<br>
++			phys_pg_pack->total_size);<br>
++<br>
++		for (i = 0; i < phys_pg_pack->npages ; i++)<br>
++			kref_put(&vm->dram_pg_pool_refcount,<br>
++				dram_pg_pool_do_release);<br>
++	} else {<br>
++		for (i = 0 ; i < phys_pg_pack->npages ; i++) {<br>
++			if (hdev->memory_scrub && !hdev->disabled && rc == 0) {<br>
++				rc = hdev->asic_funcs->scrub_device_mem(<br>
++						hdev,<br>
+ 						phys_pg_pack->pages[i],<br>
+ 						phys_pg_pack->page_size);<br>
+-				kref_put(&vm->dram_pg_pool_refcount,<br>
+-					dram_pg_pool_do_release);<br>
++				if (rc)<br>
++					dev_err(hdev->dev,<br>
++						"Failed to scrub device memory\n");<br>
+ 			}<br>
++			gen_pool_free(vm->dram_pg_pool,<br>
++				phys_pg_pack->pages[i],<br>
++				phys_pg_pack->page_size);<br>
++			kref_put(&vm->dram_pg_pool_refcount,<br>
++				dram_pg_pool_do_release);<br>
+ 		}<br>
+ 	}<br>
+ <br>
++	if (rc && !hdev->disabled)<br>
++		hl_device_reset(hdev, HL_RESET_HARD);<br>
++<br>
++end:<br>
+ 	kvfree(phys_pg_pack->pages);<br>
+ 	kfree(phys_pg_pack);<br>
++<br>
++	return rc;<br>
+ }<br>
+ <br>
+ /**<br>
+@@ -349,7 +358,7 @@ static int free_device_memory(struct hl_ctx *ctx, struct hl_mem_in *args)<br>
+ 		atomic64_sub(phys_pg_pack->total_size, &ctx->dram_phys_mem);<br>
+ 		atomic64_sub(phys_pg_pack->total_size, &hdev->dram_used_mem);<br>
+ <br>
+-		free_phys_pg_pack(hdev, phys_pg_pack);<br>
++		return free_phys_pg_pack(hdev, phys_pg_pack);<br>
+ 	} else {<br>
+ 		spin_unlock(&vm->idr_lock);<br>
+ 		dev_err(hdev->dev,<br>
+@@ -1131,9 +1140,9 @@ static int map_device_va(struct hl_ctx *ctx, struct hl_mem_in *args,<br>
+ 	*device_addr = ret_vaddr;<br>
+ <br>
+ 	if (is_userptr)<br>
+-		free_phys_pg_pack(hdev, phys_pg_pack);<br>
++		rc = free_phys_pg_pack(hdev, phys_pg_pack);<br>
+ <br>
+-	return 0;<br>
++	return rc;<br>
+ <br>
+ map_err:<br>
+ 	if (add_va_block(hdev, va_range, ret_vaddr,<br>
+@@ -1286,7 +1295,7 @@ static int unmap_device_va(struct hl_ctx *ctx, struct hl_mem_in *args,<br>
+ 	kfree(hnode);<br>
+ <br>
+ 	if (is_userptr) {<br>
+-		free_phys_pg_pack(hdev, phys_pg_pack);<br>
++		rc = free_phys_pg_pack(hdev, phys_pg_pack);<br>
+ 		dma_unmap_host_va(hdev, userptr);<br>
+ 	}<br>
+ <br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

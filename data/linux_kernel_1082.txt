@@ -1,0 +1,28 @@
+pm_runtime_get_sync will increment pm usage counter even it failed.<br>
+Forgetting to putting operation will result in reference leak here.<br>
+Fix it by replacing it with pm_runtime_resume_and_get to keep usage<br>
+counter balanced.<br>
+<br>
+Signed-off-by: Shixin Liu <liushixin2@xxxxxxxxxx><br>
+---<br>
+ drivers/crypto/sa2ul.c | 2 +-<br>
+ 1 file changed, 1 insertion(+), 1 deletion(-)<br>
+<br>
+diff --git a/drivers/crypto/sa2ul.c b/drivers/crypto/sa2ul.c<br>
+index f300b0a5958a..d7b1628fb484 100644<br>
+--- a/drivers/crypto/sa2ul.c<br>
++++ b/drivers/crypto/sa2ul.c<br>
+@@ -2350,7 +2350,7 @@ static int sa_ul_probe(struct platform_device *pdev)<br>
+ 	dev_set_drvdata(sa_k3_dev, dev_data);<br>
+ <br>
+ 	pm_runtime_enable(dev);<br>
+-	ret = pm_runtime_get_sync(dev);<br>
++	ret = pm_runtime_resume_and_get(dev);<br>
+ 	if (ret < 0) {<br>
+ 		dev_err(&pdev->dev, "%s: failed to get sync: %d\n", __func__,<br>
+ 			ret);<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

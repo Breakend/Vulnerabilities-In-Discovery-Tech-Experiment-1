@@ -1,0 +1,34 @@
+On Wed, 7 Apr 2021 14:56:34 +0500, Muhammad Usama Anjum wrote:<br>
+><i> devm_ioremap_resource() prints error message in itself. Remove the</i><br>
+><i> dev_err call to avoid redundant error message.</i><br>
+<br>
+Applied to<br>
+<br>
+   <a  rel="nofollow" href="https://git.kernel.org/pub/scm/linux/kernel/git/broonie/sound.git">https://git.kernel.org/pub/scm/linux/kernel/git/broonie/sound.git</a> for-next<br>
+<br>
+Thanks!<br>
+<br>
+[1/1] ASoC: fsl: sunxi: remove redundant dev_err call<br>
+      commit: a93799d55fd479f540ed97066e69114aa7709787<br>
+<br>
+All being well this means that it will be integrated into the linux-next<br>
+tree (usually sometime in the next 24 hours) and sent to Linus during<br>
+the next merge window (or sooner if it is a bug fix), however if<br>
+problems are discovered then the patch may be dropped or reverted.<br>
+<br>
+You may get further e-mails resulting from automated or manual testing<br>
+and review of the tree, please engage with people reporting problems and<br>
+send followup patches addressing any issues that are reported if needed.<br>
+<br>
+If any updates are required or you are submitting further changes they<br>
+should be sent as incremental updates against current git, existing<br>
+patches will not be replaced.<br>
+<br>
+Please add any relevant lists and maintainers to the CCs when replying<br>
+to this mail.<br>
+<br>
+Thanks,<br>
+Mark<br>
+<br>
+<br>
+

@@ -1,0 +1,21 @@
+On Wed, Mar 31, 2021 at 1:06 PM Heikki Krogerus<br>
+<heikki.krogerus@xxxxxxxxxxxxxxx> wrote:<br>
+><i></i><br>
+><i> On Mon, Mar 29, 2021 at 06:12:02PM +0300, Andy Shevchenko wrote:</i><br>
+><i> > Currently we have a slightly twisted logic in swnode_register().</i><br>
+><i> > It frees resources that it doesn't allocate on error path and</i><br>
+><i> > in once case it relies on the ->release() implementation.</i><br>
+><i> ></i><br>
+><i> > Untwist the logic by freeing resources explicitly when swnode_register()</i><br>
+><i> > fails. Currently it happens only in fwnode_create_software_node().</i><br>
+><i> ></i><br>
+><i> > Signed-off-by: Andy Shevchenko <andriy.shevchenko@xxxxxxxxxxxxxxx></i><br>
+><i></i><br>
+><i> It all looks OK to me. FWIW, for the whole series:</i><br>
+><i></i><br>
+><i> Reviewed-by: Heikki Krogerus <heikki.krogerus@xxxxxxxxxxxxxxx></i><br>
+<br>
+Whole series applied (with some minor changelog edits) as 5.13 material, thanks!<br>
+<br>
+<br>
+

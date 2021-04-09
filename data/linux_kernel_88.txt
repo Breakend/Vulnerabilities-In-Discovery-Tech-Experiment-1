@@ -1,0 +1,38 @@
+Thorsten Leemhuis <linux@xxxxxxxxxxxxx> writes:<br>
+<br>
+><i> +In case you performed a successful bisection, use the title of the change that</i><br>
+><i> +introduced the regression as the second part of your subject. Make the report</i><br>
+><i> +also mention the commit id of the culprit. For tracking purposes, add a line</i><br>
+><i> +like the following that contains both pieces of information, but with the</i><br>
+><i> +commit id shortened to 12 characters::</i><br>
+><i> +</i><br>
+><i> +    #regzb introduced: 94a632d91ad1 ("usc: xhbi-foo: check bar_params earlier")</i><br>
+><i> +</i><br>
+><i> +In case of an unsuccessful bisection, make your report mention the latest tested</i><br>
+><i> +version that's working fine (say 5.7) and the oldest where the issue occurs (say</i><br>
+><i> +5.8-rc1). For tracking purposes add a line expressing it like this::</i><br>
+><i> +</i><br>
+><i> +    #regzb introduced: v5.7..v5.8-rc1</i><br>
+<br>
+I kind of share Greg's concern that people aren't going to want to do<br>
+this; it could even be seen as an impediment to reporting problems in<br>
+general.  If you *really* want random users to input this sort of<br>
+information, you may well end up creating some sort of web page to step<br>
+them through it.<br>
+<br>
+Also, though, as I understand it the system that will interpret these<br>
+lines does not yet exist.  Experience tells me that, as this system<br>
+comes into existence, you will have a good chance of deciding that you<br>
+want the syntax to look different anyway.  So I would personally hold<br>
+off on telling people to include directives like this until you have<br>
+something that works with them.<br>
+<br>
+But that's just me... if this is the way it's going to work then the<br>
+docs should of course reflect that.<br>
+<br>
+Thanks,<br>
+<br>
+jon<br>
+<br>
+<br>
+

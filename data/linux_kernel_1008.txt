@@ -1,0 +1,40 @@
+
+On 07/04/21 19:40, Marcelo Tosatti wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em"><blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c<br>
+index fe806e894212..0a83eff40b43 100644<br>
+--- a/arch/x86/kvm/x86.c<br>
++++ b/arch/x86/kvm/x86.c<br>
+@@ -2562,10 +2562,12 @@ static void kvm_gen_update_masterclock(struct kvm *kvm)<br>
+  
+  	kvm_hv_invalidate_tsc_page(kvm);
+<br>  
+-	spin_lock(&ka->pvclock_gtod_sync_lock);
+<br>
+  	kvm_make_mclock_inprogress_request(kvm);<br>
++<br>
+</blockquote>
+Might be good to serialize against two kvm_gen_update_masterclock<br>
+callers? Otherwise one caller could clear KVM_REQ_MCLOCK_INPROGRESS,<br>
+while the other is still at pvclock_update_vm_gtod_copy().<br>
+</blockquote>
+<br>
+Makes sense, but this stuff has always seemed unnecessarily complicated 
+to me.
+<br>
+<br>
+KVM_REQ_MCLOCK_INPROGRESS is only needed to kick running vCPUs out of 
+the execution loop; clearing it in kvm_gen_update_masterclock is 
+unnecessary, because KVM_REQ_CLOCK_UPDATE takes pvclock_gtod_sync_lock 
+too and thus will already wait for pvclock_update_vm_gtod_copy to end.
+<br>
+<br>
+I think it's possible to use a seqcount in KVM_REQ_CLOCK_UPDATE instead 
+of KVM_REQ_MCLOCK_INPROGRESS.  Both cause the vCPUs to spin. I'll take a 
+look.
+<br>
+<br>
+Paolo<br>
+<br>
+<br>
+

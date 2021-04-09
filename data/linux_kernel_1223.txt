@@ -1,0 +1,27 @@
+Quoting Petr Mladek (2021-04-07 06:42:38)<br>
+><i> </i><br>
+><i> I think that you need to use something like:</i><br>
+><i> </i><br>
+><i> #ifdef CONFIG_STACKTRACE_BUILD_ID</i><br>
+><i> #define BUILD_ID_FTM " %20phN"</i><br>
+><i> #define BUILD_ID_VAL vmlinux_build_id</i><br>
+><i> #else</i><br>
+><i> #define BUILD_ID_FTM "%s"</i><br>
+><i> #define BUILD_ID_VAL ""</i><br>
+><i> #endif</i><br>
+><i> </i><br>
+><i>         printk("%sCPU: %d PID: %d Comm: %.20s %s%s %s %.*s" BUILD_ID_FTM "\n",</i><br>
+><i>                log_lvl, raw_smp_processor_id(), current->pid, current->comm,</i><br>
+><i>                kexec_crash_loaded() ? "Kdump: loaded " : "",</i><br>
+><i>                print_tainted(),</i><br>
+><i>                init_utsname()->release,</i><br>
+><i>                (int)strcspn(init_utsname()->version, " "),</i><br>
+><i>                init_utsname()->version,</i><br>
+><i>                BUILD_ID_VAL);</i><br>
+><i> </i><br>
+<br>
+Thanks. I didn't see this warning but I see it now after compiling<br>
+again. Not sure how I missed this one. I've rolled in this fix as well.<br>
+<br>
+<br>
+

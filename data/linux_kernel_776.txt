@@ -1,0 +1,70 @@
+<br>
+><i> -----Original Message-----</i><br>
+><i> From: Bart Van Assche <bvanassche@xxxxxxx></i><br>
+><i> Sent: Wednesday, March 17, 2021 5:31 AM</i><br>
+><i> To: Arthur Simchaev <Arthur.Simchaev@xxxxxxx>; James E . J . Bottomley</i><br>
+><i> <jejb@xxxxxxxxxxxxxxxxxx>; Martin K . Petersen</i><br>
+><i> <martin.petersen@xxxxxxxxxx>; linux-scsi@xxxxxxxxxxxxxxx; linux-</i><br>
+><i> kernel@xxxxxxxxxxxxxxx</i><br>
+><i> Cc: alim.akhtar@xxxxxxxxxxx; Bean Huo <beanhuo@xxxxxxxxxx></i><br>
+><i> Subject: Re: [PATCH v2] scsi: ufs: sysfs: Print string descriptors as raw data</i><br>
+><i> </i><br>
+><i> CAUTION: This email originated from outside of Western Digital. Do not click</i><br>
+><i> on links or open attachments unless you recognize the sender and know that</i><br>
+><i> the content is safe.</i><br>
+><i> </i><br>
+><i> </i><br>
+><i> On 2/15/21 9:40 AM, Arthur Simchaev wrote:</i><br>
+><i> > -#define UFS_STRING_DESCRIPTOR(_name, _pname)                         \</i><br>
+><i> > +#define UFS_STRING_DESCRIPTOR(_name, _pname, _is_ascii)              \</i><br>
+><i> >  static ssize_t _name##_show(struct device *dev,                              \</i><br>
+><i> >       struct device_attribute *attr, char *buf)                       \</i><br>
+><i> >  {                                                                    \</i><br>
+><i> > @@ -690,10 +690,18 @@ static ssize_t _name##_show(struct device *dev,</i><br>
+><i> \</i><br>
+><i> >       kfree(desc_buf);                                                \</i><br>
+><i> >       desc_buf = NULL;                                                \</i><br>
+><i> >       ret = ufshcd_read_string_desc(hba, index, &desc_buf,            \</i><br>
+><i> > -                                   SD_ASCII_STD);                    \</i><br>
+><i> > +                                   _is_ascii);                       \</i><br>
+><i> >       if (ret < 0)                                                    \</i><br>
+><i> >               goto out;                                               \</i><br>
+><i> > -     ret = sysfs_emit(buf, "%s\n", desc_buf);                        \</i><br>
+><i> > +     if (_is_ascii) {                                                \</i><br>
+><i> > +             ret = sysfs_emit(buf, "%s\n", desc_buf);                \</i><br>
+><i> > +     } else {                                                        \</i><br>
+><i> > +             int i;                                                  \</i><br>
+><i> > +                                                                     \</i><br>
+><i> > +             for (i = 0; i < desc_buf[0]; i++)                       \</i><br>
+><i> > +                     hex_byte_pack(buf + i * 2, desc_buf[i]);        \</i><br>
+><i> > +             ret = sysfs_emit(buf, "%s\n", buf);                     \</i><br>
+><i> > +     }                       \</i><br>
+><i> >  out:                                                                 \</i><br>
+><i> >       pm_runtime_put_sync(hba->dev);                                  \</i><br>
+><i> >       kfree(desc_buf);                                                \</i><br>
+><i> </i><br>
+><i> Hex data needs to be parsed before it can be used by any software. Has</i><br>
+><i> it been considered to make the "raw" attributes binary attributes</i><br>
+><i> instead of hex-encoded binary? See also sysfs_create_bin_file().</i><br>
+><i> </i><br>
+><i> Thanks,</i><br>
+><i> </i><br>
+><i> Bart.</i><br>
+<br>
+Hi Bart,<br>
+Thank you for your comments.<br>
+<br>
+The typical use case that originate this issue, is of some flash vendor's field engineer reading the serial part number.<br>
+All other string descriptors are less of an issue.<br>
+<br>
+The current Jedec spec allows the serial number may not be ascii convertible . For example:<br>
+ - ufshcd_read_string_desc(bool asci = false):  00 1d 00 20 00 95 00 20 00 ec 00 84 00 5b 00 14<br>
+ - ufshcd_read_string_desc(bool asci = true):  "  ]  "<br>
+<br>
+Therefore, upon reading the "raw" serial number, the user can verify the data integrity.<br>
+<br>
+How about just applying this change to the serial number sysfs entry, and drop all others?<br>
+<br>
+Regards<br>
+Arthur<br>
+

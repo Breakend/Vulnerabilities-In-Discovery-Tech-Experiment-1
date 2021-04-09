@@ -1,0 +1,1192 @@
+Implement primitives necessary for the 4th level folding, add walks of p4d<br>
+level where appropriate and replace 5level-fixup.h with pgtable-nop4d.h.<br>
+<br>
+Signed-off-by: Mike Rapoport <rppt@xxxxxxxxxxxxx><br>
+Tested-by: Christophe Leroy <christophe.leroy@xxxxxx> # 8xx and 83xx<br>
+---<br>
+v3:<br>
+* reduce amount of added p4d walks<br>
+* kill pgtable_32::get_pteptr and traverse page table in<br>
+  pgtable_32::__change_page_attr_noflush<br>
+<br>
+<br>
+ arch/powerpc/include/asm/book3s/32/pgtable.h  |  1 -<br>
+ arch/powerpc/include/asm/book3s/64/hash.h     |  4 +-<br>
+ arch/powerpc/include/asm/book3s/64/pgalloc.h  |  4 +-<br>
+ arch/powerpc/include/asm/book3s/64/pgtable.h  | 60 ++++++++++---------<br>
+ arch/powerpc/include/asm/book3s/64/radix.h    |  6 +-<br>
+ arch/powerpc/include/asm/nohash/32/pgtable.h  |  1 -<br>
+ arch/powerpc/include/asm/nohash/64/pgalloc.h  |  2 +-<br>
+ .../include/asm/nohash/64/pgtable-4k.h        | 32 +++++-----<br>
+ arch/powerpc/include/asm/nohash/64/pgtable.h  |  6 +-<br>
+ arch/powerpc/include/asm/pgtable.h            |  6 +-<br>
+ arch/powerpc/kvm/book3s_64_mmu_radix.c        | 30 ++++++----<br>
+ arch/powerpc/lib/code-patching.c              |  7 ++-<br>
+ arch/powerpc/mm/book3s32/mmu.c                |  2 +-<br>
+ arch/powerpc/mm/book3s32/tlb.c                |  4 +-<br>
+ arch/powerpc/mm/book3s64/hash_pgtable.c       |  4 +-<br>
+ arch/powerpc/mm/book3s64/radix_pgtable.c      | 26 +++++---<br>
+ arch/powerpc/mm/book3s64/subpage_prot.c       |  6 +-<br>
+ arch/powerpc/mm/hugetlbpage.c                 | 28 +++++----<br>
+ arch/powerpc/mm/kasan/kasan_init_32.c         |  8 +--<br>
+ arch/powerpc/mm/mem.c                         |  4 +-<br>
+ arch/powerpc/mm/nohash/40x.c                  |  4 +-<br>
+ arch/powerpc/mm/nohash/book3e_pgtable.c       | 15 ++---<br>
+ arch/powerpc/mm/pgtable.c                     | 30 ++++++----<br>
+ arch/powerpc/mm/pgtable_32.c                  | 45 +++-----------<br>
+ arch/powerpc/mm/pgtable_64.c                  | 10 ++--<br>
+ arch/powerpc/mm/ptdump/hashpagetable.c        | 20 ++++++-<br>
+ arch/powerpc/mm/ptdump/ptdump.c               | 14 +++--<br>
+ arch/powerpc/xmon/xmon.c                      | 18 +++---<br>
+ 28 files changed, 213 insertions(+), 184 deletions(-)<br>
+<br>
+diff --git a/arch/powerpc/include/asm/book3s/32/pgtable.h b/arch/powerpc/include/asm/book3s/32/pgtable.h<br>
+index 5b39c11e884a..39ec11371be0 100644<br>
+--- a/arch/powerpc/include/asm/book3s/32/pgtable.h<br>
++++ b/arch/powerpc/include/asm/book3s/32/pgtable.h<br>
+@@ -2,7 +2,6 @@<br>
+ #ifndef _ASM_POWERPC_BOOK3S_32_PGTABLE_H<br>
+ #define _ASM_POWERPC_BOOK3S_32_PGTABLE_H<br>
+ <br>
+-#define __ARCH_USE_5LEVEL_HACK<br>
+ #include <asm-generic/pgtable-nopmd.h><br>
+ <br>
+ #include <asm/book3s/32/hash.h><br>
+diff --git a/arch/powerpc/include/asm/book3s/64/hash.h b/arch/powerpc/include/asm/book3s/64/hash.h<br>
+index 2781ebf6add4..876d1528c2cf 100644<br>
+--- a/arch/powerpc/include/asm/book3s/64/hash.h<br>
++++ b/arch/powerpc/include/asm/book3s/64/hash.h<br>
+@@ -134,9 +134,9 @@ static inline int get_region_id(unsigned long ea)<br>
+ <br>
+ #define	hash__pmd_bad(pmd)		(pmd_val(pmd) & H_PMD_BAD_BITS)<br>
+ #define	hash__pud_bad(pud)		(pud_val(pud) & H_PUD_BAD_BITS)<br>
+-static inline int hash__pgd_bad(pgd_t pgd)<br>
++static inline int hash__p4d_bad(p4d_t p4d)<br>
+ {<br>
+-	return (pgd_val(pgd) == 0);<br>
++	return (p4d_val(p4d) == 0);<br>
+ }<br>
+ #ifdef CONFIG_STRICT_KERNEL_RWX<br>
+ extern void hash__mark_rodata_ro(void);<br>
+diff --git a/arch/powerpc/include/asm/book3s/64/pgalloc.h b/arch/powerpc/include/asm/book3s/64/pgalloc.h<br>
+index a41e91bd0580..69c5b051734f 100644<br>
+--- a/arch/powerpc/include/asm/book3s/64/pgalloc.h<br>
++++ b/arch/powerpc/include/asm/book3s/64/pgalloc.h<br>
+@@ -85,9 +85,9 @@ static inline void pgd_free(struct mm_struct *mm, pgd_t *pgd)<br>
+ 	kmem_cache_free(PGT_CACHE(PGD_INDEX_SIZE), pgd);<br>
+ }<br>
+ <br>
+-static inline void pgd_populate(struct mm_struct *mm, pgd_t *pgd, pud_t *pud)<br>
++static inline void p4d_populate(struct mm_struct *mm, p4d_t *pgd, pud_t *pud)<br>
+ {<br>
+-	*pgd =  __pgd(__pgtable_ptr_val(pud) | PGD_VAL_BITS);<br>
++	*pgd =  __p4d(__pgtable_ptr_val(pud) | PGD_VAL_BITS);<br>
+ }<br>
+ <br>
+ static inline pud_t *pud_alloc_one(struct mm_struct *mm, unsigned long addr)<br>
+diff --git a/arch/powerpc/include/asm/book3s/64/pgtable.h b/arch/powerpc/include/asm/book3s/64/pgtable.h<br>
+index 201a69e6a355..fa60e8594b9f 100644<br>
+--- a/arch/powerpc/include/asm/book3s/64/pgtable.h<br>
++++ b/arch/powerpc/include/asm/book3s/64/pgtable.h<br>
+@@ -2,7 +2,7 @@<br>
+ #ifndef _ASM_POWERPC_BOOK3S_64_PGTABLE_H_<br>
+ #define _ASM_POWERPC_BOOK3S_64_PGTABLE_H_<br>
+ <br>
+-#include <asm-generic/5level-fixup.h><br>
++#include <asm-generic/pgtable-nop4d.h><br>
+ <br>
+ #ifndef __ASSEMBLY__<br>
+ #include <linux/mmdebug.h><br>
+@@ -251,7 +251,7 @@ extern unsigned long __pmd_frag_size_shift;<br>
+ /* Bits to mask out from a PUD to get to the PMD page */<br>
+ #define PUD_MASKED_BITS		0xc0000000000000ffUL<br>
+ /* Bits to mask out from a PGD to get to the PUD page */<br>
+-#define PGD_MASKED_BITS		0xc0000000000000ffUL<br>
++#define P4D_MASKED_BITS		0xc0000000000000ffUL<br>
+ <br>
+ /*<br>
+  * Used as an indicator for rcu callback functions<br>
+@@ -949,54 +949,60 @@ static inline bool pud_access_permitted(pud_t pud, bool write)<br>
+ 	return pte_access_permitted(pud_pte(pud), write);<br>
+ }<br>
+ <br>
+-#define pgd_write(pgd)		pte_write(pgd_pte(pgd))<br>
++#define __p4d_raw(x)	((p4d_t) { __pgd_raw(x) })<br>
++static inline __be64 p4d_raw(p4d_t x)<br>
++{<br>
++	return pgd_raw(x.pgd);<br>
++}<br>
++<br>
++#define p4d_write(p4d)		pte_write(p4d_pte(p4d))<br>
+ <br>
+-static inline void pgd_clear(pgd_t *pgdp)<br>
++static inline void p4d_clear(p4d_t *p4dp)<br>
+ {<br>
+-	*pgdp = __pgd(0);<br>
++	*p4dp = __p4d(0);<br>
+ }<br>
+ <br>
+-static inline int pgd_none(pgd_t pgd)<br>
++static inline int p4d_none(p4d_t p4d)<br>
+ {<br>
+-	return !pgd_raw(pgd);<br>
++	return !p4d_raw(p4d);<br>
+ }<br>
+ <br>
+-static inline int pgd_present(pgd_t pgd)<br>
++static inline int p4d_present(p4d_t p4d)<br>
+ {<br>
+-	return !!(pgd_raw(pgd) & cpu_to_be64(_PAGE_PRESENT));<br>
++	return !!(p4d_raw(p4d) & cpu_to_be64(_PAGE_PRESENT));<br>
+ }<br>
+ <br>
+-static inline pte_t pgd_pte(pgd_t pgd)<br>
++static inline pte_t p4d_pte(p4d_t p4d)<br>
+ {<br>
+-	return __pte_raw(pgd_raw(pgd));<br>
++	return __pte_raw(p4d_raw(p4d));<br>
+ }<br>
+ <br>
+-static inline pgd_t pte_pgd(pte_t pte)<br>
++static inline p4d_t pte_p4d(pte_t pte)<br>
+ {<br>
+-	return __pgd_raw(pte_raw(pte));<br>
++	return __p4d_raw(pte_raw(pte));<br>
+ }<br>
+ <br>
+-static inline int pgd_bad(pgd_t pgd)<br>
++static inline int p4d_bad(p4d_t p4d)<br>
+ {<br>
+ 	if (radix_enabled())<br>
+-		return radix__pgd_bad(pgd);<br>
+-	return hash__pgd_bad(pgd);<br>
++		return radix__p4d_bad(p4d);<br>
++	return hash__p4d_bad(p4d);<br>
+ }<br>
+ <br>
+-#define pgd_access_permitted pgd_access_permitted<br>
+-static inline bool pgd_access_permitted(pgd_t pgd, bool write)<br>
++#define p4d_access_permitted p4d_access_permitted<br>
++static inline bool p4d_access_permitted(p4d_t p4d, bool write)<br>
+ {<br>
+-	return pte_access_permitted(pgd_pte(pgd), write);<br>
++	return pte_access_permitted(p4d_pte(p4d), write);<br>
+ }<br>
+ <br>
+-extern struct page *pgd_page(pgd_t pgd);<br>
++extern struct page *p4d_page(p4d_t p4d);<br>
+ <br>
+ /* Pointers in the page table tree are physical addresses */<br>
+ #define __pgtable_ptr_val(ptr)	__pa(ptr)<br>
+ <br>
+ #define pmd_page_vaddr(pmd)	__va(pmd_val(pmd) & ~PMD_MASKED_BITS)<br>
+ #define pud_page_vaddr(pud)	__va(pud_val(pud) & ~PUD_MASKED_BITS)<br>
+-#define pgd_page_vaddr(pgd)	__va(pgd_val(pgd) & ~PGD_MASKED_BITS)<br>
++#define p4d_page_vaddr(p4d)	__va(p4d_val(p4d) & ~P4D_MASKED_BITS)<br>
+ <br>
+ #define pgd_index(address) (((address) >> (PGDIR_SHIFT)) & (PTRS_PER_PGD - 1))<br>
+ #define pud_index(address) (((address) >> (PUD_SHIFT)) & (PTRS_PER_PUD - 1))<br>
+@@ -1010,8 +1016,8 @@ extern struct page *pgd_page(pgd_t pgd);<br>
+ <br>
+ #define pgd_offset(mm, address)	 ((mm)->pgd + pgd_index(address))<br>
+ <br>
+-#define pud_offset(pgdp, addr)	\<br>
+-	(((pud_t *) pgd_page_vaddr(*(pgdp))) + pud_index(addr))<br>
++#define pud_offset(p4dp, addr)	\<br>
++	(((pud_t *) p4d_page_vaddr(*(p4dp))) + pud_index(addr))<br>
+ #define pmd_offset(pudp,addr) \<br>
+ 	(((pmd_t *) pud_page_vaddr(*(pudp))) + pmd_index(addr))<br>
+ #define pte_offset_kernel(dir,addr) \<br>
+@@ -1368,11 +1374,11 @@ static inline bool pud_is_leaf(pud_t pud)<br>
+ 	return !!(pud_raw(pud) & cpu_to_be64(_PAGE_PTE));<br>
+ }<br>
+ <br>
+-#define pgd_is_leaf pgd_is_leaf<br>
+-#define pgd_leaf pgd_is_leaf<br>
+-static inline bool pgd_is_leaf(pgd_t pgd)<br>
++#define p4d_is_leaf p4d_is_leaf<br>
++#define p4d_leaf p4d_is_leaf<br>
++static inline bool p4d_is_leaf(p4d_t p4d)<br>
+ {<br>
+-	return !!(pgd_raw(pgd) & cpu_to_be64(_PAGE_PTE));<br>
++	return !!(p4d_raw(p4d) & cpu_to_be64(_PAGE_PTE));<br>
+ }<br>
+ <br>
+ #endif /* __ASSEMBLY__ */<br>
+diff --git a/arch/powerpc/include/asm/book3s/64/radix.h b/arch/powerpc/include/asm/book3s/64/radix.h<br>
+index d97db3ad9aae..9bca2ac64220 100644<br>
+--- a/arch/powerpc/include/asm/book3s/64/radix.h<br>
++++ b/arch/powerpc/include/asm/book3s/64/radix.h<br>
+@@ -30,7 +30,7 @@<br>
+ /* Don't have anything in the reserved bits and leaf bits */<br>
+ #define RADIX_PMD_BAD_BITS		0x60000000000000e0UL<br>
+ #define RADIX_PUD_BAD_BITS		0x60000000000000e0UL<br>
+-#define RADIX_PGD_BAD_BITS		0x60000000000000e0UL<br>
++#define RADIX_P4D_BAD_BITS		0x60000000000000e0UL<br>
+ <br>
+ #define RADIX_PMD_SHIFT		(PAGE_SHIFT + RADIX_PTE_INDEX_SIZE)<br>
+ #define RADIX_PUD_SHIFT		(RADIX_PMD_SHIFT + RADIX_PMD_INDEX_SIZE)<br>
+@@ -227,9 +227,9 @@ static inline int radix__pud_bad(pud_t pud)<br>
+ }<br>
+ <br>
+ <br>
+-static inline int radix__pgd_bad(pgd_t pgd)<br>
++static inline int radix__p4d_bad(p4d_t p4d)<br>
+ {<br>
+-	return !!(pgd_val(pgd) & RADIX_PGD_BAD_BITS);<br>
++	return !!(p4d_val(p4d) & RADIX_P4D_BAD_BITS);<br>
+ }<br>
+ <br>
+ #ifdef CONFIG_TRANSPARENT_HUGEPAGE<br>
+diff --git a/arch/powerpc/include/asm/nohash/32/pgtable.h b/arch/powerpc/include/asm/nohash/32/pgtable.h<br>
+index 60c4d829152e..d4c2c4259fa3 100644<br>
+--- a/arch/powerpc/include/asm/nohash/32/pgtable.h<br>
++++ b/arch/powerpc/include/asm/nohash/32/pgtable.h<br>
+@@ -2,7 +2,6 @@<br>
+ #ifndef _ASM_POWERPC_NOHASH_32_PGTABLE_H<br>
+ #define _ASM_POWERPC_NOHASH_32_PGTABLE_H<br>
+ <br>
+-#define __ARCH_USE_5LEVEL_HACK<br>
+ #include <asm-generic/pgtable-nopmd.h><br>
+ <br>
+ #ifndef __ASSEMBLY__<br>
+diff --git a/arch/powerpc/include/asm/nohash/64/pgalloc.h b/arch/powerpc/include/asm/nohash/64/pgalloc.h<br>
+index b9534a793293..668aee6017e7 100644<br>
+--- a/arch/powerpc/include/asm/nohash/64/pgalloc.h<br>
++++ b/arch/powerpc/include/asm/nohash/64/pgalloc.h<br>
+@@ -15,7 +15,7 @@ struct vmemmap_backing {<br>
+ };<br>
+ extern struct vmemmap_backing *vmemmap_list;<br>
+ <br>
+-#define pgd_populate(MM, PGD, PUD)	pgd_set(PGD, (unsigned long)PUD)<br>
++#define p4d_populate(MM, P4D, PUD)	p4d_set(P4D, (unsigned long)PUD)<br>
+ <br>
+ static inline pud_t *pud_alloc_one(struct mm_struct *mm, unsigned long addr)<br>
+ {<br>
+diff --git a/arch/powerpc/include/asm/nohash/64/pgtable-4k.h b/arch/powerpc/include/asm/nohash/64/pgtable-4k.h<br>
+index c40ec32b8194..81b1c54e3cf1 100644<br>
+--- a/arch/powerpc/include/asm/nohash/64/pgtable-4k.h<br>
++++ b/arch/powerpc/include/asm/nohash/64/pgtable-4k.h<br>
+@@ -2,7 +2,7 @@<br>
+ #ifndef _ASM_POWERPC_NOHASH_64_PGTABLE_4K_H<br>
+ #define _ASM_POWERPC_NOHASH_64_PGTABLE_4K_H<br>
+ <br>
+-#include <asm-generic/5level-fixup.h><br>
++#include <asm-generic/pgtable-nop4d.h><br>
+ <br>
+ /*<br>
+  * Entries per page directory level.  The PTE level must use a 64b record<br>
+@@ -45,41 +45,41 @@<br>
+ #define PMD_MASKED_BITS		0<br>
+ /* Bits to mask out from a PUD to get to the PMD page */<br>
+ #define PUD_MASKED_BITS		0<br>
+-/* Bits to mask out from a PGD to get to the PUD page */<br>
+-#define PGD_MASKED_BITS		0<br>
++/* Bits to mask out from a P4D to get to the PUD page */<br>
++#define P4D_MASKED_BITS		0<br>
+ <br>
+ <br>
+ /*<br>
+  * 4-level page tables related bits<br>
+  */<br>
+ <br>
+-#define pgd_none(pgd)		(!pgd_val(pgd))<br>
+-#define pgd_bad(pgd)		(pgd_val(pgd) == 0)<br>
+-#define pgd_present(pgd)	(pgd_val(pgd) != 0)<br>
+-#define pgd_page_vaddr(pgd)	(pgd_val(pgd) & ~PGD_MASKED_BITS)<br>
++#define p4d_none(p4d)		(!p4d_val(p4d))<br>
++#define p4d_bad(p4d)		(p4d_val(p4d) == 0)<br>
++#define p4d_present(p4d)	(p4d_val(p4d) != 0)<br>
++#define p4d_page_vaddr(p4d)	(p4d_val(p4d) & ~P4D_MASKED_BITS)<br>
+ <br>
+ #ifndef __ASSEMBLY__<br>
+ <br>
+-static inline void pgd_clear(pgd_t *pgdp)<br>
++static inline void p4d_clear(p4d_t *p4dp)<br>
+ {<br>
+-	*pgdp = __pgd(0);<br>
++	*p4dp = __p4d(0);<br>
+ }<br>
+ <br>
+-static inline pte_t pgd_pte(pgd_t pgd)<br>
++static inline pte_t p4d_pte(p4d_t p4d)<br>
+ {<br>
+-	return __pte(pgd_val(pgd));<br>
++	return __pte(p4d_val(p4d));<br>
+ }<br>
+ <br>
+-static inline pgd_t pte_pgd(pte_t pte)<br>
++static inline p4d_t pte_p4d(pte_t pte)<br>
+ {<br>
+-	return __pgd(pte_val(pte));<br>
++	return __p4d(pte_val(pte));<br>
+ }<br>
+-extern struct page *pgd_page(pgd_t pgd);<br>
++extern struct page *p4d_page(p4d_t p4d);<br>
+ <br>
+ #endif /* !__ASSEMBLY__ */<br>
+ <br>
+-#define pud_offset(pgdp, addr)	\<br>
+-  (((pud_t *) pgd_page_vaddr(*(pgdp))) + \<br>
++#define pud_offset(p4dp, addr)	\<br>
++  (((pud_t *) p4d_page_vaddr(*(p4dp))) + \<br>
+     (((addr) >> PUD_SHIFT) & (PTRS_PER_PUD - 1)))<br>
+ <br>
+ #define pud_ERROR(e) \<br>
+diff --git a/arch/powerpc/include/asm/nohash/64/pgtable.h b/arch/powerpc/include/asm/nohash/64/pgtable.h<br>
+index 9a33b8bd842d..b360f262b9c6 100644<br>
+--- a/arch/powerpc/include/asm/nohash/64/pgtable.h<br>
++++ b/arch/powerpc/include/asm/nohash/64/pgtable.h<br>
+@@ -175,11 +175,11 @@ static inline pud_t pte_pud(pte_t pte)<br>
+ 	return __pud(pte_val(pte));<br>
+ }<br>
+ #define pud_write(pud)		pte_write(pud_pte(pud))<br>
+-#define pgd_write(pgd)		pte_write(pgd_pte(pgd))<br>
++#define p4d_write(pgd)		pte_write(p4d_pte(p4d))<br>
+ <br>
+-static inline void pgd_set(pgd_t *pgdp, unsigned long val)<br>
++static inline void p4d_set(p4d_t *p4dp, unsigned long val)<br>
+ {<br>
+-	*pgdp = __pgd(val);<br>
++	*p4dp = __p4d(val);<br>
+ }<br>
+ <br>
+ /*<br>
+diff --git a/arch/powerpc/include/asm/pgtable.h b/arch/powerpc/include/asm/pgtable.h<br>
+index 8cc543ed114c..05205d7a7b4a 100644<br>
+--- a/arch/powerpc/include/asm/pgtable.h<br>
++++ b/arch/powerpc/include/asm/pgtable.h<br>
+@@ -139,9 +139,9 @@ static inline bool pud_is_leaf(pud_t pud)<br>
+ }<br>
+ #endif<br>
+ <br>
+-#ifndef pgd_is_leaf<br>
+-#define pgd_is_leaf pgd_is_leaf<br>
+-static inline bool pgd_is_leaf(pgd_t pgd)<br>
++#ifndef p4d_is_leaf<br>
++#define p4d_is_leaf p4d_is_leaf<br>
++static inline bool p4d_is_leaf(p4d_t p4d)<br>
+ {<br>
+ 	return false;<br>
+ }<br>
+diff --git a/arch/powerpc/kvm/book3s_64_mmu_radix.c b/arch/powerpc/kvm/book3s_64_mmu_radix.c<br>
+index 803940d79b73..beb694285100 100644<br>
+--- a/arch/powerpc/kvm/book3s_64_mmu_radix.c<br>
++++ b/arch/powerpc/kvm/book3s_64_mmu_radix.c<br>
+@@ -499,13 +499,14 @@ void kvmppc_free_pgtable_radix(struct kvm *kvm, pgd_t *pgd, unsigned int lpid)<br>
+ 	unsigned long ig;<br>
+ <br>
+ 	for (ig = 0; ig < PTRS_PER_PGD; ++ig, ++pgd) {<br>
++		p4d_t *p4d = p4d_offset(pgd, 0);<br>
+ 		pud_t *pud;<br>
+ <br>
+-		if (!pgd_present(*pgd))<br>
++		if (!p4d_present(*p4d))<br>
+ 			continue;<br>
+-		pud = pud_offset(pgd, 0);<br>
++		pud = pud_offset(p4d, 0);<br>
+ 		kvmppc_unmap_free_pud(kvm, pud, lpid);<br>
+-		pgd_clear(pgd);<br>
++		p4d_clear(p4d);<br>
+ 	}<br>
+ }<br>
+ <br>
+@@ -566,6 +567,7 @@ int kvmppc_create_pte(struct kvm *kvm, pgd_t *pgtable, pte_t pte,<br>
+ 		      unsigned long *rmapp, struct rmap_nested **n_rmap)<br>
+ {<br>
+ 	pgd_t *pgd;<br>
++	p4d_t *p4d;<br>
+ 	pud_t *pud, *new_pud = NULL;<br>
+ 	pmd_t *pmd, *new_pmd = NULL;<br>
+ 	pte_t *ptep, *new_ptep = NULL;<br>
+@@ -573,9 +575,11 @@ int kvmppc_create_pte(struct kvm *kvm, pgd_t *pgtable, pte_t pte,<br>
+ <br>
+ 	/* Traverse the guest's 2nd-level tree, allocate new levels needed */<br>
+ 	pgd = pgtable + pgd_index(gpa);<br>
++	p4d = p4d_offset(pgd, gpa);<br>
++<br>
+ 	pud = NULL;<br>
+-	if (pgd_present(*pgd))<br>
+-		pud = pud_offset(pgd, gpa);<br>
++	if (p4d_present(*p4d))<br>
++		pud = pud_offset(p4d, gpa);<br>
+ 	else<br>
+ 		new_pud = pud_alloc_one(kvm->mm, gpa);<br>
+ <br>
+@@ -596,13 +600,13 @@ int kvmppc_create_pte(struct kvm *kvm, pgd_t *pgtable, pte_t pte,<br>
+ <br>
+ 	/* Now traverse again under the lock and change the tree */<br>
+ 	ret = -ENOMEM;<br>
+-	if (pgd_none(*pgd)) {<br>
++	if (p4d_none(*p4d)) {<br>
+ 		if (!new_pud)<br>
+ 			goto out_unlock;<br>
+-		pgd_populate(kvm->mm, pgd, new_pud);<br>
++		p4d_populate(kvm->mm, p4d, new_pud);<br>
+ 		new_pud = NULL;<br>
+ 	}<br>
+-	pud = pud_offset(pgd, gpa);<br>
++	pud = pud_offset(p4d, gpa);<br>
+ 	if (pud_is_leaf(*pud)) {<br>
+ 		unsigned long hgpa = gpa & PUD_MASK;<br>
+ <br>
+@@ -1220,6 +1224,7 @@ static ssize_t debugfs_radix_read(struct file *file, char __user *buf,<br>
+ 	pgd_t *pgt;<br>
+ 	struct kvm_nested_guest *nested;<br>
+ 	pgd_t pgd, *pgdp;<br>
++	p4d_t p4d, *p4dp;<br>
+ 	pud_t pud, *pudp;<br>
+ 	pmd_t pmd, *pmdp;<br>
+ 	pte_t *ptep;<br>
+@@ -1292,13 +1297,14 @@ static ssize_t debugfs_radix_read(struct file *file, char __user *buf,<br>
+ 		}<br>
+ <br>
+ 		pgdp = pgt + pgd_index(gpa);<br>
+-		pgd = READ_ONCE(*pgdp);<br>
+-		if (!(pgd_val(pgd) & _PAGE_PRESENT)) {<br>
+-			gpa = (gpa & PGDIR_MASK) + PGDIR_SIZE;<br>
++		p4dp = p4d_offset(pgdp, gpa);<br>
++		p4d = READ_ONCE(*p4dp);<br>
++		if (!(p4d_val(p4d) & _PAGE_PRESENT)) {<br>
++			gpa = (gpa & P4D_MASK) + P4D_SIZE;<br>
+ 			continue;<br>
+ 		}<br>
+ <br>
+-		pudp = pud_offset(&pgd, gpa);<br>
++		pudp = pud_offset(&p4d, gpa);<br>
+ 		pud = READ_ONCE(*pudp);<br>
+ 		if (!(pud_val(pud) & _PAGE_PRESENT)) {<br>
+ 			gpa = (gpa & PUD_MASK) + PUD_SIZE;<br>
+diff --git a/arch/powerpc/lib/code-patching.c b/arch/powerpc/lib/code-patching.c<br>
+index 3345f039a876..7a59f6863cec 100644<br>
+--- a/arch/powerpc/lib/code-patching.c<br>
++++ b/arch/powerpc/lib/code-patching.c<br>
+@@ -107,13 +107,18 @@ static inline int unmap_patch_area(unsigned long addr)<br>
+ 	pte_t *ptep;<br>
+ 	pmd_t *pmdp;<br>
+ 	pud_t *pudp;<br>
++	p4d_t *p4dp;<br>
+ 	pgd_t *pgdp;<br>
+ <br>
+ 	pgdp = pgd_offset_k(addr);<br>
+ 	if (unlikely(!pgdp))<br>
+ 		return -EINVAL;<br>
+ <br>
+-	pudp = pud_offset(pgdp, addr);<br>
++	p4dp = p4d_offset(pgdp, addr);<br>
++	if (unlikely(!p4dp))<br>
++		return -EINVAL;<br>
++<br>
++	pudp = pud_offset(p4dp, addr);<br>
+ 	if (unlikely(!pudp))<br>
+ 		return -EINVAL;<br>
+ <br>
+diff --git a/arch/powerpc/mm/book3s32/mmu.c b/arch/powerpc/mm/book3s32/mmu.c<br>
+index f888cbb109b9..edef17c97206 100644<br>
+--- a/arch/powerpc/mm/book3s32/mmu.c<br>
++++ b/arch/powerpc/mm/book3s32/mmu.c<br>
+@@ -312,7 +312,7 @@ void hash_preload(struct mm_struct *mm, unsigned long ea)<br>
+ <br>
+ 	if (!Hash)<br>
+ 		return;<br>
+-	pmd = pmd_offset(pud_offset(pgd_offset(mm, ea), ea), ea);<br>
++	pmd = pmd_offset(pud_offset(p4d_offset(pgd_offset(mm, ea), ea), ea), ea);<br>
+ 	if (!pmd_none(*pmd))<br>
+ 		add_hash_page(mm->context.id, ea, pmd_val(*pmd));<br>
+ }<br>
+diff --git a/arch/powerpc/mm/book3s32/tlb.c b/arch/powerpc/mm/book3s32/tlb.c<br>
+index 2fcd321040ff..175bc33b41b7 100644<br>
+--- a/arch/powerpc/mm/book3s32/tlb.c<br>
++++ b/arch/powerpc/mm/book3s32/tlb.c<br>
+@@ -87,7 +87,7 @@ static void flush_range(struct mm_struct *mm, unsigned long start,<br>
+ 	if (start >= end)<br>
+ 		return;<br>
+ 	end = (end - 1) | ~PAGE_MASK;<br>
+-	pmd = pmd_offset(pud_offset(pgd_offset(mm, start), start), start);<br>
++	pmd = pmd_offset(pud_offset(p4d_offset(pgd_offset(mm, start), start), start), start);<br>
+ 	for (;;) {<br>
+ 		pmd_end = ((start + PGDIR_SIZE) & PGDIR_MASK) - 1;<br>
+ 		if (pmd_end > end)<br>
+@@ -145,7 +145,7 @@ void flush_tlb_page(struct vm_area_struct *vma, unsigned long vmaddr)<br>
+ 		return;<br>
+ 	}<br>
+ 	mm = (vmaddr < TASK_SIZE)? vma->vm_mm: &init_mm;<br>
+-	pmd = pmd_offset(pud_offset(pgd_offset(mm, vmaddr), vmaddr), vmaddr);<br>
++	pmd = pmd_offset(pud_offset(p4d_offset(pgd_offset(mm, vmaddr), vmaddr), vmaddr), vmaddr);<br>
+ 	if (!pmd_none(*pmd))<br>
+ 		flush_hash_pages(mm->context.id, vmaddr, pmd_val(*pmd), 1);<br>
+ }<br>
+diff --git a/arch/powerpc/mm/book3s64/hash_pgtable.c b/arch/powerpc/mm/book3s64/hash_pgtable.c<br>
+index 64733b9cb20a..9cd15937e88a 100644<br>
+--- a/arch/powerpc/mm/book3s64/hash_pgtable.c<br>
++++ b/arch/powerpc/mm/book3s64/hash_pgtable.c<br>
+@@ -148,6 +148,7 @@ void hash__vmemmap_remove_mapping(unsigned long start,<br>
+ int hash__map_kernel_page(unsigned long ea, unsigned long pa, pgprot_t prot)<br>
+ {<br>
+ 	pgd_t *pgdp;<br>
++	p4d_t *p4dp;<br>
+ 	pud_t *pudp;<br>
+ 	pmd_t *pmdp;<br>
+ 	pte_t *ptep;<br>
+@@ -155,7 +156,8 @@ int hash__map_kernel_page(unsigned long ea, unsigned long pa, pgprot_t prot)<br>
+ 	BUILD_BUG_ON(TASK_SIZE_USER64 > H_PGTABLE_RANGE);<br>
+ 	if (slab_is_available()) {<br>
+ 		pgdp = pgd_offset_k(ea);<br>
+-		pudp = pud_alloc(&init_mm, pgdp, ea);<br>
++		p4dp = p4d_offset(pgdp, ea);<br>
++		pudp = pud_alloc(&init_mm, p4dp, ea);<br>
+ 		if (!pudp)<br>
+ 			return -ENOMEM;<br>
+ 		pmdp = pmd_alloc(&init_mm, pudp, ea);<br>
+diff --git a/arch/powerpc/mm/book3s64/radix_pgtable.c b/arch/powerpc/mm/book3s64/radix_pgtable.c<br>
+index dd1bea45325c..fc3d0b0460b0 100644<br>
+--- a/arch/powerpc/mm/book3s64/radix_pgtable.c<br>
++++ b/arch/powerpc/mm/book3s64/radix_pgtable.c<br>
+@@ -64,17 +64,19 @@ static int early_map_kernel_page(unsigned long ea, unsigned long pa,<br>
+ {<br>
+ 	unsigned long pfn = pa >> PAGE_SHIFT;<br>
+ 	pgd_t *pgdp;<br>
++	p4d_t *p4dp;<br>
+ 	pud_t *pudp;<br>
+ 	pmd_t *pmdp;<br>
+ 	pte_t *ptep;<br>
+ <br>
+ 	pgdp = pgd_offset_k(ea);<br>
+-	if (pgd_none(*pgdp)) {<br>
++	p4dp = p4d_offset(pgdp, ea);<br>
++	if (p4d_none(*p4dp)) {<br>
+ 		pudp = early_alloc_pgtable(PUD_TABLE_SIZE, nid,<br>
+ 						region_start, region_end);<br>
+-		pgd_populate(&init_mm, pgdp, pudp);<br>
++		p4d_populate(&init_mm, p4dp, pudp);<br>
+ 	}<br>
+-	pudp = pud_offset(pgdp, ea);<br>
++	pudp = pud_offset(p4dp, ea);<br>
+ 	if (map_page_size == PUD_SIZE) {<br>
+ 		ptep = (pte_t *)pudp;<br>
+ 		goto set_the_pte;<br>
+@@ -114,6 +116,7 @@ static int __map_kernel_page(unsigned long ea, unsigned long pa,<br>
+ {<br>
+ 	unsigned long pfn = pa >> PAGE_SHIFT;<br>
+ 	pgd_t *pgdp;<br>
++	p4d_t *p4dp;<br>
+ 	pud_t *pudp;<br>
+ 	pmd_t *pmdp;<br>
+ 	pte_t *ptep;<br>
+@@ -136,7 +139,8 @@ static int __map_kernel_page(unsigned long ea, unsigned long pa,<br>
+ 	 * boot.<br>
+ 	 */<br>
+ 	pgdp = pgd_offset_k(ea);<br>
+-	pudp = pud_alloc(&init_mm, pgdp, ea);<br>
++	p4dp = p4d_offset(pgdp, ea);<br>
++	pudp = pud_alloc(&init_mm, p4dp, ea);<br>
+ 	if (!pudp)<br>
+ 		return -ENOMEM;<br>
+ 	if (map_page_size == PUD_SIZE) {<br>
+@@ -173,6 +177,7 @@ void radix__change_memory_range(unsigned long start, unsigned long end,<br>
+ {<br>
+ 	unsigned long idx;<br>
+ 	pgd_t *pgdp;<br>
++	p4d_t *p4dp;<br>
+ 	pud_t *pudp;<br>
+ 	pmd_t *pmdp;<br>
+ 	pte_t *ptep;<br>
+@@ -185,7 +190,8 @@ void radix__change_memory_range(unsigned long start, unsigned long end,<br>
+ <br>
+ 	for (idx = start; idx < end; idx += PAGE_SIZE) {<br>
+ 		pgdp = pgd_offset_k(idx);<br>
+-		pudp = pud_alloc(&init_mm, pgdp, idx);<br>
++		p4dp = p4d_offset(pgdp, idx);<br>
++		pudp = pud_alloc(&init_mm, p4dp, idx);<br>
+ 		if (!pudp)<br>
+ 			continue;<br>
+ 		if (pud_is_leaf(*pudp)) {<br>
+@@ -847,6 +853,7 @@ static void __meminit remove_pagetable(unsigned long start, unsigned long end)<br>
+ 	unsigned long addr, next;<br>
+ 	pud_t *pud_base;<br>
+ 	pgd_t *pgd;<br>
++	p4d_t *p4d;<br>
+ <br>
+ 	spin_lock(&init_mm.page_table_lock);<br>
+ <br>
+@@ -854,15 +861,16 @@ static void __meminit remove_pagetable(unsigned long start, unsigned long end)<br>
+ 		next = pgd_addr_end(addr, end);<br>
+ <br>
+ 		pgd = pgd_offset_k(addr);<br>
+-		if (!pgd_present(*pgd))<br>
++		p4d = p4d_offset(pgd, addr);<br>
++		if (!p4d_present(*p4d))<br>
+ 			continue;<br>
+ <br>
+-		if (pgd_is_leaf(*pgd)) {<br>
+-			split_kernel_mapping(addr, end, PGDIR_SIZE, (pte_t *)pgd);<br>
++		if (p4d_is_leaf(*p4d)) {<br>
++			split_kernel_mapping(addr, end, P4D_SIZE, (pte_t *)p4d);<br>
+ 			continue;<br>
+ 		}<br>
+ <br>
+-		pud_base = (pud_t *)pgd_page_vaddr(*pgd);<br>
++		pud_base = (pud_t *)p4d_page_vaddr(*p4d);<br>
+ 		remove_pud_table(pud_base, addr, next);<br>
+ 	}<br>
+ <br>
+diff --git a/arch/powerpc/mm/book3s64/subpage_prot.c b/arch/powerpc/mm/book3s64/subpage_prot.c<br>
+index 2ef24a53f4c9..25a0c044bd93 100644<br>
+--- a/arch/powerpc/mm/book3s64/subpage_prot.c<br>
++++ b/arch/powerpc/mm/book3s64/subpage_prot.c<br>
+@@ -54,15 +54,17 @@ static void hpte_flush_range(struct mm_struct *mm, unsigned long addr,<br>
+ 			     int npages)<br>
+ {<br>
+ 	pgd_t *pgd;<br>
++	p4d_t *p4d;<br>
+ 	pud_t *pud;<br>
+ 	pmd_t *pmd;<br>
+ 	pte_t *pte;<br>
+ 	spinlock_t *ptl;<br>
+ <br>
+ 	pgd = pgd_offset(mm, addr);<br>
+-	if (pgd_none(*pgd))<br>
++	p4d = p4d_offset(pgd, addr);<br>
++	if (p4d_none(*p4d))<br>
+ 		return;<br>
+-	pud = pud_offset(pgd, addr);<br>
++	pud = pud_offset(p4d, addr);<br>
+ 	if (pud_none(*pud))<br>
+ 		return;<br>
+ 	pmd = pmd_offset(pud, addr);<br>
+diff --git a/arch/powerpc/mm/hugetlbpage.c b/arch/powerpc/mm/hugetlbpage.c<br>
+index 33b3461d91e8..54f5994d4cbb 100644<br>
+--- a/arch/powerpc/mm/hugetlbpage.c<br>
++++ b/arch/powerpc/mm/hugetlbpage.c<br>
+@@ -119,6 +119,7 @@ static int __hugepte_alloc(struct mm_struct *mm, hugepd_t *hpdp,<br>
+ pte_t *huge_pte_alloc(struct mm_struct *mm, unsigned long addr, unsigned long sz)<br>
+ {<br>
+ 	pgd_t *pg;<br>
++	p4d_t *p4;<br>
+ 	pud_t *pu;<br>
+ 	pmd_t *pm;<br>
+ 	hugepd_t *hpdp = NULL;<br>
+@@ -128,20 +129,21 @@ pte_t *huge_pte_alloc(struct mm_struct *mm, unsigned long addr, unsigned long sz<br>
+ <br>
+ 	addr &= ~(sz-1);<br>
+ 	pg = pgd_offset(mm, addr);<br>
++	p4 = p4d_offset(pg, addr);<br>
+ <br>
+ #ifdef CONFIG_PPC_BOOK3S_64<br>
+ 	if (pshift == PGDIR_SHIFT)<br>
+ 		/* 16GB huge page */<br>
+-		return (pte_t *) pg;<br>
++		return (pte_t *) p4;<br>
+ 	else if (pshift > PUD_SHIFT) {<br>
+ 		/*<br>
+ 		 * We need to use hugepd table<br>
+ 		 */<br>
+ 		ptl = &mm->page_table_lock;<br>
+-		hpdp = (hugepd_t *)pg;<br>
++		hpdp = (hugepd_t *)p4;<br>
+ 	} else {<br>
+ 		pdshift = PUD_SHIFT;<br>
+-		pu = pud_alloc(mm, pg, addr);<br>
++		pu = pud_alloc(mm, p4, addr);<br>
+ 		if (!pu)<br>
+ 			return NULL;<br>
+ 		if (pshift == PUD_SHIFT)<br>
+@@ -166,10 +168,10 @@ pte_t *huge_pte_alloc(struct mm_struct *mm, unsigned long addr, unsigned long sz<br>
+ #else<br>
+ 	if (pshift >= PGDIR_SHIFT) {<br>
+ 		ptl = &mm->page_table_lock;<br>
+-		hpdp = (hugepd_t *)pg;<br>
++		hpdp = (hugepd_t *)p4;<br>
+ 	} else {<br>
+ 		pdshift = PUD_SHIFT;<br>
+-		pu = pud_alloc(mm, pg, addr);<br>
++		pu = pud_alloc(mm, p4, addr);<br>
+ 		if (!pu)<br>
+ 			return NULL;<br>
+ 		if (pshift >= PUD_SHIFT) {<br>
+@@ -390,7 +392,7 @@ static void hugetlb_free_pmd_range(struct mmu_gather *tlb, pud_t *pud,<br>
+ 	mm_dec_nr_pmds(tlb->mm);<br>
+ }<br>
+ <br>
+-static void hugetlb_free_pud_range(struct mmu_gather *tlb, pgd_t *pgd,<br>
++static void hugetlb_free_pud_range(struct mmu_gather *tlb, p4d_t *p4d,<br>
+ 				   unsigned long addr, unsigned long end,<br>
+ 				   unsigned long floor, unsigned long ceiling)<br>
+ {<br>
+@@ -400,7 +402,7 @@ static void hugetlb_free_pud_range(struct mmu_gather *tlb, pgd_t *pgd,<br>
+ <br>
+ 	start = addr;<br>
+ 	do {<br>
+-		pud = pud_offset(pgd, addr);<br>
++		pud = pud_offset(p4d, addr);<br>
+ 		next = pud_addr_end(addr, end);<br>
+ 		if (!is_hugepd(__hugepd(pud_val(*pud)))) {<br>
+ 			if (pud_none_or_clear_bad(pud))<br>
+@@ -435,8 +437,8 @@ static void hugetlb_free_pud_range(struct mmu_gather *tlb, pgd_t *pgd,<br>
+ 	if (end - 1 > ceiling - 1)<br>
+ 		return;<br>
+ <br>
+-	pud = pud_offset(pgd, start);<br>
+-	pgd_clear(pgd);<br>
++	pud = pud_offset(p4d, start);<br>
++	p4d_clear(p4d);<br>
+ 	pud_free_tlb(tlb, pud, start);<br>
+ 	mm_dec_nr_puds(tlb->mm);<br>
+ }<br>
+@@ -449,6 +451,7 @@ void hugetlb_free_pgd_range(struct mmu_gather *tlb,<br>
+ 			    unsigned long floor, unsigned long ceiling)<br>
+ {<br>
+ 	pgd_t *pgd;<br>
++	p4d_t *p4d;<br>
+ 	unsigned long next;<br>
+ <br>
+ 	/*<br>
+@@ -471,10 +474,11 @@ void hugetlb_free_pgd_range(struct mmu_gather *tlb,<br>
+ 	do {<br>
+ 		next = pgd_addr_end(addr, end);<br>
+ 		pgd = pgd_offset(tlb->mm, addr);<br>
++		p4d = p4d_offset(pgd, addr);<br>
+ 		if (!is_hugepd(__hugepd(pgd_val(*pgd)))) {<br>
+-			if (pgd_none_or_clear_bad(pgd))<br>
++			if (p4d_none_or_clear_bad(p4d))<br>
+ 				continue;<br>
+-			hugetlb_free_pud_range(tlb, pgd, addr, next, floor, ceiling);<br>
++			hugetlb_free_pud_range(tlb, p4d, addr, next, floor, ceiling);<br>
+ 		} else {<br>
+ 			unsigned long more;<br>
+ 			/*<br>
+@@ -487,7 +491,7 @@ void hugetlb_free_pgd_range(struct mmu_gather *tlb,<br>
+ 			if (more > next)<br>
+ 				next = more;<br>
+ <br>
+-			free_hugepd_range(tlb, (hugepd_t *)pgd, PGDIR_SHIFT,<br>
++			free_hugepd_range(tlb, (hugepd_t *)p4d, PGDIR_SHIFT,<br>
+ 					  addr, next, floor, ceiling);<br>
+ 		}<br>
+ 	} while (addr = next, addr != end);<br>
+diff --git a/arch/powerpc/mm/kasan/kasan_init_32.c b/arch/powerpc/mm/kasan/kasan_init_32.c<br>
+index db5664dde5ff..88e2e16380b5 100644<br>
+--- a/arch/powerpc/mm/kasan/kasan_init_32.c<br>
++++ b/arch/powerpc/mm/kasan/kasan_init_32.c<br>
+@@ -36,7 +36,7 @@ static int __init kasan_init_shadow_page_tables(unsigned long k_start, unsigned<br>
+ 	unsigned long k_cur, k_next;<br>
+ 	pte_t *new = NULL;<br>
+ <br>
+-	pmd = pmd_offset(pud_offset(pgd_offset_k(k_start), k_start), k_start);<br>
++	pmd = pmd_offset(pud_offset(p4d_offset(pgd_offset_k(k_start), k_start), k_start), k_start);<br>
+ <br>
+ 	for (k_cur = k_start; k_cur != k_end; k_cur = k_next, pmd++) {<br>
+ 		k_next = pgd_addr_end(k_cur, k_end);<br>
+@@ -78,7 +78,7 @@ static int __init kasan_init_region(void *start, size_t size)<br>
+ 	block = memblock_alloc(k_end - k_start, PAGE_SIZE);<br>
+ <br>
+ 	for (k_cur = k_start & PAGE_MASK; k_cur < k_end; k_cur += PAGE_SIZE) {<br>
+-		pmd_t *pmd = pmd_offset(pud_offset(pgd_offset_k(k_cur), k_cur), k_cur);<br>
++		pmd_t *pmd = pmd_offset(pud_offset(p4d_offset(pgd_offset_k(k_cur), k_cur), k_cur), k_cur);<br>
+ 		void *va = block + k_cur - k_start;<br>
+ 		pte_t pte = pfn_pte(PHYS_PFN(__pa(va)), PAGE_KERNEL);<br>
+ <br>
+@@ -102,7 +102,7 @@ static void __init kasan_remap_early_shadow_ro(void)<br>
+ 	kasan_populate_pte(kasan_early_shadow_pte, prot);<br>
+ <br>
+ 	for (k_cur = k_start & PAGE_MASK; k_cur < k_end; k_cur += PAGE_SIZE) {<br>
+-		pmd_t *pmd = pmd_offset(pud_offset(pgd_offset_k(k_cur), k_cur), k_cur);<br>
++		pmd_t *pmd = pmd_offset(pud_offset(p4d_offset(pgd_offset_k(k_cur), k_cur), k_cur), k_cur);<br>
+ 		pte_t *ptep = pte_offset_kernel(pmd, k_cur);<br>
+ <br>
+ 		if ((pte_val(*ptep) & PTE_RPN_MASK) != pa)<br>
+@@ -201,7 +201,7 @@ void __init kasan_early_init(void)<br>
+ 	unsigned long addr = KASAN_SHADOW_START;<br>
+ 	unsigned long end = KASAN_SHADOW_END;<br>
+ 	unsigned long next;<br>
+-	pmd_t *pmd = pmd_offset(pud_offset(pgd_offset_k(addr), addr), addr);<br>
++	pmd_t *pmd = pmd_offset(pud_offset(p4d_offset(pgd_offset_k(addr), addr), addr), addr);<br>
+ <br>
+ 	BUILD_BUG_ON(KASAN_SHADOW_START & ~PGDIR_MASK);<br>
+ <br>
+diff --git a/arch/powerpc/mm/mem.c b/arch/powerpc/mm/mem.c<br>
+index ef7b1119b2e2..8262b384dcf3 100644<br>
+--- a/arch/powerpc/mm/mem.c<br>
++++ b/arch/powerpc/mm/mem.c<br>
+@@ -69,8 +69,8 @@ EXPORT_SYMBOL(kmap_prot);<br>
+ <br>
+ static inline pte_t *virt_to_kpte(unsigned long vaddr)<br>
+ {<br>
+-	return pte_offset_kernel(pmd_offset(pud_offset(pgd_offset_k(vaddr),<br>
+-			vaddr), vaddr), vaddr);<br>
++	return pte_offset_kernel(pmd_offset(pud_offset(p4d_offset(pgd_offset_k(vaddr),<br>
++			vaddr), vaddr), vaddr), vaddr);<br>
+ }<br>
+ #endif<br>
+ <br>
+diff --git a/arch/powerpc/mm/nohash/40x.c b/arch/powerpc/mm/nohash/40x.c<br>
+index f348104eb461..7aaf7155e350 100644<br>
+--- a/arch/powerpc/mm/nohash/40x.c<br>
++++ b/arch/powerpc/mm/nohash/40x.c<br>
+@@ -104,7 +104,7 @@ unsigned long __init mmu_mapin_ram(unsigned long base, unsigned long top)<br>
+ 		pmd_t *pmdp;<br>
+ 		unsigned long val = p | _PMD_SIZE_16M | _PAGE_EXEC | _PAGE_HWWRITE;<br>
+ <br>
+-		pmdp = pmd_offset(pud_offset(pgd_offset_k(v), v), v);<br>
++		pmdp = pmd_offset(pud_offset(p4d_offset(pgd_offset_k(v), v), v), v);<br>
+ 		*pmdp++ = __pmd(val);<br>
+ 		*pmdp++ = __pmd(val);<br>
+ 		*pmdp++ = __pmd(val);<br>
+@@ -119,7 +119,7 @@ unsigned long __init mmu_mapin_ram(unsigned long base, unsigned long top)<br>
+ 		pmd_t *pmdp;<br>
+ 		unsigned long val = p | _PMD_SIZE_4M | _PAGE_EXEC | _PAGE_HWWRITE;<br>
+ <br>
+-		pmdp = pmd_offset(pud_offset(pgd_offset_k(v), v), v);<br>
++		pmdp = pmd_offset(pud_offset(p4d_offset(pgd_offset_k(v), v), v), v);<br>
+ 		*pmdp = __pmd(val);<br>
+ <br>
+ 		v += LARGE_PAGE_SIZE_4M;<br>
+diff --git a/arch/powerpc/mm/nohash/book3e_pgtable.c b/arch/powerpc/mm/nohash/book3e_pgtable.c<br>
+index 4637fdd469cf..77884e24281d 100644<br>
+--- a/arch/powerpc/mm/nohash/book3e_pgtable.c<br>
++++ b/arch/powerpc/mm/nohash/book3e_pgtable.c<br>
+@@ -73,6 +73,7 @@ static void __init *early_alloc_pgtable(unsigned long size)<br>
+ int __ref map_kernel_page(unsigned long ea, unsigned long pa, pgprot_t prot)<br>
+ {<br>
+ 	pgd_t *pgdp;<br>
++	p4d_t *p4dp;<br>
+ 	pud_t *pudp;<br>
+ 	pmd_t *pmdp;<br>
+ 	pte_t *ptep;<br>
+@@ -80,7 +81,8 @@ int __ref map_kernel_page(unsigned long ea, unsigned long pa, pgprot_t prot)<br>
+ 	BUILD_BUG_ON(TASK_SIZE_USER64 > PGTABLE_RANGE);<br>
+ 	if (slab_is_available()) {<br>
+ 		pgdp = pgd_offset_k(ea);<br>
+-		pudp = pud_alloc(&init_mm, pgdp, ea);<br>
++		p4dp = p4d_offset(pgdp, ea);<br>
++		pudp = pud_alloc(&init_mm, p4dp, ea);<br>
+ 		if (!pudp)<br>
+ 			return -ENOMEM;<br>
+ 		pmdp = pmd_alloc(&init_mm, pudp, ea);<br>
+@@ -91,13 +93,12 @@ int __ref map_kernel_page(unsigned long ea, unsigned long pa, pgprot_t prot)<br>
+ 			return -ENOMEM;<br>
+ 	} else {<br>
+ 		pgdp = pgd_offset_k(ea);<br>
+-#ifndef __PAGETABLE_PUD_FOLDED<br>
+-		if (pgd_none(*pgdp)) {<br>
+-			pudp = early_alloc_pgtable(PUD_TABLE_SIZE);<br>
+-			pgd_populate(&init_mm, pgdp, pudp);<br>
++		p4dp = p4d_offset(pgdp, ea);<br>
++		if (p4d_none(*p4dp)) {<br>
++			pmdp = early_alloc_pgtable(PMD_TABLE_SIZE);<br>
++			p4d_populate(&init_mm, p4dp, pmdp);<br>
+ 		}<br>
+-#endif /* !__PAGETABLE_PUD_FOLDED */<br>
+-		pudp = pud_offset(pgdp, ea);<br>
++		pudp = pud_offset(p4dp, ea);<br>
+ 		if (pud_none(*pudp)) {<br>
+ 			pmdp = early_alloc_pgtable(PMD_TABLE_SIZE);<br>
+ 			pud_populate(&init_mm, pudp, pmdp);<br>
+diff --git a/arch/powerpc/mm/pgtable.c b/arch/powerpc/mm/pgtable.c<br>
+index e3759b69f81b..c2499271f6c1 100644<br>
+--- a/arch/powerpc/mm/pgtable.c<br>
++++ b/arch/powerpc/mm/pgtable.c<br>
+@@ -265,6 +265,7 @@ int huge_ptep_set_access_flags(struct vm_area_struct *vma,<br>
+ void assert_pte_locked(struct mm_struct *mm, unsigned long addr)<br>
+ {<br>
+ 	pgd_t *pgd;<br>
++	p4d_t *p4d;<br>
+ 	pud_t *pud;<br>
+ 	pmd_t *pmd;<br>
+ <br>
+@@ -272,7 +273,9 @@ void assert_pte_locked(struct mm_struct *mm, unsigned long addr)<br>
+ 		return;<br>
+ 	pgd = mm->pgd + pgd_index(addr);<br>
+ 	BUG_ON(pgd_none(*pgd));<br>
+-	pud = pud_offset(pgd, addr);<br>
++	p4d = p4d_offset(pgd, addr);<br>
++	BUG_ON(p4d_none(*p4d));<br>
++	pud = pud_offset(p4d, addr);<br>
+ 	BUG_ON(pud_none(*pud));<br>
+ 	pmd = pmd_offset(pud, addr);<br>
+ 	/*<br>
+@@ -312,12 +315,13 @@ EXPORT_SYMBOL_GPL(vmalloc_to_phys);<br>
+ pte_t *__find_linux_pte(pgd_t *pgdir, unsigned long ea,<br>
+ 			bool *is_thp, unsigned *hpage_shift)<br>
+ {<br>
+-	pgd_t pgd, *pgdp;<br>
++	pgd_t *pgdp;<br>
++	p4d_t p4d, *p4dp;<br>
+ 	pud_t pud, *pudp;<br>
+ 	pmd_t pmd, *pmdp;<br>
+ 	pte_t *ret_pte;<br>
+ 	hugepd_t *hpdp = NULL;<br>
+-	unsigned pdshift = PGDIR_SHIFT;<br>
++	unsigned pdshift;<br>
+ <br>
+ 	if (hpage_shift)<br>
+ 		*hpage_shift = 0;<br>
+@@ -325,24 +329,28 @@ pte_t *__find_linux_pte(pgd_t *pgdir, unsigned long ea,<br>
+ 	if (is_thp)<br>
+ 		*is_thp = false;<br>
+ <br>
+-	pgdp = pgdir + pgd_index(ea);<br>
+-	pgd  = READ_ONCE(*pgdp);<br>
+ 	/*<br>
+ 	 * Always operate on the local stack value. This make sure the<br>
+ 	 * value don't get updated by a parallel THP split/collapse,<br>
+ 	 * page fault or a page unmap. The return pte_t * is still not<br>
+ 	 * stable. So should be checked there for above conditions.<br>
++	 * Top level is an exception because it is folded into p4d.<br>
+ 	 */<br>
+-	if (pgd_none(pgd))<br>
++	pgdp = pgdir + pgd_index(ea);<br>
++	p4dp = p4d_offset(pgdp, ea);<br>
++	p4d  = READ_ONCE(*p4dp);<br>
++	pdshift = P4D_SHIFT;<br>
++<br>
++	if (p4d_none(p4d))<br>
+ 		return NULL;<br>
+ <br>
+-	if (pgd_is_leaf(pgd)) {<br>
+-		ret_pte = (pte_t *)pgdp;<br>
++	if (p4d_is_leaf(p4d)) {<br>
++		ret_pte = (pte_t *)p4dp;<br>
+ 		goto out;<br>
+ 	}<br>
+ <br>
+-	if (is_hugepd(__hugepd(pgd_val(pgd)))) {<br>
+-		hpdp = (hugepd_t *)&pgd;<br>
++	if (is_hugepd(__hugepd(p4d_val(p4d)))) {<br>
++		hpdp = (hugepd_t *)&p4d;<br>
+ 		goto out_huge;<br>
+ 	}<br>
+ <br>
+@@ -352,7 +360,7 @@ pte_t *__find_linux_pte(pgd_t *pgdir, unsigned long ea,<br>
+ 	 * irq disabled<br>
+ 	 */<br>
+ 	pdshift = PUD_SHIFT;<br>
+-	pudp = pud_offset(&pgd, ea);<br>
++	pudp = pud_offset(&p4d, ea);<br>
+ 	pud  = READ_ONCE(*pudp);<br>
+ <br>
+ 	if (pud_none(pud))<br>
+diff --git a/arch/powerpc/mm/pgtable_32.c b/arch/powerpc/mm/pgtable_32.c<br>
+index 5fb90edd865e..5774d4bc94d0 100644<br>
+--- a/arch/powerpc/mm/pgtable_32.c<br>
++++ b/arch/powerpc/mm/pgtable_32.c<br>
+@@ -63,7 +63,7 @@ int __ref map_kernel_page(unsigned long va, phys_addr_t pa, pgprot_t prot)<br>
+ 	int err = -ENOMEM;<br>
+ <br>
+ 	/* Use upper 10 bits of VA to index the first level map */<br>
+-	pd = pmd_offset(pud_offset(pgd_offset_k(va), va), va);<br>
++	pd = pmd_offset(pud_offset(p4d_offset(pgd_offset_k(va), va), va), va);<br>
+ 	/* Use middle 10 bits of VA to index the second-level map */<br>
+ 	if (likely(slab_is_available()))<br>
+ 		pg = pte_alloc_kernel(pd, va);<br>
+@@ -121,53 +121,24 @@ void __init mapin_ram(void)<br>
+ 	}<br>
+ }<br>
+ <br>
+-/* Scan the real Linux page tables and return a PTE pointer for<br>
+- * a virtual address in a context.<br>
+- * Returns true (1) if PTE was found, zero otherwise.  The pointer to<br>
+- * the PTE pointer is unmodified if PTE is not found.<br>
+- */<br>
+-static int<br>
+-get_pteptr(struct mm_struct *mm, unsigned long addr, pte_t **ptep, pmd_t **pmdp)<br>
+-{<br>
+-        pgd_t	*pgd;<br>
+-	pud_t	*pud;<br>
+-        pmd_t	*pmd;<br>
+-        pte_t	*pte;<br>
+-        int     retval = 0;<br>
+-<br>
+-        pgd = pgd_offset(mm, addr & PAGE_MASK);<br>
+-        if (pgd) {<br>
+-		pud = pud_offset(pgd, addr & PAGE_MASK);<br>
+-		if (pud && pud_present(*pud)) {<br>
+-			pmd = pmd_offset(pud, addr & PAGE_MASK);<br>
+-			if (pmd_present(*pmd)) {<br>
+-				pte = pte_offset_map(pmd, addr & PAGE_MASK);<br>
+-				if (pte) {<br>
+-					retval = 1;<br>
+-					*ptep = pte;<br>
+-					if (pmdp)<br>
+-						*pmdp = pmd;<br>
+-					/* XXX caller needs to do pte_unmap, yuck */<br>
+-				}<br>
+-			}<br>
+-		}<br>
+-        }<br>
+-        return(retval);<br>
+-}<br>
+-<br>
+ static int __change_page_attr_noflush(struct page *page, pgprot_t prot)<br>
+ {<br>
+ 	pte_t *kpte;<br>
+ 	pmd_t *kpmd;<br>
+-	unsigned long address;<br>
++	unsigned long address, va;<br>
+ <br>
+ 	BUG_ON(PageHighMem(page));<br>
+ 	address = (unsigned long)page_address(page);<br>
++	va = address & PAGE_MASK;<br>
+ <br>
+ 	if (v_block_mapped(address))<br>
+ 		return 0;<br>
+-	if (!get_pteptr(&init_mm, address, &kpte, &kpmd))<br>
++<br>
++	kpmd = pmd_offset(pud_offset(p4d_offset(pgd_offset_k(va), va), va), va);<br>
++	if (!pmd_present(*kpmd))<br>
+ 		return -EINVAL;<br>
++<br>
++	kpte = pte_offset_map(kpmd, va);<br>
+ 	__set_pte_at(&init_mm, address, kpte, mk_pte(page, prot), 0);<br>
+ 	pte_unmap(kpte);<br>
+ <br>
+diff --git a/arch/powerpc/mm/pgtable_64.c b/arch/powerpc/mm/pgtable_64.c<br>
+index e78832dce7bb..1f86a88fd4bb 100644<br>
+--- a/arch/powerpc/mm/pgtable_64.c<br>
++++ b/arch/powerpc/mm/pgtable_64.c<br>
+@@ -101,13 +101,13 @@ EXPORT_SYMBOL(__pte_frag_size_shift);<br>
+ <br>
+ #ifndef __PAGETABLE_PUD_FOLDED<br>
+ /* 4 level page table */<br>
+-struct page *pgd_page(pgd_t pgd)<br>
++struct page *p4d_page(p4d_t p4d)<br>
+ {<br>
+-	if (pgd_is_leaf(pgd)) {<br>
+-		VM_WARN_ON(!pgd_huge(pgd));<br>
+-		return pte_page(pgd_pte(pgd));<br>
++	if (p4d_is_leaf(p4d)) {<br>
++		VM_WARN_ON(!p4d_huge(p4d));<br>
++		return pte_page(p4d_pte(p4d));<br>
+ 	}<br>
+-	return virt_to_page(pgd_page_vaddr(pgd));<br>
++	return virt_to_page(p4d_page_vaddr(p4d));<br>
+ }<br>
+ #endif<br>
+ <br>
+diff --git a/arch/powerpc/mm/ptdump/hashpagetable.c b/arch/powerpc/mm/ptdump/hashpagetable.c<br>
+index a07278027c6f..ac360ad865a8 100644<br>
+--- a/arch/powerpc/mm/ptdump/hashpagetable.c<br>
++++ b/arch/powerpc/mm/ptdump/hashpagetable.c<br>
+@@ -417,9 +417,9 @@ static void walk_pmd(struct pg_state *st, pud_t *pud, unsigned long start)<br>
+ 	}<br>
+ }<br>
+ <br>
+-static void walk_pud(struct pg_state *st, pgd_t *pgd, unsigned long start)<br>
++static void walk_pud(struct pg_state *st, p4d_t *p4d, unsigned long start)<br>
+ {<br>
+-	pud_t *pud = pud_offset(pgd, 0);<br>
++	pud_t *pud = pud_offset(p4d, 0);<br>
+ 	unsigned long addr;<br>
+ 	unsigned int i;<br>
+ <br>
+@@ -431,6 +431,20 @@ static void walk_pud(struct pg_state *st, pgd_t *pgd, unsigned long start)<br>
+ 	}<br>
+ }<br>
+ <br>
++static void walk_p4d(struct pg_state *st, pgd_t *pgd, unsigned long start)<br>
++{<br>
++	p4d_t *p4d = p4d_offset(pgd, 0);<br>
++	unsigned long addr;<br>
++	unsigned int i;<br>
++<br>
++	for (i = 0; i < PTRS_PER_P4D; i++, p4d++) {<br>
++		addr = start + i * P4D_SIZE;<br>
++		if (!p4d_none(*p4d))<br>
++			/* p4d exists */<br>
++			walk_pud(st, p4d, addr);<br>
++	}<br>
++}<br>
++<br>
+ static void walk_pagetables(struct pg_state *st)<br>
+ {<br>
+ 	pgd_t *pgd = pgd_offset_k(0UL);<br>
+@@ -445,7 +459,7 @@ static void walk_pagetables(struct pg_state *st)<br>
+ 		addr = KERN_VIRT_START + i * PGDIR_SIZE;<br>
+ 		if (!pgd_none(*pgd))<br>
+ 			/* pgd exists */<br>
+-			walk_pud(st, pgd, addr);<br>
++			walk_p4d(st, pgd, addr);<br>
+ 	}<br>
+ }<br>
+ <br>
+diff --git a/arch/powerpc/mm/ptdump/ptdump.c b/arch/powerpc/mm/ptdump/ptdump.c<br>
+index 206156255247..9d6256b61df3 100644<br>
+--- a/arch/powerpc/mm/ptdump/ptdump.c<br>
++++ b/arch/powerpc/mm/ptdump/ptdump.c<br>
+@@ -277,9 +277,9 @@ static void walk_pmd(struct pg_state *st, pud_t *pud, unsigned long start)<br>
+ 	}<br>
+ }<br>
+ <br>
+-static void walk_pud(struct pg_state *st, pgd_t *pgd, unsigned long start)<br>
++static void walk_pud(struct pg_state *st, p4d_t *p4d, unsigned long start)<br>
+ {<br>
+-	pud_t *pud = pud_offset(pgd, 0);<br>
++	pud_t *pud = pud_offset(p4d, 0);<br>
+ 	unsigned long addr;<br>
+ 	unsigned int i;<br>
+ <br>
+@@ -304,11 +304,13 @@ static void walk_pagetables(struct pg_state *st)<br>
+ 	 * the hash pagetable.<br>
+ 	 */<br>
+ 	for (i = pgd_index(addr); i < PTRS_PER_PGD; i++, pgd++, addr += PGDIR_SIZE) {<br>
+-		if (!pgd_none(*pgd) && !pgd_is_leaf(*pgd))<br>
+-			/* pgd exists */<br>
+-			walk_pud(st, pgd, addr);<br>
++		p4d_t *p4d = p4d_offset(pgd, 0);<br>
++<br>
++		if (!p4d_none(*p4d) && !p4d_is_leaf(*p4d))<br>
++			/* p4d exists */<br>
++			walk_pud(st, p4d, addr);<br>
+ 		else<br>
+-			note_page(st, addr, 1, pgd_val(*pgd));<br>
++			note_page(st, addr, 1, p4d_val(*p4d));<br>
+ 	}<br>
+ }<br>
+ <br>
+diff --git a/arch/powerpc/xmon/xmon.c b/arch/powerpc/xmon/xmon.c<br>
+index 0ec9640335bb..3e29128c58cc 100644<br>
+--- a/arch/powerpc/xmon/xmon.c<br>
++++ b/arch/powerpc/xmon/xmon.c<br>
+@@ -3130,6 +3130,7 @@ static void show_pte(unsigned long addr)<br>
+ 	struct task_struct *tsk = NULL;<br>
+ 	struct mm_struct *mm;<br>
+ 	pgd_t *pgdp, *pgdir;<br>
++	p4d_t *p4dp;<br>
+ 	pud_t *pudp;<br>
+ 	pmd_t *pmdp;<br>
+ 	pte_t *ptep;<br>
+@@ -3161,20 +3162,21 @@ static void show_pte(unsigned long addr)<br>
+ 		pgdir = pgd_offset(mm, 0);<br>
+ 	}<br>
+ <br>
+-	if (pgd_none(*pgdp)) {<br>
+-		printf("no linux page table for address\n");<br>
++	p4dp = p4d_offset(pgdp, addr);<br>
++<br>
++	if (p4d_none(*p4dp)) {<br>
++		printf("No valid P4D\n");<br>
+ 		return;<br>
+ 	}<br>
+ <br>
+-	printf("pgd  @ 0x%px\n", pgdir);<br>
+-<br>
+-	if (pgd_is_leaf(*pgdp)) {<br>
+-		format_pte(pgdp, pgd_val(*pgdp));<br>
++	if (p4d_is_leaf(*p4dp)) {<br>
++		format_pte(p4dp, p4d_val(*p4dp));<br>
+ 		return;<br>
+ 	}<br>
+-	printf("pgdp @ 0x%px = 0x%016lx\n", pgdp, pgd_val(*pgdp));<br>
+ <br>
+-	pudp = pud_offset(pgdp, addr);<br>
++	printf("p4dp @ 0x%px = 0x%016lx\n", p4dp, p4d_val(*p4dp));<br>
++<br>
++	pudp = pud_offset(p4dp, addr);<br>
+ <br>
+ 	if (pud_none(*pudp)) {<br>
+ 		printf("No valid PUD\n");<br>
+-- <br>
+2.24.0<br>
+<br>
+<br>
+

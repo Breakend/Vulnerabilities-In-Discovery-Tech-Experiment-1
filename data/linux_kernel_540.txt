@@ -1,0 +1,24 @@
+On Thu, Apr 08, 2021 at 02:51:34PM +0200, Greg Kroah-Hartman wrote:<br>
+><i> There are a lot of tty-core-only functions that are listed in</i><br>
+><i> include/linux/tty.h.  Move them to drivers/tty/tty.h so that no one else</i><br>
+><i> can accidentally call them or think that they are public functions.</i><br>
+><i> </i><br>
+><i> Cc: Jiri Slaby <jirislaby@xxxxxxxxxx></i><br>
+><i> Signed-off-by: Greg Kroah-Hartman <gregkh@xxxxxxxxxxxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  drivers/tty/n_gsm.c  |  1 +</i><br>
+><i>  drivers/tty/n_hdlc.c |  1 +</i><br>
+><i>  drivers/tty/tty.h    | 37 +++++++++++++++++++++++++++++++++++++</i><br>
+><i>  include/linux/tty.h  | 34 ----------------------------------</i><br>
+><i>  4 files changed, 39 insertions(+), 34 deletions(-)</i><br>
+<br>
+This needs a "tty.h" inclusion into drivers/tty/tty_baudrate.c,<br>
+otherwise it's a build warning, I missed that, sorry.  Will add that to<br>
+the next revision if it's needed, or just fix it up when committing it.<br>
+<br>
+thanks,<br>
+<br>
+greg k-h<br>
+<br>
+<br>
+

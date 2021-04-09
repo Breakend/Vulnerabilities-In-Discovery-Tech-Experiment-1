@@ -1,0 +1,42 @@
+Change the type of fw_current_in_ps_mode from u8 to bool, because<br>
+it is used everywhere as a bool and, accordingly, it should be<br>
+declared as a bool. Shorten the controlling<br>
+expression of an 'if' statement.<br>
+<br>
+Signed-off-by: Fabio M. De Francesco <fmdefrancesco@xxxxxxxxx><br>
+---<br>
+ drivers/staging/rtl8723bs/hal/hal_intf.c        | 2 +-<br>
+ drivers/staging/rtl8723bs/include/rtw_pwrctrl.h | 2 +-<br>
+ 2 files changed, 2 insertions(+), 2 deletions(-)<br>
+<br>
+diff --git a/drivers/staging/rtl8723bs/hal/hal_intf.c b/drivers/staging/rtl8723bs/hal/hal_intf.c<br>
+index 96fe172ced8d..8dc4dd8c6d4c 100644<br>
+--- a/drivers/staging/rtl8723bs/hal/hal_intf.c<br>
++++ b/drivers/staging/rtl8723bs/hal/hal_intf.c<br>
+@@ -348,7 +348,7 @@ void rtw_hal_dm_watchdog(struct adapter *padapter)<br>
+ <br>
+ void rtw_hal_dm_watchdog_in_lps(struct adapter *padapter)<br>
+ {<br>
+-	if (adapter_to_pwrctl(padapter)->fw_current_in_ps_mode == true) {<br>
++	if (adapter_to_pwrctl(padapter)->fw_current_in_ps_mode) {<br>
+ 		if (padapter->HalFunc.hal_dm_watchdog_in_lps)<br>
+ 			padapter->HalFunc.hal_dm_watchdog_in_lps(padapter); /* this function caller is in interrupt context */<br>
+ 	}<br>
+diff --git a/drivers/staging/rtl8723bs/include/rtw_pwrctrl.h b/drivers/staging/rtl8723bs/include/rtw_pwrctrl.h<br>
+index 5450d20b44a6..c03ae33b0aa6 100644<br>
+--- a/drivers/staging/rtl8723bs/include/rtw_pwrctrl.h<br>
++++ b/drivers/staging/rtl8723bs/include/rtw_pwrctrl.h<br>
+@@ -203,7 +203,7 @@ struct pwrctrl_priv {<br>
+ 	u8 LpsIdleCount;<br>
+ 	u8 power_mgnt;<br>
+ 	u8 org_power_mgnt;<br>
+-	u8 fw_current_in_ps_mode;<br>
++	bool fw_current_in_ps_mode;<br>
+ 	unsigned long	DelayLPSLastTimeStamp;<br>
+ 	s32		pnp_current_pwr_state;<br>
+ 	u8 pnp_bstop_trx;<br>
+-- <br>
+2.30.2<br>
+<br>
+<br>
+

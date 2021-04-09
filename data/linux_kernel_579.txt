@@ -1,0 +1,27 @@
+Enable arm64 platform to use the MHP_MEMMAP_ON_MEMORY feature.<br>
+<br>
+Signed-off-by: Oscar Salvador <osalvador@xxxxxxx><br>
+Reviewed-by: David Hildenbrand <david@xxxxxxxxxx><br>
+---<br>
+ arch/arm64/Kconfig | 3 +++<br>
+ 1 file changed, 3 insertions(+)<br>
+<br>
+diff --git a/arch/arm64/Kconfig b/arch/arm64/Kconfig<br>
+index 5656e7aacd69..0e23acd173f0 100644<br>
+--- a/arch/arm64/Kconfig<br>
++++ b/arch/arm64/Kconfig<br>
+@@ -309,6 +309,9 @@ config ARCH_ENABLE_MEMORY_HOTPLUG<br>
+ config ARCH_ENABLE_MEMORY_HOTREMOVE<br>
+ 	def_bool y<br>
+ <br>
++config ARCH_MHP_MEMMAP_ON_MEMORY_ENABLE<br>
++	def_bool y<br>
++<br>
+ config SMP<br>
+ 	def_bool y<br>
+ <br>
+-- <br>
+2.16.3<br>
+<br>
+<br>
+

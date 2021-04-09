@@ -1,0 +1,44 @@
+On Thu, Apr 08, 2021 at 10:47:21PM +0900, Tetsuo Handa wrote:<br>
+><i> On 2021/04/08 21:51, Greg Kroah-Hartman wrote:</i><br>
+><i> > Remove users of tty_warn() and replace them with calls to dev_warn()</i><br>
+><i> > which provides more information about the tty that has the error and</i><br>
+><i> > uses the standard formatting logic.</i><br>
+><i> </i><br>
+><i> Ouch. This series would be good for clean up, but this series might be</i><br>
+><i> bad for handling lockdep warning syzbot is reporting.</i><br>
+<br>
+Again, we can worry about lockdep stuff for the real places where it<br>
+matters, which should not have been the same place as all of these were<br>
+used (they were used very infrequently.)<br>
+<br>
+><i> Since tty_warn() is using plain printk(), we can avoid lockdep warning by</i><br>
+><i> using printk_deferred(). If we use dev_warn() instead, we need to modify</i><br>
+><i> __dev_printk() to use printk_deferred(), which means that all dev_*() users</i><br>
+><i> are affected by this change.</i><br>
+<br>
+I don't want to use printk_deffered() if at all possible, let's let the<br>
+printk developers fix up their implementation which should make that<br>
+change not needed.<br>
+<br>
+And worst case, take the few places that really really really need it,<br>
+and call printk_deferred() so it's obvious what we are doing.<br>
+<br>
+><i> Also, we need to modify dev_printk_emit()/dev_vprintk_emit() callers to embed</i><br>
+><i> loglevel into the format string so that we pass LOGLEVEL_SCHED to vprintk_emit() ...</i><br>
+><i> maybe just change from "if (!in_sched)" to "if (!in_sched && !dev_info)" instead ?</i><br>
+<br>
+Huh?  No.<br>
+<br>
+><i> Also, dev_vprintk_emit() need to start calling defer_console_output()</i><br>
+><i> after returning from vprintk_emit() in order to behave like printk_deferred().</i><br>
+<br>
+Again, no.  If we really need to deferr a printk, let's call that, but<br>
+that should not be the case for all of the places these macros were<br>
+used.<br>
+<br>
+thanks,<br>
+<br>
+greg k-h<br>
+<br>
+<br>
+

@@ -1,0 +1,59 @@
+Accept pss encoding for public_key_verify_signature. If<br>
+CONFIG_CRYPTO_RSASSA_PSS is disabled, crypto_alloc_akcipher will<br>
+fail to find a pss backend anyway.<br>
+<br>
+Signed-off-by: Varad Gautam <varad.gautam@xxxxxxxx><br>
+Acked-by: Jarkko Sakkinen <jarkko@xxxxxxxxxx><br>
+---<br>
+ crypto/asymmetric_keys/public_key.c | 18 +++++++++++++-----<br>
+ 1 file changed, 13 insertions(+), 5 deletions(-)<br>
+<br>
+diff --git a/crypto/asymmetric_keys/public_key.c b/crypto/asymmetric_keys/public_key.c<br>
+index 788a4ba1e2e74..b9cc83ba7a127 100644<br>
+--- a/crypto/asymmetric_keys/public_key.c<br>
++++ b/crypto/asymmetric_keys/public_key.c<br>
+@@ -69,19 +69,20 @@ int software_key_determine_akcipher(const char *encoding,<br>
+ {<br>
+ 	int n;<br>
+ <br>
+-	if (strcmp(encoding, "pkcs1") == 0) {<br>
++	if (strcmp(encoding, "pkcs1") == 0 || strcmp(encoding, "pss") == 0) {<br>
+ 		/* The data wangled by the RSA algorithm is typically padded<br>
+ 		 * and encoded in some manner, such as EMSA-PKCS1-1_5 [RFC3447<br>
+-		 * sec 8.2].<br>
++		 * sec 8.2] or EMSA-PSS [RFC8017 sec 9.1].<br>
+ 		 */<br>
+ 		if (!hash_algo)<br>
+ 			n = snprintf(alg_name, CRYPTO_MAX_ALG_NAME,<br>
+-				     "pkcs1pad(%s)",<br>
++				     "%spad(%s)",<br>
++				     encoding,<br>
+ 				     pkey->pkey_algo);<br>
+ 		else<br>
+ 			n = snprintf(alg_name, CRYPTO_MAX_ALG_NAME,<br>
+-				     "pkcs1pad(%s,%s)",<br>
+-				     pkey->pkey_algo, hash_algo);<br>
++				     "%spad(%s,%s)",<br>
++				     encoding, pkey->pkey_algo, hash_algo);<br>
+ 		return n >= CRYPTO_MAX_ALG_NAME ? -EINVAL : 0;<br>
+ 	}<br>
+ <br>
+@@ -363,6 +364,13 @@ int public_key_verify_signature(const struct public_key *pkey,<br>
+ 			goto error_free_key;<br>
+ 	}<br>
+ <br>
++	if (strcmp(sig->encoding, "pss") == 0) {<br>
++		ret = crypto_akcipher_set_sig_params(tfm, sig, sizeof(*sig));<br>
++		if (ret) {<br>
++			goto error_free_key;<br>
++		}<br>
++	}<br>
++<br>
+ 	sg_init_table(src_sg, 2);<br>
+ 	sg_set_buf(&src_sg[0], sig->s, sig->s_size);<br>
+ 	sg_set_buf(&src_sg[1], sig->digest, sig->digest_size);<br>
+-- <br>
+2.30.2<br>
+<br>
+<br>
+

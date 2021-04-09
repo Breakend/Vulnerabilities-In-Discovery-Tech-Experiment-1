@@ -1,0 +1,54 @@
+
+<br>
+On 2021/4/8 5:56, Bart Van Assche wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+On 4/5/21 11:39 PM, luojiaxing wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+<br>
+On 2021/4/3 0:01, Bart Van Assche wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+On 4/2/21 2:08 AM, Luo Jiaxing wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+  #define AAP1_MEMMAP(r, c) \<br>
+-    (*(u32 *)((u8*)pm8001_ha->memoryMap.region[AAP1].virt_ptr + 
+(r) * 32 \
+<br>+    (*(u32 *)((u8 *)pm8001_ha->memoryMap.region[AAP1].virt_ptr + 
+(r) * 32 \
+<br>
+      + (c)))<br>
+</blockquote>
+Since this macro is being modified, please convert it into an inline<br>
+function such that the type of the arguments can be verified by the<br>
+compiler.<br>
+</blockquote>
+<br>
+Sure, but still keep the function name as AAP1_MEMMAP?<br>
+</blockquote>
+<br>
+The coding style requires lower case names for functions so the 
+function name probably should be converted to lower case.
+<br></blockquote>
+<br>
+<br>
+Sure, and sorry to post v2 before you reply, you can ignore it and 
+directly check v3.
+<br>
+<br>
+<br>
+Thanks<br>
+<br>
+Jiaxing<br>
+<br>
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+<br>
+Thanks,<br>
+<br>
+Bart.<br>
+<br>
+.<br>
+<br>
+</blockquote>
+<br>
+<br>
+

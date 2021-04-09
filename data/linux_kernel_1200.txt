@@ -1,0 +1,32 @@
+On Thu, Apr 8, 2021 at 8:12 AM Chanwoo Choi <cw00.choi@xxxxxxxxxxx> wrote:<br>
+><i></i><br>
+><i> Dear Rafael,</i><br>
+><i></i><br>
+><i> This is devfreq-next pull request for v5.13-rc1. I add detailed description of</i><br>
+><i> this pull request on the following tag. Please pull devfreq with following updates.</i><br>
+><i> - tag name : devfreq-next-for-5.12</i><br>
+><i></i><br>
+><i> This pull request contains the immutable branch to keep the immutable patch[1]</i><br>
+><i> between devfreq and drm for gpu driver.</i><br>
+><i> [1] <a  rel="nofollow" href="https://patchwork.kernel.org/project/linux-pm/patch/20210308133041.10516-1-daniel.lezcano@xxxxxxxxxx/">https://patchwork.kernel.org/project/linux-pm/patch/20210308133041.10516-1-daniel.lezcano@xxxxxxxxxx/</a></i><br>
+><i></i><br>
+><i> Best Regards,</i><br>
+><i> Chanwoo Choi</i><br>
+><i></i><br>
+><i></i><br>
+><i> The following changes since commit e49d033bddf5b565044e2abe4241353959bc9120:</i><br>
+><i></i><br>
+><i>   Linux 5.12-rc6 (2021-04-04 14:15:36 -0700)</i><br>
+><i></i><br>
+><i> are available in the Git repository at:</i><br>
+><i></i><br>
+><i>   git://git.kernel.org/pub/scm/linux/kernel/git/chanwoo/linux.git tags/devfreq-next-for-5.13</i><br>
+><i></i><br>
+><i> for you to fetch changes up to 0a7dc8318c2817fb33dc50946f7ca6e0ff28f036:</i><br>
+><i></i><br>
+><i>   PM / devfreq: imx8m-ddrc: Remove unneeded of_match_ptr() (2021-04-08 13:14:51 +0900)</i><br>
+<br>
+Pulled, thanks!<br>
+<br>
+<br>
+

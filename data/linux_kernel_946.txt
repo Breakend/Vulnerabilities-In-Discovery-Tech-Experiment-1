@@ -1,0 +1,56 @@
+On Thu, Apr 08, 2021 at 01:59:43PM +0200, Oliver Neukum wrote:<br>
+><i> Am Donnerstag, den 08.04.2021, 13:54 +0200 schrieb Johan Hovold:</i><br>
+><i> > On Thu, Apr 08, 2021 at 01:34:12PM +0200, Oliver Neukum wrote:</i><br>
+><i> > > Am Donnerstag, den 08.04.2021, 11:48 +0200 schrieb Johan Hovold:</i><br>
+><i> > > > On Thu, Apr 08, 2021 at 10:36:46AM +0200, Oliver Neukum wrote:</i><br>
+><i> > > > > Am Mittwoch, den 07.04.2021, 12:28 +0200 schrieb Johan Hovold:</i><br>
+><i> > > > > Well, the devices report it. It is part of the standard.</i><br>
+><i> > > > </i><br>
+><i> > > > No, the standard doesn't include anything about a baud-base clock</i><br>
+><i> > > > AFAICT.</i><br>
+><i> > > </i><br>
+><i> > > Unfortunately it does.</i><br>
+><i> > > dwDTERate - chapter 6.3.11 - table 17</i><br>
+><i> > </i><br>
+><i> > That's not the base clock rate, that's just the currently configured</i><br>
+><i> > line speed which you can read from termios </i><br>
+><i> > > If we does this wrongly, we should certainly fix it, but just removing</i><br>
+><i> > > the reporting doesn't look right to me.</i><br>
+><i> > </i><br>
+><i> > The driver got its interpretation of baud_base wrong, and CDC doesn't</i><br>
+><i> > even have a concept of base clock rate so removing it is the right thing</i><br>
+><i> > to do.</i><br>
+><i> > </i><br>
+><i> > Again, baud_base is really only relevant with legacy UARTs and when</i><br>
+><i> > using the deprecated ASYNC_SPD_CUST.</i><br>
+><i> > </i><br>
+><i> > And if the user wants to knows the current line speed we have a</i><br>
+><i> > different interface for that.</i><br>
+><i> </i><br>
+><i> Hi,</i><br>
+><i> </i><br>
+><i> thank you, that clarifies things. I am happy with the patch itself,</i><br>
+><i> but could I ask you to do two things:</i><br>
+><i> </i><br>
+><i> 1. Edit the commit description</i><br>
+><i> making clear that the difference</i><br>
+><i> between the base clock rate and the line speed.</i><br>
+><i> </i><br>
+><i> 2. Mark the patch specially to NOT be included in stable. We may</i><br>
+><i> have</i><br>
+><i> users misusing the current API.</i><br>
+<br>
+That doesn't matter, if there are misusers then their use will "break"<br>
+on newer kernels.  And if so, then it doesn't deserve to be in any<br>
+release.<br>
+<br>
+If a change is good enough for Linus's tree, that means it is good<br>
+enough for a stable tree, the requirements are exactly the same when it<br>
+comes to userspace interactions.<br>
+<br>
+thanks,<br>
+<br>
+greg k-h<br>
+<br>
+<br>
+

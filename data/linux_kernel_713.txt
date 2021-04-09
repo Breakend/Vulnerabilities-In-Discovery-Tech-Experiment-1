@@ -1,0 +1,125 @@
+
+On 08/04/21 13:15, Wanpeng Li wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+I saw this splatting:<br>
+<br>
+  BUG: sleeping function called from invalid context at<br>
+arch/x86/kvm/kvm_cache_regs.h:115<br>
+   kvm_pdptr_read+0x20/0x60 [kvm]<br>
+   kvm_mmu_load+0x3bd/0x540 [kvm]<br>
+<br>
+There is a might_sleep() in kvm_pdptr_read(), however, the original<br>
+commit didn't explain more. I can send a formal one if the below fix<br>
+is acceptable.<br>
+</blockquote>
+<br>
+I think we can just push make_mmu_pages_available down into<br>
+kvm_mmu_load's callees.  This way it's not necessary to hold the lock<br>
+until after the PDPTR check:<br>
+<br>
+diff --git a/arch/x86/kvm/mmu/mmu.c b/arch/x86/kvm/mmu/mmu.c<br>
+index 0d92a269c5fa..f92c3695bfeb 100644<br>
+--- a/arch/x86/kvm/mmu/mmu.c<br>
++++ b/arch/x86/kvm/mmu/mmu.c<br>
+@@ -3244,6 +3244,12 @@ static int mmu_alloc_direct_roots(struct kvm_vcpu *vcpu)<br>
+ 	u8 shadow_root_level = mmu->shadow_root_level;<br>
+ 	hpa_t root;<br>
+ 	unsigned i;<br>
++	int r;<br>
++<br>
++	write_lock(&vcpu->kvm->mmu_lock);<br>
++	r = make_mmu_pages_available(vcpu);<br>
++	if (r < 0)<br>
++		goto out_unlock;<br>
+ 
+ 	if (is_tdp_mmu_enabled(vcpu->kvm)) {
+<br>
+ 		root = kvm_tdp_mmu_get_vcpu_root_hpa(vcpu);<br>
+@@ -3266,13 +3272,16 @@ static int mmu_alloc_direct_roots(struct kvm_vcpu *vcpu)<br>
+ 		mmu->root_hpa = __pa(mmu->pae_root);<br>
+ 	} else {<br>
+ 		WARN_ONCE(1, "Bad TDP root level = %d\n", shadow_root_level);<br>
+-		return -EIO;<br>
++		r = -EIO;<br>
+ 	}<br>
+ 
++out_unlock:
+<br>
++	write_unlock(&vcpu->kvm->mmu_lock);<br>
++<br>
+ 	/* root_pgd is ignored for direct MMUs. */<br>
+ 	mmu->root_pgd = 0;<br>
+ 
+-	return 0;
+<br>
++	return r;<br>
+ }<br>
+ 
+ static int mmu_alloc_shadow_roots(struct kvm_vcpu *vcpu)
+<br>
+@@ -3282,6 +3291,7 @@ static int mmu_alloc_shadow_roots(struct kvm_vcpu *vcpu)<br>
+ 	gfn_t root_gfn, root_pgd;<br>
+ 	hpa_t root;<br>
+ 	int i;<br>
++	int r;<br>
+ 
+ 	root_pgd = mmu->get_guest_pgd(vcpu);
+<br>
+ 	root_gfn = root_pgd >> PAGE_SHIFT;<br>
+@@ -3300,6 +3310,11 @@ static int mmu_alloc_shadow_roots(struct kvm_vcpu *vcpu)<br>
+ 		}<br>
+ 	}<br>
+ 
++	write_lock(&vcpu->kvm->mmu_lock);
+<br>
++	r = make_mmu_pages_available(vcpu);<br>
++	if (r < 0)<br>
++		goto out_unlock;<br>
++<br>
+ 	/*<br>
+ 	 * Do we shadow a long mode page table? If so we need to<br>
+ 	 * write-protect the guests page table root.<br>
+@@ -3308,7 +3323,7 @@ static int mmu_alloc_shadow_roots(struct kvm_vcpu *vcpu)<br>
+ 		root = mmu_alloc_root(vcpu, root_gfn, 0,<br>
+ 				      mmu->shadow_root_level, false);<br>
+ 		mmu->root_hpa = root;<br>
+-		goto set_root_pgd;<br>
++		goto out_unlock;<br>
+ 	}<br>
+ 
+ 	if (WARN_ON_ONCE(!mmu->pae_root))
+<br>
+@@ -3350,7 +3365,8 @@ static int mmu_alloc_shadow_roots(struct kvm_vcpu *vcpu)<br>
+ 	else<br>
+ 		mmu->root_hpa = __pa(mmu->pae_root);<br>
+ 
+-set_root_pgd:
+<br>
++out_unlock:<br>
++	write_unlock(&vcpu->kvm->mmu_lock);<br>
+ 	mmu->root_pgd = root_pgd;<br>
+ 
+ 	return 0;
+<br>
+@@ -4852,14 +4868,10 @@ int kvm_mmu_load(struct kvm_vcpu *vcpu)<br>
+ 	r = mmu_alloc_special_roots(vcpu);<br>
+ 	if (r)<br>
+ 		goto out;<br>
+-	write_lock(&vcpu->kvm->mmu_lock);<br>
+-	if (make_mmu_pages_available(vcpu))<br>
+-		r = -ENOSPC;<br>
+-	else if (vcpu->arch.mmu->direct_map)<br>
++	if (vcpu->arch.mmu->direct_map)<br>
+ 		r = mmu_alloc_direct_roots(vcpu);<br>
+ 	else<br>
+ 		r = mmu_alloc_shadow_roots(vcpu);<br>
+-	write_unlock(&vcpu->kvm->mmu_lock);<br>
+ 	if (r)<br>
+ 		goto out;<br>
+ 
+
+<br>
+Paolo<br>
+<br>
+<br>
+

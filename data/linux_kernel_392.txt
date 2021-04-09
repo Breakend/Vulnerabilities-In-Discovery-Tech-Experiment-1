@@ -1,0 +1,351 @@
+From: Xiongwei Song <sxwjean@xxxxxxxxx><br>
+<br>
+Create a new header named traps.h, define macros to list ppc interrupt<br>
+types in traps.h, replace the reference of the trap hex values with these<br>
+macros.<br>
+<br>
+Referred the hex number in arch/powerpc/kernel/exceptions-64e.S,<br>
+arch/powerpc/kernel/exceptions-64s.S and<br>
+arch/powerpc/include/asm/kvm_asm.h.<br>
+<br>
+v2-v3:<br>
+Correct the prefix of trap macros with INTERRUPT_, the previous prefix<br>
+is TRAP_, which is not precise. This is suggested by Segher Boessenkool<br>
+and Nicholas Piggin.<br>
+<br>
+v1-v2:<br>
+Define more trap macros to replace more trap hexs in code, not just for<br>
+the __show_regs function. This is suggested by Christophe Leroy.<br>
+<br>
+Signed-off-by: Xiongwei Song <sxwjean@xxxxxxxxx><br>
+---<br>
+ arch/powerpc/include/asm/interrupt.h  |  9 +++++---<br>
+ arch/powerpc/include/asm/ptrace.h     |  3 ++-<br>
+ arch/powerpc/include/asm/traps.h      | 32 +++++++++++++++++++++++++++<br>
+ arch/powerpc/kernel/interrupt.c       |  3 ++-<br>
+ arch/powerpc/kernel/process.c         |  5 ++++-<br>
+ arch/powerpc/mm/book3s64/hash_utils.c |  5 +++--<br>
+ arch/powerpc/mm/fault.c               | 21 +++++++++++-------<br>
+ arch/powerpc/perf/core-book3s.c       |  5 +++--<br>
+ arch/powerpc/xmon/xmon.c              | 16 +++++++++++---<br>
+ 9 files changed, 78 insertions(+), 21 deletions(-)<br>
+ create mode 100644 arch/powerpc/include/asm/traps.h<br>
+<br>
+diff --git a/arch/powerpc/include/asm/interrupt.h b/arch/powerpc/include/asm/interrupt.h<br>
+index 7c633896d758..5ce9898bc9a6 100644<br>
+--- a/arch/powerpc/include/asm/interrupt.h<br>
++++ b/arch/powerpc/include/asm/interrupt.h<br>
+@@ -8,6 +8,7 @@<br>
+ #include <asm/ftrace.h><br>
+ #include <asm/kprobes.h><br>
+ #include <asm/runlatch.h><br>
++#include <asm/traps.h><br>
+ <br>
+ struct interrupt_state {<br>
+ #ifdef CONFIG_PPC_BOOK3E_64<br>
+@@ -59,7 +60,7 @@ static inline void interrupt_enter_prepare(struct pt_regs *regs, struct interrup<br>
+ 		 * CT_WARN_ON comes here via program_check_exception,<br>
+ 		 * so avoid recursion.<br>
+ 		 */<br>
+-		if (TRAP(regs) != 0x700)<br>
++		if (TRAP(regs) != INTERRUPT_PROGRAM)<br>
+ 			CT_WARN_ON(ct_state() != CONTEXT_KERNEL);<br>
+ 	}<br>
+ #endif<br>
+@@ -156,7 +157,8 @@ static inline void interrupt_nmi_enter_prepare(struct pt_regs *regs, struct inte<br>
+ 	/* Don't do any per-CPU operations until interrupt state is fixed */<br>
+ #endif<br>
+ 	/* Allow DEC and PMI to be traced when they are soft-NMI */<br>
+-	if (TRAP(regs) != 0x900 && TRAP(regs) != 0xf00 && TRAP(regs) != 0x260) {<br>
++	if (TRAP(regs) != INTERRUPT_DECREMENTER &&<br>
++	    TRAP(regs) != INTERRUPT_PERFMON) {<br>
+ 		state->ftrace_enabled = this_cpu_get_ftrace_enabled();<br>
+ 		this_cpu_set_ftrace_enabled(0);<br>
+ 	}<br>
+@@ -180,7 +182,8 @@ static inline void interrupt_nmi_exit_prepare(struct pt_regs *regs, struct inter<br>
+ 		nmi_exit();<br>
+ <br>
+ #ifdef CONFIG_PPC64<br>
+-	if (TRAP(regs) != 0x900 && TRAP(regs) != 0xf00 && TRAP(regs) != 0x260)<br>
++	if (TRAP(regs) != INTERRUPT_DECREMENTER &&<br>
++	    TRAP(regs) != INTERRUPT_PERFMON)<br>
+ 		this_cpu_set_ftrace_enabled(state->ftrace_enabled);<br>
+ <br>
+ #ifdef CONFIG_PPC_BOOK3S_64<br>
+diff --git a/arch/powerpc/include/asm/ptrace.h b/arch/powerpc/include/asm/ptrace.h<br>
+index f10498e1b3f6..7a17e0365d43 100644<br>
+--- a/arch/powerpc/include/asm/ptrace.h<br>
++++ b/arch/powerpc/include/asm/ptrace.h<br>
+@@ -21,6 +21,7 @@<br>
+ <br>
+ #include <uapi/asm/ptrace.h><br>
+ #include <asm/asm-const.h><br>
++#include <asm/traps.h><br>
+ <br>
+ #ifndef __ASSEMBLY__<br>
+ struct pt_regs<br>
+@@ -237,7 +238,7 @@ static inline bool trap_is_unsupported_scv(struct pt_regs *regs)<br>
+ <br>
+ static inline bool trap_is_syscall(struct pt_regs *regs)<br>
+ {<br>
+-	return (trap_is_scv(regs) || TRAP(regs) == 0xc00);<br>
++	return (trap_is_scv(regs) || TRAP(regs) == INTERRUPT_SYSCALL);<br>
+ }<br>
+ <br>
+ static inline bool trap_norestart(struct pt_regs *regs)<br>
+diff --git a/arch/powerpc/include/asm/traps.h b/arch/powerpc/include/asm/traps.h<br>
+new file mode 100644<br>
+index 000000000000..cb416a17097c<br>
+--- /dev/null<br>
++++ b/arch/powerpc/include/asm/traps.h<br>
+@@ -0,0 +1,32 @@<br>
++/* SPDX-License-Identifier: GPL-2.0 */<br>
++#ifndef _ASM_PPC_TRAPS_H<br>
++#define _ASM_PPC_TRAPS_H<br>
++<br>
++#if defined(CONFIG_BOOKE) || defined(CONFIG_4xx)<br>
++#define INTERRUPT_MACHINE_CHECK   0x000<br>
++#define INTERRUPT_CRITICAL_INPUT  0x100<br>
++#define INTERRUPT_ALTIVEC_UNAVAIL 0x200<br>
++#define INTERRUPT_PERFMON         0x260<br>
++#define INTERRUPT_DOORBELL        0x280<br>
++#define INTERRUPT_DEBUG           0xd00<br>
++#elif defined(CONFIG_PPC_BOOK3S)<br>
++#define INTERRUPT_SYSTEM_RESET    0x100<br>
++#define INTERRUPT_MACHINE_CHECK   0x200<br>
++#define INTERRUPT_DATA_SEGMENT    0x380<br>
++#define INTERRUPT_INST_SEGMENT    0x480<br>
++#define INTERRUPT_DOORBELL        0xa00<br>
++#define INTERRUPT_TRACE           0xd00<br>
++#define INTERRUPT_H_DATA_STORAGE  0xe00<br>
++#define INTERRUPT_PERFMON         0xf00<br>
++#define INTERRUPT_H_FAC_UNAVAIL   0xf80<br>
++#endif<br>
++<br>
++#define INTERRUPT_DATA_STORAGE    0x300<br>
++#define INTERRUPT_INST_STORAGE    0x400<br>
++#define INTERRUPT_ALIGNMENT       0x600<br>
++#define INTERRUPT_PROGRAM         0x700<br>
++#define INTERRUPT_FP_UNAVAIL      0x800<br>
++#define INTERRUPT_DECREMENTER     0x900<br>
++#define INTERRUPT_SYSCALL         0xc00<br>
++<br>
++#endif /* _ASM_PPC_TRAPS_H */<br>
+diff --git a/arch/powerpc/kernel/interrupt.c b/arch/powerpc/kernel/interrupt.c<br>
+index c4dd4b8f9cfa..72689f7ca7c8 100644<br>
+--- a/arch/powerpc/kernel/interrupt.c<br>
++++ b/arch/powerpc/kernel/interrupt.c<br>
+@@ -19,6 +19,7 @@<br>
+ #include <asm/syscall.h><br>
+ #include <asm/time.h><br>
+ #include <asm/unistd.h><br>
++#include <asm/traps.h><br>
+ <br>
+ #if defined(CONFIG_PPC_ADV_DEBUG_REGS) && defined(CONFIG_PPC32)<br>
+ unsigned long global_dbcr0[NR_CPUS];<br>
+@@ -456,7 +457,7 @@ notrace unsigned long interrupt_exit_kernel_prepare(struct pt_regs *regs, unsign<br>
+ 	 * CT_WARN_ON comes here via program_check_exception,<br>
+ 	 * so avoid recursion.<br>
+ 	 */<br>
+-	if (TRAP(regs) != 0x700)<br>
++	if (TRAP(regs) != INTERRUPT_PROGRAM)<br>
+ 		CT_WARN_ON(ct_state() == CONTEXT_USER);<br>
+ <br>
+ 	kuap = kuap_get_and_assert_locked();<br>
+diff --git a/arch/powerpc/kernel/process.c b/arch/powerpc/kernel/process.c<br>
+index b966c8e0cead..92cd49427b2f 100644<br>
+--- a/arch/powerpc/kernel/process.c<br>
++++ b/arch/powerpc/kernel/process.c<br>
+@@ -64,6 +64,7 @@<br>
+ #include <asm/asm-prototypes.h><br>
+ #include <asm/stacktrace.h><br>
+ #include <asm/hw_breakpoint.h><br>
++#include <asm/traps.h><br>
+ <br>
+ #include <linux/kprobes.h><br>
+ #include <linux/kdebug.h><br>
+@@ -1469,7 +1470,9 @@ static void __show_regs(struct pt_regs *regs)<br>
+ 	trap = TRAP(regs);<br>
+ 	if (!trap_is_syscall(regs) && cpu_has_feature(CPU_FTR_CFAR))<br>
+ 		pr_cont("CFAR: "REG" ", regs->orig_gpr3);<br>
+-	if (trap == 0x200 || trap == 0x300 || trap == 0x600) {<br>
++	if (trap == INTERRUPT_MACHINE_CHECK ||<br>
++	    trap == INTERRUPT_DATA_STORAGE ||<br>
++	    trap == INTERRUPT_ALIGNMENT) {<br>
+ 		if (IS_ENABLED(CONFIG_4xx) || IS_ENABLED(CONFIG_BOOKE))<br>
+ 			pr_cont("DEAR: "REG" ESR: "REG" ", regs->dar, regs->dsisr);<br>
+ 		else<br>
+diff --git a/arch/powerpc/mm/book3s64/hash_utils.c b/arch/powerpc/mm/book3s64/hash_utils.c<br>
+index 7719995323c3..2bf06e01b309 100644<br>
+--- a/arch/powerpc/mm/book3s64/hash_utils.c<br>
++++ b/arch/powerpc/mm/book3s64/hash_utils.c<br>
+@@ -64,6 +64,7 @@<br>
+ #include <asm/pte-walk.h><br>
+ #include <asm/asm-prototypes.h><br>
+ #include <asm/ultravisor.h><br>
++#include <asm/traps.h><br>
+ <br>
+ #include <mm/mmu_decl.h><br>
+ <br>
+@@ -1145,7 +1146,7 @@ unsigned int hash_page_do_lazy_icache(unsigned int pp, pte_t pte, int trap)<br>
+ <br>
+ 	/* page is dirty */<br>
+ 	if (!test_bit(PG_dcache_clean, &page->flags) && !PageReserved(page)) {<br>
+-		if (trap == 0x400) {<br>
++		if (trap == INTERRUPT_INST_STORAGE) {<br>
+ 			flush_dcache_icache_page(page);<br>
+ 			set_bit(PG_dcache_clean, &page->flags);<br>
+ 		} else<br>
+@@ -1545,7 +1546,7 @@ DEFINE_INTERRUPT_HANDLER_RET(__do_hash_fault)<br>
+ 	if (user_mode(regs) || (region_id == USER_REGION_ID))<br>
+ 		access &= ~_PAGE_PRIVILEGED;<br>
+ <br>
+-	if (TRAP(regs) == 0x400)<br>
++	if (TRAP(regs) == INTERRUPT_INST_STORAGE)<br>
+ 		access |= _PAGE_EXEC;<br>
+ <br>
+ 	err = hash_page_mm(mm, ea, access, TRAP(regs), flags);<br>
+diff --git a/arch/powerpc/mm/fault.c b/arch/powerpc/mm/fault.c<br>
+index 0c0b1c2cfb49..641b3feef7ee 100644<br>
+--- a/arch/powerpc/mm/fault.c<br>
++++ b/arch/powerpc/mm/fault.c<br>
+@@ -44,6 +44,7 @@<br>
+ #include <asm/debug.h><br>
+ #include <asm/kup.h><br>
+ #include <asm/inst.h><br>
++#include <asm/traps.h><br>
+ <br>
+ <br>
+ /*<br>
+@@ -197,7 +198,7 @@ static int mm_fault_error(struct pt_regs *regs, unsigned long addr,<br>
+ static bool bad_kernel_fault(struct pt_regs *regs, unsigned long error_code,<br>
+ 			     unsigned long address, bool is_write)<br>
+ {<br>
+-	int is_exec = TRAP(regs) == 0x400;<br>
++	int is_exec = TRAP(regs) == INTERRUPT_INST_STORAGE;<br>
+ <br>
+ 	/* NX faults set DSISR_PROTFAULT on the 8xx, DSISR_NOEXEC_OR_G on others */<br>
+ 	if (is_exec && (error_code & (DSISR_NOEXEC_OR_G | DSISR_KEYFAULT |<br>
+@@ -391,7 +392,7 @@ static int ___do_page_fault(struct pt_regs *regs, unsigned long address,<br>
+ 	struct vm_area_struct * vma;<br>
+ 	struct mm_struct *mm = current->mm;<br>
+ 	unsigned int flags = FAULT_FLAG_DEFAULT;<br>
+- 	int is_exec = TRAP(regs) == 0x400;<br>
++	int is_exec = TRAP(regs) == INTERRUPT_INST_STORAGE;<br>
+ 	int is_user = user_mode(regs);<br>
+ 	int is_write = page_fault_is_write(error_code);<br>
+ 	vm_fault_t fault, major = 0;<br>
+@@ -588,20 +589,24 @@ void __bad_page_fault(struct pt_regs *regs, int sig)<br>
+ 	/* kernel has accessed a bad area */<br>
+ <br>
+ 	switch (TRAP(regs)) {<br>
+-	case 0x300:<br>
+-	case 0x380:<br>
+-	case 0xe00:<br>
++	case INTERRUPT_DATA_STORAGE:<br>
++#ifdef CONFIG_PPC_BOOK3S<br>
++	case INTERRUPT_DATA_SEGMENT:<br>
++	case INTERRUPT_H_DATA_STORAGE:<br>
++#endif<br>
+ 		pr_alert("BUG: %s on %s at 0x%08lx\n",<br>
+ 			 regs->dar < PAGE_SIZE ? "Kernel NULL pointer dereference" :<br>
+ 			 "Unable to handle kernel data access",<br>
+ 			 is_write ? "write" : "read", regs->dar);<br>
+ 		break;<br>
+-	case 0x400:<br>
+-	case 0x480:<br>
++	case INTERRUPT_INST_STORAGE:<br>
++#ifdef CONFIG_PPC_BOOK3S<br>
++	case INTERRUPT_INST_SEGMENT:<br>
++#endif<br>
+ 		pr_alert("BUG: Unable to handle kernel instruction fetch%s",<br>
+ 			 regs->nip < PAGE_SIZE ? " (NULL pointer?)\n" : "\n");<br>
+ 		break;<br>
+-	case 0x600:<br>
++	case INTERRUPT_ALIGNMENT:<br>
+ 		pr_alert("BUG: Unable to handle kernel unaligned access at 0x%08lx\n",<br>
+ 			 regs->dar);<br>
+ 		break;<br>
+diff --git a/arch/powerpc/perf/core-book3s.c b/arch/powerpc/perf/core-book3s.c<br>
+index 766f064f00fb..6e34f5bba232 100644<br>
+--- a/arch/powerpc/perf/core-book3s.c<br>
++++ b/arch/powerpc/perf/core-book3s.c<br>
+@@ -17,6 +17,7 @@<br>
+ #include <asm/firmware.h><br>
+ #include <asm/ptrace.h><br>
+ #include <asm/code-patching.h><br>
++#include <asm/traps.h><br>
+ <br>
+ #ifdef CONFIG_PPC64<br>
+ #include "internal.h"<br>
+@@ -168,7 +169,7 @@ static bool regs_use_siar(struct pt_regs *regs)<br>
+ 	 * they have not been setup using perf_read_regs() and so regs->result<br>
+ 	 * is something random.<br>
+ 	 */<br>
+-	return ((TRAP(regs) == 0xf00) && regs->result);<br>
++	return ((TRAP(regs) == INTERRUPT_PERFMON) && regs->result);<br>
+ }<br>
+ <br>
+ /*<br>
+@@ -347,7 +348,7 @@ static inline void perf_read_regs(struct pt_regs *regs)<br>
+ 	 * hypervisor samples as well as samples in the kernel with<br>
+ 	 * interrupts off hence the userspace check.<br>
+ 	 */<br>
+-	if (TRAP(regs) != 0xf00)<br>
++	if (TRAP(regs) != INTERRUPT_PERFMON)<br>
+ 		use_siar = 0;<br>
+ 	else if ((ppmu->flags & PPMU_NO_SIAR))<br>
+ 		use_siar = 0;<br>
+diff --git a/arch/powerpc/xmon/xmon.c b/arch/powerpc/xmon/xmon.c<br>
+index bf7d69625a2e..2a4f99e64bf3 100644<br>
+--- a/arch/powerpc/xmon/xmon.c<br>
++++ b/arch/powerpc/xmon/xmon.c<br>
+@@ -54,6 +54,7 @@<br>
+ #include <asm/code-patching.h><br>
+ #include <asm/sections.h><br>
+ #include <asm/inst.h><br>
++#include <asm/traps.h><br>
+ <br>
+ #ifdef CONFIG_PPC64<br>
+ #include <asm/hvcall.h><br>
+@@ -1769,7 +1770,12 @@ static void excprint(struct pt_regs *fp)<br>
+ 	printf("    sp: %lx\n", fp->gpr[1]);<br>
+ 	printf("   msr: %lx\n", fp->msr);<br>
+ <br>
+-	if (trap == 0x300 || trap == 0x380 || trap == 0x600 || trap == 0x200) {<br>
++	if (trap == INTERRUPT_DATA_STORAGE ||<br>
++#ifdef CONFIG_PPC_BOOK3S<br>
++	    trap == INTERRUPT_DATA_SEGMENT ||<br>
++#endif<br>
++	    trap == INTERRUPT_ALIGNMENT ||<br>
++	    trap == INTERRUPT_MACHINE_CHECK) {<br>
+ 		printf("   dar: %lx\n", fp->dar);<br>
+ 		if (trap != 0x380)<br>
+ 			printf(" dsisr: %lx\n", fp->dsisr);<br>
+@@ -1785,7 +1791,7 @@ static void excprint(struct pt_regs *fp)<br>
+ 		       current->pid, current->comm);<br>
+ 	}<br>
+ <br>
+-	if (trap == 0x700)<br>
++	if (trap == INTERRUPT_PROGRAM)<br>
+ 		print_bug_trap(fp);<br>
+ <br>
+ 	printf(linux_banner);<br>
+@@ -1846,7 +1852,11 @@ static void prregs(struct pt_regs *fp)<br>
+ 	printf("ctr = "REG"   xer = "REG"   trap = %4lx\n",<br>
+ 	       fp->ctr, fp->xer, fp->trap);<br>
+ 	trap = TRAP(fp);<br>
+-	if (trap == 0x300 || trap == 0x380 || trap == 0x600)<br>
++	if (trap == INTERRUPT_DATA_STORAGE ||<br>
++#ifdef CONFIG_PPC_BOOK3S<br>
++	    trap == INTERRUPT_DATA_SEGMENT ||<br>
++#endif<br>
++	    trap == INTERRUPT_ALIGNMENT)<br>
+ 		printf("dar = "REG"   dsisr = %.8lx\n", fp->dar, fp->dsisr);<br>
+ }<br>
+ <br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+

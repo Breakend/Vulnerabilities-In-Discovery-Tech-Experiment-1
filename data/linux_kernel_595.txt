@@ -1,0 +1,105 @@
+The following commit has been merged into the x86/entry branch of tip:<br>
+<br>
+Commit-ID:     fe950f6020338c8ac668ef823bb692d36b7542a2<br>
+Gitweb:        <a  rel="nofollow" href="https://git.kernel.org/tip/fe950f6020338c8ac668ef823bb692d36b7542a2">https://git.kernel.org/tip/fe950f6020338c8ac668ef823bb692d36b7542a2</a><br>
+Author:        Kees Cook <keescook@xxxxxxxxxxxx><br>
+AuthorDate:    Thu, 01 Apr 2021 16:23:45 -07:00<br>
+Committer:     Thomas Gleixner <tglx@xxxxxxxxxxxxx><br>
+CommitterDate: Thu, 08 Apr 2021 14:05:20 +02:00<br>
+<br>
+x86/entry: Enable random_kstack_offset support<br>
+<br>
+Allow for a randomized stack offset on a per-syscall basis, with roughly<br>
+5-6 bits of entropy, depending on compiler and word size. Since the<br>
+method of offsetting uses macros, this cannot live in the common entry<br>
+code (the stack offset needs to be retained for the life of the syscall,<br>
+which means it needs to happen at the actual entry point).<br>
+<br>
+Signed-off-by: Kees Cook <keescook@xxxxxxxxxxxx><br>
+Signed-off-by: Thomas Gleixner <tglx@xxxxxxxxxxxxx><br>
+Reviewed-by: Thomas Gleixner <tglx@xxxxxxxxxxxxx><br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/20210401232347.2791257-5-keescook@xxxxxxxxxxxx">https://lore.kernel.org/r/20210401232347.2791257-5-keescook@xxxxxxxxxxxx</a><br>
+<br>
+---<br>
+ arch/x86/Kconfig                    |  1 +<br>
+ arch/x86/entry/common.c             |  3 +++<br>
+ arch/x86/include/asm/entry-common.h | 16 ++++++++++++++++<br>
+ 3 files changed, 20 insertions(+)<br>
+<br>
+diff --git a/arch/x86/Kconfig b/arch/x86/Kconfig<br>
+index 2792879..4b4ad8e 100644<br>
+--- a/arch/x86/Kconfig<br>
++++ b/arch/x86/Kconfig<br>
+@@ -165,6 +165,7 @@ config X86<br>
+ 	select HAVE_ARCH_TRANSPARENT_HUGEPAGE_PUD if X86_64<br>
+ 	select HAVE_ARCH_USERFAULTFD_WP         if X86_64 && USERFAULTFD<br>
+ 	select HAVE_ARCH_VMAP_STACK		if X86_64<br>
++	select HAVE_ARCH_RANDOMIZE_KSTACK_OFFSET<br>
+ 	select HAVE_ARCH_WITHIN_STACK_FRAMES<br>
+ 	select HAVE_ASM_MODVERSIONS<br>
+ 	select HAVE_CMPXCHG_DOUBLE<br>
+diff --git a/arch/x86/entry/common.c b/arch/x86/entry/common.c<br>
+index 4efd39a..7b2542b 100644<br>
+--- a/arch/x86/entry/common.c<br>
++++ b/arch/x86/entry/common.c<br>
+@@ -38,6 +38,7 @@<br>
+ #ifdef CONFIG_X86_64<br>
+ __visible noinstr void do_syscall_64(unsigned long nr, struct pt_regs *regs)<br>
+ {<br>
++	add_random_kstack_offset();<br>
+ 	nr = syscall_enter_from_user_mode(regs, nr);<br>
+ <br>
+ 	instrumentation_begin();<br>
+@@ -83,6 +84,7 @@ __visible noinstr void do_int80_syscall_32(struct pt_regs *regs)<br>
+ {<br>
+ 	unsigned int nr = syscall_32_enter(regs);<br>
+ <br>
++	add_random_kstack_offset();<br>
+ 	/*<br>
+ 	 * Subtlety here: if ptrace pokes something larger than 2^32-1 into<br>
+ 	 * orig_ax, the unsigned int return value truncates it.  This may<br>
+@@ -102,6 +104,7 @@ static noinstr bool __do_fast_syscall_32(struct pt_regs *regs)<br>
+ 	unsigned int nr = syscall_32_enter(regs);<br>
+ 	int res;<br>
+ <br>
++	add_random_kstack_offset();<br>
+ 	/*<br>
+ 	 * This cannot use syscall_enter_from_user_mode() as it has to<br>
+ 	 * fetch EBP before invoking any of the syscall entry work<br>
+diff --git a/arch/x86/include/asm/entry-common.h b/arch/x86/include/asm/entry-common.h<br>
+index 2b87b19..14ebd21 100644<br>
+--- a/arch/x86/include/asm/entry-common.h<br>
++++ b/arch/x86/include/asm/entry-common.h<br>
+@@ -2,6 +2,7 @@<br>
+ #ifndef _ASM_X86_ENTRY_COMMON_H<br>
+ #define _ASM_X86_ENTRY_COMMON_H<br>
+ <br>
++#include <linux/randomize_kstack.h><br>
+ #include <linux/user-return-notifier.h><br>
+ <br>
+ #include <asm/nospec-branch.h><br>
+@@ -70,6 +71,21 @@ static inline void arch_exit_to_user_mode_prepare(struct pt_regs *regs,<br>
+ 	 */<br>
+ 	current_thread_info()->status &= ~(TS_COMPAT | TS_I386_REGS_POKED);<br>
+ #endif<br>
++<br>
++	/*<br>
++	 * Ultimately, this value will get limited by KSTACK_OFFSET_MAX(),<br>
++	 * but not enough for x86 stack utilization comfort. To keep<br>
++	 * reasonable stack head room, reduce the maximum offset to 8 bits.<br>
++	 *<br>
++	 * The actual entropy will be further reduced by the compiler when<br>
++	 * applying stack alignment constraints (see cc_stack_align4/8 in<br>
++	 * arch/x86/Makefile), which will remove the 3 (x86_64) or 2 (ia32)<br>
++	 * low bits from any entropy chosen here.<br>
++	 *<br>
++	 * Therefore, final stack offset entropy will be 5 (x86_64) or<br>
++	 * 6 (ia32) bits.<br>
++	 */<br>
++	choose_random_kstack_offset(rdtsc() & 0xFF);<br>
+ }<br>
+ #define arch_exit_to_user_mode_prepare arch_exit_to_user_mode_prepare<br>
+ <br>
+<br>
+<br>
+

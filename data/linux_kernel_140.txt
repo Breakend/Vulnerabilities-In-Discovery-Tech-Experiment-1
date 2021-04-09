@@ -1,0 +1,40 @@
+Add a simple-mfd representing IMEM on SDX55 and define the PIL<br>
+relocation info region, so that post mortem tools will be able to locate<br>
+the loaded remoteproc.<br>
+<br>
+Signed-off-by: Manivannan Sadhasivam <manivannan.sadhasivam@xxxxxxxxxx><br>
+---<br>
+ arch/arm/boot/dts/qcom-sdx55.dtsi | 15 +++++++++++++++<br>
+ 1 file changed, 15 insertions(+)<br>
+<br>
+diff --git a/arch/arm/boot/dts/qcom-sdx55.dtsi b/arch/arm/boot/dts/qcom-sdx55.dtsi<br>
+index f2805b526516..4ca871735025 100644<br>
+--- a/arch/arm/boot/dts/qcom-sdx55.dtsi<br>
++++ b/arch/arm/boot/dts/qcom-sdx55.dtsi<br>
+@@ -379,6 +379,21 @@ tlmm: pinctrl@f100000 {<br>
+ 			#interrupt-cells = <2>;<br>
+ 		};<br>
+ <br>
++		imem@1468f000 {<br>
++			compatible = "simple-mfd";<br>
++			reg = <0x1468f000 0x1000>;<br>
++<br>
++			#address-cells = <1>;<br>
++			#size-cells = <1>;<br>
++<br>
++			ranges = <0x0 0x1468f000 0x1000>;<br>
++<br>
++			pil-reloc@94c {<br>
++				compatible = "qcom,pil-reloc-info";<br>
++				reg = <0x94c 0x200>;<br>
++			};<br>
++		};<br>
++<br>
+ 		apps_smmu: iommu@15000000 {<br>
+ 			compatible = "qcom,sdx55-smmu-500", "arm,mmu-500";<br>
+ 			reg = <0x15000000 0x20000>;<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

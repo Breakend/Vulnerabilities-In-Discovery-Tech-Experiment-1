@@ -1,0 +1,27 @@
+On Thu, Apr 8, 2021 at 5:10 PM Daniel Lezcano <daniel.lezcano@xxxxxxxxxx> wrote:<br>
+><i></i><br>
+><i></i><br>
+><i> Hi Rafael,</i><br>
+><i></i><br>
+><i> please consider pulling the following change for cpuidle on ARM for</i><br>
+><i> v5.13-rc1</i><br>
+><i></i><br>
+><i> Thanks</i><br>
+><i></i><br>
+><i>   -- Daniel</i><br>
+><i></i><br>
+><i></i><br>
+><i> The following changes since commit dde8740bd9b505c58ec8b2277d5d55c6951b7e42:</i><br>
+><i></i><br>
+><i>   Merge branch 'acpi-processor-fixes' into linux-next (2021-04-07</i><br>
+><i> 19:02:56 +0200)</i><br>
+<br>
+Can you please rebase this on 5.12-rc6?  My linux-next branch is<br>
+re-merged on a regular basis.<br>
+<br>
+Generally speaking, if you want me to pull from a branch, please make<br>
+sure that this branch is based on a commit present in the Linus' tree,<br>
+preferably one of the commits tagged as -rc or a specific merge.<br>
+<br>
+<br>
+

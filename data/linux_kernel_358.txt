@@ -1,0 +1,53 @@
+RSASSA-PSS verify operation needs to compute digests for its<br>
+Mask Generation Function (MGF1), and for digest comparison.<br>
+<br>
+Add helpers to populate a crypto_shash and desc for use in both cases.<br>
+<br>
+Signed-off-by: Varad Gautam <varad.gautam@xxxxxxxx><br>
+---<br>
+ crypto/rsa-psspad.c | 24 ++++++++++++++++++++++++<br>
+ 1 file changed, 24 insertions(+)<br>
+<br>
+diff --git a/crypto/rsa-psspad.c b/crypto/rsa-psspad.c<br>
+index 0e5422b05c081..855e82ca071a7 100644<br>
+--- a/crypto/rsa-psspad.c<br>
++++ b/crypto/rsa-psspad.c<br>
+@@ -6,9 +6,33 @@<br>
+  * Authors: Varad Gautam <varad.gautam@xxxxxxxx><br>
+  */<br>
+ <br>
++#include <crypto/hash.h><br>
+ #include <crypto/internal/akcipher.h><br>
+ #include <crypto/internal/rsa-common.h><br>
+ <br>
++static int psspad_setup_shash(struct crypto_shash **hash_tfm, struct shash_desc **desc,<br>
++			      const char *hash_algo)<br>
++{<br>
++	*hash_tfm = crypto_alloc_shash(hash_algo, 0, 0);<br>
++	if (IS_ERR(*hash_tfm))<br>
++		return PTR_ERR(*hash_tfm);<br>
++<br>
++	*desc = kzalloc(crypto_shash_descsize(*hash_tfm) + sizeof(**desc),<br>
++			GFP_KERNEL);<br>
++	if (!desc)<br>
++		return -ENOMEM;<br>
++<br>
++	(*desc)->tfm = *hash_tfm;<br>
++<br>
++	return 0;<br>
++}<br>
++<br>
++static void psspad_free_shash(struct crypto_shash *hash_tfm, struct shash_desc *desc)<br>
++{<br>
++	kfree(desc);<br>
++	crypto_free_shash(hash_tfm);<br>
++}<br>
++<br>
+ static int psspad_s_v_e_d(struct akcipher_request *req)<br>
+ {<br>
+ 	return -EOPNOTSUPP;<br>
+-- <br>
+2.30.2<br>
+<br>
+<br>
+

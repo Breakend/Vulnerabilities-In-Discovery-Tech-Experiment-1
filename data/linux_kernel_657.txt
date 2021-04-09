@@ -1,0 +1,71 @@
+As the similar kvm_get_supported_cpuid(),<br>
+kvm_get_emulated_cpuid  allocates and gets<br>
+a struct kvm_cpuid2 filled with emulated features.<br>
+<br>
+Signed-off-by: Emanuele Giuseppe Esposito <eesposit@xxxxxxxxxx><br>
+---<br>
+ .../selftests/kvm/include/x86_64/processor.h  |  1 +<br>
+ .../selftests/kvm/lib/x86_64/processor.c      | 33 +++++++++++++++++++<br>
+ 2 files changed, 34 insertions(+)<br>
+<br>
+diff --git a/tools/testing/selftests/kvm/include/x86_64/processor.h b/tools/testing/selftests/kvm/include/x86_64/processor.h<br>
+index 0b30b4e15c38..ae1b9530e187 100644<br>
+--- a/tools/testing/selftests/kvm/include/x86_64/processor.h<br>
++++ b/tools/testing/selftests/kvm/include/x86_64/processor.h<br>
+@@ -353,6 +353,7 @@ void vcpu_load_state(struct kvm_vm *vm, uint32_t vcpuid,<br>
+ struct kvm_msr_list *kvm_get_msr_index_list(void);<br>
+ uint64_t kvm_get_feature_msr(uint64_t msr_index);<br>
+ struct kvm_cpuid2 *kvm_get_supported_cpuid(void);<br>
++struct kvm_cpuid2 *kvm_get_emulated_cpuid(void);<br>
+ <br>
+ struct kvm_cpuid2 *vcpu_get_cpuid(struct kvm_vm *vm, uint32_t vcpuid);<br>
+ void vcpu_set_cpuid(struct kvm_vm *vm, uint32_t vcpuid,<br>
+diff --git a/tools/testing/selftests/kvm/lib/x86_64/processor.c b/tools/testing/selftests/kvm/lib/x86_64/processor.c<br>
+index e676fe40bfe6..2ea14421bdfe 100644<br>
+--- a/tools/testing/selftests/kvm/lib/x86_64/processor.c<br>
++++ b/tools/testing/selftests/kvm/lib/x86_64/processor.c<br>
+@@ -669,6 +669,39 @@ struct kvm_cpuid2 *kvm_get_supported_cpuid(void)<br>
+ 	return cpuid;<br>
+ }<br>
+ <br>
++/*<br>
++ * KVM Emulated CPUID Get<br>
++ *<br>
++ * Input Args: None<br>
++ *<br>
++ * Output Args:<br>
++ *<br>
++ * Return: The emulated KVM CPUID<br>
++ *<br>
++ * Get the guest CPUID emulated by KVM.<br>
++ */<br>
++struct kvm_cpuid2 *kvm_get_emulated_cpuid(void)<br>
++{<br>
++	static struct kvm_cpuid2 *cpuid;<br>
++	int ret;<br>
++	int kvm_fd;<br>
++<br>
++	if (cpuid)<br>
++		return cpuid;<br>
++<br>
++	cpuid = allocate_kvm_cpuid2();<br>
++	kvm_fd = open(KVM_DEV_PATH, O_RDONLY);<br>
++	if (kvm_fd < 0)<br>
++		exit(KSFT_SKIP);<br>
++<br>
++	ret = ioctl(kvm_fd, KVM_GET_EMULATED_CPUID, cpuid);<br>
++	TEST_ASSERT(ret == 0, "KVM_GET_EMULATED_CPUID failed %d %d\n",<br>
++		    ret, errno);<br>
++<br>
++	close(kvm_fd);<br>
++	return cpuid;<br>
++}<br>
++<br>
+ /*<br>
+  * KVM Get MSR<br>
+  *<br>
+-- <br>
+2.30.2<br>
+<br>
+<br>
+

@@ -1,0 +1,70 @@
+pm_runtime_get_sync will increment pm usage counter even it failed.<br>
+Forgetting to putting operation will result in reference leak here.<br>
+Fix it by replacing it with pm_runtime_resume_and_get to keep usage<br>
+counter balanced.<br>
+<br>
+Signed-off-by: Shixin Liu <liushixin2@xxxxxxxxxx><br>
+---<br>
+ drivers/crypto/allwinner/sun4i-ss/sun4i-ss-cipher.c | 2 +-<br>
+ drivers/crypto/allwinner/sun4i-ss/sun4i-ss-core.c   | 2 +-<br>
+ drivers/crypto/allwinner/sun4i-ss/sun4i-ss-hash.c   | 2 +-<br>
+ drivers/crypto/allwinner/sun4i-ss/sun4i-ss-prng.c   | 2 +-<br>
+ 4 files changed, 4 insertions(+), 4 deletions(-)<br>
+<br>
+diff --git a/drivers/crypto/allwinner/sun4i-ss/sun4i-ss-cipher.c b/drivers/crypto/allwinner/sun4i-ss/sun4i-ss-cipher.c<br>
+index c2e6f5ed1d79..dec79fa3ebaf 100644<br>
+--- a/drivers/crypto/allwinner/sun4i-ss/sun4i-ss-cipher.c<br>
++++ b/drivers/crypto/allwinner/sun4i-ss/sun4i-ss-cipher.c<br>
+@@ -561,7 +561,7 @@ int sun4i_ss_cipher_init(struct crypto_tfm *tfm)<br>
+ 				    sizeof(struct sun4i_cipher_req_ctx) +<br>
+ 				    crypto_skcipher_reqsize(op->fallback_tfm));<br>
+ <br>
+-	err = pm_runtime_get_sync(op->ss->dev);<br>
++	err = pm_runtime_resume_and_get(op->ss->dev);<br>
+ 	if (err < 0)<br>
+ 		goto error_pm;<br>
+ <br>
+diff --git a/drivers/crypto/allwinner/sun4i-ss/sun4i-ss-core.c b/drivers/crypto/allwinner/sun4i-ss/sun4i-ss-core.c<br>
+index ef224d5e4903..44b8fc4b786d 100644<br>
+--- a/drivers/crypto/allwinner/sun4i-ss/sun4i-ss-core.c<br>
++++ b/drivers/crypto/allwinner/sun4i-ss/sun4i-ss-core.c<br>
+@@ -454,7 +454,7 @@ static int sun4i_ss_probe(struct platform_device *pdev)<br>
+ 	 * this info could be useful<br>
+ 	 */<br>
+ <br>
+-	err = pm_runtime_get_sync(ss->dev);<br>
++	err = pm_runtime_resume_and_get(ss->dev);<br>
+ 	if (err < 0)<br>
+ 		goto error_pm;<br>
+ <br>
+diff --git a/drivers/crypto/allwinner/sun4i-ss/sun4i-ss-hash.c b/drivers/crypto/allwinner/sun4i-ss/sun4i-ss-hash.c<br>
+index c1b4585e9bbc..d28292762b32 100644<br>
+--- a/drivers/crypto/allwinner/sun4i-ss/sun4i-ss-hash.c<br>
++++ b/drivers/crypto/allwinner/sun4i-ss/sun4i-ss-hash.c<br>
+@@ -27,7 +27,7 @@ int sun4i_hash_crainit(struct crypto_tfm *tfm)<br>
+ 	algt = container_of(alg, struct sun4i_ss_alg_template, alg.hash);<br>
+ 	op->ss = algt->ss;<br>
+ <br>
+-	err = pm_runtime_get_sync(op->ss->dev);<br>
++	err = pm_runtime_resume_and_get(op->ss->dev);<br>
+ 	if (err < 0)<br>
+ 		return err;<br>
+ <br>
+diff --git a/drivers/crypto/allwinner/sun4i-ss/sun4i-ss-prng.c b/drivers/crypto/allwinner/sun4i-ss/sun4i-ss-prng.c<br>
+index 443160a114bb..491fcb7b81b4 100644<br>
+--- a/drivers/crypto/allwinner/sun4i-ss/sun4i-ss-prng.c<br>
++++ b/drivers/crypto/allwinner/sun4i-ss/sun4i-ss-prng.c<br>
+@@ -29,7 +29,7 @@ int sun4i_ss_prng_generate(struct crypto_rng *tfm, const u8 *src,<br>
+ 	algt = container_of(alg, struct sun4i_ss_alg_template, alg.rng);<br>
+ 	ss = algt->ss;<br>
+ <br>
+-	err = pm_runtime_get_sync(ss->dev);<br>
++	err = pm_runtime_resume_and_get(ss->dev);<br>
+ 	if (err < 0)<br>
+ 		return err;<br>
+ <br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

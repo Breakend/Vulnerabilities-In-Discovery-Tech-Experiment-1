@@ -1,0 +1,164 @@
+Today we get the following code generation for atomic operations:<br>
+<br>
+	c001bb2c:	39 20 00 01 	li      r9,1<br>
+	c001bb30:	7d 40 18 28 	lwarx   r10,0,r3<br>
+	c001bb34:	7d 09 50 50 	subf    r8,r9,r10<br>
+	c001bb38:	7d 00 19 2d 	stwcx.  r8,0,r3<br>
+<br>
+	c001c7a8:	39 40 00 01 	li      r10,1<br>
+	c001c7ac:	7d 00 18 28 	lwarx   r8,0,r3<br>
+	c001c7b0:	7c ea 42 14 	add     r7,r10,r8<br>
+	c001c7b4:	7c e0 19 2d 	stwcx.  r7,0,r3<br>
+<br>
+By allowing GCC to choose between immediate or regular operation,<br>
+we get:<br>
+<br>
+	c001bb2c:	7d 20 18 28 	lwarx   r9,0,r3<br>
+	c001bb30:	39 49 ff ff 	addi    r10,r9,-1<br>
+	c001bb34:	7d 40 19 2d 	stwcx.  r10,0,r3<br>
+	--<br>
+	c001c7a4:	7d 40 18 28 	lwarx   r10,0,r3<br>
+	c001c7a8:	39 0a 00 01 	addi    r8,r10,1<br>
+	c001c7ac:	7d 00 19 2d 	stwcx.  r8,0,r3<br>
+<br>
+For "and", the dot form has to be used because "andi" doesn't exist.<br>
+<br>
+For logical operations we use unsigned 16 bits immediate.<br>
+For arithmetic operations we use signed 16 bits immediate.<br>
+<br>
+On pmac32_defconfig, it reduces the text by approx another 8 kbytes.<br>
+<br>
+Signed-off-by: Christophe Leroy <christophe.leroy@xxxxxxxxxx><br>
+---<br>
+ arch/powerpc/include/asm/atomic.h | 56 +++++++++++++++----------------<br>
+ 1 file changed, 28 insertions(+), 28 deletions(-)<br>
+<br>
+diff --git a/arch/powerpc/include/asm/atomic.h b/arch/powerpc/include/asm/atomic.h<br>
+index 61c6e8b200e8..e4b5e2f25ba7 100644<br>
+--- a/arch/powerpc/include/asm/atomic.h<br>
++++ b/arch/powerpc/include/asm/atomic.h<br>
+@@ -37,62 +37,62 @@ static __inline__ void atomic_set(atomic_t *v, int i)<br>
+ 	__asm__ __volatile__("stw%U0%X0 %1,%0" : "=m"UPD_CONSTR(v->counter) : "r"(i));<br>
+ }<br>
+ <br>
+-#define ATOMIC_OP(op, asm_op)						\<br>
++#define ATOMIC_OP(op, asm_op, dot, sign)				\<br>
+ static __inline__ void atomic_##op(int a, atomic_t *v)			\<br>
+ {									\<br>
+ 	int t;								\<br>
+ 									\<br>
+ 	__asm__ __volatile__(						\<br>
+ "1:	lwarx	%0,0,%3		# atomic_" #op "\n"			\<br>
+-	#asm_op " %0,%2,%0\n"						\<br>
++	#asm_op "%I2" dot " %0,%0,%2\n"					\<br>
+ "	stwcx.	%0,0,%3 \n"						\<br>
+ "	bne-	1b\n"							\<br>
+-	: "=&r" (t), "+m" (v->counter)					\<br>
+-	: "r" (a), "r" (&v->counter)					\<br>
++	: "=&b" (t), "+m" (v->counter)					\<br>
++	: "r"#sign (a), "r" (&v->counter)				\<br>
+ 	: "cc");							\<br>
+ }									\<br>
+ <br>
+-#define ATOMIC_OP_RETURN_RELAXED(op, asm_op)				\<br>
++#define ATOMIC_OP_RETURN_RELAXED(op, asm_op, dot, sign)			\<br>
+ static inline int atomic_##op##_return_relaxed(int a, atomic_t *v)	\<br>
+ {									\<br>
+ 	int t;								\<br>
+ 									\<br>
+ 	__asm__ __volatile__(						\<br>
+ "1:	lwarx	%0,0,%3		# atomic_" #op "_return_relaxed\n"	\<br>
+-	#asm_op " %0,%2,%0\n"						\<br>
++	#asm_op "%I2" dot " %0,%0,%2\n"					\<br>
+ "	stwcx.	%0,0,%3\n"						\<br>
+ "	bne-	1b\n"							\<br>
+-	: "=&r" (t), "+m" (v->counter)					\<br>
+-	: "r" (a), "r" (&v->counter)					\<br>
++	: "=&b" (t), "+m" (v->counter)					\<br>
++	: "r"#sign (a), "r" (&v->counter)				\<br>
+ 	: "cc");							\<br>
+ 									\<br>
+ 	return t;							\<br>
+ }<br>
+ <br>
+-#define ATOMIC_FETCH_OP_RELAXED(op, asm_op)				\<br>
++#define ATOMIC_FETCH_OP_RELAXED(op, asm_op, dot, sign)			\<br>
+ static inline int atomic_fetch_##op##_relaxed(int a, atomic_t *v)	\<br>
+ {									\<br>
+ 	int res, t;							\<br>
+ 									\<br>
+ 	__asm__ __volatile__(						\<br>
+ "1:	lwarx	%0,0,%4		# atomic_fetch_" #op "_relaxed\n"	\<br>
+-	#asm_op " %1,%3,%0\n"						\<br>
++	#asm_op "%I3" dot " %1,%0,%3\n"					\<br>
+ "	stwcx.	%1,0,%4\n"						\<br>
+ "	bne-	1b\n"							\<br>
+-	: "=&r" (res), "=&r" (t), "+m" (v->counter)			\<br>
+-	: "r" (a), "r" (&v->counter)					\<br>
++	: "=&b" (res), "=&r" (t), "+m" (v->counter)			\<br>
++	: "r"#sign (a), "r" (&v->counter)				\<br>
+ 	: "cc");							\<br>
+ 									\<br>
+ 	return res;							\<br>
+ }<br>
+ <br>
+-#define ATOMIC_OPS(op, asm_op)						\<br>
+-	ATOMIC_OP(op, asm_op)						\<br>
+-	ATOMIC_OP_RETURN_RELAXED(op, asm_op)				\<br>
+-	ATOMIC_FETCH_OP_RELAXED(op, asm_op)<br>
++#define ATOMIC_OPS(op, asm_op, dot, sign)				\<br>
++	ATOMIC_OP(op, asm_op, dot, sign)				\<br>
++	ATOMIC_OP_RETURN_RELAXED(op, asm_op, dot, sign)			\<br>
++	ATOMIC_FETCH_OP_RELAXED(op, asm_op, dot, sign)<br>
+ <br>
+-ATOMIC_OPS(add, add)<br>
+-ATOMIC_OPS(sub, subf)<br>
++ATOMIC_OPS(add, add, "", I)<br>
++ATOMIC_OPS(sub, sub, "", I)<br>
+ <br>
+ #define atomic_add_return_relaxed atomic_add_return_relaxed<br>
+ #define atomic_sub_return_relaxed atomic_sub_return_relaxed<br>
+@@ -101,13 +101,13 @@ ATOMIC_OPS(sub, subf)<br>
+ #define atomic_fetch_sub_relaxed atomic_fetch_sub_relaxed<br>
+ <br>
+ #undef ATOMIC_OPS<br>
+-#define ATOMIC_OPS(op, asm_op)						\<br>
+-	ATOMIC_OP(op, asm_op)						\<br>
+-	ATOMIC_FETCH_OP_RELAXED(op, asm_op)<br>
++#define ATOMIC_OPS(op, asm_op, dot, sign)				\<br>
++	ATOMIC_OP(op, asm_op, dot, sign)				\<br>
++	ATOMIC_FETCH_OP_RELAXED(op, asm_op, dot, sign)<br>
+ <br>
+-ATOMIC_OPS(and, and)<br>
+-ATOMIC_OPS(or, or)<br>
+-ATOMIC_OPS(xor, xor)<br>
++ATOMIC_OPS(and, and, ".", K)<br>
++ATOMIC_OPS(or, or, "", K)<br>
++ATOMIC_OPS(xor, xor, "", K)<br>
+ <br>
+ #define atomic_fetch_and_relaxed atomic_fetch_and_relaxed<br>
+ #define atomic_fetch_or_relaxed  atomic_fetch_or_relaxed<br>
+@@ -238,14 +238,14 @@ static __inline__ int atomic_fetch_add_unless(atomic_t *v, int a, int u)<br>
+ "1:	lwarx	%0,0,%1		# atomic_fetch_add_unless\n\<br>
+ 	cmpw	0,%0,%3 \n\<br>
+ 	beq	2f \n\<br>
+-	add	%0,%2,%0 \n"<br>
++	add%I2	%0,%0,%2 \n"<br>
+ "	stwcx.	%0,0,%1 \n\<br>
+ 	bne-	1b \n"<br>
+ 	PPC_ATOMIC_EXIT_BARRIER<br>
+-"	subf	%0,%2,%0 \n\<br>
++"	sub%I2	%0,%0,%2 \n\<br>
+ 2:"<br>
+-	: "=&r" (t)<br>
+-	: "r" (&v->counter), "r" (a), "r" (u)<br>
++	: "=&b" (t)<br>
++	: "r" (&v->counter), "rI" (a), "r" (u)<br>
+ 	: "cc", "memory");<br>
+ <br>
+ 	return t;<br>
+-- <br>
+2.25.0<br>
+<br>
+<br>
+

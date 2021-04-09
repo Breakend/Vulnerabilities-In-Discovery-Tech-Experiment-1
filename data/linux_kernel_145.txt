@@ -1,0 +1,57 @@
+Hi Bjorn,<br>
+<br>
+This series updates the SDX55 devicetree by adding below features:<br>
+<br>
+- A7 PLL<br>
+- APCS mailbox<br>
+- CPUFreq using clk and regulator<br>
+- SMP2P<br>
+- IMEM, PIL<br>
+- SCM<br>
+- Interconnect<br>
+- Telit FN980 TLB board<br>
+- Thundercomm T55 dev board<br>
+- Modem remoteproc<br>
+<br>
+Except remoteproc, all of the driver patches already merged. Remoteproc<br>
+patch will be submitted separately.<br>
+<br>
+Thanks,<br>
+Mani<br>
+<br>
+Manivannan Sadhasivam (15):<br>
+  ARM: dts: qcom: sdx55: Add support for A7 PLL clock<br>
+  ARM: dts: qcom: sdx55: Add support for APCS block<br>
+  ARM: dts: qcom: sdx55: Add CPUFreq support<br>
+  ARM: dts: qcom: sdx55: Add modem SMP2P node<br>
+  ARM: dts: qcom: sdx55: Add IMEM and PIL info region<br>
+  dt-bindings: firmware: scm: Add compatible for SDX55<br>
+  ARM: dts: qcom: sdx55: Add SCM node<br>
+  ARM: dts: qcom: sdx55: Add interconnect nodes<br>
+  ARM: dts: qcom: Fix node name for NAND controller node<br>
+  dt-bindings: arm: qcom: Add binding for Telit FN980 TLB board<br>
+  ARM: dts: qcom: sdx55: Add basic devicetree support for Telit FN980<br>
+    TLB<br>
+  dt-bindings: arm: qcom: Add binding for Thundercomm T55 kit<br>
+  ARM: dts: qcom: sdx55: Add basic devicetree support for Thundercomm<br>
+    T55<br>
+  dt-bindings: remoteproc: qcom: pas: Add binding for SDX55<br>
+  ARM: dts: qcom: sdx55: Add Modem remoteproc node<br>
+<br>
+ .../devicetree/bindings/arm/qcom.yaml         |   2 +<br>
+ .../devicetree/bindings/firmware/qcom,scm.txt |   1 +<br>
+ .../bindings/remoteproc/qcom,adsp.txt         |   4 +<br>
+ arch/arm/boot/dts/Makefile                    |   4 +-<br>
+ arch/arm/boot/dts/qcom-ipq4019.dtsi           |   2 +-<br>
+ arch/arm/boot/dts/qcom-sdx55-t55.dts          | 281 +++++++++++++++++<br>
+ .../boot/dts/qcom-sdx55-telit-fn980-tlb.dts   | 282 ++++++++++++++++++<br>
+ arch/arm/boot/dts/qcom-sdx55.dtsi             | 166 ++++++++++-<br>
+ 8 files changed, 739 insertions(+), 3 deletions(-)<br>
+ create mode 100644 arch/arm/boot/dts/qcom-sdx55-t55.dts<br>
+ create mode 100644 arch/arm/boot/dts/qcom-sdx55-telit-fn980-tlb.dts<br>
+<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

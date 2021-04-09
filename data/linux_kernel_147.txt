@@ -1,0 +1,150 @@
+Add pci_p2pdma_map_segment() as a helper for simple dma_map_sg()<br>
+implementations. It takes an scatterlist segment that must point to a<br>
+pci_p2pdma struct page and will map it if the mapping requires a bus<br>
+address.<br>
+<br>
+The return value indicates whether the mapping required a bus address<br>
+or whether the caller still needs to map the segment normally. If the<br>
+segment should not be mapped, -EREMOTEIO is returned.<br>
+<br>
+This helper uses a state structure to track the changes to the<br>
+pgmap across calls and avoid needing to lookup into the xarray for<br>
+every page.<br>
+<br>
+Also add pci_p2pdma_map_bus_segment() which is useful for IOMMU<br>
+dma_map_sg() implementations where the sg segment containing the page<br>
+differs from the sg segment containing the DMA address.<br>
+<br>
+Signed-off-by: Logan Gunthorpe <logang@xxxxxxxxxxxx><br>
+---<br>
+ drivers/pci/p2pdma.c       | 65 ++++++++++++++++++++++++++++++++++++++<br>
+ include/linux/pci-p2pdma.h | 21 ++++++++++++<br>
+ 2 files changed, 86 insertions(+)<br>
+<br>
+diff --git a/drivers/pci/p2pdma.c b/drivers/pci/p2pdma.c<br>
+index 38c93f57a941..44ad7664e875 100644<br>
+--- a/drivers/pci/p2pdma.c<br>
++++ b/drivers/pci/p2pdma.c<br>
+@@ -923,6 +923,71 @@ void pci_p2pdma_unmap_sg_attrs(struct device *dev, struct scatterlist *sg,<br>
+ }<br>
+ EXPORT_SYMBOL_GPL(pci_p2pdma_unmap_sg_attrs);<br>
+ <br>
++/**<br>
++ * pci_p2pdma_map_segment - map an sg segment determining the mapping type<br>
++ * @state: State structure that should be declared on the stack outside of<br>
++ *	the for_each_sg() loop and initialized to zero.<br>
++ * @dev: DMA device that's doing the mapping operation<br>
++ * @sg: scatterlist segment to map<br>
++ * @attrs: dma mapping attributes<br>
++ *<br>
++ * This is a helper to be used by non-iommu dma_map_sg() implementations where<br>
++ * the sg segment is the same for the page_link and the dma_address.<br>
++ *<br>
++ * Attempt to map a single segment in an SGL with the PCI bus address.<br>
++ * The segment must point to a PCI P2PDMA page and thus must be<br>
++ * wrapped in a is_pci_p2pdma_page(sg_page(sg)) check.<br>
++ *<br>
++ * Returns 1 if the segment was mapped, 0 if the segment should be mapped<br>
++ * directly (or through the IOMMU) and -EREMOTEIO if the segment should not<br>
++ * be mapped at all.<br>
++ */<br>
++int pci_p2pdma_map_segment(struct pci_p2pdma_map_state *state,<br>
++			   struct device *dev, struct scatterlist *sg,<br>
++			   unsigned long dma_attrs)<br>
++{<br>
++	if (state->pgmap != sg_page(sg)->pgmap) {<br>
++		state->pgmap = sg_page(sg)->pgmap;<br>
++		state->map = pci_p2pdma_map_type(state->pgmap, dev, dma_attrs);<br>
++		state->bus_off = to_p2p_pgmap(state->pgmap)->bus_offset;<br>
++	}<br>
++<br>
++	switch (state->map) {<br>
++	case PCI_P2PDMA_MAP_BUS_ADDR:<br>
++		sg->dma_address = sg_phys(sg) + state->bus_off;<br>
++		sg_dma_len(sg) = sg->length;<br>
++		sg_mark_pci_p2pdma(sg);<br>
++		return 1;<br>
++	case PCI_P2PDMA_MAP_THRU_HOST_BRIDGE:<br>
++		return 0;<br>
++	default:<br>
++		return -EREMOTEIO;<br>
++	}<br>
++}<br>
++<br>
++/**<br>
++ * pci_p2pdma_map_bus_segment - map an sg segment pre determined to<br>
++ *	be mapped with PCI_P2PDMA_MAP_BUS_ADDR<br>
++ * @pg_sg: scatterlist segment with the page to map<br>
++ * @dma_sg: scatterlist segment to assign a dma address to<br>
++ *<br>
++ * This is a helper for iommu dma_map_sg() implementations when the<br>
++ * segment for the dma address differs from the segment containing the<br>
++ * source page.<br>
++ *<br>
++ * pci_p2pdma_map_type() must have already been called on the pg_sg and<br>
++ * returned PCI_P2PDMA_MAP_BUS_ADDR.<br>
++ */<br>
++void pci_p2pdma_map_bus_segment(struct scatterlist *pg_sg,<br>
++				struct scatterlist *dma_sg)<br>
++{<br>
++	struct pci_p2pdma_pagemap *pgmap = to_p2p_pgmap(sg_page(pg_sg)->pgmap);<br>
++<br>
++	dma_sg->dma_address = sg_phys(pg_sg) + pgmap->bus_offset;<br>
++	sg_dma_len(dma_sg) = pg_sg->length;<br>
++	sg_mark_pci_p2pdma(dma_sg);<br>
++}<br>
++<br>
+ /**<br>
+  * pci_p2pdma_enable_store - parse a configfs/sysfs attribute store<br>
+  *		to enable p2pdma<br>
+diff --git a/include/linux/pci-p2pdma.h b/include/linux/pci-p2pdma.h<br>
+index a06072ac3a52..49e7679403cf 100644<br>
+--- a/include/linux/pci-p2pdma.h<br>
++++ b/include/linux/pci-p2pdma.h<br>
+@@ -13,6 +13,12 @@<br>
+ <br>
+ #include <linux/pci.h><br>
+ <br>
++struct pci_p2pdma_map_state {<br>
++	struct dev_pagemap *pgmap;<br>
++	int map;<br>
++	u64 bus_off;<br>
++};<br>
++<br>
+ struct block_device;<br>
+ struct scatterlist;<br>
+ <br>
+@@ -43,6 +49,11 @@ int pci_p2pdma_map_sg_attrs(struct device *dev, struct scatterlist *sg,<br>
+ 		int nents, enum dma_data_direction dir, unsigned long attrs);<br>
+ void pci_p2pdma_unmap_sg_attrs(struct device *dev, struct scatterlist *sg,<br>
+ 		int nents, enum dma_data_direction dir, unsigned long attrs);<br>
++int pci_p2pdma_map_segment(struct pci_p2pdma_map_state *state,<br>
++		struct device *dev, struct scatterlist *sg,<br>
++		unsigned long dma_attrs);<br>
++void pci_p2pdma_map_bus_segment(struct scatterlist *pg_sg,<br>
++				struct scatterlist *dma_sg);<br>
+ int pci_p2pdma_enable_store(const char *page, struct pci_dev **p2p_dev,<br>
+ 			    bool *use_p2pdma);<br>
+ ssize_t pci_p2pdma_enable_show(char *page, struct pci_dev *p2p_dev,<br>
+@@ -109,6 +120,16 @@ static inline void pci_p2pdma_unmap_sg_attrs(struct device *dev,<br>
+ 		unsigned long attrs)<br>
+ {<br>
+ }<br>
++static inline int pci_p2pdma_map_segment(struct pci_p2pdma_map_state *state,<br>
++		struct device *dev, struct scatterlist *sg,<br>
++		unsigned long dma_attrs)<br>
++{<br>
++	return 0;<br>
++}<br>
++static inline void pci_p2pdma_map_bus_segment(struct scatterlist *pg_sg,<br>
++					      struct scatterlist *dma_sg)<br>
++{<br>
++}<br>
+ static inline int pci_p2pdma_enable_store(const char *page,<br>
+ 		struct pci_dev **p2p_dev, bool *use_p2pdma)<br>
+ {<br>
+-- <br>
+2.20.1<br>
+<br>
+<br>
+

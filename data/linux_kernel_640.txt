@@ -1,0 +1,33 @@
+Added spaces around '+' to improve readability and adhere to linux<br>
+kernel coding style.<br>
+Reported by checkpatch<br>
+<br>
+Signed-off-by: Mitali Borkar <mitaliborkar810@xxxxxxxxx><br>
+---<br>
+<br>
+Changes from v1: No changes in the code, but only to subject description<br>
+and patch body. <br>
+Changed the subject decription according to PatchPhilosophy and made<br>
+patch body more clearer.<br>
+<br>
+drivers/staging/rtl8712/wlan_bssdef.h | 2 +-<br>
+ 1 file changed, 1 insertion(+), 1 deletion(-)<br>
+<br>
+diff --git a/drivers/staging/rtl8712/wlan_bssdef.h b/drivers/staging/rtl8712/wlan_bssdef.h<br>
+index b54ccaacc527..ec3749813728 100644<br>
+--- a/drivers/staging/rtl8712/wlan_bssdef.h<br>
++++ b/drivers/staging/rtl8712/wlan_bssdef.h<br>
+@@ -176,7 +176,7 @@ struct NDIS_802_11_WEP {<br>
+ #define MIC_CHECK_TIME	60000000<br>
+ <br>
+ #ifndef Ndis802_11APMode<br>
+-#define Ndis802_11APMode (Ndis802_11InfrastructureMax+1)<br>
++#define Ndis802_11APMode (Ndis802_11InfrastructureMax + 1)<br>
+ #endif<br>
+ <br>
+ struct	wlan_network {<br>
+-- <br>
+2.30.2<br>
+<br>
+<br>
+

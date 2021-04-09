@@ -1,0 +1,26 @@
+The snd_soc_dai_ops structures is only stored in the ops field of a<br>
+snd_soc_dai_driver structure, so make the snd_soc_dai_ops structure<br>
+const to allow the compiler to put it in read-only memory.<br>
+<br>
+Reported-by: Hulk Robot <hulkci@xxxxxxxxxx><br>
+Signed-off-by: Ye Bin <yebin10@xxxxxxxxxx><br>
+---<br>
+ sound/soc/codecs/lpass-tx-macro.c | 2 +-<br>
+ 1 file changed, 1 insertion(+), 1 deletion(-)<br>
+<br>
+diff --git a/sound/soc/codecs/lpass-tx-macro.c b/sound/soc/codecs/lpass-tx-macro.c<br>
+index e8c6c738bbaa..acd2fbc0ca7c 100644<br>
+--- a/sound/soc/codecs/lpass-tx-macro.c<br>
++++ b/sound/soc/codecs/lpass-tx-macro.c<br>
+@@ -1124,7 +1124,7 @@ static int tx_macro_digital_mute(struct snd_soc_dai *dai, int mute, int stream)<br>
+ 	return 0;<br>
+ }<br>
+ <br>
+-static struct snd_soc_dai_ops tx_macro_dai_ops = {<br>
++static const struct snd_soc_dai_ops tx_macro_dai_ops = {<br>
+ 	.hw_params = tx_macro_hw_params,<br>
+ 	.get_channel_map = tx_macro_get_channel_map,<br>
+ 	.mute_stream = tx_macro_digital_mute,<br>
+<br>
+<br>
+

@@ -1,0 +1,30 @@
+Enable MT7530 interrupt controller in the MT7621 SoC.<br>
+<br>
+Signed-off-by: DENG Qingfang <dqfext@xxxxxxxxx><br>
+Reviewed-by: Andrew Lunn <andrew@xxxxxxx><br>
+---<br>
+RFC v2 -> RFC v3:<br>
+- No changes.<br>
+<br>
+ drivers/staging/mt7621-dts/mt7621.dtsi | 3 +++<br>
+ 1 file changed, 3 insertions(+)<br>
+<br>
+diff --git a/drivers/staging/mt7621-dts/mt7621.dtsi b/drivers/staging/mt7621-dts/mt7621.dtsi<br>
+index 16fc94f65486..ebf8b0633e88 100644<br>
+--- a/drivers/staging/mt7621-dts/mt7621.dtsi<br>
++++ b/drivers/staging/mt7621-dts/mt7621.dtsi<br>
+@@ -447,6 +447,9 @@ switch0: switch0@0 {<br>
+ 				mediatek,mcm;<br>
+ 				resets = <&rstctrl 2>;<br>
+ 				reset-names = "mcm";<br>
++				interrupt-controller;<br>
++				interrupt-parent = <&gic>;<br>
++				interrupts = <GIC_SHARED 23 IRQ_TYPE_LEVEL_HIGH>;<br>
+ <br>
+ 				ports {<br>
+ 					#address-cells = <1>;<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

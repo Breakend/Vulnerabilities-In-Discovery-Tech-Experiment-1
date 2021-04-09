@@ -1,0 +1,40 @@
+On Thu, Apr 08, 2021 at 09:00:26AM +0200, Peter Zijlstra wrote:<br>
+><i> On Wed, Apr 07, 2021 at 10:27:12PM +0100, Matthew Wilcox wrote:</i><br>
+><i> > Doing I/O without any lock held already works; it just uses the file</i><br>
+><i> > refcount.  It would be better to use a vma refcount, as I already said.</i><br>
+><i> </i><br>
+><i> The original workload that I developed SPF for (waaaay back when) was</i><br>
+><i> prefaulting a single huge vma. Using a vma refcount was a total loss</i><br>
+><i> because it resulted in the same cacheline contention that down_read()</i><br>
+><i> was having.</i><br>
+><i> </i><br>
+><i> As such, I'm always incredibly sad to see mention of vma refcounts.</i><br>
+><i> They're fundamentally not solving the problem :/</i><br>
+<br>
+OK, let me outline my locking scheme because I think it's rather better<br>
+than Michel's.  The vma refcount is the slow path.<br>
+<br>
+1. take the RCU read lock<br>
+2. walk the pgd/p4d/pud/pmd<br>
+3. allocate page tables if necessary.  *handwave GFP flags*.<br>
+4. walk the vma tree<br>
+5. call ->map_pages<br>
+6. take ptlock<br>
+7. insert page(s)<br>
+8. drop ptlock<br>
+if this all worked out, we're done, drop the RCU read lock and return.<br>
+9. increment vma refcount<br>
+10. drop RCU read lock<br>
+11. call ->fault<br>
+12. decrement vma refcount<br>
+<br>
+Compared to today, where we bump the refcount on the file underlying the<br>
+vma, this is _better_ scalability -- different mappings of the same file<br>
+will not contend on the file's refcount.<br>
+<br>
+I suspect your huge VMA was anon, and that wouldn't need a vma refcount<br>
+as faulting in new pages doesn't need to do I/O, just drop the RCU<br>
+lock, allocate and retry.<br>
+<br>
+<br>
+

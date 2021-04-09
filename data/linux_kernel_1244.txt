@@ -1,0 +1,138 @@
+Hello Andy,<br>
+<br>
+On Wed, 2021-04-07 at 16:21 +0300, Andy Shevchenko wrote:<br>
+><i> On Wed, Apr 7, 2021 at 1:04 PM Matti Vaittinen</i><br>
+><i> <matti.vaittinen@xxxxxxxxxxxxxxxxx> wrote:</i><br>
+><i> > Provide helper function for IC's implementing regulator</i><br>
+><i> > notifications</i><br>
+><i> > when an IRQ fires. The helper also works for IRQs which can not be</i><br>
+><i> > acked.</i><br>
+><i> > Helper can be set to disable the IRQ at handler and then re-</i><br>
+><i> > enabling it</i><br>
+><i> > on delayed work later. The helper also adds</i><br>
+><i> > regulator_get_error_flags()</i><br>
+><i> > errors in cache for the duration of IRQ disabling.</i><br>
+><i> </i><br>
+><i> Thanks for an update, my comments below. After addressing them, feel</i><br>
+><i> free to add</i><br>
+><i> Reviewed-by: Andy Shevchenko <andy.shevchenko@xxxxxxxxx></i><br>
+<br>
+I (eventually) disagreed with couple of points here and haven't changed<br>
+those. Please see list below.<br>
+<br>
+I still do think you did a really good job reviewing this - and you<br>
+should get the recognition from that work. Thus I'd nevertheless would<br>
+like to add your Reviewed-by to the next version. Please let me know if<br>
+you think it's ok. (I have the v7 ready but I'll wait until the next<br>
+Monday before sending it to see if this brings more discussion).<br>
+<br>
+><i> > +/**</i><br>
+><i> > + * devm_regulator_irq_helper - resource managed registration of</i><br>
+><i> > IRQ based</i><br>
+><i> > + * regulator event/error notifier</i><br>
+><i> > + *</i><br>
+><i> > + * @dev:               device to which lifetime the helper's</i><br>
+><i> > lifetime is</i><br>
+><i> > + *                     bound.</i><br>
+><i> > + * @d:                 IRQ helper descriptor.</i><br>
+><i> > + * @irq:               IRQ used to inform events/errors to be</i><br>
+><i> > notified.</i><br>
+><i> > + * @irq_flags:         Extra IRQ flags to be OR's with the default</i><br>
+><i> > IRQF_ONESHOT</i><br>
+><i> > + *                     when requesting the (threaded) irq.</i><br>
+><i> > + * @common_errs:       Errors which can be flagged by this IRQ for</i><br>
+><i> > all rdevs.</i><br>
+><i> > + *                     When IRQ is re-enabled these errors will be</i><br>
+><i> > cleared</i><br>
+><i> > + *                     from all associated regulators</i><br>
+><i> > + * @per_rdev_errs:     Optional error flag array describing errors</i><br>
+><i> > specific</i><br>
+><i> > + *                     for only some of the regulators. These</i><br>
+><i> > errors will be</i><br>
+><i> > + *                     or'ed with common errors. If this is given</i><br>
+><i> > the array</i><br>
+><i> > + *                     should contain rdev_amount flags. Can be</i><br>
+><i> > set to NULL</i><br>
+><i> > + *                     if there is no regulator specific error</i><br>
+><i> > flags for this</i><br>
+><i> > + *                     IRQ.</i><br>
+><i> > + * @rdev:              Array of regulators associated with this</i><br>
+><i> > IRQ.</i><br>
+><i> > + * @rdev_amount:       Amount of regulators associated wit this</i><br>
+><i> > IRQ.</i><br>
+><i> </i><br>
+><i> Can you describe, please, the return value meaning. It will be good</i><br>
+><i> also to move detailed descriptions (expectations?) of the fields to</i><br>
+><i> the Description section, here.</i><br>
+<br>
+I added the return-value documentation as you suggested. For parameter<br>
+descriptions I still think the best and clearest place is in parameter<br>
+description.<br>
+<br>
+><i> </i><br>
+><i> > + */</i><br>
+><i> > +void *devm_regulator_irq_helper(struct device *dev,</i><br>
+><i> > +                               const struct regulator_irq_desc *d,</i><br>
+><i> > int irq,</i><br>
+><i> > +                               int irq_flags, int common_errs,</i><br>
+><i> > +                               int *per_rdev_errs,</i><br>
+><i> > +                               struct regulator_dev **rdev, int</i><br>
+><i> > rdev_amount)</i><br>
+><i> </i><br>
+><i> I didn't get why you need the ** pointer instead of plain pointer.</i><br>
+><i> </i><br>
+<br>
+This I replied to earlier - I did change the parameter documentation a<br>
+bit to explain this:<br>
+"@rdev: Array of pointers to regulators associated with this IRQ"<br>
+<br>
+><i> > +#include <linux/regmap.h></i><br>
+><i> > +#include <linux/slab.h></i><br>
+><i> > +#include <linux/spinlock.h></i><br>
+><i> </i><br>
+><i> + Blank line? I would separate group of generic headers with</i><br>
+><i> particular to the subsystem</i><br>
+<br>
+I haven't seen this practice in other parts of regulator subsystem (and<br>
+I personally fail to see the value).<br>
+<br>
+><i> > +/**</i><br>
+><i> > + * struct regulator_irq_data - regulator error/notification status</i><br>
+><i> > date</i><br>
+><i> > + *</i><br>
+><i> > + * @states:    Status structs for each of the associated</i><br>
+><i> > regulators.</i><br>
+><i> > + * @num_states:        Amount of associated regulators.</i><br>
+><i> > + * @data:      Driver data pointer given at regulator_irq_desc.</i><br>
+><i> > + * @opaque:    Value storage for IC driver. Core does not update</i><br>
+><i> > this. ICs</i><br>
+><i> > + *             may want to store status register value here at</i><br>
+><i> > map_event and</i><br>
+><i> > + *             compare contents at renable to see if new problems</i><br>
+><i> > have been</i><br>
+><i> </i><br>
+><i> re-enable / reenable</i><br>
+><i> </i><br>
+><i> > + *             added to status. If that is the case it may be</i><br>
+><i> > desirable to</i><br>
+><i> > + *             return REGULATOR_ERROR_CLEARED and not</i><br>
+><i> > REGULATOR_ERROR_ON to</i><br>
+><i> > + *             allow IRQ fire again and to generate notifications</i><br>
+><i> > also for</i><br>
+><i> > + *             the new issues.</i><br>
+><i> > + *</i><br>
+><i> > + * This structure is passed to map_event and renable for reporting</i><br>
+><i> > regulator</i><br>
+><i> </i><br>
+><i> Ditto.</i><br>
+<br>
+'renable' refers to the callback name. I tried to clarify that in<br>
+comments though.<br>
+"compare contents at 'renable' callback to see..." and "This structure<br>
+is passed to 'map_event' and 'renable' callbacks for..."<br>
+<br>
+Best Regards<br>
+	Matti Vaittinen<br>
+<br>
+<br>
+

@@ -1,0 +1,40 @@
+On Thu, 8 Apr 2021 15:14:04 +0200<br>
+Thierry Reding <thierry.reding@xxxxxxxxx> wrote:<br>
+<br>
+><i> On Thu, Apr 08, 2021 at 08:52:57AM +0000, Carlis wrote:</i><br>
+><i> > From: Xuezhi Zhang <zhangxuezhi1@xxxxxxxxxx></i><br>
+><i> > </i><br>
+><i> > Fix the following coccicheck warning:</i><br>
+><i> > drivers/gpu/drm//panel/panel-dsi-cm.c:271:8-16: </i><br>
+><i> > WARNING: use scnprintf or sprintf</i><br>
+><i> > drivers/gpu/drm//panel/panel-dsi-cm.c:251:8-16: </i><br>
+><i> > WARNING: use scnprintf or sprintf</i><br>
+><i> > </i><br>
+><i> > Signed-off-by: Xuezhi Zhang <zhangxuezhi1@xxxxxxxxxx></i><br>
+><i> > ---</i><br>
+><i> > v2: change snprint to snprintf in subject.</i><br>
+><i> > ---</i><br>
+><i> >  drivers/gpu/drm/panel/panel-dsi-cm.c | 4 ++--</i><br>
+><i> >  1 file changed, 2 insertions(+), 2 deletions(-)  </i><br>
+><i> </i><br>
+><i> Nit: I suspect you might've just resent this from some private email</i><br>
+><i> address, but it's kind of hard to tell because you haven't been using</i><br>
+><i> at least the same name in both email addresses.</i><br>
+><i> </i><br>
+><i> However, if you're forwarding this patch on behalf of somebody else</i><br>
+><i> you need to add your own Signed-off-by: line.</i><br>
+><i> </i><br>
+><i> Reviewed-by: Thierry Reding <treding@xxxxxxxxxx></i><br>
+<br>
+Hi,<br>
+   the email address of llyz108@xxxxxxx is my private email address,<br>
+   and zhangxuezhi@xxxxxxxxx is my company email address, and Carlis is <br>
+   my English name ,Xuezhi Zhang is my Chinese name, i will use the<br>
+   Chinese name to send the emails and patchs in the future.<br>
+<br>
+thanks,<br>
+<br>
+Xuezhi Zhang<br>
+<br>
+<br>
+

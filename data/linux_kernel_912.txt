@@ -1,0 +1,45 @@
+On Thu, Apr 08, 2021 at 11:20:10AM +0200, David Hildenbrand wrote:<br>
+><i> Random drivers should not override a user configuration of core knobs</i><br>
+><i> (e.g., CONFIG_DMA_CMA=n). Use "imply" instead, to still respect</i><br>
+><i> dependencies and manual overrides.</i><br>
+><i> </i><br>
+><i> "This is similar to "select" as it enforces a lower limit on another</i><br>
+><i>  symbol except that the "implied" symbol's value may still be set to n</i><br>
+><i>  from a direct dependency or with a visible prompt."</i><br>
+><i> </i><br>
+><i> Implying DRM_CMA should be sufficient, as that depends on CMA.</i><br>
+<br>
+	  ^ DMA_CMA ?<br>
+<br>
+><i> Note: If this is a real dependency, we should use "depends on DMA_CMA"</i><br>
+><i> instead -  but I assume the driver can work without CMA just fine --</i><br>
+><i> esp. when we wouldn't have HAVE_DMA_CONTIGUOUS or CMA right now.</i><br>
+><i> </i><br>
+><i> Signed-off-by: David Hildenbrand <david@xxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  drivers/video/fbdev/Kconfig | 2 +-</i><br>
+><i>  1 file changed, 1 insertion(+), 1 deletion(-)</i><br>
+><i> </i><br>
+><i> diff --git a/drivers/video/fbdev/Kconfig b/drivers/video/fbdev/Kconfig</i><br>
+><i> index 4f02db65dede..d37cd5341e1b 100644</i><br>
+><i> --- a/drivers/video/fbdev/Kconfig</i><br>
+><i> +++ b/drivers/video/fbdev/Kconfig</i><br>
+><i> @@ -2186,7 +2186,7 @@ config FB_HYPERV</i><br>
+><i>  	select FB_CFB_COPYAREA</i><br>
+><i>  	select FB_CFB_IMAGEBLIT</i><br>
+><i>  	select FB_DEFERRED_IO</i><br>
+><i> -	select DMA_CMA if HAVE_DMA_CONTIGUOUS && CMA</i><br>
+><i> +	imply DMA_CMA</i><br>
+><i>  	help</i><br>
+><i>  	  This framebuffer driver supports Microsoft Hyper-V Synthetic Video.</i><br>
+><i>  </i><br>
+><i> -- </i><br>
+><i> 2.30.2</i><br>
+><i> </i><br>
+<br>
+-- <br>
+Sincerely yours,<br>
+Mike.<br>
+<br>
+<br>
+

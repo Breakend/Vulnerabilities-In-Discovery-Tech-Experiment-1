@@ -1,0 +1,43 @@
+Remove unused variable from rtl871x_mlme.c.<br>
+<br>
+No side effects can be seen locally or in r8712_find_network()<br>
+<br>
+Signed-off-by: Sergei Krainov <sergei.krainov.lkd@xxxxxxxxx><br>
+---<br>
+Mention in the description that no observable side effects were found<br>
+<br>
+ drivers/staging/rtl8712/rtl871x_mlme.c | 9 +--------<br>
+ 1 file changed, 1 insertion(+), 8 deletions(-)<br>
+<br>
+diff --git a/drivers/staging/rtl8712/rtl871x_mlme.c b/drivers/staging/rtl8712/rtl871x_mlme.c<br>
+index 8a97307fbbd6..4f41e321ea63 100644<br>
+--- a/drivers/staging/rtl8712/rtl871x_mlme.c<br>
++++ b/drivers/staging/rtl8712/rtl871x_mlme.c<br>
+@@ -656,7 +656,7 @@ void r8712_joinbss_event_callback(struct _adapter *adapter, u8 *pbuf)<br>
+ 	struct sta_priv	*pstapriv = &adapter->stapriv;<br>
+ 	struct mlme_priv	*pmlmepriv = &adapter->mlmepriv;<br>
+ 	struct wlan_network	*cur_network = &pmlmepriv->cur_network;<br>
+-	struct wlan_network	*pcur_wlan = NULL, *ptarget_wlan = NULL;<br>
++	struct wlan_network	*ptarget_wlan = NULL;<br>
+ 	unsigned int		the_same_macaddr = false;<br>
+ 	struct wlan_network *pnetwork;<br>
+ <br>
+@@ -721,13 +721,6 @@ void r8712_joinbss_event_callback(struct _adapter *adapter, u8 *pbuf)<br>
+ 					    scanned_queue,<br>
+ 					    cur_network->network.MacAddress);<br>
+ 				} else {<br>
+-					pcur_wlan =<br>
+-					     r8712_find_network(&pmlmepriv-><br>
+-					     scanned_queue,<br>
+-					     cur_network->network.MacAddress);<br>
+-					if (pcur_wlan)<br>
+-						pcur_wlan->fixed = false;<br>
+-<br>
+ 					pcur_sta = r8712_get_stainfo(pstapriv,<br>
+ 					     cur_network->network.MacAddress);<br>
+ 					spin_lock_irqsave(&pstapriv-><br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

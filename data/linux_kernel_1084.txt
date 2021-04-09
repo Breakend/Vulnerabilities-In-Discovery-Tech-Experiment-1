@@ -1,0 +1,28 @@
+pm_runtime_get_sync will increment pm usage counter even it failed.<br>
+Forgetting to putting operation will result in reference leak here.<br>
+Fix it by replacing it with pm_runtime_resume_and_get to keep usage<br>
+counter balanced.<br>
+<br>
+Signed-off-by: Shixin Liu <liushixin2@xxxxxxxxxx><br>
+---<br>
+ drivers/crypto/allwinner/sun8i-ce/sun8i-ce-core.c | 2 +-<br>
+ 1 file changed, 1 insertion(+), 1 deletion(-)<br>
+<br>
+diff --git a/drivers/crypto/allwinner/sun8i-ce/sun8i-ce-core.c b/drivers/crypto/allwinner/sun8i-ce/sun8i-ce-core.c<br>
+index 158422ff5695..00194d1d9ae6 100644<br>
+--- a/drivers/crypto/allwinner/sun8i-ce/sun8i-ce-core.c<br>
++++ b/drivers/crypto/allwinner/sun8i-ce/sun8i-ce-core.c<br>
+@@ -932,7 +932,7 @@ static int sun8i_ce_probe(struct platform_device *pdev)<br>
+ 	if (err)<br>
+ 		goto error_alg;<br>
+ <br>
+-	err = pm_runtime_get_sync(ce->dev);<br>
++	err = pm_runtime_resume_and_get(ce->dev);<br>
+ 	if (err < 0)<br>
+ 		goto error_alg;<br>
+ <br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

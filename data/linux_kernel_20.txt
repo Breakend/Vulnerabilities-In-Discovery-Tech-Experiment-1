@@ -1,0 +1,70 @@
+The Special Function Registers on all Exynos SoC, including ARM64, are<br>
+32-bit wide, so entire driver uses matching functions like readl() or<br>
+writel().  On 64-bit ARM using unsigned long for register masks:<br>
+1. makes little sense as immediately after bitwise operation it will be<br>
+   cast to 32-bit value when calling writel(),<br>
+2. is actually error-prone because it might promote other operands to<br>
+   64-bit.<br>
+<br>
+Addresses-Coverity: Unintentional integer overflow<br>
+Signed-off-by: Krzysztof Kozlowski <krzysztof.kozlowski@xxxxxxxxxxxxx><br>
+<br>
+---<br>
+<br>
+Not tested on ARM64.<br>
+<br>
+Dear Linus,<br>
+<br>
+Please apply it directly, I don't have any patches for Samsung pinctrl<br>
+in my tree.<br>
+---<br>
+ drivers/pinctrl/samsung/pinctrl-exynos.c | 10 +++++-----<br>
+ 1 file changed, 5 insertions(+), 5 deletions(-)<br>
+<br>
+diff --git a/drivers/pinctrl/samsung/pinctrl-exynos.c b/drivers/pinctrl/samsung/pinctrl-exynos.c<br>
+index 0cd7f33cdf25..2b99f4130e1e 100644<br>
+--- a/drivers/pinctrl/samsung/pinctrl-exynos.c<br>
++++ b/drivers/pinctrl/samsung/pinctrl-exynos.c<br>
+@@ -55,7 +55,7 @@ static void exynos_irq_mask(struct irq_data *irqd)<br>
+ 	struct exynos_irq_chip *our_chip = to_exynos_irq_chip(chip);<br>
+ 	struct samsung_pin_bank *bank = irq_data_get_irq_chip_data(irqd);<br>
+ 	unsigned long reg_mask = our_chip->eint_mask + bank->eint_offset;<br>
+-	unsigned long mask;<br>
++	unsigned int mask;<br>
+ 	unsigned long flags;<br>
+ <br>
+ 	raw_spin_lock_irqsave(&bank->slock, flags);<br>
+@@ -83,7 +83,7 @@ static void exynos_irq_unmask(struct irq_data *irqd)<br>
+ 	struct exynos_irq_chip *our_chip = to_exynos_irq_chip(chip);<br>
+ 	struct samsung_pin_bank *bank = irq_data_get_irq_chip_data(irqd);<br>
+ 	unsigned long reg_mask = our_chip->eint_mask + bank->eint_offset;<br>
+-	unsigned long mask;<br>
++	unsigned int mask;<br>
+ 	unsigned long flags;<br>
+ <br>
+ 	/*<br>
+@@ -483,7 +483,7 @@ static void exynos_irq_eint0_15(struct irq_desc *desc)<br>
+ 	chained_irq_exit(chip, desc);<br>
+ }<br>
+ <br>
+-static inline void exynos_irq_demux_eint(unsigned long pend,<br>
++static inline void exynos_irq_demux_eint(unsigned int pend,<br>
+ 						struct irq_domain *domain)<br>
+ {<br>
+ 	unsigned int irq;<br>
+@@ -500,8 +500,8 @@ static void exynos_irq_demux_eint16_31(struct irq_desc *desc)<br>
+ {<br>
+ 	struct irq_chip *chip = irq_desc_get_chip(desc);<br>
+ 	struct exynos_muxed_weint_data *eintd = irq_desc_get_handler_data(desc);<br>
+-	unsigned long pend;<br>
+-	unsigned long mask;<br>
++	unsigned int pend;<br>
++	unsigned int mask;<br>
+ 	int i;<br>
+ <br>
+ 	chained_irq_enter(chip, desc);<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

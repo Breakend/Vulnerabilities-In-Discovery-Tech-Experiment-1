@@ -1,0 +1,45 @@
+Turns out there is a lot of tty-internal stuff in include/linux/tty.h<br>
+that do not belong there.  Create a internal-to-the-tty-layer .h file<br>
+for these types of things and move function prototypes to it instead of<br>
+being in the system-wide header file.<br>
+<br>
+Along the way clean up the use of some old tty-only debugging macros and<br>
+use the in-kernel dev_*() calls instead.<br>
+<br>
+Greg Kroah-Hartman (13):<br>
+  tty: create internal tty.h file<br>
+  tty: tty.h: remove tty_info()<br>
+  tty: remove tty_err()<br>
+  tty: remove tty_notice()<br>
+  tty: remove tty_warn()<br>
+  tty: remove tty_info_ratelimited()<br>
+  tty: remove tty_debug()<br>
+  tty: audit: move some local functions out of tty.h<br>
+  tty: move some internal tty lock enums and functions out of tty.h<br>
+  tty: make tty_release_redirect() static<br>
+  tty: move some tty-only functions to drivers/tty/tty.h<br>
+  tty: remove tty_driver_name()<br>
+  tty: clean include/linux/tty.h up<br>
+<br>
+ drivers/tty/n_gsm.c       |   1 +<br>
+ drivers/tty/n_hdlc.c      |   1 +<br>
+ drivers/tty/n_tty.c       |   5 +-<br>
+ drivers/tty/pty.c         |   3 +-<br>
+ drivers/tty/tty.h         | 103 ++++++++++++++++++++++++++++++++++++++<br>
+ drivers/tty/tty_audit.c   |   1 +<br>
+ drivers/tty/tty_buffer.c  |   2 +-<br>
+ drivers/tty/tty_io.c      |  43 +++++++---------<br>
+ drivers/tty/tty_ioctl.c   |   3 +-<br>
+ drivers/tty/tty_jobctrl.c |   7 +--<br>
+ drivers/tty/tty_ldisc.c   |   3 +-<br>
+ drivers/tty/tty_mutex.c   |   1 +<br>
+ drivers/tty/tty_port.c    |   5 +-<br>
+ include/linux/tty.h       | 100 ------------------------------------<br>
+ 14 files changed, 142 insertions(+), 136 deletions(-)<br>
+ create mode 100644 drivers/tty/tty.h<br>
+<br>
+-- <br>
+2.31.1<br>
+<br>
+<br>
+

@@ -1,0 +1,98 @@
+08.04.2021 15:40, Thierry Reding пишет:<br>
+><i> On Mon, Mar 29, 2021 at 02:32:55AM +0300, Dmitry Osipenko wrote:</i><br>
+><i>> All consumer-grade Android and Chromebook devices show a splash screen</i><br>
+><i>> on boot and then display is left enabled when kernel is booted. This</i><br>
+><i>> behaviour is unacceptable in a case of implicit IOMMU domains to which</i><br>
+><i>> devices are attached during kernel boot since devices, like display</i><br>
+><i>> controller, may perform DMA at that time. We can work around this problem</i><br>
+><i>> by deferring the enable of SMMU translation for a specific devices,</i><br>
+><i>> like a display controller, until the first IOMMU mapping is created,</i><br>
+><i>> which works good enough in practice because by that time h/w is already</i><br>
+><i>> stopped.</i><br>
+><i>></i><br>
+><i>> Signed-off-by: Dmitry Osipenko <digetx@xxxxxxxxx></i><br>
+><i>> ---</i><br>
+><i>>  drivers/iommu/tegra-smmu.c | 71 ++++++++++++++++++++++++++++++++++++++</i><br>
+><i>>  1 file changed, 71 insertions(+)</i><br>
+><i> </i><br>
+><i> In general I do see why we would want to enable this. However, I think</i><br>
+><i> this is a bad idea because it's going to proliferate the bad practice of</i><br>
+><i> not describing things properly in device tree.</i><br>
+><i> </i><br>
+><i> Whatever happened to the idea of creating identity mappings based on the</i><br>
+><i> obscure tegra_fb_mem (or whatever it was called) command-line option? Is</i><br>
+><i> that command-line not universally passed to the kernel from bootloaders</i><br>
+><i> that initialize display?</i><br>
+<br>
+This is still a good idea! The command-line isn't universally passed<br>
+just because it's up to a user to override the cmdline and then we get a<br>
+hang (a very slow boot in reality) on T30 since display client takes out<br>
+the whole memory bus with the constant SMMU faults. For example I don't<br>
+have that cmdline option in my current setups.<br>
+<br>
+><i> That idealistic objection aside, this seems a bit over-engineered for</i><br>
+><i> the hack that it is. See below.</i><br>
+><i> </i><br>
+><i>> diff --git a/drivers/iommu/tegra-smmu.c b/drivers/iommu/tegra-smmu.c</i><br>
+><i>> index 602aab98c079..af1e4b5adb27 100644</i><br>
+><i>> --- a/drivers/iommu/tegra-smmu.c</i><br>
+><i>> +++ b/drivers/iommu/tegra-smmu.c</i><br>
+><i>> @@ -60,6 +60,8 @@ struct tegra_smmu_as {</i><br>
+><i>>  	dma_addr_t pd_dma;</i><br>
+><i>>  	unsigned id;</i><br>
+><i>>  	u32 attr;</i><br>
+><i>> +	bool display_attached[2];</i><br>
+><i>> +	bool attached_devices_need_sync;</i><br>
+><i>>  };</i><br>
+><i>>  </i><br>
+><i>>  static struct tegra_smmu_as *to_smmu_as(struct iommu_domain *dom)</i><br>
+><i>> @@ -78,6 +80,10 @@ static inline u32 smmu_readl(struct tegra_smmu *smmu, unsigned long offset)</i><br>
+><i>>  	return readl(smmu->regs + offset);</i><br>
+><i>>  }</i><br>
+><i>>  </i><br>
+><i>> +/* all Tegra SoCs use the same group IDs for displays */</i><br>
+><i>> +#define SMMU_SWGROUP_DC		1</i><br>
+><i>> +#define SMMU_SWGROUP_DCB	2</i><br>
+><i>> +</i><br>
+><i>>  #define SMMU_CONFIG 0x010</i><br>
+><i>>  #define  SMMU_CONFIG_ENABLE (1 << 0)</i><br>
+><i>>  </i><br>
+><i>> @@ -253,6 +259,20 @@ static inline void smmu_flush(struct tegra_smmu *smmu)</i><br>
+><i>>  	smmu_readl(smmu, SMMU_PTB_ASID);</i><br>
+><i>>  }</i><br>
+><i>>  </i><br>
+><i>> +static int smmu_swgroup_to_display_id(unsigned int swgroup)</i><br>
+><i>> +{</i><br>
+><i>> +	switch (swgroup) {</i><br>
+><i>> +	case SMMU_SWGROUP_DC:</i><br>
+><i>> +		return 0;</i><br>
+><i>> +</i><br>
+><i>> +	case SMMU_SWGROUP_DCB:</i><br>
+><i>> +		return 1;</i><br>
+><i>> +</i><br>
+><i>> +	default:</i><br>
+><i>> +		return -1;</i><br>
+><i>> +	}</i><br>
+><i>> +}</i><br>
+><i>> +</i><br>
+><i> </i><br>
+><i> Why do we need to have this two-level mapping? Do we even need to care</i><br>
+><i> about the specific swgroups IDs?</i><br>
+<br>
+It's not clear to me what you're meaning here, the swgroup IDs are used<br>
+here for determining whether client belongs to a display controller.<br>
+<br>
+><i> Can we not just simply check at attach</i><br>
+><i> time if the client that's being attached is a display client and then</i><br>
+><i> set atteched_devices_need_sync = true?</i><br>
+<br>
+The reason I made atteched_devices_need_sync opt-out for display clients<br>
+instead of<br>
+opt-in is to make it clear and easy to override this option once we will<br>
+support the identity mappings.<br>
+<br>
+- attached_devices_need_sync = true;<br>
++ attached_devices_need_sync = no_identity_mapping_for_display;<br>
+<br>
+<br>
+

@@ -1,0 +1,45 @@
+On Thu, Apr 8, 2021 at 11:21 AM Matti Vaittinen<br>
+<matti.vaittinen@xxxxxxxxxxxxxxxxx> wrote:<br>
+><i></i><br>
+><i> Hello Andy,</i><br>
+><i></i><br>
+><i> On Wed, 2021-04-07 at 16:21 +0300, Andy Shevchenko wrote:</i><br>
+><i> > On Wed, Apr 7, 2021 at 1:04 PM Matti Vaittinen</i><br>
+><i> > <matti.vaittinen@xxxxxxxxxxxxxxxxx> wrote:</i><br>
+><i> > > Provide helper function for IC's implementing regulator</i><br>
+><i> > > notifications</i><br>
+><i> > > when an IRQ fires. The helper also works for IRQs which can not be</i><br>
+><i> > > acked.</i><br>
+><i> > > Helper can be set to disable the IRQ at handler and then re-</i><br>
+><i> > > enabling it</i><br>
+><i> > > on delayed work later. The helper also adds</i><br>
+><i> > > regulator_get_error_flags()</i><br>
+><i> > > errors in cache for the duration of IRQ disabling.</i><br>
+><i> ></i><br>
+><i> > Thanks for an update, my comments below. After addressing them, feel</i><br>
+><i> > free to add</i><br>
+><i> > Reviewed-by: Andy Shevchenko <andy.shevchenko@xxxxxxxxx></i><br>
+><i></i><br>
+><i> I (eventually) disagreed with couple of points here and haven't changed</i><br>
+><i> those. Please see list below.</i><br>
+><i></i><br>
+><i> I still do think you did a really good job reviewing this - and you</i><br>
+><i> should get the recognition from that work. Thus I'd nevertheless would</i><br>
+><i> like to add your Reviewed-by to the next version. Please let me know if</i><br>
+><i> you think it's ok. (I have the v7 ready but I'll wait until the next</i><br>
+><i> Monday before sending it to see if this brings more discussion).</i><br>
+<br>
+Looks OK to me.<br>
+Just rename die_loudly() to rdev_die_loudly() and in any way of<br>
+conditionals with that, please mark it with __noreturn attribute, so<br>
+if (bla bla bla)<br>
+  rdev_die_loudly();<br>
+<br>
+will be an understandable trap.<br>
+<br>
+-- <br>
+With Best Regards,<br>
+Andy Shevchenko<br>
+<br>
+<br>
+

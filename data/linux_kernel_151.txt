@@ -1,0 +1,81 @@
+Introduce a supports_pci_p2pdma() operation in nvme_ctrl_ops to<br>
+replace the fixed NVME_F_PCI_P2PDMA flag such that the dma_map_ops<br>
+flags can be checked for PCI P2PDMA support.<br>
+<br>
+Signed-off-by: Logan Gunthorpe <logang@xxxxxxxxxxxx><br>
+---<br>
+ drivers/nvme/host/core.c |  3 ++-<br>
+ drivers/nvme/host/nvme.h |  2 +-<br>
+ drivers/nvme/host/pci.c  | 11 +++++++++--<br>
+ 3 files changed, 12 insertions(+), 4 deletions(-)<br>
+<br>
+diff --git a/drivers/nvme/host/core.c b/drivers/nvme/host/core.c<br>
+index 0896e21642be..223419454516 100644<br>
+--- a/drivers/nvme/host/core.c<br>
++++ b/drivers/nvme/host/core.c<br>
+@@ -3907,7 +3907,8 @@ static void nvme_alloc_ns(struct nvme_ctrl *ctrl, unsigned nsid,<br>
+ 		blk_queue_flag_set(QUEUE_FLAG_STABLE_WRITES, ns->queue);<br>
+ <br>
+ 	blk_queue_flag_set(QUEUE_FLAG_NONROT, ns->queue);<br>
+-	if (ctrl->ops->flags & NVME_F_PCI_P2PDMA)<br>
++	if (ctrl->ops->supports_pci_p2pdma &&<br>
++	    ctrl->ops->supports_pci_p2pdma(ctrl))<br>
+ 		blk_queue_flag_set(QUEUE_FLAG_PCI_P2PDMA, ns->queue);<br>
+ <br>
+ 	ns->queue->queuedata = ns;<br>
+diff --git a/drivers/nvme/host/nvme.h b/drivers/nvme/host/nvme.h<br>
+index 07b34175c6ce..9c04df982d2c 100644<br>
+--- a/drivers/nvme/host/nvme.h<br>
++++ b/drivers/nvme/host/nvme.h<br>
+@@ -473,7 +473,6 @@ struct nvme_ctrl_ops {<br>
+ 	unsigned int flags;<br>
+ #define NVME_F_FABRICS			(1 << 0)<br>
+ #define NVME_F_METADATA_SUPPORTED	(1 << 1)<br>
+-#define NVME_F_PCI_P2PDMA		(1 << 2)<br>
+ 	int (*reg_read32)(struct nvme_ctrl *ctrl, u32 off, u32 *val);<br>
+ 	int (*reg_write32)(struct nvme_ctrl *ctrl, u32 off, u32 val);<br>
+ 	int (*reg_read64)(struct nvme_ctrl *ctrl, u32 off, u64 *val);<br>
+@@ -481,6 +480,7 @@ struct nvme_ctrl_ops {<br>
+ 	void (*submit_async_event)(struct nvme_ctrl *ctrl);<br>
+ 	void (*delete_ctrl)(struct nvme_ctrl *ctrl);<br>
+ 	int (*get_address)(struct nvme_ctrl *ctrl, char *buf, int size);<br>
++	bool (*supports_pci_p2pdma)(struct nvme_ctrl *ctrl);<br>
+ };<br>
+ <br>
+ #ifdef CONFIG_FAULT_INJECTION_DEBUG_FS<br>
+diff --git a/drivers/nvme/host/pci.c b/drivers/nvme/host/pci.c<br>
+index 7249ae74f71f..14f092973792 100644<br>
+--- a/drivers/nvme/host/pci.c<br>
++++ b/drivers/nvme/host/pci.c<br>
+@@ -2759,17 +2759,24 @@ static int nvme_pci_get_address(struct nvme_ctrl *ctrl, char *buf, int size)<br>
+ 	return snprintf(buf, size, "%s\n", dev_name(&pdev->dev));<br>
+ }<br>
+ <br>
++static bool nvme_pci_supports_pci_p2pdma(struct nvme_ctrl *ctrl)<br>
++{<br>
++	struct nvme_dev *dev = to_nvme_dev(ctrl);<br>
++<br>
++	return dma_pci_p2pdma_supported(dev->dev);<br>
++}<br>
++<br>
+ static const struct nvme_ctrl_ops nvme_pci_ctrl_ops = {<br>
+ 	.name			= "pcie",<br>
+ 	.module			= THIS_MODULE,<br>
+-	.flags			= NVME_F_METADATA_SUPPORTED |<br>
+-				  NVME_F_PCI_P2PDMA,<br>
++	.flags			= NVME_F_METADATA_SUPPORTED,<br>
+ 	.reg_read32		= nvme_pci_reg_read32,<br>
+ 	.reg_write32		= nvme_pci_reg_write32,<br>
+ 	.reg_read64		= nvme_pci_reg_read64,<br>
+ 	.free_ctrl		= nvme_pci_free_ctrl,<br>
+ 	.submit_async_event	= nvme_pci_submit_async_event,<br>
+ 	.get_address		= nvme_pci_get_address,<br>
++	.supports_pci_p2pdma	= nvme_pci_supports_pci_p2pdma,<br>
+ };<br>
+ <br>
+ static int nvme_dev_map(struct nvme_dev *dev)<br>
+-- <br>
+2.20.1<br>
+<br>
+<br>
+

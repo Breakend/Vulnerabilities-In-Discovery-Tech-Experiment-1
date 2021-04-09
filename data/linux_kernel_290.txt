@@ -1,0 +1,57 @@
+
+<br>
+<br>
+On 4/8/21 6:26 PM, Eric Dumazet wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+<br>
+<br>
+On 4/8/21 5:14 PM, Pavel Tikhomirov wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+Reproduce:<br>
+<br>
+   modprobe sch_teql<br>
+   tc qdisc add dev teql0 root teql0<br>
+<br>
+This leads to (for instance in Centos 7 VM) OOPS:<br>
+<br>
+<br>
+<br>
+Null pointer dereference happens on master->slaves dereference in<br>
+teql_destroy() as master is null-pointer.<br>
+<br>
+When qdisc_create() calls teql_qdisc_init() it imediately fails after<br>
+check "if (m->dev == dev)" because both devices are teql0, and it does<br>
+not set qdisc_priv(sch)->m leaving it zero on error path, then<br>
+qdisc_create() imediately calls teql_destroy() which does not expect<br>
+zero master pointer and we get OOPS.<br>
+<br>
+Signed-off-by: Pavel Tikhomirov <ptikhomirov@xxxxxxxxxxxxx><br>
+---<br>
+</blockquote>
+<br>
+This makes sense, thanks !<br>
+<br>
+Reviewed-by: Eric Dumazet <edumazet@xxxxxxxxxx><br>
+</blockquote>
+<br>
+Thanks!<br>
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+<br>
+I would think bug origin is<br>
+<br>
+Fixes: 87b60cfacf9f ("net_sched: fix error recovery at qdisc creation")<br>
+<br>
+Can you confirm you have this backported to 3.10.0-1062.7.1.el7.x86_64 ?<br>
+<br>
+</blockquote>
+<br>
+According to our source copy it looks backported to 1062.7.1, please see:<br>
+<a  rel="nofollow" href="https://src.openvz.org/projects/OVZ/repos/vzkernel/browse/net/sched/sch_api.c?at=refs%2Ftags%2Frh7-3.10.0-1062.7.1.el7#1167">https://src.openvz.org/projects/OVZ/repos/vzkernel/browse/net/sched/sch_api.c?at=refs%2Ftags%2Frh7-3.10.0-1062.7.1.el7#1167</a><br>
+<br>
+--<br>
+Best regards, Tikhomirov Pavel<br>
+Software Developer, Virtuozzo.<br>
+<br>
+<br>
+

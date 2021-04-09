@@ -1,0 +1,158 @@
+Hi Manivannan,<br>
+<br>
+I love your patch! Perhaps something to improve:<br>
+<br>
+[auto build test WARNING on linus/master]<br>
+[also build test WARNING on v5.12-rc6 next-20210408]<br>
+[If your patch is applied to the wrong git tree, kindly drop us a note.<br>
+And when submitting patch, we suggest to use '--base' as documented in<br>
+<a  rel="nofollow" href="https://git-scm.com/docs/git-format-patch">https://git-scm.com/docs/git-format-patch</a>]<br>
+<br>
+url:    <a  rel="nofollow" href="https://github.com/0day-ci/linux/commits/Manivannan-Sadhasivam/bus-mhi-core-Fix-shadow-declarations/20210408-213242">https://github.com/0day-ci/linux/commits/Manivannan-Sadhasivam/bus-mhi-core-Fix-shadow-declarations/20210408-213242</a><br>
+base:   <a  rel="nofollow" href="https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git">https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git</a> 454859c552da78b0f587205d308401922b56863e<br>
+config: um-randconfig-c024-20210408 (attached as .config)<br>
+compiler: gcc-9 (Debian 9.3.0-22) 9.3.0<br>
+<br>
+If you fix the issue, kindly add following tag as appropriate<br>
+Reported-by: kernel test robot <lkp@xxxxxxxxx><br>
+<br>
+<br>
+cocci warnings: (new ones prefixed by >>)<br>
+><i>> drivers/bus/mhi/core/main.c:599:2-19: ERROR: nested lock+irqsave that reuses flags from line 521.</i><br>
+<br>
+vim +599 drivers/bus/mhi/core/main.c<br>
+<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  496  <br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  497  static int parse_xfer_event(struct mhi_controller *mhi_cntrl,<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  498  			    struct mhi_tre *event,<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  499  			    struct mhi_chan *mhi_chan)<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  500  {<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  501  	struct mhi_ring *buf_ring, *tre_ring;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  502  	struct device *dev = &mhi_cntrl->mhi_dev->dev;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  503  	struct mhi_result result;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  504  	unsigned long flags = 0;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  505  	u32 ev_code;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  506  <br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  507  	ev_code = MHI_TRE_GET_EV_CODE(event);<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  508  	buf_ring = &mhi_chan->buf_ring;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  509  	tre_ring = &mhi_chan->tre_ring;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  510  <br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  511  	result.transaction_status = (ev_code == MHI_EV_CC_OVERFLOW) ?<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  512  		-EOVERFLOW : 0;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  513  <br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  514  	/*<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  515  	 * If it's a DB Event then we need to grab the lock<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  516  	 * with preemption disabled and as a write because we<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  517  	 * have to update db register and there are chances that<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  518  	 * another thread could be doing the same.<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  519  	 */<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  520  	if (ev_code >= MHI_EV_CC_OOB)<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20 @521  		write_lock_irqsave(&mhi_chan->lock, flags);<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  522  	else<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  523  		read_lock_bh(&mhi_chan->lock);<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  524  <br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  525  	if (mhi_chan->ch_state != MHI_CH_STATE_ENABLED)<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  526  		goto end_process_tx_event;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  527  <br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  528  	switch (ev_code) {<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  529  	case MHI_EV_CC_OVERFLOW:<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  530  	case MHI_EV_CC_EOB:<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  531  	case MHI_EV_CC_EOT:<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  532  	{<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  533  		dma_addr_t ptr = MHI_TRE_GET_EV_PTR(event);<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  534  		struct mhi_tre *local_rp, *ev_tre;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  535  		void *dev_rp;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  536  		struct mhi_buf_info *buf_info;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  537  		u16 xfer_len;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  538  <br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  539  		/* Get the TRB this event points to */<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  540  		ev_tre = mhi_to_virtual(tre_ring, ptr);<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  541  <br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  542  		dev_rp = ev_tre + 1;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  543  		if (dev_rp >= (tre_ring->base + tre_ring->len))<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  544  			dev_rp = tre_ring->base;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  545  <br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  546  		result.dir = mhi_chan->dir;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  547  <br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  548  		local_rp = tre_ring->rp;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  549  		while (local_rp != dev_rp) {<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  550  			buf_info = buf_ring->rp;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  551  			/* If it's the last TRE, get length from the event */<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  552  			if (local_rp == ev_tre)<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  553  				xfer_len = MHI_TRE_GET_EV_LEN(event);<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  554  			else<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  555  				xfer_len = buf_info->len;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  556  <br>
+189ff97cca53e3 Manivannan Sadhasivam 2020-02-20  557  			/* Unmap if it's not pre-mapped by client */<br>
+189ff97cca53e3 Manivannan Sadhasivam 2020-02-20  558  			if (likely(!buf_info->pre_mapped))<br>
+189ff97cca53e3 Manivannan Sadhasivam 2020-02-20  559  				mhi_cntrl->unmap_single(mhi_cntrl, buf_info);<br>
+189ff97cca53e3 Manivannan Sadhasivam 2020-02-20  560  <br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  561  			result.buf_addr = buf_info->cb_buf;<br>
+ee75cedf82d832 Hemant Kumar          2020-05-21  562  <br>
+ee75cedf82d832 Hemant Kumar          2020-05-21  563  			/* truncate to buf len if xfer_len is larger */<br>
+ee75cedf82d832 Hemant Kumar          2020-05-21  564  			result.bytes_xferd =<br>
+ee75cedf82d832 Hemant Kumar          2020-05-21  565  				min_t(u16, xfer_len, buf_info->len);<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  566  			mhi_del_ring_element(mhi_cntrl, buf_ring);<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  567  			mhi_del_ring_element(mhi_cntrl, tre_ring);<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  568  			local_rp = tre_ring->rp;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  569  <br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  570  			/* notify client */<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  571  			mhi_chan->xfer_cb(mhi_chan->mhi_dev, &result);<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  572  <br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  573  			if (mhi_chan->dir == DMA_TO_DEVICE)<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  574  				atomic_dec(&mhi_cntrl->pending_pkts);<br>
+189ff97cca53e3 Manivannan Sadhasivam 2020-02-20  575  <br>
+189ff97cca53e3 Manivannan Sadhasivam 2020-02-20  576  			/*<br>
+189ff97cca53e3 Manivannan Sadhasivam 2020-02-20  577  			 * Recycle the buffer if buffer is pre-allocated,<br>
+189ff97cca53e3 Manivannan Sadhasivam 2020-02-20  578  			 * if there is an error, not much we can do apart<br>
+189ff97cca53e3 Manivannan Sadhasivam 2020-02-20  579  			 * from dropping the packet<br>
+189ff97cca53e3 Manivannan Sadhasivam 2020-02-20  580  			 */<br>
+189ff97cca53e3 Manivannan Sadhasivam 2020-02-20  581  			if (mhi_chan->pre_alloc) {<br>
+189ff97cca53e3 Manivannan Sadhasivam 2020-02-20  582  				if (mhi_queue_buf(mhi_chan->mhi_dev,<br>
+189ff97cca53e3 Manivannan Sadhasivam 2020-02-20  583  						  mhi_chan->dir,<br>
+189ff97cca53e3 Manivannan Sadhasivam 2020-02-20  584  						  buf_info->cb_buf,<br>
+189ff97cca53e3 Manivannan Sadhasivam 2020-02-20  585  						  buf_info->len, MHI_EOT)) {<br>
+189ff97cca53e3 Manivannan Sadhasivam 2020-02-20  586  					dev_err(dev,<br>
+189ff97cca53e3 Manivannan Sadhasivam 2020-02-20  587  						"Error recycling buffer for chan:%d\n",<br>
+189ff97cca53e3 Manivannan Sadhasivam 2020-02-20  588  						mhi_chan->chan);<br>
+189ff97cca53e3 Manivannan Sadhasivam 2020-02-20  589  					kfree(buf_info->cb_buf);<br>
+189ff97cca53e3 Manivannan Sadhasivam 2020-02-20  590  				}<br>
+189ff97cca53e3 Manivannan Sadhasivam 2020-02-20  591  			}<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  592  		}<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  593  		break;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  594  	} /* CC_EOT */<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  595  	case MHI_EV_CC_OOB:<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  596  	case MHI_EV_CC_DB_MODE:<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  597  	{<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  598  		mhi_chan->db_cfg.db_mode = 1;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20 @599  		read_lock_irqsave(&mhi_cntrl->pm_lock, flags);<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  600  		if (tre_ring->wp != tre_ring->rp &&<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  601  		    MHI_DB_ACCESS_VALID(mhi_cntrl)) {<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  602  			mhi_ring_chan_db(mhi_cntrl, mhi_chan);<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  603  		}<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  604  		read_unlock_irqrestore(&mhi_cntrl->pm_lock, flags);<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  605  		break;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  606  	}<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  607  	case MHI_EV_CC_BAD_TRE:<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  608  	default:<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  609  		dev_err(dev, "Unknown event 0x%x\n", ev_code);<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  610  		break;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  611  	} /* switch(MHI_EV_READ_CODE(EV_TRB_CODE,event)) */<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  612  <br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  613  end_process_tx_event:<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  614  	if (ev_code >= MHI_EV_CC_OOB)<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  615  		write_unlock_irqrestore(&mhi_chan->lock, flags);<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  616  	else<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  617  		read_unlock_bh(&mhi_chan->lock);<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  618  <br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  619  	return 0;<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  620  }<br>
+1d3173a3bae703 Manivannan Sadhasivam 2020-02-20  621  <br>
+<br>
+---<br>
+0-DAY CI Kernel Test Service, Intel Corporation<br>
+<a  rel="nofollow" href="https://lists.01.org/hyperkitty/list/kbuild-all@xxxxxxxxxxxx">https://lists.01.org/hyperkitty/list/kbuild-all@xxxxxxxxxxxx</a><br>
+<p><strong>Attachment:
+<a href="01266/.config.gz" ><tt>.config.gz</tt></a></strong><br>
+<em>Description:</em> application/gzip</p>
+

@@ -1,0 +1,45 @@
+Make a netfs helper module to manage read request segmentation, caching<br>
+support and transparent huge page support on behalf of a network<br>
+filesystem.<br>
+<br>
+Signed-off-by: David Howells <dhowells@xxxxxxxxxx><br>
+Reviewed-by: Jeff Layton <jlayton@xxxxxxxxxx><br>
+cc: Matthew Wilcox <willy@xxxxxxxxxxxxx><br>
+cc: linux-mm@xxxxxxxxx<br>
+cc: linux-cachefs@xxxxxxxxxx<br>
+cc: linux-afs@xxxxxxxxxxxxxxxxxxx<br>
+cc: linux-nfs@xxxxxxxxxxxxxxx<br>
+cc: linux-cifs@xxxxxxxxxxxxxxx<br>
+cc: ceph-devel@xxxxxxxxxxxxxxx<br>
+cc: v9fs-developer@xxxxxxxxxxxxxxxxxxxxx<br>
+cc: linux-fsdevel@xxxxxxxxxxxxxxx<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/160588496284.3465195.10102643717770106661.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/160588496284.3465195.10102643717770106661.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # rfc<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161118135638.1232039.1622182202673126285.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161118135638.1232039.1622182202673126285.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # rfc<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161161031028.2537118.1213974428943508753.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161161031028.2537118.1213974428943508753.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v2<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161340391427.1303470.14884950716721956560.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161340391427.1303470.14884950716721956560.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v3<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161539531569.286939.18317119181653706665.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161539531569.286939.18317119181653706665.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v4<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161653790328.2770958.6710423217716151549.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161653790328.2770958.6710423217716151549.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v5<br>
+---<br>
+<br>
+ fs/netfs/Kconfig |    8 ++++++++<br>
+ 1 file changed, 8 insertions(+)<br>
+ create mode 100644 fs/netfs/Kconfig<br>
+<br>
+diff --git a/fs/netfs/Kconfig b/fs/netfs/Kconfig<br>
+new file mode 100644<br>
+index 000000000000..2ebf90e6ca95<br>
+--- /dev/null<br>
++++ b/fs/netfs/Kconfig<br>
+@@ -0,0 +1,8 @@<br>
++# SPDX-License-Identifier: GPL-2.0-only<br>
++<br>
++config NETFS_SUPPORT<br>
++	tristate "Support for network filesystem high-level I/O"<br>
++	help<br>
++	  This option enables support for network filesystems, including<br>
++	  helpers for high-level buffered I/O, abstracting out read<br>
++	  segmentation, local caching and transparent huge page support.<br>
+<br>
+<br>
+<br>
+

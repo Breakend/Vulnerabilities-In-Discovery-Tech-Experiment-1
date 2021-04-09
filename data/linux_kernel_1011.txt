@@ -1,0 +1,33 @@
+><i> > @@ -4047,9 +4053,12 @@ static void run_state_machine(struct tcpm_port *port)</i><br>
+><i> >  		break;</i><br>
+><i> >  	case SNK_DISCOVERY:</i><br>
+><i> >  		if (port->vbus_present) {</i><br>
+><i> > -			tcpm_set_current_limit(port,</i><br>
+><i> > -					       tcpm_get_current_limit(port),</i><br>
+><i> > -					       5000);</i><br>
+><i> > +			u32 current_lim = (!port->slow_charger_loop ||</i><br>
+><i> > +					   (tcpm_get_current_limit(port) <=</i><br>
+><i> > +					    PD_P_SNK_STDBY_MW / 5)) ?</i><br>
+><i> > +				tcpm_get_current_limit(port) :</i><br>
+><i> > +				PD_P_SNK_STDBY_MW / 5;</i><br>
+><i> </i><br>
+><i> Here the use of the ternary operator is not appropriate. Please try to</i><br>
+><i> clean that up somehow. Maybe something like this would be better?</i><br>
+><i> </i><br>
+><i>                         u32 current_lim = tcpm_get_current_limit(port);</i><br>
+><i> </i><br>
+><i> 			if (port->slow_charger_loop || (current_lim < PD_P_SNK_STDBY_MW / 5))</i><br>
+><i> 				current_lim = PD_P_SNK_STDBY_MW / 5;</i><br>
+<br>
+Sorry, I mean:<br>
+<br>
+			if (port->slow_charger_loop || (current_lim > PD_P_SNK_STDBY_MW / 5))<br>
+				current_lim = PD_P_SNK_STDBY_MW / 5;<br>
+<br>
+thanks,<br>
+<br>
+-- <br>
+heikki<br>
+<br>
+<br>
+

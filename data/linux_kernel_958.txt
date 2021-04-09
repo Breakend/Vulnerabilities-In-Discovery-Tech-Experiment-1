@@ -1,0 +1,21 @@
+On Thu, Apr 08, 2021 at 12:13:21PM +0300, Jarkko Sakkinen wrote:<br>
+><i> Actually I think read-only sysctl attributes would be a better idea.</i><br>
+<br>
+I still think debugfs is the right *start* for this: you play with them,<br>
+see what makes sense and what not, tweak them, etc, and then you cast<br>
+them in stone.<br>
+<br>
+Not cast them in stone and see if anyone is even interested. So pls keep<br>
+them in debugfs for now - you can always do whatever, later, when it<br>
+turns out that those are useful.<br>
+<br>
+Thx.<br>
+<br>
+-- <br>
+Regards/Gruss,<br>
+    Boris.<br>
+<br>
+<a  rel="nofollow" href="https://people.kernel.org/tglx/notes-about-netiquette">https://people.kernel.org/tglx/notes-about-netiquette</a><br>
+<br>
+<br>
+

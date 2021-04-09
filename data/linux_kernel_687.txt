@@ -1,0 +1,39 @@
+On Thu, Apr 08, 2021, Wanpeng Li wrote:<br>
+><i> From: Wanpeng Li <wanpengli@xxxxxxxxxxx></i><br>
+><i> </i><br>
+><i> If the target is self we do not need to yield, we can avoid malicious </i><br>
+><i> guest to play this.</i><br>
+><i> </i><br>
+><i> Signed-off-by: Wanpeng Li <wanpengli@xxxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i> Rebased on <a  rel="nofollow" href="https://lore.kernel.org/kvm/1617697935-4158-1-git-send-email-wanpengli@xxxxxxxxxxx/">https://lore.kernel.org/kvm/1617697935-4158-1-git-send-email-wanpengli@xxxxxxxxxxx/</a></i><br>
+><i> </i><br>
+><i>  arch/x86/kvm/x86.c | 4 ++++</i><br>
+><i>  1 file changed, 4 insertions(+)</i><br>
+><i> </i><br>
+><i> diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c</i><br>
+><i> index 43c9f9b..260650f 100644</i><br>
+><i> --- a/arch/x86/kvm/x86.c</i><br>
+><i> +++ b/arch/x86/kvm/x86.c</i><br>
+><i> @@ -8230,6 +8230,10 @@ static void kvm_sched_yield(struct kvm_vcpu *vcpu, unsigned long dest_id)</i><br>
+><i>  	if (!target)</i><br>
+><i>  		goto no_yield;</i><br>
+><i>  </i><br>
+><i> +	/* yield to self */</i><br>
+<br>
+If you're going to bother with a comment, maybe elaborate a bit, e.g.<br>
+<br>
+	/* Ignore requests to yield to self. */<br>
+<br>
+><i> +	if (vcpu->vcpu_id == target->vcpu_id)</i><br>
+><i> +		goto no_yield;</i><br>
+><i> +</i><br>
+><i>  	if (!READ_ONCE(target->ready))</i><br>
+><i>  		goto no_yield;</i><br>
+><i>  </i><br>
+><i> -- </i><br>
+><i> 2.7.4</i><br>
+><i> </i><br>
+<br>
+<br>
+

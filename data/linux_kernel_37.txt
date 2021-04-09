@@ -1,0 +1,147 @@
+<br>
+On 4/7/21 11:18 AM, Nitesh Narayan Lal wrote:<br>
+><i> On 4/6/21 1:22 PM, Jesse Brandeburg wrote:</i><br>
+><i>> Continuing a thread from a bit ago...</i><br>
+><i>></i><br>
+><i>> Nitesh Narayan Lal wrote:</i><br>
+><i>></i><br>
+><i>>>> After a little more digging, I found out why cpumask_local_spread change</i><br>
+><i>>>> affects the general/initial smp_affinity for certain device IRQs.</i><br>
+><i>>>></i><br>
+><i>>>> After the introduction of the commit:</i><br>
+><i>>>></i><br>
+><i>>>>     e2e64a932 genirq: Set initial affinity in irq_set_affinity_hint()</i><br>
+><i>>>></i><br>
+><i>>> Continuing the conversation about the above commit and adding Jesse.</i><br>
+><i>>> I was trying to understand the problem that the commit message explains</i><br>
+><i>>> "The default behavior of the kernel is somewhat undesirable as all</i><br>
+><i>>> requested interrupts end up on CPU0 after registration.", I have also been</i><br>
+><i>>> trying to reproduce this behavior without the patch but I failed in doing</i><br>
+><i>>> so, maybe because I am missing something here.</i><br>
+><i>>></i><br>
+><i>>> @Jesse Can you please explain? FWIU IRQ affinity should be decided based on</i><br>
+><i>>> the default affinity mask.</i><br>
+><i> Thanks, Jesse for responding.</i><br>
+><i></i><br>
+><i>> The original issue as seen, was that if you rmmod/insmod a driver</i><br>
+><i>> *without* irqbalance running, the default irq mask is -1, which means</i><br>
+><i>> any CPU. The older kernels (this issue was patched in 2014) used to use</i><br>
+><i>> that affinity mask, but the value programmed into all the interrupt</i><br>
+><i>> registers "actual affinity" would end up delivering all interrupts to</i><br>
+><i>> CPU0,</i><br>
+><i> So does that mean the affinity mask for the IRQs was different wrt where</i><br>
+><i> the IRQs were actually delivered?</i><br>
+><i> Or, the affinity mask itself for the IRQs after rmmod, insmod was changed</i><br>
+><i> to 0 instead of -1?</i><br>
+><i></i><br>
+><i> I did a quick test on top of 5.12.0-rc6 by comparing the i40e IRQ affinity</i><br>
+><i> mask before removing the kernel module and after doing rmmod+insmod</i><br>
+><i> and didn't find any difference.</i><br>
+><i></i><br>
+><i>>  and if the machine was under traffic load incoming when the</i><br>
+><i>> driver loaded, CPU0 would start to poll among all the different netdev</i><br>
+><i>> queues, all on CPU0.</i><br>
+><i>></i><br>
+><i>> The above then leads to the condition that the device is stuck polling</i><br>
+><i>> even if the affinity gets updated from user space, and the polling will</i><br>
+><i>> continue until traffic stops.</i><br>
+><i>></i><br>
+><i>>> The problem with the commit is that when we overwrite the affinity mask</i><br>
+><i>>> based on the hinting mask we completely ignore the default SMP affinity</i><br>
+><i>>> mask. If we do want to overwrite the affinity based on the hint mask we</i><br>
+><i>>> should atleast consider the default SMP affinity.</i><br>
+><i> For the issue where the IRQs don't follow the default_smp_affinity mask</i><br>
+><i> because of this patch, the following are the steps by which it can be easily</i><br>
+><i> reproduced with the latest linux kernel:</i><br>
+><i></i><br>
+><i> # Kernel</i><br>
+><i> 5.12.0-rc6+</i><br>
+><i></i><br>
+><i> # Other pramaeters in the cmdline</i><br>
+><i> isolcpus=2-39,44-79 nohz=on nohz_full=2-39,44-79</i><br>
+><i> rcu_nocbs=2-39,44-79</i><br>
+><i></i><br>
+><i> # cat /proc/irq/default_smp_affinity</i><br>
+><i> 0000,00000f00,00000003 [Corresponds to HK CPUs - 0, 1, 40, 41, 42 and 43]</i><br>
+><i></i><br>
+><i> # Create VFs and check IRQ affinity mask</i><br>
+><i></i><br>
+><i> /proc/irq/1423/iavf-ens1f1v3-TxRx-3</i><br>
+><i> 3</i><br>
+><i> /proc/irq/1424/iavf-0000:3b:0b.0:mbx</i><br>
+><i> 0</i><br>
+><i> 40</i><br>
+><i> 42</i><br>
+><i> /proc/irq/1425/iavf-ens1f1v8-TxRx-0</i><br>
+><i> 0</i><br>
+><i> /proc/irq/1426/iavf-ens1f1v8-TxRx-1</i><br>
+><i> 1</i><br>
+><i> /proc/irq/1427/iavf-ens1f1v8-TxRx-2</i><br>
+><i> 2</i><br>
+><i> /proc/irq/1428/iavf-ens1f1v8-TxRx-3</i><br>
+><i> 3</i><br>
+><i> ...</i><br>
+><i> /proc/irq/1475/iavf-ens1f1v15-TxRx-0</i><br>
+><i> 0</i><br>
+><i> /proc/irq/1476/iavf-ens1f1v15-TxRx-1</i><br>
+><i> 1</i><br>
+><i> /proc/irq/1477/iavf-ens1f1v15-TxRx-2</i><br>
+><i> 2</i><br>
+><i> /proc/irq/1478/iavf-ens1f1v15-TxRx-3</i><br>
+><i> 3</i><br>
+><i> /proc/irq/1479/iavf-0000:3b:0a.0:mbx</i><br>
+><i> 0</i><br>
+><i> 40</i><br>
+><i> 42</i><br>
+><i> ...</i><br>
+><i> /proc/irq/240/iavf-ens1f1v3-TxRx-0</i><br>
+><i> 0</i><br>
+><i> /proc/irq/248/iavf-ens1f1v3-TxRx-1</i><br>
+><i> 1</i><br>
+><i> /proc/irq/249/iavf-ens1f1v3-TxRx-2</i><br>
+><i> 2</i><br>
+><i></i><br>
+><i></i><br>
+><i> Trace dump:</i><br>
+><i> ----------</i><br>
+><i> ..</i><br>
+><i> 11551082:  NetworkManager-1734  [040]  8167.465719: vector_activate:    </i><br>
+><i>             irq=1478 is_managed=0 can_reserve=1 reserve=0</i><br>
+><i> 11551090:  NetworkManager-1734  [040]  8167.465720: vector_alloc:</i><br>
+><i>             irq=1478 vector=65 reserved=1 ret=0</i><br>
+><i> 11551093:  NetworkManager-1734  [040]  8167.465721: vector_update:      </i><br>
+><i>             irq=1478 vector=65 cpu=42 prev_vector=0 prev_cpu=0</i><br>
+><i> 11551097:  NetworkManager-1734  [040]  8167.465721: vector_config:      </i><br>
+><i>             irq=1478 vector=65 cpu=42 apicdest=0x00000200</i><br>
+><i> 11551357:  NetworkManager-1734  [040]  8167.465768: vector_alloc:        </i><br>
+><i>             irq=1478 vector=46 reserved=0 ret=0</i><br>
+><i></i><br>
+><i> 11551360:  NetworkManager-1734  [040]  8167.465769: vector_update:      </i><br>
+><i>             irq=1478 vector=46 cpu=3 prev_vector=65 prev_cpu=42</i><br>
+><i></i><br>
+><i> 11551364:  NetworkManager-1734  [040]  8167.465770: vector_config:      </i><br>
+><i>             irq=1478 vector=46 cpu=3 apicdest=0x00040100</i><br>
+><i> ..</i><br>
+><i></i><br>
+><i> As we can see in the above trace the initial affinity for the IRQ 1478 was</i><br>
+><i> correctly set as per the default_smp_affinity mask which includes CPU 42,</i><br>
+><i> however, later on, it is updated with CPU3 which is returned from</i><br>
+><i> cpumask_local_spread().</i><br>
+><i></i><br>
+><i>> Maybe the right thing is to fix which CPUs are passed in as the valid</i><br>
+><i>> mask, or make sure the kernel cross checks that what the driver asks</i><br>
+><i>> for is a "valid CPU"?</i><br>
+><i>></i><br>
+><i> Sure, if we can still reproduce the problem that your patch was fixing then</i><br>
+><i> maybe we can consider adding a new API like cpumask_local_spread_irq in</i><br>
+><i> which we should consider deafult_smp_affinity mask as well before returning</i><br>
+><i> the CPU.</i><br>
+><i></i><br>
+<br>
+Didn't realize that netdev ml was not included, so adding that.<br>
+<br>
+-- <br>
+Nitesh<br>
+<br>
+<br>
+

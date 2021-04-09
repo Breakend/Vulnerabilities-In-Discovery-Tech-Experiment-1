@@ -1,0 +1,106 @@
+Add support for using elliptic curve keys for signing modules. It uses<br>
+a NIST P384 (secp384r1) key if the user chooses an elliptic curve key<br>
+and will have ECDSA support built into the kernel.<br>
+<br>
+Note: A developer choosing an ECDSA key for signing modules should still<br>
+delete the signing key (rm certs/signing_key.*) when building an older<br>
+version of a kernel that only supports RSA keys. Unless kbuild automati-<br>
+cally detects and generates a new kernel module key, ECDSA-signed kernel<br>
+modules will fail signature verification.<br>
+<br>
+Signed-off-by: Stefan Berger <stefanb@xxxxxxxxxxxxx><br>
+<br>
+---<br>
+v2:<br>
+  - check for ECDSA key by id-ecPublicKey from output line<br>
+    'Public Key Algorithm: id-ecPublicKey'.<br>
+---<br>
+ certs/Kconfig                         | 25 +++++++++++++++++++++++++<br>
+ certs/Makefile                        |  9 +++++++++<br>
+ crypto/asymmetric_keys/pkcs7_parser.c |  4 ++++<br>
+ 3 files changed, 38 insertions(+)<br>
+<br>
+diff --git a/certs/Kconfig b/certs/Kconfig<br>
+index 48675ad319db..6f8337874ae0 100644<br>
+--- a/certs/Kconfig<br>
++++ b/certs/Kconfig<br>
+@@ -15,6 +15,31 @@ config MODULE_SIG_KEY<br>
+          then the kernel will automatically generate the private key and<br>
+          certificate as described in Documentation/admin-guide/module-signing.rst<br>
+ <br>
++choice<br>
++	prompt "Type of module signing key to be generated"<br>
++	default MODULE_SIG_KEY_TYPE_RSA<br>
++	help<br>
++	 The type of module signing key type to generate. This option<br>
++	 does not apply if a #PKCS11 URI is used.<br>
++<br>
++config MODULE_SIG_KEY_TYPE_RSA<br>
++	bool "RSA"<br>
++	depends on MODULE_SIG || IMA_APPRAISE_MODSIG<br>
++	help<br>
++	 Use an RSA key for module signing.<br>
++<br>
++config MODULE_SIG_KEY_TYPE_ECDSA<br>
++	bool "ECDSA"<br>
++	select CRYPTO_ECDSA<br>
++	depends on MODULE_SIG || IMA_APPRAISE_MODSIG<br>
++	help<br>
++	 Use an elliptic curve key (NIST P384) for module signing.<br>
++<br>
++	 Note: Remove all ECDSA signing keys, e.g. certs/signing_key.pem,<br>
++	 when falling back to building Linux 5.11 and older kernels.<br>
++<br>
++endchoice<br>
++<br>
+ config SYSTEM_TRUSTED_KEYRING<br>
+ 	bool "Provide system-wide ring of trusted keys"<br>
+ 	depends on KEYS<br>
+diff --git a/certs/Makefile b/certs/Makefile<br>
+index f64bc89ccbf1..c2fabc288550 100644<br>
+--- a/certs/Makefile<br>
++++ b/certs/Makefile<br>
+@@ -62,7 +62,15 @@ ifeq ($(CONFIG_MODULE_SIG_KEY),"certs/signing_key.pem")<br>
+ <br>
+ X509TEXT=$(shell openssl x509 -in $(CONFIG_MODULE_SIG_KEY) -text)<br>
+ <br>
++# Support user changing key type<br>
++ifdef CONFIG_MODULE_SIG_KEY_TYPE_ECDSA<br>
++keytype_openssl = -newkey ec -pkeyopt ec_paramgen_curve:secp384r1<br>
++$(if $(findstring id-ecPublicKey,$(X509TEXT)),,$(shell rm -f $(CONFIG_MODULE_SIG_KEY)))<br>
++endif<br>
++<br>
++ifdef CONFIG_MODULE_SIG_KEY_TYPE_RSA<br>
+ $(if $(findstring rsaEncryption,$(X509TEXT)),,$(shell rm -f $(CONFIG_MODULE_SIG_KEY)))<br>
++endif<br>
+ <br>
+ $(obj)/signing_key.pem: $(obj)/x509.genkey<br>
+ 	@$(kecho) "###"<br>
+@@ -77,6 +85,7 @@ $(obj)/signing_key.pem: $(obj)/x509.genkey<br>
+ 		-batch -x509 -config $(obj)/x509.genkey \<br>
+ 		-outform PEM -out $(obj)/signing_key.pem \<br>
+ 		-keyout $(obj)/signing_key.pem \<br>
++		$(keytype_openssl) \<br>
+ 		$($(quiet)redirect_openssl)<br>
+ 	@$(kecho) "###"<br>
+ 	@$(kecho) "### Key pair generated."<br>
+diff --git a/crypto/asymmetric_keys/pkcs7_parser.c b/crypto/asymmetric_keys/pkcs7_parser.c<br>
+index 967329e0a07b..2546ec6a0505 100644<br>
+--- a/crypto/asymmetric_keys/pkcs7_parser.c<br>
++++ b/crypto/asymmetric_keys/pkcs7_parser.c<br>
+@@ -269,6 +269,10 @@ int pkcs7_sig_note_pkey_algo(void *context, size_t hdrlen,<br>
+ 		ctx->sinfo->sig->pkey_algo = "rsa";<br>
+ 		ctx->sinfo->sig->encoding = "pkcs1";<br>
+ 		break;<br>
++	case OID_id_ecdsa_with_sha256:<br>
++		ctx->sinfo->sig->pkey_algo = "ecdsa";<br>
++		ctx->sinfo->sig->encoding = "x962";<br>
++		break;<br>
+ 	default:<br>
+ 		printk("Unsupported pkey algo: %u\n", ctx->last_oid);<br>
+ 		return -ENOPKG;<br>
+-- <br>
+2.29.2<br>
+<br>
+<br>
+

@@ -1,0 +1,19 @@
+On Thu, 2021-04-08 at 11:24 -0400, Stefan Berger wrote:<br>
+><i> Add support for using elliptic curve keys for signing modules. It uses</i><br>
+><i> a NIST P384 (secp384r1) key if the user chooses an elliptic curve key</i><br>
+><i> and will have ECDSA support built into the kernel.</i><br>
+><i> </i><br>
+><i> Note: A developer choosing an ECDSA key for signing modules should still</i><br>
+><i> delete the signing key (rm certs/signing_key.*) when building an older</i><br>
+><i> version of a kernel that only supports RSA keys. Unless kbuild automati-</i><br>
+><i> cally detects and generates a new kernel module key, ECDSA-signed kernel</i><br>
+><i> modules will fail signature verification.</i><br>
+><i> </i><br>
+><i> Signed-off-by: Stefan Berger <stefanb@xxxxxxxxxxxxx></i><br>
+<br>
+Thanks, Stefan.<br>
+<br>
+Reviewed-by: Mimi Zohar <zohar@xxxxxxxxxxxxx><br>
+<br>
+<br>
+

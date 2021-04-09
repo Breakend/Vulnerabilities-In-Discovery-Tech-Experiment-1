@@ -1,0 +1,60 @@
+
+On 2021/04/08 13:01, Christophe Leroy wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+<br>
+<br>
+Le 08/04/2021 à 03:18, Yu Kuai a écrit :<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+Fixes gcc '-Wunused-but-set-variable' warning:<br>
+<br>
+arch/powerpc/kernel/btext.c:49:12: error: 'force_printk_to_btext'<br>
+defined but not used.<br>
+</blockquote>
+<br>
+You don't get this error as it is now.<br>
+You will get this error only if you make it 'static', which is what you 
+did in your first patch based on the 'sparse' report.
+<br>
+<br>
+When removing a non static variable, you should explain that you can 
+remove it after you have verifier that it is nowhere used, neither in 
+that file nor in any other one.
+<br></blockquote>
+<br>
+Hi,<br>
+<br>
+I do use 'git grep force_printk_to_btext' to confirm that<br>
+'force_printk_to_btext' is not used anywhere. Maybe it's better to<br>
+metion it in commit message?<br>
+<br>
+Thanks<br>
+Yu Kuai<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+<br>
+It is never used, and so can be removed.<br>
+<br>
+Signed-off-by: Yu Kuai <yukuai3@xxxxxxxxxx><br>
+---<br>
+  arch/powerpc/kernel/btext.c | 1 -<br>
+  1 file changed, 1 deletion(-)<br>
+<br>
+diff --git a/arch/powerpc/kernel/btext.c b/arch/powerpc/kernel/btext.c<br>
+index 803c2a45b22a..359d0f4ca532 100644<br>
+--- a/arch/powerpc/kernel/btext.c<br>
++++ b/arch/powerpc/kernel/btext.c<br>
+@@ -46,7 +46,6 @@ unsigned long disp_BAT[2] __initdata = {0, 0};<br>
+  static unsigned char vga_font[cmapsz];<br>
+  int boot_text_mapped __force_data = 0;<br>
+-int force_printk_to_btext = 0;<br>
+  extern void rmci_on(void);<br>
+  extern void rmci_off(void);<br>
+<br>
+</blockquote>
+.<br>
+<br>
+</blockquote>
+<br>
+<br>
+

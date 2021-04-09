@@ -1,0 +1,200 @@
+
+> On Apr 7, 2021, at 5:16 AM, riteshh <riteshh@xxxxxxxxxxxxx> wrote:<br>
+>><br>
+>> On 21/04/07 03:01PM, Wen Yang wrote:<br>
+>>> From: Wen Yang <simon.wy@xxxxxxxxxxxxxxx><br>
+>>><br>
+>>> The kworker has occupied 100% of the CPU for several days:<br>
+>>> PID USER  PR  NI VIRT RES SHR S  %CPU  %MEM TIME+  COMMAND<br>
+>>> 68086 root 20 0  0    0   0   R  100.0 0.0  9718:18 kworker/u64:11<br>
+>>><br>
+>>> And the stack obtained through sysrq is as follows:<br>
+>>> [20613144.850426] task: ffff8800b5e08000 task.stack: ffffc9001342c000<br>
+>>> [20613144.850438] Call Trace:<br>
+>>> [20613144.850439] 
+[<ffffffffa0244209>]ext4_mb_new_blocks+0x429/0x550 [ext4]
+<br>>>> [20613144.850439]  [<ffffffffa02389ae>] 
+ext4_ext_map_blocks+0xb5e/0xf30 [ext4]
+<br>>>> [20613144.850441]  [<ffffffffa0204b52>] ext4_map_blocks+0x172/0x620 
+[ext4]
+<br>>>> [20613144.850442]  [<ffffffffa0208675>] ext4_writepages+0x7e5/0xf00 
+[ext4]
+<br>
+>>> [20613144.850443]  [<ffffffff811c487e>] do_writepages+0x1e/0x30<br>
+>>> [20613144.850444]  [<ffffffff81280265>] 
+__writeback_single_inode+0x45/0x320
+<br>
+>>> [20613144.850444]  [<ffffffff81280ab2>] writeback_sb_inodes+0x272/0x600<br>
+>>> [20613144.850445]  [<ffffffff81280ed2>] __writeback_inodes_wb+0x92/0xc0<br>
+>>> [20613144.850445]  [<ffffffff81281238>] wb_writeback+0x268/0x300<br>
+>>> [20613144.850446]  [<ffffffff812819f4>] wb_workfn+0xb4/0x380<br>
+>>> [20613144.850447]  [<ffffffff810a5dc9>] process_one_work+0x189/0x420<br>
+>>> [20613144.850447]  [<ffffffff810a60ae>] worker_thread+0x4e/0x4b0<br>
+>>><br>
+>>> The cpu resources of the cloud server are precious, and the server<br>
+>>> cannot be restarted after running for a long time, so a configuration<br>
+>>> parameter is added to prevent this endless loop.<br>
+>><br>
+>> Strange, if there is a endless loop here. Then I would definitely see<br>
+>> if there is any accounting problem in pa->pa_count. Otherwise busy=1<br>
+>> should not be set everytime. ext4_mb_show_pa() function may help 
+debug this.
+<br>
+>><br>
+>> If yes, then that means there always exists either a file preallocation<br>
+>> or a group preallocation. Maybe it is possible, in some use case.<br>
+>> Others may know of such use case, if any.<br>
+<br>
+> If this code is broken, then it doesn't make sense to me that we would<br>
+> leave it in the "run forever" state after the patch, and require a sysfs<br>
+> tunable to be set to have a properly working system?<br>
+<br>
+> Is there anything particularly strange about the workload/system that<br>
+> might cause this?  Filesystem is very full, memory is very low, etc?<br>
+<br>
+Hi Ritesh and Andreas,<br>
+<br>
+Thank you for your reply. Since there is still a faulty machine, we have 
+analyzed it again and found it is indeed a very special case:
+<br>
+<br>
+<br>
+crash> struct ext4_group_info ffff8813bb5f72d0<br>
+struct ext4_group_info {<br>
+  bb_state = 0,<br>
+  bb_free_root = {<br>
+    rb_node = 0x0<br>
+  },<br>
+  bb_first_free = 1681,<br>
+  bb_free = 0,<br>
+  bb_fragments = 0,<br>
+  bb_largest_free_order = -1,<br>
+  bb_prealloc_list = {<br>
+    next = 0xffff880268291d78,<br>
+    prev = 0xffff880268291d78     ---> *** The list is empty<br>
+  },<br>
+  alloc_sem = {<br>
+    count = {<br>
+      counter = 0<br>
+    },<br>
+    wait_list = {<br>
+      next = 0xffff8813bb5f7308,<br>
+      prev = 0xffff8813bb5f7308<br>
+    },<br>
+    wait_lock = {<br>
+      raw_lock = {<br>
+        {<br>
+          val = {<br>
+            counter = 0<br>
+          },<br>
+          {<br>
+            locked = 0 '\000',<br>
+            pending = 0 '\000'<br>
+          },<br>
+          {<br>
+            locked_pending = 0,<br>
+            tail = 0<br>
+          }<br>
+        }<br>
+      }<br>
+    },<br>
+    osq = {<br>
+      tail = {<br>
+        counter = 0<br>
+      }<br>
+    },<br>
+    owner = 0x0<br>
+  },<br>
+  bb_counters = 0xffff8813bb5f7328<br>
+}<br>
+crash><br>
+<br>
+<br>
+crash> list 0xffff880268291d78  -l ext4_prealloc_space.pa_group_list -s 
+ext4_prealloc_space.pa_count
+<br>
+ffff880268291d78<br>
+  pa_count = {<br>
+    counter = 1      ---> ****pa->pa_count<br>
+  }<br>
+ffff8813bb5f72f0<br>
+  pa_count = {<br>
+    counter = -30701<br>
+  }<br>
+<br>
+<br>
+crash> struct -xo  ext4_prealloc_space<br>
+struct ext4_prealloc_space {<br>
+   [0x0] struct list_head pa_inode_list;<br>
+  [0x10] struct list_head pa_group_list;<br>
+         union {<br>
+             struct list_head pa_tmp_list;<br>
+             struct callback_head pa_rcu;<br>
+  [0x20] } u;<br>
+  [0x30] spinlock_t pa_lock;<br>
+  [0x34] atomic_t pa_count;<br>
+  [0x38] unsigned int pa_deleted;<br>
+  [0x40] ext4_fsblk_t pa_pstart;<br>
+  [0x48] ext4_lblk_t pa_lstart;<br>
+  [0x4c] ext4_grpblk_t pa_len;<br>
+  [0x50] ext4_grpblk_t pa_free;<br>
+  [0x54] unsigned short pa_type;<br>
+  [0x58] spinlock_t *pa_obj_lock;<br>
+  [0x60] struct inode *pa_inode;<br>
+}<br>
+SIZE: 0x68<br>
+	<br>
+<br>
+crash> rd 0xffff880268291d68 20<br>
+ffff880268291d68:  ffff881822f8a4c8 ffff881822f8a4c8   ..."......."....<br>
+ffff880268291d78:  ffff8813bb5f72f0 ffff8813bb5f72f0   .r_......r_.....<br>
+ffff880268291d88:  0000000000001000 ffff880db2371000   ..........7.....<br>
+ffff880268291d98:  0000000100000001 0000000000000000   ................<br>
+ffff880268291da8:  0000000000029c39 0000001700000c41   9.......A.......<br>
+ffff880268291db8:  ffff000000000016 ffff881822f8a4d8   ..........."....<br>
+ffff880268291dc8:  ffff881822f8a268 ffff880268291af8   h.."......)h....<br>
+ffff880268291dd8:  ffff880268291dd0 ffffea00069a07c0   ..)h............<br>
+ffff880268291de8:  00000000004d5bb7 0000000000001000   .[M.............<br>
+ffff880268291df8:  ffff8801a681f000 0000000000000000   ................<br>
+<br>
+<br>
+<br>
+Before "goto repeat", it is necessary to check whether 
+grp->bb_prealloc_list is empty.
+<br>
+This patch may fix it.<br>
+Please kindly give us your comments and suggestions.<br>
+Thanks.<br>
+<br>
+<br>
+diff --git a/fs/ext4/mballoc.c b/fs/ext4/mballoc.c<br>
+index 99bf091..8082e2d 100644<br>
+--- a/fs/ext4/mballoc.c<br>
++++ b/fs/ext4/mballoc.c<br>
+@@ -4290,7 +4290,7 @@ static void ext4_mb_new_preallocation(struct 
+ext4_allocation_context *ac)
+<br>
+        free_total += free;<br>
+<br>
+        /* if we still need more blocks and some PAs were used, try 
+again */
+<br>
+-       if (free_total < needed && busy) {<br>
++       if (free_total < needed && busy && 
+!list_empty(&grp->bb_prealloc_list)) {
+<br>
+                ext4_unlock_group(sb, group);<br>
+                cond_resched();<br>
+                busy = 0;<br>
+<br>
+<br>
+<br>
+--<br>
+Best wishes,<br>
+Wen<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+

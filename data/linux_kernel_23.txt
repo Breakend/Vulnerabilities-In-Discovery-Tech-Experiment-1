@@ -1,0 +1,132 @@
+On Fri, Apr 02, 2021 at 03:18:20PM +0000, Christophe Leroy wrote:<br>
+><i> This converts the architecture to GENERIC_CMDLINE.</i><br>
+><i> </i><br>
+><i> Signed-off-by: Christophe Leroy <christophe.leroy@xxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  arch/x86/Kconfig        | 45 ++---------------------------------------</i><br>
+><i>  arch/x86/kernel/setup.c | 17 ++--------------</i><br>
+><i>  2 files changed, 4 insertions(+), 58 deletions(-)</i><br>
+><i> </i><br>
+><i> diff --git a/arch/x86/Kconfig b/arch/x86/Kconfig</i><br>
+><i> index a20684d56b4b..66b384228ca3 100644</i><br>
+><i> --- a/arch/x86/Kconfig</i><br>
+><i> +++ b/arch/x86/Kconfig</i><br>
+><i> @@ -104,6 +104,7 @@ config X86</i><br>
+><i>  	select ARCH_USE_QUEUED_SPINLOCKS</i><br>
+><i>  	select ARCH_USE_SYM_ANNOTATIONS</i><br>
+><i>  	select ARCH_WANT_BATCHED_UNMAP_TLB_FLUSH</i><br>
+><i> +	select ARCH_WANT_CMDLINE_PREPEND_BY_DEFAULT</i><br>
+<br>
+Seems to be non-existent kconfig option.<br>
+<br>
+><i>  	select ARCH_WANT_DEFAULT_BPF_JIT	if X86_64</i><br>
+><i>  	select ARCH_WANTS_DYNAMIC_TASK_STRUCT</i><br>
+><i>  	select ARCH_WANT_HUGE_PMD_SHARE</i><br>
+><i> @@ -118,6 +119,7 @@ config X86</i><br>
+><i>  	select EDAC_SUPPORT</i><br>
+><i>  	select GENERIC_CLOCKEVENTS_BROADCAST	if X86_64 || (X86_32 && X86_LOCAL_APIC)</i><br>
+><i>  	select GENERIC_CLOCKEVENTS_MIN_ADJUST</i><br>
+><i> +	select GENERIC_CMDLINE</i><br>
+><i>  	select GENERIC_CMOS_UPDATE</i><br>
+><i>  	select GENERIC_CPU_AUTOPROBE</i><br>
+><i>  	select GENERIC_CPU_VULNERABILITIES</i><br>
+><i> @@ -2358,49 +2360,6 @@ choice</i><br>
+><i>  </i><br>
+><i>  endchoice</i><br>
+><i>  </i><br>
+><i> -config CMDLINE_BOOL</i><br>
+><i> -	bool "Built-in kernel command line"</i><br>
+><i> -	help</i><br>
+><i> -	  Allow for specifying boot arguments to the kernel at</i><br>
+><i> -	  build time.  On some systems (e.g. embedded ones), it is</i><br>
+><i> -	  necessary or convenient to provide some or all of the</i><br>
+><i> -	  kernel boot arguments with the kernel itself (that is,</i><br>
+><i> -	  to not rely on the boot loader to provide them.)</i><br>
+><i> -</i><br>
+><i> -	  To compile command line arguments into the kernel,</i><br>
+><i> -	  set this option to 'Y', then fill in the</i><br>
+><i> -	  boot arguments in CONFIG_CMDLINE.</i><br>
+><i> -</i><br>
+><i> -	  Systems with fully functional boot loaders (i.e. non-embedded)</i><br>
+><i> -	  should leave this option set to 'N'.</i><br>
+><i> -</i><br>
+><i> -config CMDLINE</i><br>
+><i> -	string "Built-in kernel command string"</i><br>
+><i> -	depends on CMDLINE_BOOL</i><br>
+><i> -	default ""</i><br>
+><i> -	help</i><br>
+><i> -	  Enter arguments here that should be compiled into the kernel</i><br>
+><i> -	  image and used at boot time.  If the boot loader provides a</i><br>
+><i> -	  command line at boot time, it is appended to this string to</i><br>
+><i> -	  form the full kernel command line, when the system boots.</i><br>
+><i> -</i><br>
+><i> -	  However, you can use the CONFIG_CMDLINE_FORCE option to</i><br>
+><i> -	  change this behavior.</i><br>
+><i> -</i><br>
+><i> -	  In most cases, the command line (whether built-in or provided</i><br>
+><i> -	  by the boot loader) should specify the device for the root</i><br>
+><i> -	  file system.</i><br>
+><i> -</i><br>
+><i> -config CMDLINE_FORCE</i><br>
+><i> -	bool "Built-in command line overrides boot loader arguments"</i><br>
+><i> -	depends on CMDLINE_BOOL && CMDLINE != ""</i><br>
+><i> -	help</i><br>
+><i> -	  Set this option to 'Y' to have the kernel ignore the boot loader</i><br>
+><i> -	  command line, and use ONLY the built-in command line.</i><br>
+><i> -</i><br>
+><i> -	  This is used to work around broken boot loaders.  This should</i><br>
+><i> -	  be set to 'N' under normal conditions.</i><br>
+><i> -</i><br>
+><i>  config MODIFY_LDT_SYSCALL</i><br>
+><i>  	bool "Enable the LDT (local descriptor table)" if EXPERT</i><br>
+><i>  	default y</i><br>
+><i> diff --git a/arch/x86/kernel/setup.c b/arch/x86/kernel/setup.c</i><br>
+><i> index 6f2de58eeb54..3f274b02e51c 100644</i><br>
+><i> --- a/arch/x86/kernel/setup.c</i><br>
+><i> +++ b/arch/x86/kernel/setup.c</i><br>
+><i> @@ -5,6 +5,7 @@</i><br>
+><i>   * This file contains the setup_arch() code, which handles the architecture-dependent</i><br>
+><i>   * parts of early kernel initialization.</i><br>
+><i>   */</i><br>
+><i> +#include <linux/cmdline.h></i><br>
+><i>  #include <linux/console.h></i><br>
+><i>  #include <linux/crash_dump.h></i><br>
+><i>  #include <linux/dma-map-ops.h></i><br>
+><i> @@ -161,9 +162,6 @@ unsigned long saved_video_mode;</i><br>
+><i>  #define RAMDISK_LOAD_FLAG		0x4000</i><br>
+><i>  </i><br>
+><i>  static char __initdata command_line[COMMAND_LINE_SIZE];</i><br>
+><i> -#ifdef CONFIG_CMDLINE_BOOL</i><br>
+><i> -static char __initdata builtin_cmdline[COMMAND_LINE_SIZE] = CONFIG_CMDLINE;</i><br>
+><i> -#endif</i><br>
+><i>  </i><br>
+><i>  #if defined(CONFIG_EDD) || defined(CONFIG_EDD_MODULE)</i><br>
+><i>  struct edd edd;</i><br>
+><i> @@ -883,18 +881,7 @@ void __init setup_arch(char **cmdline_p)</i><br>
+><i>  	bss_resource.start = __pa_symbol(__bss_start);</i><br>
+><i>  	bss_resource.end = __pa_symbol(__bss_stop)-1;</i><br>
+><i>  </i><br>
+><i> -#ifdef CONFIG_CMDLINE_BOOL</i><br>
+><i> -#ifdef CONFIG_CMDLINE_FORCE</i><br>
+><i> -	strlcpy(boot_command_line, builtin_cmdline, COMMAND_LINE_SIZE);</i><br>
+><i> -#else</i><br>
+><i> -	if (builtin_cmdline[0]) {</i><br>
+><i> -		/* append boot loader cmdline to builtin */</i><br>
+><i> -		strlcat(builtin_cmdline, " ", COMMAND_LINE_SIZE);</i><br>
+><i> -		strlcat(builtin_cmdline, boot_command_line, COMMAND_LINE_SIZE);</i><br>
+><i> -		strlcpy(boot_command_line, builtin_cmdline, COMMAND_LINE_SIZE);</i><br>
+><i> -	}</i><br>
+><i> -#endif</i><br>
+><i> -#endif</i><br>
+><i> +	cmdline_build(boot_command_line, boot_command_line);</i><br>
+><i>  </i><br>
+><i>  	strlcpy(command_line, boot_command_line, COMMAND_LINE_SIZE);</i><br>
+><i>  	*cmdline_p = command_line;</i><br>
+<br>
+Once this is all done, I wonder if we can get rid of the strlcpy and <br>
+perhaps also cmdline_p.<br>
+<br>
+Rob<br>
+<br>
+<br>
+

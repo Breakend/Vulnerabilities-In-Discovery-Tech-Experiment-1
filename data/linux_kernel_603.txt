@@ -1,0 +1,262 @@
+Hi Igor,<br>
+<br>
+Thank you for the patch! Perhaps something to improve:<br>
+<br>
+[auto build test WARNING on linuxtv-media/master]<br>
+[also build test WARNING on v5.12-rc6 next-20210408]<br>
+[If your patch is applied to the wrong git tree, kindly drop us a note.<br>
+And when submitting patch, we suggest to use '--base' as documented in<br>
+<a  rel="nofollow" href="https://git-scm.com/docs/git-format-patch">https://git-scm.com/docs/git-format-patch</a>]<br>
+<br>
+url:    <a  rel="nofollow" href="https://github.com/0day-ci/linux/commits/Igor-Matheus-Andrade-Torrente/media-em28xx-Fix-race-condition-between-open-and-init-function/20210408-201217">https://github.com/0day-ci/linux/commits/Igor-Matheus-Andrade-Torrente/media-em28xx-Fix-race-condition-between-open-and-init-function/20210408-201217</a><br>
+base:   git://linuxtv.org/media_tree.git master<br>
+config: x86_64-randconfig-a014-20210408 (attached as .config)<br>
+compiler: clang version 13.0.0 (<a  rel="nofollow" href="https://github.com/llvm/llvm-project">https://github.com/llvm/llvm-project</a> 56ea2e2fdd691136d5e6631fa0e447173694b82c)<br>
+reproduce (this is a W=1 build):<br>
+        wget <a  rel="nofollow" href="https://raw.githubusercontent.com/intel/lkp-tests/master/sbin/make.cross">https://raw.githubusercontent.com/intel/lkp-tests/master/sbin/make.cross</a> -O ~/bin/make.cross<br>
+        chmod +x ~/bin/make.cross<br>
+        # install x86_64 cross compiling tool for clang build<br>
+        # apt-get install binutils-x86-64-linux-gnu<br>
+        # <a  rel="nofollow" href="https://github.com/0day-ci/linux/commit/e13d07271a1ee4cbd8ac421bf575a36f9d0e1008">https://github.com/0day-ci/linux/commit/e13d07271a1ee4cbd8ac421bf575a36f9d0e1008</a><br>
+        git remote add linux-review <a  rel="nofollow" href="https://github.com/0day-ci/linux">https://github.com/0day-ci/linux</a><br>
+        git fetch --no-tags linux-review Igor-Matheus-Andrade-Torrente/media-em28xx-Fix-race-condition-between-open-and-init-function/20210408-201217<br>
+        git checkout e13d07271a1ee4cbd8ac421bf575a36f9d0e1008<br>
+        # save the attached .config to linux build tree<br>
+        COMPILER_INSTALL_PATH=$HOME/0day COMPILER=clang make.cross ARCH=x86_64 <br>
+<br>
+If you fix the issue, kindly add following tag as appropriate<br>
+Reported-by: kernel test robot <lkp@xxxxxxxxx><br>
+<br>
+All warnings (new ones prefixed by >>):<br>
+<br>
+><i>> drivers/media/usb/em28xx/em28xx-video.c:2347:6: warning: no previous prototype for function 'em28xx_vdev_release' [-Wmissing-prototypes]</i><br>
+   void em28xx_vdev_release(struct video_device *vdev)<br>
+        ^<br>
+   drivers/media/usb/em28xx/em28xx-video.c:2347:1: note: declare 'static' if the function is not intended to be used outside of this translation unit<br>
+   void em28xx_vdev_release(struct video_device *vdev)<br>
+   ^<br>
+   static <br>
+><i>> drivers/media/usb/em28xx/em28xx-video.c:2545:6: warning: no previous prototype for function 'em28xx_v4l2_dev_release' [-Wmissing-prototypes]</i><br>
+   void em28xx_v4l2_dev_release(struct v4l2_device *v4l2_dev)<br>
+        ^<br>
+   drivers/media/usb/em28xx/em28xx-video.c:2545:1: note: declare 'static' if the function is not intended to be used outside of this translation unit<br>
+   void em28xx_v4l2_dev_release(struct v4l2_device *v4l2_dev)<br>
+   ^<br>
+   static <br>
+   2 warnings generated.<br>
+<br>
+<br>
+vim +/em28xx_vdev_release +2347 drivers/media/usb/em28xx/em28xx-video.c<br>
+<br>
+  2346	<br>
+><i> 2347	void em28xx_vdev_release(struct video_device *vdev)</i><br>
+  2348	{<br>
+  2349	#ifdef CONFIG_MEDIA_CONTROLLER<br>
+  2350		int i;<br>
+  2351	<br>
+  2352		for (i = 0; i < vdev->entity.num_pads; i++)<br>
+  2353			kfree(&vdev->entity.pads[i]);<br>
+  2354	#endif<br>
+  2355		kfree(vdev);<br>
+  2356	}<br>
+  2357	<br>
+  2358	static const struct v4l2_file_operations em28xx_v4l_fops = {<br>
+  2359		.owner         = THIS_MODULE,<br>
+  2360		.open          = em28xx_v4l2_open,<br>
+  2361		.release       = em28xx_v4l2_close,<br>
+  2362		.read          = vb2_fop_read,<br>
+  2363		.poll          = vb2_fop_poll,<br>
+  2364		.mmap          = vb2_fop_mmap,<br>
+  2365		.unlocked_ioctl = video_ioctl2,<br>
+  2366	};<br>
+  2367	<br>
+  2368	static const struct v4l2_ioctl_ops video_ioctl_ops = {<br>
+  2369		.vidioc_querycap            = vidioc_querycap,<br>
+  2370		.vidioc_enum_fmt_vid_cap    = vidioc_enum_fmt_vid_cap,<br>
+  2371		.vidioc_g_fmt_vid_cap       = vidioc_g_fmt_vid_cap,<br>
+  2372		.vidioc_try_fmt_vid_cap     = vidioc_try_fmt_vid_cap,<br>
+  2373		.vidioc_s_fmt_vid_cap       = vidioc_s_fmt_vid_cap,<br>
+  2374		.vidioc_g_fmt_vbi_cap       = vidioc_g_fmt_vbi_cap,<br>
+  2375		.vidioc_try_fmt_vbi_cap     = vidioc_g_fmt_vbi_cap,<br>
+  2376		.vidioc_s_fmt_vbi_cap       = vidioc_g_fmt_vbi_cap,<br>
+  2377		.vidioc_enum_framesizes     = vidioc_enum_framesizes,<br>
+  2378		.vidioc_enumaudio           = vidioc_enumaudio,<br>
+  2379		.vidioc_g_audio             = vidioc_g_audio,<br>
+  2380		.vidioc_s_audio             = vidioc_s_audio,<br>
+  2381	<br>
+  2382		.vidioc_reqbufs             = vb2_ioctl_reqbufs,<br>
+  2383		.vidioc_create_bufs         = vb2_ioctl_create_bufs,<br>
+  2384		.vidioc_prepare_buf         = vb2_ioctl_prepare_buf,<br>
+  2385		.vidioc_querybuf            = vb2_ioctl_querybuf,<br>
+  2386		.vidioc_qbuf                = vb2_ioctl_qbuf,<br>
+  2387		.vidioc_dqbuf               = vb2_ioctl_dqbuf,<br>
+  2388	<br>
+  2389		.vidioc_g_std               = vidioc_g_std,<br>
+  2390		.vidioc_querystd            = vidioc_querystd,<br>
+  2391		.vidioc_s_std               = vidioc_s_std,<br>
+  2392		.vidioc_g_parm		    = vidioc_g_parm,<br>
+  2393		.vidioc_s_parm		    = vidioc_s_parm,<br>
+  2394		.vidioc_enum_input          = vidioc_enum_input,<br>
+  2395		.vidioc_g_input             = vidioc_g_input,<br>
+  2396		.vidioc_s_input             = vidioc_s_input,<br>
+  2397		.vidioc_streamon            = vb2_ioctl_streamon,<br>
+  2398		.vidioc_streamoff           = vb2_ioctl_streamoff,<br>
+  2399		.vidioc_g_tuner             = vidioc_g_tuner,<br>
+  2400		.vidioc_s_tuner             = vidioc_s_tuner,<br>
+  2401		.vidioc_g_frequency         = vidioc_g_frequency,<br>
+  2402		.vidioc_s_frequency         = vidioc_s_frequency,<br>
+  2403		.vidioc_subscribe_event = v4l2_ctrl_subscribe_event,<br>
+  2404		.vidioc_unsubscribe_event = v4l2_event_unsubscribe,<br>
+  2405	#ifdef CONFIG_VIDEO_ADV_DEBUG<br>
+  2406		.vidioc_g_chip_info         = vidioc_g_chip_info,<br>
+  2407		.vidioc_g_register          = vidioc_g_register,<br>
+  2408		.vidioc_s_register          = vidioc_s_register,<br>
+  2409	#endif<br>
+  2410	};<br>
+  2411	<br>
+  2412	static const struct video_device em28xx_video_template = {<br>
+  2413		.fops		= &em28xx_v4l_fops,<br>
+  2414		.ioctl_ops	= &video_ioctl_ops,<br>
+  2415		.release	= em28xx_vdev_release,<br>
+  2416		.tvnorms	= V4L2_STD_ALL,<br>
+  2417	};<br>
+  2418	<br>
+  2419	static const struct v4l2_file_operations radio_fops = {<br>
+  2420		.owner         = THIS_MODULE,<br>
+  2421		.open          = em28xx_v4l2_open,<br>
+  2422		.release       = em28xx_v4l2_close,<br>
+  2423		.unlocked_ioctl = video_ioctl2,<br>
+  2424	};<br>
+  2425	<br>
+  2426	static const struct v4l2_ioctl_ops radio_ioctl_ops = {<br>
+  2427		.vidioc_querycap      = vidioc_querycap,<br>
+  2428		.vidioc_g_tuner       = radio_g_tuner,<br>
+  2429		.vidioc_s_tuner       = radio_s_tuner,<br>
+  2430		.vidioc_g_frequency   = vidioc_g_frequency,<br>
+  2431		.vidioc_s_frequency   = vidioc_s_frequency,<br>
+  2432		.vidioc_subscribe_event = v4l2_ctrl_subscribe_event,<br>
+  2433		.vidioc_unsubscribe_event = v4l2_event_unsubscribe,<br>
+  2434	#ifdef CONFIG_VIDEO_ADV_DEBUG<br>
+  2435		.vidioc_g_chip_info   = vidioc_g_chip_info,<br>
+  2436		.vidioc_g_register    = vidioc_g_register,<br>
+  2437		.vidioc_s_register    = vidioc_s_register,<br>
+  2438	#endif<br>
+  2439	};<br>
+  2440	<br>
+  2441	static struct video_device em28xx_radio_template = {<br>
+  2442		.fops		= &radio_fops,<br>
+  2443		.ioctl_ops	= &radio_ioctl_ops,<br>
+  2444		.release	= video_device_release_empty,<br>
+  2445	};<br>
+  2446	<br>
+  2447	/* I2C possible address to saa7115, tvp5150, msp3400, tvaudio */<br>
+  2448	static unsigned short saa711x_addrs[] = {<br>
+  2449		0x4a >> 1, 0x48 >> 1,   /* SAA7111, SAA7111A and SAA7113 */<br>
+  2450		0x42 >> 1, 0x40 >> 1,   /* SAA7114, SAA7115 and SAA7118 */<br>
+  2451		I2C_CLIENT_END };<br>
+  2452	<br>
+  2453	static unsigned short tvp5150_addrs[] = {<br>
+  2454		0xb8 >> 1,<br>
+  2455		0xba >> 1,<br>
+  2456		I2C_CLIENT_END<br>
+  2457	};<br>
+  2458	<br>
+  2459	static unsigned short msp3400_addrs[] = {<br>
+  2460		0x80 >> 1,<br>
+  2461		0x88 >> 1,<br>
+  2462		I2C_CLIENT_END<br>
+  2463	};<br>
+  2464	<br>
+  2465	/******************************** usb interface ******************************/<br>
+  2466	<br>
+  2467	static void em28xx_vdev_init(struct em28xx *dev,<br>
+  2468				     struct video_device *vfd,<br>
+  2469				     const struct video_device *template,<br>
+  2470				     const char *type_name)<br>
+  2471	{<br>
+  2472		*vfd		= *template;<br>
+  2473		vfd->v4l2_dev	= dev->v4l2->v4l2_dev;<br>
+  2474		vfd->lock	= &dev->lock;<br>
+  2475		if (dev->is_webcam)<br>
+  2476			vfd->tvnorms = 0;<br>
+  2477	<br>
+  2478		snprintf(vfd->name, sizeof(vfd->name), "%s %s",<br>
+  2479			 dev_name(&dev->intf->dev), type_name);<br>
+  2480	<br>
+  2481		video_set_drvdata(vfd, dev);<br>
+  2482	}<br>
+  2483	<br>
+  2484	static void em28xx_tuner_setup(struct em28xx *dev, unsigned short tuner_addr)<br>
+  2485	{<br>
+  2486		struct em28xx_v4l2      *v4l2 = dev->v4l2;<br>
+  2487		struct v4l2_device      *v4l2_dev = v4l2->v4l2_dev;<br>
+  2488		struct tuner_setup      tun_setup;<br>
+  2489		struct v4l2_frequency   f;<br>
+  2490	<br>
+  2491		memset(&tun_setup, 0, sizeof(tun_setup));<br>
+  2492	<br>
+  2493		tun_setup.mode_mask = T_ANALOG_TV | T_RADIO;<br>
+  2494		tun_setup.tuner_callback = em28xx_tuner_callback;<br>
+  2495	<br>
+  2496		if (dev->board.radio.type) {<br>
+  2497			tun_setup.type = dev->board.radio.type;<br>
+  2498			tun_setup.addr = dev->board.radio_addr;<br>
+  2499	<br>
+  2500			v4l2_device_call_all(v4l2_dev,<br>
+  2501					     0, tuner, s_type_addr, &tun_setup);<br>
+  2502		}<br>
+  2503	<br>
+  2504		if (dev->tuner_type != TUNER_ABSENT && dev->tuner_type) {<br>
+  2505			tun_setup.type   = dev->tuner_type;<br>
+  2506			tun_setup.addr   = tuner_addr;<br>
+  2507	<br>
+  2508			v4l2_device_call_all(v4l2_dev,<br>
+  2509					     0, tuner, s_type_addr, &tun_setup);<br>
+  2510		}<br>
+  2511	<br>
+  2512		if (dev->board.tda9887_conf) {<br>
+  2513			struct v4l2_priv_tun_config tda9887_cfg;<br>
+  2514	<br>
+  2515			tda9887_cfg.tuner = TUNER_TDA9887;<br>
+  2516			tda9887_cfg.priv = &dev->board.tda9887_conf;<br>
+  2517	<br>
+  2518			v4l2_device_call_all(v4l2_dev,<br>
+  2519					     0, tuner, s_config, &tda9887_cfg);<br>
+  2520		}<br>
+  2521	<br>
+  2522		if (dev->tuner_type == TUNER_XC2028) {<br>
+  2523			struct v4l2_priv_tun_config  xc2028_cfg;<br>
+  2524			struct xc2028_ctrl           ctl;<br>
+  2525	<br>
+  2526			memset(&xc2028_cfg, 0, sizeof(xc2028_cfg));<br>
+  2527			memset(&ctl, 0, sizeof(ctl));<br>
+  2528	<br>
+  2529			em28xx_setup_xc3028(dev, &ctl);<br>
+  2530	<br>
+  2531			xc2028_cfg.tuner = TUNER_XC2028;<br>
+  2532			xc2028_cfg.priv  = &ctl;<br>
+  2533	<br>
+  2534			v4l2_device_call_all(v4l2_dev, 0, tuner, s_config, &xc2028_cfg);<br>
+  2535		}<br>
+  2536	<br>
+  2537		/* configure tuner */<br>
+  2538		f.tuner = 0;<br>
+  2539		f.type = V4L2_TUNER_ANALOG_TV;<br>
+  2540		f.frequency = 9076;     /* just a magic number */<br>
+  2541		v4l2->frequency = f.frequency;<br>
+  2542		v4l2_device_call_all(v4l2_dev, 0, tuner, s_frequency, &f);<br>
+  2543	}<br>
+  2544	<br>
+><i> 2545	void em28xx_v4l2_dev_release(struct v4l2_device *v4l2_dev)</i><br>
+  2546	{<br>
+  2547		kfree(v4l2_dev);<br>
+  2548	}<br>
+  2549	<br>
+<br>
+---<br>
+0-DAY CI Kernel Test Service, Intel Corporation<br>
+<a  rel="nofollow" href="https://lists.01.org/hyperkitty/list/kbuild-all@xxxxxxxxxxxx">https://lists.01.org/hyperkitty/list/kbuild-all@xxxxxxxxxxxx</a><br>
+<p><strong>Attachment:
+<a href="00928/.config.gz" ><tt>.config.gz</tt></a></strong><br>
+<em>Description:</em> application/gzip</p>
+

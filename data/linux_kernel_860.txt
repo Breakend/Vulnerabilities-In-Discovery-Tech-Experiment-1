@@ -1,0 +1,27 @@
+Now some members about phys and wakeup are not used anymore,<br>
+remove them.<br>
+<br>
+Signed-off-by: Chunfeng Yun <chunfeng.yun@xxxxxxxxxxxx><br>
+---<br>
+ drivers/usb/host/xhci-mtk.h | 3 ---<br>
+ 1 file changed, 3 deletions(-)<br>
+<br>
+diff --git a/drivers/usb/host/xhci-mtk.h b/drivers/usb/host/xhci-mtk.h<br>
+index 11996edc1967..7940593a3445 100644<br>
+--- a/drivers/usb/host/xhci-mtk.h<br>
++++ b/drivers/usb/host/xhci-mtk.h<br>
+@@ -145,9 +145,6 @@ struct xhci_hcd_mtk {<br>
+ 	struct regulator *vusb33;<br>
+ 	struct regulator *vbus;<br>
+ 	struct clk_bulk_data clks[BULK_CLKS_NUM];<br>
+-	struct regmap *pericfg;<br>
+-	struct phy **phys;<br>
+-	int num_phys;<br>
+ 	bool lpm_support;<br>
+ 	/* usb remote wakeup */<br>
+ 	bool uwk_en;<br>
+-- <br>
+2.18.0<br>
+<br>
+<br>
+

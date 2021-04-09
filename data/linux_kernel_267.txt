@@ -1,0 +1,16 @@
+On Thu, 2021-04-08 at 11:24 -0400, Stefan Berger wrote:<br>
+><i> Address a kbuild issue where a developer created an ECDSA key for signing</i><br>
+><i> kernel modules and then builds an older version of the kernel, when bi-</i><br>
+><i> secting the kernel for example, that does not support ECDSA keys.</i><br>
+><i> </i><br>
+><i> Trigger the creation of an RSA module signing key if it is not an RSA key.</i><br>
+><i> </i><br>
+><i> Fixes: cfc411e7fff3 ("Move certificate handling to its own directory")</i><br>
+><i> Signed-off-by: Stefan Berger <stefanb@xxxxxxxxxxxxx></i><br>
+<br>
+Thanks, Stefan.<br>
+<br>
+Reviewed-by: Mimi Zohar <zohar@xxxxxxxxxxxxx><br>
+<br>
+<br>
+

@@ -1,0 +1,125 @@
+LLVM changed the expected function signature for<br>
+llvm_gcda_emit_function() in the clang-11 release.  Users of clang-11 or<br>
+newer may have noticed their kernels producing invalid coverage<br>
+information:<br>
+<br>
+$ llvm-cov gcov -a -c -u -f -b <input>.gcda -- gcno=<input>.gcno<br>
+1 <func>: checksum mismatch, \<br>
+  (<lineno chksum A>, <cfg chksum B>) != (<lineno chksum A>, <cfg chksum C>)<br>
+2 Invalid .gcda File!<br>
+...<br>
+<br>
+Fix up the function signatures so calling this function interprets its<br>
+parameters correctly and computes the correct cfg checksum. In<br>
+particular, in clang-11, the additional checksum is no longer optional.<br>
+<br>
+Link: <a  rel="nofollow" href="https://reviews.llvm.org/rG25544ce2df0daa4304c07e64b9c8b0f7df60c11d">https://reviews.llvm.org/rG25544ce2df0daa4304c07e64b9c8b0f7df60c11d</a><br>
+Cc: stable@xxxxxxxxxxxxxxx #5.4+<br>
+Reported-by: Prasad Sodagudi <psodagud@xxxxxxxxxxx><br>
+Tested-by: Prasad Sodagudi <psodagud@xxxxxxxxxxx><br>
+Signed-off-by: Nick Desaulniers <ndesaulniers@xxxxxxxxxx><br>
+Reviewed-by: Nathan Chancellor <nathan@xxxxxxxxxx><br>
+---<br>
+Changes V1 -> V2:<br>
+* Carried Nathan's reviewed-by tag.<br>
+* Rebased on mainline, as per Andrew.<br>
+* Left off patch 2/2 from the series<br>
+<a  rel="nofollow" href="https://lore.kernel.org/lkml/20210407185456.41943-1-ndesaulniers@xxxxxxxxxx/">https://lore.kernel.org/lkml/20210407185456.41943-1-ndesaulniers@xxxxxxxxxx/</a><br>
+  I assume that dropping support for clang-10+GCOV will be held<br>
+  separately for -next for 5.13, while this will be sent for 5.12?<br>
+<br>
+ kernel/gcov/clang.c | 29 +++++++++++++++++++----------<br>
+ 1 file changed, 19 insertions(+), 10 deletions(-)<br>
+<br>
+diff --git a/kernel/gcov/clang.c b/kernel/gcov/clang.c<br>
+index 8743150db2ac..c466c7fbdece 100644<br>
+--- a/kernel/gcov/clang.c<br>
++++ b/kernel/gcov/clang.c<br>
+@@ -70,7 +70,9 @@ struct gcov_fn_info {<br>
+ <br>
+ 	u32 ident;<br>
+ 	u32 checksum;<br>
++#if CONFIG_CLANG_VERSION < 110000<br>
+ 	u8 use_extra_checksum;<br>
++#endif<br>
+ 	u32 cfg_checksum;<br>
+ <br>
+ 	u32 num_counters;<br>
+@@ -145,10 +147,8 @@ void llvm_gcda_emit_function(u32 ident, const char *function_name,<br>
+ <br>
+ 	list_add_tail(&info->head, &current_info->functions);<br>
+ }<br>
+-EXPORT_SYMBOL(llvm_gcda_emit_function);<br>
+ #else<br>
+-void llvm_gcda_emit_function(u32 ident, u32 func_checksum,<br>
+-		u8 use_extra_checksum, u32 cfg_checksum)<br>
++void llvm_gcda_emit_function(u32 ident, u32 func_checksum, u32 cfg_checksum)<br>
+ {<br>
+ 	struct gcov_fn_info *info = kzalloc(sizeof(*info), GFP_KERNEL);<br>
+ <br>
+@@ -158,12 +158,11 @@ void llvm_gcda_emit_function(u32 ident, u32 func_checksum,<br>
+ 	INIT_LIST_HEAD(&info->head);<br>
+ 	info->ident = ident;<br>
+ 	info->checksum = func_checksum;<br>
+-	info->use_extra_checksum = use_extra_checksum;<br>
+ 	info->cfg_checksum = cfg_checksum;<br>
+ 	list_add_tail(&info->head, &current_info->functions);<br>
+ }<br>
+-EXPORT_SYMBOL(llvm_gcda_emit_function);<br>
+ #endif<br>
++EXPORT_SYMBOL(llvm_gcda_emit_function);<br>
+ <br>
+ void llvm_gcda_emit_arcs(u32 num_counters, u64 *counters)<br>
+ {<br>
+@@ -293,11 +292,16 @@ int gcov_info_is_compatible(struct gcov_info *info1, struct gcov_info *info2)<br>
+ 		!list_is_last(&fn_ptr2->head, &info2->functions)) {<br>
+ 		if (fn_ptr1->checksum != fn_ptr2->checksum)<br>
+ 			return false;<br>
++#if CONFIG_CLANG_VERSION < 110000<br>
+ 		if (fn_ptr1->use_extra_checksum != fn_ptr2->use_extra_checksum)<br>
+ 			return false;<br>
+ 		if (fn_ptr1->use_extra_checksum &&<br>
+ 			fn_ptr1->cfg_checksum != fn_ptr2->cfg_checksum)<br>
+ 			return false;<br>
++#else<br>
++		if (fn_ptr1->cfg_checksum != fn_ptr2->cfg_checksum)<br>
++			return false;<br>
++#endif<br>
+ 		fn_ptr1 = list_next_entry(fn_ptr1, head);<br>
+ 		fn_ptr2 = list_next_entry(fn_ptr2, head);<br>
+ 	}<br>
+@@ -529,17 +533,22 @@ static size_t convert_to_gcda(char *buffer, struct gcov_info *info)<br>
+ <br>
+ 	list_for_each_entry(fi_ptr, &info->functions, head) {<br>
+ 		u32 i;<br>
+-		u32 len = 2;<br>
+-<br>
+-		if (fi_ptr->use_extra_checksum)<br>
+-			len++;<br>
+ <br>
+ 		pos += store_gcov_u32(buffer, pos, GCOV_TAG_FUNCTION);<br>
+-		pos += store_gcov_u32(buffer, pos, len);<br>
++#if CONFIG_CLANG_VERSION < 110000<br>
++		pos += store_gcov_u32(buffer, pos,<br>
++			fi_ptr->use_extra_checksum ? 3 : 2);<br>
++#else<br>
++		pos += store_gcov_u32(buffer, pos, 3);<br>
++#endif<br>
+ 		pos += store_gcov_u32(buffer, pos, fi_ptr->ident);<br>
+ 		pos += store_gcov_u32(buffer, pos, fi_ptr->checksum);<br>
++#if CONFIG_CLANG_VERSION < 110000<br>
+ 		if (fi_ptr->use_extra_checksum)<br>
+ 			pos += store_gcov_u32(buffer, pos, fi_ptr->cfg_checksum);<br>
++#else<br>
++		pos += store_gcov_u32(buffer, pos, fi_ptr->cfg_checksum);<br>
++#endif<br>
+ <br>
+ 		pos += store_gcov_u32(buffer, pos, GCOV_TAG_COUNTER_BASE);<br>
+ 		pos += store_gcov_u32(buffer, pos, fi_ptr->num_counters * 2);<br>
+<br>
+base-commit: 3fb4f979b4fa1f92a02b538ae86e725b73e703d0<br>
+-- <br>
+2.31.1.295.g9ea45b61b8-goog<br>
+<br>
+<br>
+

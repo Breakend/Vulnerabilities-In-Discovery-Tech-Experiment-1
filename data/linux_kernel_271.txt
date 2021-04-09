@@ -1,0 +1,259 @@
+From: Ohad Sharabi <osharabi@xxxxxxxxx><br>
+<br>
+update files to latest version from F/W team.<br>
+<br>
+Signed-off-by: Ohad Sharabi <osharabi@xxxxxxxxx><br>
+Reviewed-by: Oded Gabbay <ogabbay@xxxxxxxxxx><br>
+Signed-off-by: Oded Gabbay <ogabbay@xxxxxxxxxx><br>
+---<br>
+ .../misc/habanalabs/include/common/cpucp_if.h |   3 +-<br>
+ .../habanalabs/include/common/hl_boot_if.h    | 198 ++++++++++++++++++<br>
+ 2 files changed, 200 insertions(+), 1 deletion(-)<br>
+<br>
+diff --git a/drivers/misc/habanalabs/include/common/cpucp_if.h b/drivers/misc/habanalabs/include/common/cpucp_if.h<br>
+index 20a710f7a369..27cd0ba99aa3 100644<br>
+--- a/drivers/misc/habanalabs/include/common/cpucp_if.h<br>
++++ b/drivers/misc/habanalabs/include/common/cpucp_if.h<br>
+@@ -11,6 +11,8 @@<br>
+ #include <linux/types.h><br>
+ #include <linux/if_ether.h><br>
+ <br>
++#include "hl_boot_if.h"<br>
++<br>
+ #define NUM_HBM_PSEUDO_CH				2<br>
+ #define NUM_HBM_CH_PER_DEV				8<br>
+ #define CPUCP_PKT_HBM_ECC_INFO_WR_PAR_SHIFT		0<br>
+@@ -564,7 +566,6 @@ struct eq_generic_event {<br>
+  */<br>
+ <br>
+ #define CARD_NAME_MAX_LEN		16<br>
+-#define VERSION_MAX_LEN			128<br>
+ #define CPUCP_MAX_SENSORS		128<br>
+ #define CPUCP_MAX_NICS			128<br>
+ #define CPUCP_LANES_PER_NIC		4<br>
+diff --git a/drivers/misc/habanalabs/include/common/hl_boot_if.h b/drivers/misc/habanalabs/include/common/hl_boot_if.h<br>
+index 980b432fd76e..e0a259e0495c 100644<br>
+--- a/drivers/misc/habanalabs/include/common/hl_boot_if.h<br>
++++ b/drivers/misc/habanalabs/include/common/hl_boot_if.h<br>
+@@ -13,6 +13,8 @@<br>
+ <br>
+ #define BOOT_FIT_SRAM_OFFSET		0x200000<br>
+ <br>
++#define VERSION_MAX_LEN			128<br>
++<br>
+ /*<br>
+  * CPU error bits in BOOT_ERROR registers<br>
+  *<br>
+@@ -251,6 +253,7 @@ enum kmd_msg {<br>
+ 	KMD_MSG_SKIP_BMC,<br>
+ 	RESERVED,<br>
+ 	KMD_MSG_RST_DEV,<br>
++	KMD_MSG_LAST<br>
+ };<br>
+ <br>
+ enum cpu_msg_status {<br>
+@@ -259,4 +262,199 @@ enum cpu_msg_status {<br>
+ 	CPU_MSG_ERR,<br>
+ };<br>
+ <br>
++/* communication registers mapping - consider ABI when changing */<br>
++struct cpu_dyn_regs {<br>
++	uint32_t cpu_pq_base_addr_low;<br>
++	uint32_t cpu_pq_base_addr_high;<br>
++	uint32_t cpu_pq_length;<br>
++	uint32_t cpu_pq_init_status;<br>
++	uint32_t cpu_eq_base_addr_low;<br>
++	uint32_t cpu_eq_base_addr_high;<br>
++	uint32_t cpu_eq_length;<br>
++	uint32_t cpu_eq_ci;<br>
++	uint32_t cpu_cq_base_addr_low;<br>
++	uint32_t cpu_cq_base_addr_high;<br>
++	uint32_t cpu_cq_length;<br>
++	uint32_t cpu_pf_pq_pi;<br>
++	uint32_t cpu_boot_dev_sts0;<br>
++	uint32_t cpu_boot_dev_sts1;<br>
++	uint32_t cpu_boot_err0;<br>
++	uint32_t cpu_boot_err1;<br>
++	uint32_t cpu_boot_status;<br>
++	uint32_t fw_upd_sts;<br>
++	uint32_t fw_upd_cmd;<br>
++	uint32_t fw_upd_pending_sts;<br>
++	uint32_t fuse_ver_offset;<br>
++	uint32_t preboot_ver_offset;<br>
++	uint32_t uboot_ver_offset;<br>
++	uint32_t hw_state;<br>
++	uint32_t kmd_msg_to_cpu;<br>
++	uint32_t cpu_cmd_status_to_host;<br>
++	uint32_t reserved1[32];		/* reserve for future use */<br>
++};<br>
++<br>
++/* HCDM - Habana Communications Descriptor Magic */<br>
++#define HL_COMMS_DESC_MAGIC	0x4843444D<br>
++#define HL_COMMS_DESC_VER	1<br>
++<br>
++/* this is the comms descriptor header - meta data */<br>
++struct comms_desc_header {<br>
++	uint32_t magic;		/* magic for validation */<br>
++	uint32_t crc32;		/* CRC32 of the descriptor w/o header */<br>
++	uint16_t size;		/* size of the descriptor w/o header */<br>
++	uint8_t version;	/* descriptor version */<br>
++	uint8_t reserved[5];	/* pad to 64 bit */<br>
++};<br>
++<br>
++/* this is the main FW descriptor - consider ABI when changing */<br>
++struct lkd_fw_comms_desc {<br>
++	struct comms_desc_header header;<br>
++	struct cpu_dyn_regs cpu_dyn_regs;<br>
++	char fuse_ver[VERSION_MAX_LEN];<br>
++	char cur_fw_ver[VERSION_MAX_LEN];<br>
++	/* can be used for 1 more version w/o ABI change */<br>
++	char reserved0[VERSION_MAX_LEN];<br>
++	uint64_t img_addr;	/* address for next FW component load */<br>
++};<br>
++<br>
++/*<br>
++ * LKD commands:<br>
++ *<br>
++ * COMMS_NOOP			Used to clear the command register and no actual<br>
++ *				command is send.<br>
++ *<br>
++ * COMMS_CLR_STS		Clear status command - FW should clear the<br>
++ *				status register. Used for synchronization<br>
++ *				between the commands as part of the race free<br>
++ *				protocol.<br>
++ *<br>
++ * COMMS_RST_STATE		Reset the current communication state which is<br>
++ *				kept by FW for proper responses.<br>
++ *				Should be used in the beginning of the<br>
++ *				communication cycle to clean any leftovers from<br>
++ *				previous communication attempts.<br>
++ *<br>
++ * COMMS_PREP_DESC		Prepare descriptor for setting up the<br>
++ *				communication and other dynamic data:<br>
++ *				struct lkd_fw_comms_desc.<br>
++ *				This command has a parameter stating the next FW<br>
++ *				component size, so the FW can actually prepare a<br>
++ *				space for it and in the status response provide<br>
++ *				the descriptor offset. The Offset of the next FW<br>
++ *				data component is a part of the descriptor<br>
++ *				structure.<br>
++ *<br>
++ * COMMS_DATA_RDY		The FW data has been uploaded and is ready for<br>
++ *				validation.<br>
++ *<br>
++ * COMMS_EXEC			Execute the next FW component.<br>
++ *<br>
++ * COMMS_RST_DEV		Reset the device.<br>
++ *<br>
++ * COMMS_GOTO_WFE		Execute WFE command. Allowed only on non-secure<br>
++ *				devices.<br>
++ *<br>
++ * COMMS_SKIP_BMC		Perform actions required for BMC-less servers.<br>
++ *				Do not wait for BMC response.<br>
++ *<br>
++ * COMMS_LOW_PLL_OPP		Initialize PLLs for low OPP.<br>
++ */<br>
++enum comms_cmd {<br>
++	COMMS_NOOP = 0,<br>
++	COMMS_CLR_STS = 1,<br>
++	COMMS_RST_STATE = 2,<br>
++	COMMS_PREP_DESC = 3,<br>
++	COMMS_DATA_RDY = 4,<br>
++	COMMS_EXEC = 5,<br>
++	COMMS_RST_DEV = 6,<br>
++	COMMS_GOTO_WFE = 7,<br>
++	COMMS_SKIP_BMC = 8,<br>
++	COMMS_LOW_PLL_OPP = 9,<br>
++	COMMS_INVLD_LAST<br>
++};<br>
++<br>
++#define COMMS_COMMAND_SIZE_SHIFT	0<br>
++#define COMMS_COMMAND_SIZE_MASK		0x1FFFFFF<br>
++#define COMMS_COMMAND_CMD_SHIFT		27<br>
++#define COMMS_COMMAND_CMD_MASK		0xF8000000<br>
++<br>
++/*<br>
++ * LKD command to FW register structure<br>
++ * @size	- FW component size<br>
++ * @cmd		- command from enum comms_cmd<br>
++ */<br>
++struct comms_command {<br>
++	union {		/* bit fields are only for FW use */<br>
++		struct {<br>
++			unsigned int size :25;		/* 32MB max. */<br>
++			unsigned int reserved :2;<br>
++			enum comms_cmd cmd :5;		/* 32 commands */<br>
++		};<br>
++		unsigned int val;<br>
++	};<br>
++};<br>
++<br>
++/*<br>
++ * FW status<br>
++ *<br>
++ * COMMS_STS_NOOP		Used to clear the status register and no actual<br>
++ *				status is provided.<br>
++ *<br>
++ * COMMS_STS_ACK		Command has been received and recognized.<br>
++ *<br>
++ * COMMS_STS_OK			Command execution has finished successfully.<br>
++ *<br>
++ * COMMS_STS_ERR		Command execution was unsuccessful and resulted<br>
++ *				in error.<br>
++ *<br>
++ * COMMS_STS_VALID_ERR		FW validation has failed.<br>
++ *<br>
++ * COMMS_STS_TIMEOUT_ERR	Command execution has timed out.<br>
++ */<br>
++enum comms_sts {<br>
++	COMMS_STS_NOOP = 0,<br>
++	COMMS_STS_ACK = 1,<br>
++	COMMS_STS_OK = 2,<br>
++	COMMS_STS_ERR = 3,<br>
++	COMMS_STS_VALID_ERR = 4,<br>
++	COMMS_STS_TIMEOUT_ERR = 5,<br>
++	COMMS_STS_INVLD_LAST<br>
++};<br>
++<br>
++/* RAM types for FW components loading - defines the base address */<br>
++enum comms_ram_types {<br>
++	COMMS_SRAM = 0,<br>
++	COMMS_DRAM = 1,<br>
++};<br>
++<br>
++#define COMMS_STATUS_OFFSET_SHIFT	0<br>
++#define COMMS_STATUS_OFFSET_MASK	0x03FFFFFF<br>
++#define COMMS_STATUS_OFFSET_ALIGN_SHIFT	2<br>
++#define COMMS_STATUS_RAM_TYPE_SHIFT	26<br>
++#define COMMS_STATUS_RAM_TYPE_MASK	0x0C000000<br>
++#define COMMS_STATUS_STATUS_SHIFT	28<br>
++#define COMMS_STATUS_STATUS_MASK	0xF0000000<br>
++<br>
++/*<br>
++ * FW status to LKD register structure<br>
++ * @offset	- an offset from the base of the ram_type shifted right by<br>
++ *		  2 bits (always aligned to 32 bits).<br>
++ *		  Allows a maximum addressable offset of 256MB from RAM base.<br>
++ *		  Example: for real offset in RAM of 0x800000 (8MB), the value<br>
++ *		  in offset field is (0x800000 >> 2) = 0x200000.<br>
++ * @ram_type	- the RAM type that should be used for offset from<br>
++ *		  enum comms_ram_types<br>
++ * @status	- status from enum comms_sts<br>
++ */<br>
++struct comms_status {<br>
++	union {		/* bit fields are only for FW use */<br>
++		struct {<br>
++			unsigned int offset :26;<br>
++			unsigned int ram_type :2;<br>
++			enum comms_sts status :4;	/* 16 statuses */<br>
++		};<br>
++		unsigned int val;<br>
++	};<br>
++};<br>
++<br>
+ #endif /* HL_BOOT_IF_H */<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

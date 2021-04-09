@@ -1,0 +1,387 @@
+Vineeth Pillai <viremana@xxxxxxxxxxxxxxxxxxx> writes:<br>
+<br>
+><i> Currently the remote TLB flush logic is specific to VMX.</i><br>
+><i> Move it to a common place so that SVM can use it as well.</i><br>
+><i></i><br>
+><i> Signed-off-by: Vineeth Pillai <viremana@xxxxxxxxxxxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  arch/x86/include/asm/kvm_host.h | 15 +++++</i><br>
+><i>  arch/x86/kvm/hyperv.c           | 89 ++++++++++++++++++++++++++++++</i><br>
+><i>  arch/x86/kvm/hyperv.h           | 12 ++++</i><br>
+><i>  arch/x86/kvm/vmx/vmx.c          | 97 +++------------------------------</i><br>
+><i>  arch/x86/kvm/vmx/vmx.h          | 10 ----</i><br>
+><i>  5 files changed, 123 insertions(+), 100 deletions(-)</i><br>
+><i></i><br>
+><i> diff --git a/arch/x86/include/asm/kvm_host.h b/arch/x86/include/asm/kvm_host.h</i><br>
+><i> index 877a4025d8da..336716124b7e 100644</i><br>
+><i> --- a/arch/x86/include/asm/kvm_host.h</i><br>
+><i> +++ b/arch/x86/include/asm/kvm_host.h</i><br>
+><i> @@ -530,6 +530,12 @@ struct kvm_vcpu_hv {</i><br>
+><i>  	struct kvm_vcpu_hv_stimer stimer[HV_SYNIC_STIMER_COUNT];</i><br>
+><i>  	DECLARE_BITMAP(stimer_pending_bitmap, HV_SYNIC_STIMER_COUNT);</i><br>
+><i>  	cpumask_t tlb_flush;</i><br>
+><i> +	/*</i><br>
+><i> +	 * Two Dimensional paging CR3</i><br>
+><i> +	 * EPTP for Intel</i><br>
+><i> +	 * nCR3 for AMD</i><br>
+><i> +	 */</i><br>
+><i> +	u64 tdp_pointer;</i><br>
+><i>  };</i><br>
+<br>
+'struct kvm_vcpu_hv' is only allocated when we emulate Hyper-V in KVM<br>
+(run Windows/Hyper-V guests on top of KVM). Remote TLB flush is used<br>
+when we run KVM on Hyper-V and this is a very different beast. Let's not<br>
+mix these things together. I understand that some unification is needed<br>
+to bring the AMD specific feature but let's do it differently.<br>
+<br>
+E.g. 'ept_pointer' and friends from 'struct kvm_vmx' can just go to<br>
+'struct kvm_vcpu_arch' (in case they really need to be unified).<br>
+<br>
+><i>  </i><br>
+><i>  /* Xen HVM per vcpu emulation context */</i><br>
+><i> @@ -884,6 +890,12 @@ struct kvm_hv_syndbg {</i><br>
+><i>  	u64 options;</i><br>
+><i>  };</i><br>
+><i>  </i><br>
+><i> +enum tdp_pointers_status {</i><br>
+><i> +	TDP_POINTERS_CHECK = 0,</i><br>
+><i> +	TDP_POINTERS_MATCH = 1,</i><br>
+><i> +	TDP_POINTERS_MISMATCH = 2</i><br>
+><i> +};</i><br>
+><i> +</i><br>
+><i>  /* Hyper-V emulation context */</i><br>
+><i>  struct kvm_hv {</i><br>
+><i>  	struct mutex hv_lock;</i><br>
+><i> @@ -908,6 +920,9 @@ struct kvm_hv {</i><br>
+><i>  </i><br>
+><i>  	struct hv_partition_assist_pg *hv_pa_pg;</i><br>
+><i>  	struct kvm_hv_syndbg hv_syndbg;</i><br>
+><i> +</i><br>
+><i> +	enum tdp_pointers_status tdp_pointers_match;</i><br>
+><i> +	spinlock_t tdp_pointer_lock;</i><br>
+><i>  };</i><br>
+><i>  </i><br>
+><i>  struct msr_bitmap_range {</i><br>
+><i> diff --git a/arch/x86/kvm/hyperv.c b/arch/x86/kvm/hyperv.c</i><br>
+><i> index 58fa8c029867..c5bec598bf28 100644</i><br>
+><i> --- a/arch/x86/kvm/hyperv.c</i><br>
+><i> +++ b/arch/x86/kvm/hyperv.c</i><br>
+><i> @@ -32,6 +32,7 @@</i><br>
+><i>  #include <linux/eventfd.h></i><br>
+><i>  </i><br>
+><i>  #include <asm/apicdef.h></i><br>
+><i> +#include <asm/mshyperv.h></i><br>
+><i>  #include <trace/events/kvm.h></i><br>
+><i>  </i><br>
+><i>  #include "trace.h"</i><br>
+><i> @@ -913,6 +914,8 @@ static int kvm_hv_vcpu_init(struct kvm_vcpu *vcpu)</i><br>
+><i>  	for (i = 0; i < ARRAY_SIZE(hv_vcpu->stimer); i++)</i><br>
+><i>  		stimer_init(&hv_vcpu->stimer[i], i);</i><br>
+><i>  </i><br>
+><i> +	hv_vcpu->tdp_pointer = INVALID_PAGE;</i><br>
+><i> +</i><br>
+><i>  	hv_vcpu->vp_index = kvm_vcpu_get_idx(vcpu);</i><br>
+><i>  </i><br>
+><i>  	return 0;</i><br>
+><i> @@ -1960,6 +1963,7 @@ void kvm_hv_init_vm(struct kvm *kvm)</i><br>
+><i>  {</i><br>
+><i>  	struct kvm_hv *hv = to_kvm_hv(kvm);</i><br>
+><i>  </i><br>
+><i> +	spin_lock_init(&hv->tdp_pointer_lock);</i><br>
+><i>  	mutex_init(&hv->hv_lock);</i><br>
+><i>  	idr_init(&hv->conn_to_evt);</i><br>
+><i>  }</i><br>
+><i> @@ -2180,3 +2184,88 @@ int kvm_get_hv_cpuid(struct kvm_vcpu *vcpu, struct kvm_cpuid2 *cpuid,</i><br>
+><i>  </i><br>
+><i>  	return 0;</i><br>
+><i>  }</i><br>
+><i> +</i><br>
+><i> +/* check_tdp_pointer() should be under protection of tdp_pointer_lock. */</i><br>
+><i> +static void check_tdp_pointer_match(struct kvm *kvm)</i><br>
+><i> +{</i><br>
+><i> +	u64 tdp_pointer = INVALID_PAGE;</i><br>
+><i> +	bool valid_tdp = false;</i><br>
+><i> +	struct kvm_vcpu *vcpu;</i><br>
+><i> +	int i;</i><br>
+><i> +</i><br>
+><i> +	kvm_for_each_vcpu(i, vcpu, kvm) {</i><br>
+><i> +		if (!valid_tdp) {</i><br>
+><i> +			tdp_pointer = to_hv_vcpu(vcpu)->tdp_pointer;</i><br>
+><i> +			valid_tdp = true;</i><br>
+><i> +			continue;</i><br>
+><i> +		}</i><br>
+><i> +</i><br>
+><i> +		if (tdp_pointer != to_hv_vcpu(vcpu)->tdp_pointer) {</i><br>
+><i> +			to_kvm_hv(kvm)->tdp_pointers_match</i><br>
+><i> +				= TDP_POINTERS_MISMATCH;</i><br>
+><i> +			return;</i><br>
+><i> +		}</i><br>
+><i> +	}</i><br>
+><i> +</i><br>
+><i> +	to_kvm_hv(kvm)->tdp_pointers_match = TDP_POINTERS_MATCH;</i><br>
+><i> +}</i><br>
+><i> +</i><br>
+><i> +static int kvm_fill_hv_flush_list_func(struct hv_guest_mapping_flush_list *flush,</i><br>
+><i> +		void *data)</i><br>
+><i> +{</i><br>
+><i> +	struct kvm_tlb_range *range = data;</i><br>
+><i> +</i><br>
+><i> +	return hyperv_fill_flush_guest_mapping_list(flush, range->start_gfn,</i><br>
+><i> +			range->pages);</i><br>
+><i> +}</i><br>
+><i> +</i><br>
+><i> +static inline int __hv_remote_flush_tlb_with_range(struct kvm *kvm,</i><br>
+><i> +		struct kvm_vcpu *vcpu, struct kvm_tlb_range *range)</i><br>
+><i> +{</i><br>
+><i> +	u64 tdp_pointer = to_hv_vcpu(vcpu)->tdp_pointer;</i><br>
+><i> +</i><br>
+><i> +	/*</i><br>
+><i> +	 * FLUSH_GUEST_PHYSICAL_ADDRESS_SPACE hypercall needs address</i><br>
+><i> +	 * of the base of EPT PML4 table, strip off EPT configuration</i><br>
+><i> +	 * information.</i><br>
+><i> +	 */</i><br>
+><i> +	if (range)</i><br>
+><i> +		return hyperv_flush_guest_mapping_range(tdp_pointer & PAGE_MASK,</i><br>
+><i> +				kvm_fill_hv_flush_list_func, (void *)range);</i><br>
+><i> +	else</i><br>
+><i> +		return hyperv_flush_guest_mapping(tdp_pointer & PAGE_MASK);</i><br>
+><i> +}</i><br>
+><i> +</i><br>
+><i> +int kvm_hv_remote_flush_tlb_with_range(struct kvm *kvm,</i><br>
+><i> +		struct kvm_tlb_range *range)</i><br>
+><i> +{</i><br>
+><i> +	struct kvm_vcpu *vcpu;</i><br>
+><i> +	int ret = 0, i;</i><br>
+><i> +</i><br>
+><i> +	spin_lock(&to_kvm_hv(kvm)->tdp_pointer_lock);</i><br>
+><i> +</i><br>
+><i> +	if (to_kvm_hv(kvm)->tdp_pointers_match == TDP_POINTERS_CHECK)</i><br>
+><i> +		check_tdp_pointer_match(kvm);</i><br>
+><i> +</i><br>
+><i> +	if (to_kvm_hv(kvm)->tdp_pointers_match != TDP_POINTERS_MATCH) {</i><br>
+><i> +		kvm_for_each_vcpu(i, vcpu, kvm) {</i><br>
+><i> +			/* If tdp_pointer is invalid pointer, bypass flush request. */</i><br>
+><i> +			if (VALID_PAGE(to_hv_vcpu(vcpu)->tdp_pointer))</i><br>
+><i> +				ret |= __hv_remote_flush_tlb_with_range(</i><br>
+><i> +					kvm, vcpu, range);</i><br>
+><i> +		}</i><br>
+><i> +	} else {</i><br>
+><i> +		ret = __hv_remote_flush_tlb_with_range(kvm,</i><br>
+><i> +				kvm_get_vcpu(kvm, 0), range);</i><br>
+><i> +	}</i><br>
+><i> +</i><br>
+><i> +	spin_unlock(&to_kvm_hv(kvm)->tdp_pointer_lock);</i><br>
+><i> +	return ret;</i><br>
+><i> +}</i><br>
+><i> +EXPORT_SYMBOL_GPL(kvm_hv_remote_flush_tlb_with_range);</i><br>
+><i> +</i><br>
+><i> +int kvm_hv_remote_flush_tlb(struct kvm *kvm)</i><br>
+><i> +{</i><br>
+><i> +	return kvm_hv_remote_flush_tlb_with_range(kvm, NULL);</i><br>
+><i> +}</i><br>
+><i> +EXPORT_SYMBOL_GPL(kvm_hv_remote_flush_tlb);</i><br>
+><i> diff --git a/arch/x86/kvm/hyperv.h b/arch/x86/kvm/hyperv.h</i><br>
+><i> index e951af1fcb2c..225ede22a815 100644</i><br>
+><i> --- a/arch/x86/kvm/hyperv.h</i><br>
+><i> +++ b/arch/x86/kvm/hyperv.h</i><br>
+><i> @@ -141,4 +141,16 @@ int kvm_vm_ioctl_hv_eventfd(struct kvm *kvm, struct kvm_hyperv_eventfd *args);</i><br>
+><i>  int kvm_get_hv_cpuid(struct kvm_vcpu *vcpu, struct kvm_cpuid2 *cpuid,</i><br>
+><i>  		     struct kvm_cpuid_entry2 __user *entries);</i><br>
+><i>  </i><br>
+><i> +static inline void kvm_update_arch_tdp_pointer(struct kvm *kvm,</i><br>
+><i> +		struct kvm_vcpu *vcpu, u64 tdp_pointer)</i><br>
+><i> +{</i><br>
+><i> +	spin_lock(&to_kvm_hv(kvm)->tdp_pointer_lock);</i><br>
+><i> +	to_hv_vcpu(vcpu)->tdp_pointer = tdp_pointer;</i><br>
+><i> +	to_kvm_hv(kvm)->tdp_pointers_match = TDP_POINTERS_CHECK;</i><br>
+><i> +	spin_unlock(&to_kvm_hv(kvm)->tdp_pointer_lock);</i><br>
+><i> +}</i><br>
+><i> +</i><br>
+><i> +int kvm_hv_remote_flush_tlb(struct kvm *kvm);</i><br>
+><i> +int kvm_hv_remote_flush_tlb_with_range(struct kvm *kvm,</i><br>
+><i> +		struct kvm_tlb_range *range);</i><br>
+><i>  #endif</i><br>
+><i> diff --git a/arch/x86/kvm/vmx/vmx.c b/arch/x86/kvm/vmx/vmx.c</i><br>
+><i> index 50810d471462..67f607319eb7 100644</i><br>
+><i> --- a/arch/x86/kvm/vmx/vmx.c</i><br>
+><i> +++ b/arch/x86/kvm/vmx/vmx.c</i><br>
+><i> @@ -62,6 +62,7 @@</i><br>
+><i>  #include "vmcs12.h"</i><br>
+><i>  #include "vmx.h"</i><br>
+><i>  #include "x86.h"</i><br>
+><i> +#include "hyperv.h"</i><br>
+><i>  </i><br>
+><i>  MODULE_AUTHOR("Qumranet");</i><br>
+><i>  MODULE_LICENSE("GPL");</i><br>
+><i> @@ -472,83 +473,6 @@ static const u32 vmx_uret_msrs_list[] = {</i><br>
+><i>  static bool __read_mostly enlightened_vmcs = true;</i><br>
+><i>  module_param(enlightened_vmcs, bool, 0444);</i><br>
+><i>  </i><br>
+><i> -/* check_ept_pointer() should be under protection of ept_pointer_lock. */</i><br>
+><i> -static void check_ept_pointer_match(struct kvm *kvm)</i><br>
+><i> -{</i><br>
+><i> -	struct kvm_vcpu *vcpu;</i><br>
+><i> -	u64 tmp_eptp = INVALID_PAGE;</i><br>
+><i> -	int i;</i><br>
+><i> -</i><br>
+><i> -	kvm_for_each_vcpu(i, vcpu, kvm) {</i><br>
+><i> -		if (!VALID_PAGE(tmp_eptp)) {</i><br>
+><i> -			tmp_eptp = to_vmx(vcpu)->ept_pointer;</i><br>
+><i> -		} else if (tmp_eptp != to_vmx(vcpu)->ept_pointer) {</i><br>
+><i> -			to_kvm_vmx(kvm)->ept_pointers_match</i><br>
+><i> -				= EPT_POINTERS_MISMATCH;</i><br>
+><i> -			return;</i><br>
+><i> -		}</i><br>
+><i> -	}</i><br>
+><i> -</i><br>
+><i> -	to_kvm_vmx(kvm)->ept_pointers_match = EPT_POINTERS_MATCH;</i><br>
+><i> -}</i><br>
+><i> -</i><br>
+><i> -static int kvm_fill_hv_flush_list_func(struct hv_guest_mapping_flush_list *flush,</i><br>
+><i> -		void *data)</i><br>
+><i> -{</i><br>
+><i> -	struct kvm_tlb_range *range = data;</i><br>
+><i> -</i><br>
+><i> -	return hyperv_fill_flush_guest_mapping_list(flush, range->start_gfn,</i><br>
+><i> -			range->pages);</i><br>
+><i> -}</i><br>
+><i> -</i><br>
+><i> -static inline int __hv_remote_flush_tlb_with_range(struct kvm *kvm,</i><br>
+><i> -		struct kvm_vcpu *vcpu, struct kvm_tlb_range *range)</i><br>
+><i> -{</i><br>
+><i> -	u64 ept_pointer = to_vmx(vcpu)->ept_pointer;</i><br>
+><i> -</i><br>
+><i> -	/*</i><br>
+><i> -	 * FLUSH_GUEST_PHYSICAL_ADDRESS_SPACE hypercall needs address</i><br>
+><i> -	 * of the base of EPT PML4 table, strip off EPT configuration</i><br>
+><i> -	 * information.</i><br>
+><i> -	 */</i><br>
+><i> -	if (range)</i><br>
+><i> -		return hyperv_flush_guest_mapping_range(ept_pointer & PAGE_MASK,</i><br>
+><i> -				kvm_fill_hv_flush_list_func, (void *)range);</i><br>
+><i> -	else</i><br>
+><i> -		return hyperv_flush_guest_mapping(ept_pointer & PAGE_MASK);</i><br>
+><i> -}</i><br>
+><i> -</i><br>
+><i> -static int hv_remote_flush_tlb_with_range(struct kvm *kvm,</i><br>
+><i> -		struct kvm_tlb_range *range)</i><br>
+><i> -{</i><br>
+><i> -	struct kvm_vcpu *vcpu;</i><br>
+><i> -	int ret = 0, i;</i><br>
+><i> -</i><br>
+><i> -	spin_lock(&to_kvm_vmx(kvm)->ept_pointer_lock);</i><br>
+><i> -</i><br>
+><i> -	if (to_kvm_vmx(kvm)->ept_pointers_match == EPT_POINTERS_CHECK)</i><br>
+><i> -		check_ept_pointer_match(kvm);</i><br>
+><i> -</i><br>
+><i> -	if (to_kvm_vmx(kvm)->ept_pointers_match != EPT_POINTERS_MATCH) {</i><br>
+><i> -		kvm_for_each_vcpu(i, vcpu, kvm) {</i><br>
+><i> -			/* If ept_pointer is invalid pointer, bypass flush request. */</i><br>
+><i> -			if (VALID_PAGE(to_vmx(vcpu)->ept_pointer))</i><br>
+><i> -				ret |= __hv_remote_flush_tlb_with_range(</i><br>
+><i> -					kvm, vcpu, range);</i><br>
+><i> -		}</i><br>
+><i> -	} else {</i><br>
+><i> -		ret = __hv_remote_flush_tlb_with_range(kvm,</i><br>
+><i> -				kvm_get_vcpu(kvm, 0), range);</i><br>
+><i> -	}</i><br>
+><i> -</i><br>
+><i> -	spin_unlock(&to_kvm_vmx(kvm)->ept_pointer_lock);</i><br>
+><i> -	return ret;</i><br>
+><i> -}</i><br>
+><i> -static int hv_remote_flush_tlb(struct kvm *kvm)</i><br>
+><i> -{</i><br>
+><i> -	return hv_remote_flush_tlb_with_range(kvm, NULL);</i><br>
+><i> -}</i><br>
+><i> -</i><br>
+><i>  static int hv_enable_direct_tlbflush(struct kvm_vcpu *vcpu)</i><br>
+><i>  {</i><br>
+><i>  	struct hv_enlightened_vmcs *evmcs;</i><br>
+><i> @@ -3115,13 +3039,10 @@ static void vmx_load_mmu_pgd(struct kvm_vcpu *vcpu, unsigned long pgd,</i><br>
+><i>  		eptp = construct_eptp(vcpu, pgd, pgd_level);</i><br>
+><i>  		vmcs_write64(EPT_POINTER, eptp);</i><br>
+><i>  </i><br>
+><i> -		if (kvm_x86_ops.tlb_remote_flush) {</i><br>
+><i> -			spin_lock(&to_kvm_vmx(kvm)->ept_pointer_lock);</i><br>
+><i> -			to_vmx(vcpu)->ept_pointer = eptp;</i><br>
+><i> -			to_kvm_vmx(kvm)->ept_pointers_match</i><br>
+><i> -				= EPT_POINTERS_CHECK;</i><br>
+><i> -			spin_unlock(&to_kvm_vmx(kvm)->ept_pointer_lock);</i><br>
+><i> -		}</i><br>
+><i> +#if IS_ENABLED(CONFIG_HYPERV)</i><br>
+><i> +		if (kvm_x86_ops.tlb_remote_flush)</i><br>
+><i> +			kvm_update_arch_tdp_pointer(kvm, vcpu, eptp);</i><br>
+><i> +#endif</i><br>
+><i>  </i><br>
+><i>  		if (!enable_unrestricted_guest && !is_paging(vcpu))</i><br>
+><i>  			guest_cr3 = to_kvm_vmx(kvm)->ept_identity_map_addr;</i><br>
+><i> @@ -6989,8 +6910,6 @@ static int vmx_create_vcpu(struct kvm_vcpu *vcpu)</i><br>
+><i>  	vmx->pi_desc.nv = POSTED_INTR_VECTOR;</i><br>
+><i>  	vmx->pi_desc.sn = 1;</i><br>
+><i>  </i><br>
+><i> -	vmx->ept_pointer = INVALID_PAGE;</i><br>
+><i> -</i><br>
+><i>  	return 0;</i><br>
+><i>  </i><br>
+><i>  free_vmcs:</i><br>
+><i> @@ -7007,8 +6926,6 @@ static int vmx_create_vcpu(struct kvm_vcpu *vcpu)</i><br>
+><i>  </i><br>
+><i>  static int vmx_vm_init(struct kvm *kvm)</i><br>
+><i>  {</i><br>
+><i> -	spin_lock_init(&to_kvm_vmx(kvm)->ept_pointer_lock);</i><br>
+><i> -</i><br>
+><i>  	if (!ple_gap)</i><br>
+><i>  		kvm->arch.pause_in_guest = true;</i><br>
+><i>  </i><br>
+><i> @@ -7818,9 +7735,9 @@ static __init int hardware_setup(void)</i><br>
+><i>  #if IS_ENABLED(CONFIG_HYPERV)</i><br>
+><i>  	if (ms_hyperv.nested_features & HV_X64_NESTED_GUEST_MAPPING_FLUSH</i><br>
+><i>  	    && enable_ept) {</i><br>
+><i> -		vmx_x86_ops.tlb_remote_flush = hv_remote_flush_tlb;</i><br>
+><i> +		vmx_x86_ops.tlb_remote_flush = kvm_hv_remote_flush_tlb;</i><br>
+><i>  		vmx_x86_ops.tlb_remote_flush_with_range =</i><br>
+><i> -				hv_remote_flush_tlb_with_range;</i><br>
+><i> +				kvm_hv_remote_flush_tlb_with_range;</i><br>
+><i>  	}</i><br>
+><i>  #endif</i><br>
+><i>  </i><br>
+><i> diff --git a/arch/x86/kvm/vmx/vmx.h b/arch/x86/kvm/vmx/vmx.h</i><br>
+><i> index 89da5e1251f1..d2e2ab46f5bb 100644</i><br>
+><i> --- a/arch/x86/kvm/vmx/vmx.h</i><br>
+><i> +++ b/arch/x86/kvm/vmx/vmx.h</i><br>
+><i> @@ -325,7 +325,6 @@ struct vcpu_vmx {</i><br>
+><i>  	 */</i><br>
+><i>  	u64 msr_ia32_feature_control;</i><br>
+><i>  	u64 msr_ia32_feature_control_valid_bits;</i><br>
+><i> -	u64 ept_pointer;</i><br>
+><i>  </i><br>
+><i>  	struct pt_desc pt_desc;</i><br>
+><i>  	struct lbr_desc lbr_desc;</i><br>
+><i> @@ -338,21 +337,12 @@ struct vcpu_vmx {</i><br>
+><i>  	} shadow_msr_intercept;</i><br>
+><i>  };</i><br>
+><i>  </i><br>
+><i> -enum ept_pointers_status {</i><br>
+><i> -	EPT_POINTERS_CHECK = 0,</i><br>
+><i> -	EPT_POINTERS_MATCH = 1,</i><br>
+><i> -	EPT_POINTERS_MISMATCH = 2</i><br>
+><i> -};</i><br>
+><i> -</i><br>
+><i>  struct kvm_vmx {</i><br>
+><i>  	struct kvm kvm;</i><br>
+><i>  </i><br>
+><i>  	unsigned int tss_addr;</i><br>
+><i>  	bool ept_identity_pagetable_done;</i><br>
+><i>  	gpa_t ept_identity_map_addr;</i><br>
+><i> -</i><br>
+><i> -	enum ept_pointers_status ept_pointers_match;</i><br>
+><i> -	spinlock_t ept_pointer_lock;</i><br>
+><i>  };</i><br>
+><i>  </i><br>
+><i>  bool nested_vmx_allowed(struct kvm_vcpu *vcpu);</i><br>
+<br>
+-- <br>
+Vitaly<br>
+<br>
+<br>
+

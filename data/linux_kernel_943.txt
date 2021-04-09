@@ -1,0 +1,56 @@
+Hi John,<br>
+<br>
+On Thu, Apr 08, 2021 at 01:55:02PM +0100, John Garry wrote:<br>
+><i> On 08/04/2021 10:01, Jonathan Cameron wrote:</i><br>
+><i> > On Wed, 7 Apr 2021 21:40:05 +0100</i><br>
+><i> > Will Deacon <will@xxxxxxxxxx> wrote:</i><br>
+><i> > </i><br>
+><i> > > On Wed, Apr 07, 2021 at 05:49:02PM +0800, Qi Liu wrote:</i><br>
+><i> > > > PCIe PMU Root Complex Integrated End Point(RCiEP) device is supported</i><br>
+><i> > > > to sample bandwidth, latency, buffer occupation etc.</i><br>
+><i> > > > </i><br>
+><i> > > > Each PMU RCiEP device monitors multiple root ports, and each RCiEP is</i><br>
+><i> > > > registered as a pmu in /sys/bus/event_source/devices, so users can</i><br>
+><i> > > > select target PMU, and use filter to do further sets.</i><br>
+><i> > > > </i><br>
+><i> > > > Filtering options contains:</i><br>
+><i> > > > event        - select the event.</i><br>
+><i> > > > subevent     - select the subevent.</i><br>
+><i> > > > port         - select target root ports. Information of root ports</i><br>
+><i> > > >                 are shown under sysfs.</i><br>
+><i> > > > bdf           - select requester_id of target EP device.</i><br>
+><i> > > > trig_len     - set trigger condition for starting event statistics.</i><br>
+><i> > > > trigger_mode - set trigger mode. 0 means starting to statistic when</i><br>
+><i> > > >                 bigger than trigger condition, and 1 means smaller.</i><br>
+><i> > > > thr_len      - set threshold for statistics.</i><br>
+><i> > > > thr_mode     - set threshold mode. 0 means count when bigger than</i><br>
+><i> > > >                 threshold, and 1 means smaller.</i><br>
+><i> > > > </i><br>
+><i> > > > Reviewed-by: Jonathan Cameron <Jonathan.Cameron@xxxxxxxxxx></i><br>
+><i> > > </i><br>
+><i> > > Do you have a link to this review, please?</i><br>
+><i> > </i><br>
+><i> > Internal review, so drop the tag.</i><br>
+><i> > </i><br>
+><i> > Jonathan</i><br>
+><i> </i><br>
+><i> Hi Will,</i><br>
+><i> </i><br>
+><i> Are you implying that you would rather that any review for these drivers is</i><br>
+><i> done in public on the lists?</i><br>
+<br>
+Absolutely! If I can see that you and/or Jonathan have given the thing a<br>
+good going through, then it's a lot easier to merge the patches. But just<br>
+having the tag doesn't help much, as I don't know whether it was a concerted<br>
+review effort or a "yeah, this function is about what I thought, cheers"<br>
+type of review.<br>
+<br>
+That's not to say internal patch review isn't a useful tool in some<br>
+circumstances (e.g. somebody new to the kernel, confidential stuff,<br>
+prototyping), but the vast majority of the time I'd say having the review<br>
+on the public lists is the best bet.<br>
+<br>
+Will<br>
+<br>
+<br>
+

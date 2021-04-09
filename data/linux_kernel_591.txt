@@ -1,0 +1,110 @@
+On Thu, Apr 08, 2021 at 10:27:46AM +0930, Andrew Jeffery wrote:<br>
+><i> Hi Corey,</i><br>
+><i> </i><br>
+><i> On Fri, 19 Mar 2021, at 16:49, Andrew Jeffery wrote:</i><br>
+><i> > Hello,</i><br>
+><i> > </i><br>
+><i> > This series is a bit of a mix of things, but its primary purpose is to</i><br>
+><i> > expose BMC KCS IPMI devices to userspace in a way that enables userspace</i><br>
+><i> > to talk to host firmware using protocols that are not IPMI.</i><br>
+><i> > </i><br>
+><i> > v1 can be found here:</i><br>
+><i> > </i><br>
+><i> > <a  rel="nofollow" href="https://lore.kernel.org/openbmc/20210219142523.3464540-1-andrew@xxxxxxxx/">https://lore.kernel.org/openbmc/20210219142523.3464540-1-andrew@xxxxxxxx/</a></i><br>
+><i> > </i><br>
+><i> > Changes in v2 include:</i><br>
+><i> > </i><br>
+><i> > * A rebase onto v5.12-rc2</i><br>
+><i> > * Incorporation of off-list feedback on SerIRQ configuration from</i><br>
+><i> >   Chiawei</i><br>
+><i> > * Further validation on hardware for ASPEED KCS devices 2, 3 and 4</i><br>
+><i> > * Lifting the existing single-open constraint of the IPMI chardev</i><br>
+><i> > * Fixes addressing Rob's feedback on the conversion of the ASPEED KCS</i><br>
+><i> >   binding to dt-schema</i><br>
+><i> > * Fixes addressing Rob's feedback on the new aspeed,lpc-interrupts</i><br>
+><i> >   property definition for the ASPEED KCS binding</i><br>
+><i> > </i><br>
+><i> > A new chardev device is added whose implementation exposes the Input</i><br>
+><i> > Data Register (IDR), Output Data Register (ODR) and Status Register</i><br>
+><i> > (STR) via read() and write(), and implements poll() for event</i><br>
+><i> > monitoring.</i><br>
+><i> > </i><br>
+><i> > The existing /dev/ipmi-kcs* chardev interface exposes the KCS devices in</i><br>
+><i> > a way which encoded the IPMI protocol in its behaviour. However, as</i><br>
+><i> > LPC[0] KCS devices give us bi-directional interrupts between the host</i><br>
+><i> > and a BMC with both a data and status byte, they are useful for purposes</i><br>
+><i> > beyond IPMI.</i><br>
+><i> > </i><br>
+><i> > As a concrete example, libmctp[1] implements a vendor-defined MCTP[2]</i><br>
+><i> > binding using a combination of LPC Firmware cycles for bulk data</i><br>
+><i> > transfer and a KCS device via LPC IO cycles for out-of-band protocol</i><br>
+><i> > control messages[3]. This gives a throughput improvement over the</i><br>
+><i> > standard KCS binding[4] while continuing to exploit the ease of setup of</i><br>
+><i> > the LPC bus for early boot firmware on the host processor.</i><br>
+><i> > </i><br>
+><i> > The series takes a bit of a winding path to achieve its aim:</i><br>
+><i> > </i><br>
+><i> > 1. It begins with patches 1-5 put together by Chia-Wei, which I've</i><br>
+><i> > rebased on v5.12-rc2. These fix the ASPEED LPC bindings and other</i><br>
+><i> > non-KCS LPC-related ASPEED device drivers in a way that enables the</i><br>
+><i> > SerIRQ patches at the end of the series. With Joel's review I'm hoping</i><br>
+><i> > these 5 can go through the aspeed tree, and that the rest can go through</i><br>
+><i> > the IPMI tree.</i><br>
+><i> > </i><br>
+><i> > 2. Next, patches 6-13 fairly heavily refactor the KCS support in the</i><br>
+><i> > IPMI part of the tree, re-architecting things such that it's possible to</i><br>
+><i> > support multiple chardev implementations sitting on top of the ASPEED</i><br>
+><i> > and Nuvoton device drivers. However, the KCS code didn't really have</i><br>
+><i> > great separation of concerns as it stood, so even if we disregard the</i><br>
+><i> > multiple-chardev support I think the cleanups are worthwhile.</i><br>
+><i> > </i><br>
+><i> > 3. Patch 14 adds some interrupt management capabilities to the KCS</i><br>
+><i> > device drivers in preparation for patch 16, which introduces the new</i><br>
+><i> > "raw" KCS device interface. I'm not stoked about the device name/path,</i><br>
+><i> > so if people are looking to bikeshed something then feel free to lay</i><br>
+><i> > into that.</i><br>
+><i> > </i><br>
+><i> > 4. The remaining patches switch the ASPEED KCS devicetree binding to</i><br>
+><i> > dt-schema, add a new interrupt property to describe the SerIRQ behaviour</i><br>
+><i> > of the device and finally clean up Serial IRQ support in the ASPEED KCS</i><br>
+><i> > driver.</i><br>
+><i> > </i><br>
+><i> > Rob: The dt-binding patches still come before the relevant driver</i><br>
+><i> > changes, I tried to keep the two close together in the series, hence the</i><br>
+><i> > bindings changes not being patches 1 and 2.</i><br>
+><i> > </i><br>
+><i> > I've exercised the series under qemu with the rainier-bmc machine plus</i><br>
+><i> > additional patches for KCS support[5]. I've also substituted this series in</i><br>
+><i> > place of a hacky out-of-tree driver that we've been using for the</i><br>
+><i> > libmctp stack and successfully booted the host processor under our</i><br>
+><i> > internal full-platform simulation tools for a Rainier system.</i><br>
+><i> > </i><br>
+><i> > Note that this work touches the Nuvoton driver as well as ASPEED's, but</i><br>
+><i> > I don't have the capability to test those changes or the IPMI chardev</i><br>
+><i> > path. Tested-by tags would be much appreciated if you can exercise one</i><br>
+><i> > or both.</i><br>
+><i> > </i><br>
+><i> > Please review!</i><br>
+><i> </i><br>
+><i> Unfortunately the cover letter got detached from the rest of the series.</i><br>
+><i> </i><br>
+><i> Any chance you can take a look at the patches?</i><br>
+<br>
+There were some minor concerns that were unanswered, and there really<br>
+was no review by others for many of the patches.<br>
+<br>
+I would like this patch set, it makes some good cleanups.  But I would<br>
+like some more review and testing by others, if possible.  I'm fairly<br>
+sure it has already been done, it just needs to be documented.<br>
+<br>
+-corey<br>
+<br>
+><i> </i><br>
+><i> <a  rel="nofollow" href="https://lore.kernel.org/linux-arm-kernel/20210319062752.145730-1-andrew@xxxxxxxx/">https://lore.kernel.org/linux-arm-kernel/20210319062752.145730-1-andrew@xxxxxxxx/</a></i><br>
+><i> </i><br>
+><i> Cheers,</i><br>
+><i> </i><br>
+><i> Andrew</i><br>
+<br>
+<br>
+

@@ -1,0 +1,65 @@
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em"><blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em"><blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+In particular, it does not prevent a configuration with 'DRM_CMA=m'<br>
+</blockquote>
+<br>
+I assume you meant "DRM_CMA=n" ? DRM_CMA cannot be built as a module.<br>
+</blockquote>
+<br>
+Ok, at least that makes it easier.<br>
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em"><blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+and 'DRMA_ASPEED_GFX=y', or any build failures from such<br>
+a configuration.<br>
+</blockquote>
+<br>
+I don't follow. "DRM_CMA=n" and 'DRMA_ASPEED_GFX=y' is supposed to work<br>
+just fine (e.g., without HAVE_DMA_CONTIGUOUS) or what am I missing?<br>
+</blockquote>
+<br>
+I thought you were trying to solve the problem where DRMA_ASPEED_GFX<br>
+can optionally link against CMA but would fail to build when the CMA code<br>
+is in a loadable module.<br>
+</blockquote>
+<br>
+Yes. I was trying to say: it works with this patch just fine. The issue 
+you described does not seem to apply (DRM_CMA=m).
+<br>
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+Your example looks more like a NOP - no?<br>
+Or will it have the same effect?<br>
+</blockquote>
+<br>
+The example I gave is only meaningful if both are tristate, which is<br>
+not the case here as you explain.<br>
+</blockquote>
+<br>
+Okay, thanks.<br>
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+<br>
+It is a somewhat awkward way to say "prevent this symbol from<br>
+being =y if the dependency is =m".<br>
+</blockquote>
+<br>
+What would be the right thing to do in the case here then to achieve the 
+"if DRMA_ASPEED_GFX is enabled, also enable DMA_CMA id possible"?
+<br>
+<br>
+One approach could be to have for DMA_CMA<br>
+<br>
+default y if DRMA_ASPEED_GFX<br>
+<br>
+but it feels like the wrong way to tackle this.<br>
+<br>
+Thanks!<br>
+<br>
+--<br>
+Thanks,<br>
+<br>
+David / dhildenb<br>
+<br>
+<br>
+

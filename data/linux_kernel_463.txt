@@ -1,0 +1,18 @@
+
+<br>
+On 4/7/21 3:56 PM, Michael Kelley wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+From: Vineeth Pillai <viremana@xxxxxxxxxxxxxxxxxxx> Sent: Wednesday, April 7, 2021 7:41 AM<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+Bit 22 of HYPERV_CPUID_FEATURES.EDX is specific to SVM and specifies<br>
+support for enlightened TLB flush. With this enligtenment enabled,<br>
+</blockquote>
+s/enligtenment/enlightenment/<br>
+</blockquote>
+Thanks for catching this, will fix.<br>
+<br>
+Thanks,<br>
+Vineeth<br>
+<br>
+<br>
+

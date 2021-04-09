@@ -1,0 +1,31 @@
+On Fri, 2021-04-02 at 16:20 +0200, Paolo Bonzini wrote:<br>
+><i> On 02/04/21 13:58, Ashish Kalra wrote:</i><br>
+><i> > Hi Nathan,</i><br>
+><i> > </i><br>
+><i> > Will you be posting a corresponding Qemu patch for this ?</i><br>
+><i> </i><br>
+><i> Hi Ashish,</i><br>
+><i> </i><br>
+><i> as far as I know IBM is working on QEMU patches for guest-based </i><br>
+><i> migration helpers.</i><br>
+<br>
+Yes, that's right, we'll take on this part.<br>
+<br>
+><i> However, it would be nice to collaborate on the low-level (SEC/PEI) </i><br>
+><i> firmware patches to detect whether a CPU is part of the primary VM</i><br>
+><i> or the mirror.  If Google has any OVMF patches already done for that,</i><br>
+><i> it would be great to combine it with IBM's SEV migration code and</i><br>
+><i> merge it into upstream OVMF.</i><br>
+<br>
+We've reached the stage with our prototyping where not having the OVMF<br>
+support is blocking us from working on QEMU.  If we're going to have to<br>
+reinvent the wheel in OVMF because Google is unwilling to publish the<br>
+patches, can you at least give some hints about how you did it?<br>
+<br>
+Thanks,<br>
+<br>
+James<br>
+<br>
+<br>
+<br>
+

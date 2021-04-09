@@ -1,0 +1,31 @@
+The check on p->sink looks bogus, I believe it should be p->source<br>
+since the following code blocks are related to p->source. Fix<br>
+this by replacing p->sink with p->source.<br>
+<br>
+Fixes: 24c8d14192cc ("ASoC: Intel: mrfld: add DSP core controls")<br>
+Signed-off-by: Colin Ian King <colin.king@xxxxxxxxxxxxx><br>
+Addresses-Coverity: ("Copy-paste error")<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/20191119113640.166940-1-colin.king@xxxxxxxxxxxxx">https://lore.kernel.org/r/20191119113640.166940-1-colin.king@xxxxxxxxxxxxx</a><br>
+Signed-off-by: Mark Brown <broonie@xxxxxxxxxx><br>
+---<br>
+ sound/soc/intel/atom/sst-atom-controls.c | 2 +-<br>
+ 1 file changed, 1 insertion(+), 1 deletion(-)<br>
+<br>
+diff --git a/sound/soc/intel/atom/sst-atom-controls.c b/sound/soc/intel/atom/sst-atom-controls.c<br>
+index baef461a99f1..f883c9340eee 100644<br>
+--- a/sound/soc/intel/atom/sst-atom-controls.c<br>
++++ b/sound/soc/intel/atom/sst-atom-controls.c<br>
+@@ -1333,7 +1333,7 @@ int sst_send_pipe_gains(struct snd_soc_dai *dai, int stream, int mute)<br>
+ 				dai->capture_widget->name);<br>
+ 		w = dai->capture_widget;<br>
+ 		snd_soc_dapm_widget_for_each_source_path(w, p) {<br>
+-			if (p->connected && !p->connected(w, p->sink))<br>
++			if (p->connected && !p->connected(w, p->source))<br>
+ 				continue;<br>
+ <br>
+ 			if (p->connect &&  p->source->power &&<br>
+-- <br>
+2.20.1<br>
+<br>
+<br>
+

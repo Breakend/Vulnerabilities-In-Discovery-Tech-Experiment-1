@@ -1,0 +1,81 @@
+On Wed 2021-04-07 23:20:32, Stephen Boyd wrote:<br>
+><i> Quoting Petr Mladek (2021-04-07 07:03:19)</i><br>
+><i> > # readelf -Wn vmlinux-5.12.0-rc6-default+ </i><br>
+><i> > </i><br>
+><i> > Displaying notes found in: .notes</i><br>
+><i> >   Owner                 Data size       Description</i><br>
+><i> >   Xen                  0x00000006       Unknown note type: (0x00000006)    description data: 6c 69 6e 75 78 00 </i><br>
+><i> >   Xen                  0x00000004       Unknown note type: (0x00000007)    description data: 32 2e 36 00 </i><br>
+><i> >   Xen                  0x00000008       Unknown note type: (0x00000005)    description data: 78 65 6e 2d 33 2e 30 00 </i><br>
+><i> >   Xen                  0x00000008       Unknown note type: (0x00000003)    description data: 00 00 00 ffffff80 ffffffff ffffffff ffffffff ffffffff </i><br>
+><i> > </i><br>
+><i> </i><br>
+><i> Thanks for the readelf output. That was most helpful to see what's going</i><br>
+><i> on. The buildid code isn't prepared for this it seems. We'll need to</i><br>
+><i> check the note data to see if it starts with "GNU\0" and if it does then</i><br>
+><i> we use it as the buildid. I'm not sure what this Xen note is that has a</i><br>
+><i> type of 3 but I think that's OK, it won't have "GNU" in there so we</i><br>
+><i> should ignore it. Does this patch work?</i><br>
+><i> </i><br>
+><i> ----8<----</i><br>
+><i> diff --git a/lib/buildid.c b/lib/buildid.c</i><br>
+><i> index 483abf71eeec..f281dbe6fb83 100644</i><br>
+><i> --- a/lib/buildid.c</i><br>
+><i> +++ b/lib/buildid.c</i><br>
+><i> @@ -25,6 +25,7 @@ static int parse_build_id_buf(unsigned char *build_id,</i><br>
+><i>  </i><br>
+><i>  		if (nhdr->n_type == BUILD_ID &&</i><br>
+><i>  		    nhdr->n_namesz == sizeof("GNU") &&</i><br>
+><i> +		    !strcmp((char *)(nhdr + 1), "GNU") &&</i><br>
+><i>  		    nhdr->n_descsz > 0 &&</i><br>
+><i>  		    nhdr->n_descsz <= BUILD_ID_SIZE_MAX) {</i><br>
+><i>  			memcpy(build_id,</i><br>
+<br>
+It helped with the vmlinux buildid. I see the following:<br>
+<br>
+[  551.435942][ T1803] test_printf: loaded.<br>
+[  551.436667][ T1803] ------------[ cut here ]------------<br>
+[  551.437561][ T1803] kernel BUG at lib/test_printf.c:689!<br>
+[  551.438352][ T1803] invalid opcode: 0000 [#1] SMP NOPTI<br>
+[  551.438359][ T1803] CPU: 3 PID: 1803 Comm: modprobe Kdump: loaded Tainted: G            E     5.12.0-rc6-default+ #176 e51781e52aaf4d6dfea7a18574c104c8bfd7c37f<br>
+[  551.438363][ T1803] Hardware name: QEMU Standard PC (Q35 + ICH9, 2009), BIOS rel-1.12.0-59-gc9ba527-rebuilt.opensuse.org 04/01/2014<br>
+[  551.438365][ T1803] RIP: 0010:test_printf_init+0x561/0xc99 [test_printf c2388ff0552611501b4d2ad58d8e5ca441d9a350]<br>
+[  551.443090][ T1803] Code: 00 48 c7 c7 b8 36 1b c0 e8 19 f9 ff ff b9 ab 00 00 00 48 c7 c2 93 36 1b c0 be 08 00 00 00 48 c7 c7 af 36 1b c0 e8 fc f8 ff ff <0f> 0b 8b 05 44 07 00 00 8b 35 3a 07 00 00 8b 1d 3c 07 00 00 85 c0<br>
+[  551.443094][ T1803] RSP: 0018:ffffb62c0039bc78 EFLAGS: 00010282<br>
+[  551.443096][ T1803] RAX: 0000000000000000 RBX: ffffb62c0039bc80 RCX: ffffd62bffc00b70<br>
+[  551.443098][ T1803] RDX: 0000000000000000 RSI: 0000000000000000 RDI: ffffffffa0352fd5<br>
+[  551.443099][ T1803] RBP: ffffffffc01b7367 R08: 0000000000000001 R09: 0000000000000001<br>
+[  551.443100][ T1803] R10: 0000000000000000 R11: 0000000000000001 R12: ffff9bc08c87c820<br>
+[  551.443101][ T1803] R13: 0000000000000001 R14: ffff9bc0d2798480 R15: ffffb62c0039be90<br>
+[  551.443102][ T1803] FS:  00007f5767485b80(0000) GS:ffff9bc0ffc00000(0000) knlGS:0000000000000000<br>
+[  551.443103][ T1803] CS:  0010 DS: 0000 ES: 0000 CR0: 0000000080050033<br>
+[  551.443105][ T1803] CR2: 00007f5766b36ef0 CR3: 0000000100368004 CR4: 0000000000370ee0<br>
+[  551.443108][ T1803] DR0: 0000000000000000 DR1: 0000000000000000 DR2: 0000000000000000<br>
+[  551.443108][ T1803] DR3: 0000000000000000 DR6: 00000000fffe0ff0 DR7: 0000000000000400<br>
+[  551.443109][ T1803] Call Trace:<br>
+[  551.443113][ T1803]  ? __test+0x13c/0x149 [test_printf]<br>
+[  551.443116][ T1803]  ? rcu_read_lock_sched_held+0x52/0x80<br>
+[  551.443120][ T1803]  do_one_initcall+0x5b/0x2d0<br>
+[  551.443125][ T1803]  do_init_module+0x5b/0x21c<br>
+[  551.443127][ T1803]  load_module+0x1eaa/0x23c0<br>
+[  551.443130][ T1803]  ? show_modinfo_version+0x30/0x30<br>
+[  551.443134][ T1803]  ? __do_sys_finit_module+0xad/0x110<br>
+[  551.443135][ T1803]  __do_sys_finit_module+0xad/0x110<br>
+[  551.443138][ T1803]  do_syscall_64+0x33/0x40<br>
+[  551.443139][ T1803]  entry_SYSCALL_64_after_hwframe+0x44/0xae<br>
+[  551.443143][ T1803] RIP: 0033:0x7f5766b5b2a9<br>
+[<br>
+<br>
+Note that it still does not show the build id for the module. It fails<br>
+in the module init call and the build id should be already initialized<br>
+at this stage.<br>
+<br>
+One more thing. I am not familiar with the elf-related code.<br>
+Is it safe to access (nhdr + 1)? Do we need a check that<br>
+it is still withing the given section?<br>
+<br>
+Best Regards,<br>
+Petr<br>
+<br>
+<br>
+

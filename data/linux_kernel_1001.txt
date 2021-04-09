@@ -1,0 +1,40 @@
+The following commit has been merged into the irq/irqchip-next branch of irqchip:<br>
+<br>
+Commit-ID:     94bc94209a66f05532c065279f4a719058d447e4<br>
+Gitweb:        <a  rel="nofollow" href="https://git.kernel.org/pub/scm/linux/kernel/git/maz/arm-platforms/94bc94209a66f05532c065279f4a719058d447e4">https://git.kernel.org/pub/scm/linux/kernel/git/maz/arm-platforms/94bc94209a66f05532c065279f4a719058d447e4</a><br>
+Author:        Marc Zyngier <maz@xxxxxxxxxx><br>
+AuthorDate:    Thu, 08 Apr 2021 08:56:27 +01:00<br>
+Committer:     Marc Zyngier <maz@xxxxxxxxxx><br>
+CommitterDate: Thu, 08 Apr 2021 11:37:14 +01:00<br>
+<br>
+irqchip/wpcm450: Drop COMPILE_TEST<br>
+<br>
+This driver is (for now) ARM specific, and currently doesn't<br>
+build with a variety of architectures (ia64, RISC-V, x86_64<br>
+at the very least).<br>
+<br>
+Drop COMPILE_TEST from Kconfig until it gets sorted out.<br>
+<br>
+Reviewed-by: Jonathan Neuschäfer <j.neuschaefer@xxxxxxx><br>
+Reported-by: Stephen Rothwell <sfr@xxxxxxxxxxxxxxxx><br>
+Signed-off-by: Marc Zyngier <maz@xxxxxxxxxx><br>
+---<br>
+ drivers/irqchip/Kconfig | 2 +-<br>
+ 1 file changed, 1 insertion(+), 1 deletion(-)<br>
+<br>
+diff --git a/drivers/irqchip/Kconfig b/drivers/irqchip/Kconfig<br>
+index 38ad9dc..715eb43 100644<br>
+--- a/drivers/irqchip/Kconfig<br>
++++ b/drivers/irqchip/Kconfig<br>
+@@ -579,7 +579,7 @@ config MST_IRQ<br>
+ <br>
+ config WPCM450_AIC<br>
+ 	bool "Nuvoton WPCM450 Advanced Interrupt Controller"<br>
+-	depends on ARCH_WPCM450 || COMPILE_TEST<br>
++	depends on ARCH_WPCM450<br>
+ 	help<br>
+ 	  Support for the interrupt controller in the Nuvoton WPCM450 BMC SoC.<br>
+ <br>
+<br>
+<br>
+

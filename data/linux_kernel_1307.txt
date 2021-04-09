@@ -1,0 +1,31 @@
+From: Quanyang Wang <quanyang.wang@xxxxxxxxxxxxx><br>
+<br>
+Hello,<br>
+<br>
+This series fix some issues that occurs when the gqspi driver switches to spi-mem framework.<br>
+<br>
+Hi Amit,<br>
+I rewrite the "Subject" and "commit message" of these patches, so they<br>
+look different from the ones which you reviewed before. I still keep<br>
+your "Reviewed-by" and hope you will not mind.<br>
+<br>
+Regards,<br>
+Quanyang Wang<br>
+<br>
+Quanyang Wang (4):<br>
+  spi: spi-zynqmp-gqspi: use wait_for_completion_timeout to make<br>
+    zynqmp_qspi_exec_op not interruptible<br>
+  spi: spi-zynqmp-gqspi: add mutex locking for exec_op<br>
+  spi: spi-zynqmp-gqspi: transmit dummy circles by using the<br>
+    controller's internal functionality<br>
+  spi: spi-zynqmp-gqspi: fix incorrect operating mode in<br>
+    zynqmp_qspi_read_op<br>
+<br>
+ drivers/spi/spi-zynqmp-gqspi.c | 53 +++++++++++++++++-----------------<br>
+ 1 file changed, 27 insertions(+), 26 deletions(-)<br>
+<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

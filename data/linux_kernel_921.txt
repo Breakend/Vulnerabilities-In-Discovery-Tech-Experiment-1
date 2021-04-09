@@ -1,0 +1,64 @@
+On 4/8/21 2:15 AM, Dexuan Cui wrote:<br>
+><i> diff --git a/drivers/net/ethernet/microsoft/Kconfig b/drivers/net/ethernet/microsoft/Kconfig</i><br>
+><i> new file mode 100644</i><br>
+><i> index 000000000000..12ef6b581566</i><br>
+><i> --- /dev/null</i><br>
+><i> +++ b/drivers/net/ethernet/microsoft/Kconfig</i><br>
+><i> @@ -0,0 +1,30 @@</i><br>
+><i> +#</i><br>
+><i> +# Microsoft Azure network device configuration</i><br>
+><i> +#</i><br>
+><i> +</i><br>
+><i> +config NET_VENDOR_MICROSOFT</i><br>
+><i> +	bool "Microsoft Azure Network Device"</i><br>
+<br>
+Seems to me that should be generalized, more like:<br>
+<br>
+	bool "Microsoft Network Devices"<br>
+<br>
+<br>
+><i> +	default y</i><br>
+><i> +	help</i><br>
+><i> +	  If you have a network (Ethernet) device belonging to this class, say Y.</i><br>
+><i> +</i><br>
+><i> +	  Note that the answer to this question doesn't directly affect the</i><br>
+><i> +	  kernel: saying N will just cause the configurator to skip the</i><br>
+><i> +	  question about Microsoft Azure network device. If you say Y, you</i><br>
+<br>
+	           about Microsoft networking devices.<br>
+<br>
+><i> +	  will be asked for your specific device in the following question.</i><br>
+><i> +</i><br>
+><i> +if NET_VENDOR_MICROSOFT</i><br>
+><i> +</i><br>
+><i> +config MICROSOFT_MANA</i><br>
+><i> +	tristate "Microsoft Azure Network Adapter (MANA) support"</i><br>
+><i> +	default m</i><br>
+<br>
+Please drop the default m. We don't randomly add drivers to be built.<br>
+<br>
+Or leave this as is and change NET_VENDOR_MICROSOFT to be default n.<br>
+<br>
+<br>
+><i> +	depends on PCI_MSI && X86_64</i><br>
+><i> +	select PCI_HYPERV</i><br>
+><i> +	help</i><br>
+><i> +	  This driver supports Microsoft Azure Network Adapter (MANA).</i><br>
+><i> +	  So far, the driver is only validated on X86_64.</i><br>
+<br>
+validated how?<br>
+<br>
+<br>
+><i> +</i><br>
+><i> +	  To compile this driver as a module, choose M here.</i><br>
+><i> +	  The module will be called mana.</i><br>
+><i> +</i><br>
+><i> +endif #NET_VENDOR_MICROSOFT</i><br>
+<br>
+<br>
+thanks.<br>
+-- <br>
+~Randy<br>
+<br>
+<br>
+

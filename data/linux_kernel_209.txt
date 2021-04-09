@@ -1,0 +1,439 @@
+From: Andres Beltran <lkmlabelt@xxxxxxxxx><br>
+<br>
+Pointers to ring-buffer packets sent by Hyper-V are used within the<br>
+guest VM. Hyper-V can send packets with erroneous values or modify<br>
+packet fields after they are processed by the guest. To defend<br>
+against these scenarios, return a copy of the incoming VMBus packet<br>
+after validating its length and offset fields in hv_pkt_iter_first().<br>
+In this way, the packet can no longer be modified by the host.<br>
+<br>
+Signed-off-by: Andres Beltran <lkmlabelt@xxxxxxxxx><br>
+Co-developed-by: Andrea Parri (Microsoft) <parri.andrea@xxxxxxxxx><br>
+Signed-off-by: Andrea Parri (Microsoft) <parri.andrea@xxxxxxxxx><br>
+---<br>
+ drivers/hv/channel.c              |  9 ++--<br>
+ drivers/hv/hv_fcopy.c             |  1 +<br>
+ drivers/hv/hv_kvp.c               |  1 +<br>
+ drivers/hv/hyperv_vmbus.h         |  2 +-<br>
+ drivers/hv/ring_buffer.c          | 82 ++++++++++++++++++++++++++-----<br>
+ drivers/net/hyperv/hyperv_net.h   |  7 +++<br>
+ drivers/net/hyperv/netvsc.c       |  2 +<br>
+ drivers/net/hyperv/rndis_filter.c |  2 +<br>
+ drivers/scsi/storvsc_drv.c        | 10 ++++<br>
+ include/linux/hyperv.h            | 48 +++++++++++++++---<br>
+ net/vmw_vsock/hyperv_transport.c  |  4 +-<br>
+ 11 files changed, 143 insertions(+), 25 deletions(-)<br>
+<br>
+diff --git a/drivers/hv/channel.c b/drivers/hv/channel.c<br>
+index db30be8f9ccea..b665db21e120d 100644<br>
+--- a/drivers/hv/channel.c<br>
++++ b/drivers/hv/channel.c<br>
+@@ -597,12 +597,15 @@ static int __vmbus_open(struct vmbus_channel *newchannel,<br>
+ 	newchannel->onchannel_callback = onchannelcallback;<br>
+ 	newchannel->channel_callback_context = context;<br>
+ <br>
+-	err = hv_ringbuffer_init(&newchannel->outbound, page, send_pages);<br>
++	if (!newchannel->max_pkt_size)<br>
++		newchannel->max_pkt_size = VMBUS_DEFAULT_MAX_PKT_SIZE;<br>
++<br>
++	err = hv_ringbuffer_init(&newchannel->outbound, page, send_pages, 0);<br>
+ 	if (err)<br>
+ 		goto error_clean_ring;<br>
+ <br>
+-	err = hv_ringbuffer_init(&newchannel->inbound,<br>
+-				 &page[send_pages], recv_pages);<br>
++	err = hv_ringbuffer_init(&newchannel->inbound, &page[send_pages],<br>
++				 recv_pages, newchannel->max_pkt_size);<br>
+ 	if (err)<br>
+ 		goto error_clean_ring;<br>
+ <br>
+diff --git a/drivers/hv/hv_fcopy.c b/drivers/hv/hv_fcopy.c<br>
+index 59ce85e00a028..660036da74495 100644<br>
+--- a/drivers/hv/hv_fcopy.c<br>
++++ b/drivers/hv/hv_fcopy.c<br>
+@@ -349,6 +349,7 @@ int hv_fcopy_init(struct hv_util_service *srv)<br>
+ {<br>
+ 	recv_buffer = srv->recv_buffer;<br>
+ 	fcopy_transaction.recv_channel = srv->channel;<br>
++	fcopy_transaction.recv_channel->max_pkt_size = HV_HYP_PAGE_SIZE * 2;<br>
+ <br>
+ 	/*<br>
+ 	 * When this driver loads, the user level daemon that<br>
+diff --git a/drivers/hv/hv_kvp.c b/drivers/hv/hv_kvp.c<br>
+index b49962d312cef..c698592b83e42 100644<br>
+--- a/drivers/hv/hv_kvp.c<br>
++++ b/drivers/hv/hv_kvp.c<br>
+@@ -757,6 +757,7 @@ hv_kvp_init(struct hv_util_service *srv)<br>
+ {<br>
+ 	recv_buffer = srv->recv_buffer;<br>
+ 	kvp_transaction.recv_channel = srv->channel;<br>
++	kvp_transaction.recv_channel->max_pkt_size = HV_HYP_PAGE_SIZE * 4;<br>
+ <br>
+ 	/*<br>
+ 	 * When this driver loads, the user level daemon that<br>
+diff --git a/drivers/hv/hyperv_vmbus.h b/drivers/hv/hyperv_vmbus.h<br>
+index 9416e09ebd58c..42f3d9d123a12 100644<br>
+--- a/drivers/hv/hyperv_vmbus.h<br>
++++ b/drivers/hv/hyperv_vmbus.h<br>
+@@ -174,7 +174,7 @@ extern int hv_synic_cleanup(unsigned int cpu);<br>
+ void hv_ringbuffer_pre_init(struct vmbus_channel *channel);<br>
+ <br>
+ int hv_ringbuffer_init(struct hv_ring_buffer_info *ring_info,<br>
+-		       struct page *pages, u32 pagecnt);<br>
++		       struct page *pages, u32 pagecnt, u32 max_pkt_size);<br>
+ <br>
+ void hv_ringbuffer_cleanup(struct hv_ring_buffer_info *ring_info);<br>
+ <br>
+diff --git a/drivers/hv/ring_buffer.c b/drivers/hv/ring_buffer.c<br>
+index ecd82ebfd5bc4..848f3bba83f8b 100644<br>
+--- a/drivers/hv/ring_buffer.c<br>
++++ b/drivers/hv/ring_buffer.c<br>
+@@ -190,7 +190,7 @@ void hv_ringbuffer_pre_init(struct vmbus_channel *channel)<br>
+ <br>
+ /* Initialize the ring buffer. */<br>
+ int hv_ringbuffer_init(struct hv_ring_buffer_info *ring_info,<br>
+-		       struct page *pages, u32 page_cnt)<br>
++		       struct page *pages, u32 page_cnt, u32 max_pkt_size)<br>
+ {<br>
+ 	int i;<br>
+ 	struct page **pages_wraparound;<br>
+@@ -232,6 +232,14 @@ int hv_ringbuffer_init(struct hv_ring_buffer_info *ring_info,<br>
+ 		sizeof(struct hv_ring_buffer);<br>
+ 	ring_info->priv_read_index = 0;<br>
+ <br>
++	/* Initialize buffer that holds copies of incoming packets */<br>
++	if (max_pkt_size) {<br>
++		ring_info->pkt_buffer = kzalloc(max_pkt_size, GFP_KERNEL);<br>
++		if (!ring_info->pkt_buffer)<br>
++			return -ENOMEM;<br>
++		ring_info->pkt_buffer_size = max_pkt_size;<br>
++	}<br>
++<br>
+ 	spin_lock_init(&ring_info->ring_lock);<br>
+ <br>
+ 	return 0;<br>
+@@ -244,6 +252,9 @@ void hv_ringbuffer_cleanup(struct hv_ring_buffer_info *ring_info)<br>
+ 	vunmap(ring_info->ring_buffer);<br>
+ 	ring_info->ring_buffer = NULL;<br>
+ 	mutex_unlock(&ring_info->ring_buffer_mutex);<br>
++<br>
++	kfree(ring_info->pkt_buffer);<br>
++	ring_info->pkt_buffer_size = 0;<br>
+ }<br>
+ <br>
+ /* Write to the ring buffer. */<br>
+@@ -384,7 +395,7 @@ int hv_ringbuffer_read(struct vmbus_channel *channel,<br>
+ 	memcpy(buffer, (const char *)desc + offset, packetlen);<br>
+ <br>
+ 	/* Advance ring index to next packet descriptor */<br>
+-	__hv_pkt_iter_next(channel, desc);<br>
++	__hv_pkt_iter_next(channel, desc, true);<br>
+ <br>
+ 	/* Notify host of update */<br>
+ 	hv_pkt_iter_close(channel);<br>
+@@ -410,6 +421,22 @@ static u32 hv_pkt_iter_avail(const struct hv_ring_buffer_info *rbi)<br>
+ 		return (rbi->ring_datasize - priv_read_loc) + write_loc;<br>
+ }<br>
+ <br>
++/*<br>
++ * Get first vmbus packet without copying it out of the ring buffer<br>
++ */<br>
++struct vmpacket_descriptor *hv_pkt_iter_first_raw(struct vmbus_channel *channel)<br>
++{<br>
++	struct hv_ring_buffer_info *rbi = &channel->inbound;<br>
++<br>
++	hv_debug_delay_test(channel, MESSAGE_DELAY);<br>
++<br>
++	if (hv_pkt_iter_avail(rbi) < sizeof(struct vmpacket_descriptor))<br>
++		return NULL;<br>
++<br>
++	return (struct vmpacket_descriptor *)(hv_get_ring_buffer(rbi) + rbi->priv_read_index);<br>
++}<br>
++EXPORT_SYMBOL_GPL(hv_pkt_iter_first_raw);<br>
++<br>
+ /*<br>
+  * Get first vmbus packet from ring buffer after read_index<br>
+  *<br>
+@@ -418,17 +445,49 @@ static u32 hv_pkt_iter_avail(const struct hv_ring_buffer_info *rbi)<br>
+ struct vmpacket_descriptor *hv_pkt_iter_first(struct vmbus_channel *channel)<br>
+ {<br>
+ 	struct hv_ring_buffer_info *rbi = &channel->inbound;<br>
+-	struct vmpacket_descriptor *desc;<br>
++	struct vmpacket_descriptor *desc, *desc_copy;<br>
++	u32 bytes_avail, pkt_len, pkt_offset;<br>
+ <br>
+-	hv_debug_delay_test(channel, MESSAGE_DELAY);<br>
+-	if (hv_pkt_iter_avail(rbi) < sizeof(struct vmpacket_descriptor))<br>
++	desc = hv_pkt_iter_first_raw(channel);<br>
++	if (!desc)<br>
+ 		return NULL;<br>
+ <br>
+-	desc = hv_get_ring_buffer(rbi) + rbi->priv_read_index;<br>
+-	if (desc)<br>
+-		prefetch((char *)desc + (desc->len8 << 3));<br>
++	bytes_avail = min(rbi->pkt_buffer_size, hv_pkt_iter_avail(rbi));<br>
++<br>
++	/*<br>
++	 * Ensure the compiler does not use references to incoming Hyper-V values (which<br>
++	 * could change at any moment) when reading local variables later in the code<br>
++	 */<br>
++	pkt_len = READ_ONCE(desc->len8) << 3;<br>
++	pkt_offset = READ_ONCE(desc->offset8) << 3;<br>
++<br>
++	/*<br>
++	 * If pkt_len is invalid, set it to the smaller of hv_pkt_iter_avail() and<br>
++	 * rbi->pkt_buffer_size<br>
++	 */<br>
++	if (pkt_len < sizeof(struct vmpacket_descriptor) || pkt_len > bytes_avail)<br>
++		pkt_len = bytes_avail;<br>
++<br>
++	/*<br>
++	 * If pkt_offset is invalid, arbitrarily set it to<br>
++	 * the size of vmpacket_descriptor<br>
++	 */<br>
++	if (pkt_offset < sizeof(struct vmpacket_descriptor) || pkt_offset > pkt_len)<br>
++		pkt_offset = sizeof(struct vmpacket_descriptor);<br>
++<br>
++	/* Copy the Hyper-V packet out of the ring buffer */<br>
++	desc_copy = (struct vmpacket_descriptor *)rbi->pkt_buffer;<br>
++	memcpy(desc_copy, desc, pkt_len);<br>
++<br>
++	/*<br>
++	 * Hyper-V could still change len8 and offset8 after the earlier read.<br>
++	 * Ensure that desc_copy has legal values for len8 and offset8 that<br>
++	 * are consistent with the copy we just made<br>
++	 */<br>
++	desc_copy->len8 = pkt_len >> 3;<br>
++	desc_copy->offset8 = pkt_offset >> 3;<br>
+ <br>
+-	return desc;<br>
++	return desc_copy;<br>
+ }<br>
+ EXPORT_SYMBOL_GPL(hv_pkt_iter_first);<br>
+ <br>
+@@ -440,7 +499,8 @@ EXPORT_SYMBOL_GPL(hv_pkt_iter_first);<br>
+  */<br>
+ struct vmpacket_descriptor *<br>
+ __hv_pkt_iter_next(struct vmbus_channel *channel,<br>
+-		   const struct vmpacket_descriptor *desc)<br>
++		   const struct vmpacket_descriptor *desc,<br>
++		   bool copy)<br>
+ {<br>
+ 	struct hv_ring_buffer_info *rbi = &channel->inbound;<br>
+ 	u32 packetlen = desc->len8 << 3;<br>
+@@ -453,7 +513,7 @@ __hv_pkt_iter_next(struct vmbus_channel *channel,<br>
+ 		rbi->priv_read_index -= dsize;<br>
+ <br>
+ 	/* more data? */<br>
+-	return hv_pkt_iter_first(channel);<br>
++	return copy ? hv_pkt_iter_first(channel) : hv_pkt_iter_first_raw(channel);<br>
+ }<br>
+ EXPORT_SYMBOL_GPL(__hv_pkt_iter_next);<br>
+ <br>
+diff --git a/drivers/net/hyperv/hyperv_net.h b/drivers/net/hyperv/hyperv_net.h<br>
+index e1a497d3c9ba4..154539b2f75ba 100644<br>
+--- a/drivers/net/hyperv/hyperv_net.h<br>
++++ b/drivers/net/hyperv/hyperv_net.h<br>
+@@ -895,9 +895,16 @@ static inline u32 netvsc_rqstor_size(unsigned long ringbytes)<br>
+ 		ringbytes / NETVSC_MIN_IN_MSG_SIZE;<br>
+ }<br>
+ <br>
++/* XFER PAGE packets can specify a maximum of 375 ranges for NDIS >= 6.0<br>
++ * and a maximum of 64 ranges for NDIS < 6.0 with no RSC; with RSC, this<br>
++ * limit is raised to 562 (= NVSP_RSC_MAX).<br>
++ */<br>
++#define NETVSC_MAX_XFER_PAGE_RANGES NVSP_RSC_MAX<br>
+ #define NETVSC_XFER_HEADER_SIZE(rng_cnt) \<br>
+ 		(offsetof(struct vmtransfer_page_packet_header, ranges) + \<br>
+ 		(rng_cnt) * sizeof(struct vmtransfer_page_range))<br>
++#define NETVSC_MAX_PKT_SIZE (NETVSC_XFER_HEADER_SIZE(NETVSC_MAX_XFER_PAGE_RANGES) + \<br>
++		sizeof(struct nvsp_message) + (sizeof(u32) * VRSS_SEND_TAB_SIZE))<br>
+ <br>
+ struct multi_send_data {<br>
+ 	struct sk_buff *skb; /* skb containing the pkt */<br>
+diff --git a/drivers/net/hyperv/netvsc.c b/drivers/net/hyperv/netvsc.c<br>
+index c64cc7639c39c..d17ff04986f52 100644<br>
+--- a/drivers/net/hyperv/netvsc.c<br>
++++ b/drivers/net/hyperv/netvsc.c<br>
+@@ -1603,6 +1603,8 @@ struct netvsc_device *netvsc_device_add(struct hv_device *device,<br>
+ <br>
+ 	/* Open the channel */<br>
+ 	device->channel->rqstor_size = netvsc_rqstor_size(netvsc_ring_bytes);<br>
++	device->channel->max_pkt_size = NETVSC_MAX_PKT_SIZE;<br>
++<br>
+ 	ret = vmbus_open(device->channel, netvsc_ring_bytes,<br>
+ 			 netvsc_ring_bytes,  NULL, 0,<br>
+ 			 netvsc_channel_cb, net_device->chan_table);<br>
+diff --git a/drivers/net/hyperv/rndis_filter.c b/drivers/net/hyperv/rndis_filter.c<br>
+index 123cc9d25f5ed..6508c4724c224 100644<br>
+--- a/drivers/net/hyperv/rndis_filter.c<br>
++++ b/drivers/net/hyperv/rndis_filter.c<br>
+@@ -1260,6 +1260,8 @@ static void netvsc_sc_open(struct vmbus_channel *new_sc)<br>
+ 	nvchan->channel = new_sc;<br>
+ <br>
+ 	new_sc->rqstor_size = netvsc_rqstor_size(netvsc_ring_bytes);<br>
++	new_sc->max_pkt_size = NETVSC_MAX_PKT_SIZE;<br>
++<br>
+ 	ret = vmbus_open(new_sc, netvsc_ring_bytes,<br>
+ 			 netvsc_ring_bytes, NULL, 0,<br>
+ 			 netvsc_channel_cb, nvchan);<br>
+diff --git a/drivers/scsi/storvsc_drv.c b/drivers/scsi/storvsc_drv.c<br>
+index 6bc5453cea8a7..bfbaebded8025 100644<br>
+--- a/drivers/scsi/storvsc_drv.c<br>
++++ b/drivers/scsi/storvsc_drv.c<br>
+@@ -402,6 +402,14 @@ static void storvsc_on_channel_callback(void *context);<br>
+ #define STORVSC_IDE_MAX_TARGETS				1<br>
+ #define STORVSC_IDE_MAX_CHANNELS			1<br>
+ <br>
++/*<br>
++ * Upper bound on the size of a storvsc packet. vmscsi_size_delta is not<br>
++ * included in the calculation because it is set after STORVSC_MAX_PKT_SIZE<br>
++ * is used in storvsc_connect_to_vsp<br>
++ */<br>
++#define STORVSC_MAX_PKT_SIZE (sizeof(struct vmpacket_descriptor) +\<br>
++			      sizeof(struct vstor_packet))<br>
++<br>
+ struct storvsc_cmd_request {<br>
+ 	struct scsi_cmnd *cmd;<br>
+ <br>
+@@ -697,6 +705,7 @@ static void handle_sc_creation(struct vmbus_channel *new_sc)<br>
+ 		return;<br>
+ <br>
+ 	memset(&props, 0, sizeof(struct vmstorage_channel_properties));<br>
++	new_sc->max_pkt_size = STORVSC_MAX_PKT_SIZE;<br>
+ <br>
+ 	/*<br>
+ 	 * The size of vmbus_requestor is an upper bound on the number of requests<br>
+@@ -1290,6 +1299,7 @@ static int storvsc_connect_to_vsp(struct hv_device *device, u32 ring_size,<br>
+ <br>
+ 	memset(&props, 0, sizeof(struct vmstorage_channel_properties));<br>
+ <br>
++	device->channel->max_pkt_size = STORVSC_MAX_PKT_SIZE;<br>
+ 	/*<br>
+ 	 * The size of vmbus_requestor is an upper bound on the number of requests<br>
+ 	 * that can be in-progress at any one time across all channels.<br>
+diff --git a/include/linux/hyperv.h b/include/linux/hyperv.h<br>
+index 2c18c8e768efe..7387bb41f6a37 100644<br>
+--- a/include/linux/hyperv.h<br>
++++ b/include/linux/hyperv.h<br>
+@@ -181,6 +181,10 @@ struct hv_ring_buffer_info {<br>
+ 	 * being freed while the ring buffer is being accessed.<br>
+ 	 */<br>
+ 	struct mutex ring_buffer_mutex;<br>
++<br>
++	/* Buffer that holds a copy of an incoming host packet */<br>
++	void *pkt_buffer;<br>
++	u32 pkt_buffer_size;<br>
+ };<br>
+ <br>
+ <br>
+@@ -788,6 +792,8 @@ struct vmbus_device {<br>
+ 	bool allowed_in_isolated;<br>
+ };<br>
+ <br>
++#define VMBUS_DEFAULT_MAX_PKT_SIZE 4096<br>
++<br>
+ struct vmbus_channel {<br>
+ 	struct list_head listentry;<br>
+ <br>
+@@ -1010,6 +1016,9 @@ struct vmbus_channel {<br>
+ 	/* request/transaction ids for VMBus */<br>
+ 	struct vmbus_requestor requestor;<br>
+ 	u32 rqstor_size;<br>
++<br>
++	/* The max size of a packet on this channel */<br>
++	u32 max_pkt_size;<br>
+ };<br>
+ <br>
+ u64 vmbus_next_request_id(struct vmbus_requestor *rqstor, u64 rqst_addr);<br>
+@@ -1651,32 +1660,55 @@ static inline u32 hv_pkt_datalen(const struct vmpacket_descriptor *desc)<br>
+ }<br>
+ <br>
+ <br>
++struct vmpacket_descriptor *<br>
++hv_pkt_iter_first_raw(struct vmbus_channel *channel);<br>
++<br>
+ struct vmpacket_descriptor *<br>
+ hv_pkt_iter_first(struct vmbus_channel *channel);<br>
+ <br>
+ struct vmpacket_descriptor *<br>
+ __hv_pkt_iter_next(struct vmbus_channel *channel,<br>
+-		   const struct vmpacket_descriptor *pkt);<br>
++		   const struct vmpacket_descriptor *pkt,<br>
++		   bool copy);<br>
+ <br>
+ void hv_pkt_iter_close(struct vmbus_channel *channel);<br>
+ <br>
+-/*<br>
+- * Get next packet descriptor from iterator<br>
+- * If at end of list, return NULL and update host.<br>
+- */<br>
+ static inline struct vmpacket_descriptor *<br>
+-hv_pkt_iter_next(struct vmbus_channel *channel,<br>
+-		 const struct vmpacket_descriptor *pkt)<br>
++hv_pkt_iter_next_pkt(struct vmbus_channel *channel,<br>
++		     const struct vmpacket_descriptor *pkt,<br>
++		     bool copy)<br>
+ {<br>
+ 	struct vmpacket_descriptor *nxt;<br>
+ <br>
+-	nxt = __hv_pkt_iter_next(channel, pkt);<br>
++	nxt = __hv_pkt_iter_next(channel, pkt, copy);<br>
+ 	if (!nxt)<br>
+ 		hv_pkt_iter_close(channel);<br>
+ <br>
+ 	return nxt;<br>
+ }<br>
+ <br>
++/*<br>
++ * Get next packet descriptor without copying it out of the ring buffer<br>
++ * If at end of list, return NULL and update host.<br>
++ */<br>
++static inline struct vmpacket_descriptor *<br>
++hv_pkt_iter_next_raw(struct vmbus_channel *channel,<br>
++		     const struct vmpacket_descriptor *pkt)<br>
++{<br>
++	return hv_pkt_iter_next_pkt(channel, pkt, false);<br>
++}<br>
++<br>
++/*<br>
++ * Get next packet descriptor from iterator<br>
++ * If at end of list, return NULL and update host.<br>
++ */<br>
++static inline struct vmpacket_descriptor *<br>
++hv_pkt_iter_next(struct vmbus_channel *channel,<br>
++		 const struct vmpacket_descriptor *pkt)<br>
++{<br>
++	return hv_pkt_iter_next_pkt(channel, pkt, true);<br>
++}<br>
++<br>
+ #define foreach_vmbus_pkt(pkt, channel) \<br>
+ 	for (pkt = hv_pkt_iter_first(channel); pkt; \<br>
+ 	    pkt = hv_pkt_iter_next(channel, pkt))<br>
+diff --git a/net/vmw_vsock/hyperv_transport.c b/net/vmw_vsock/hyperv_transport.c<br>
+index cc3bae2659e79..19189cf30a72f 100644<br>
+--- a/net/vmw_vsock/hyperv_transport.c<br>
++++ b/net/vmw_vsock/hyperv_transport.c<br>
+@@ -596,7 +596,7 @@ static ssize_t hvs_stream_dequeue(struct vsock_sock *vsk, struct msghdr *msg,<br>
+ 		return -EOPNOTSUPP;<br>
+ <br>
+ 	if (need_refill) {<br>
+-		hvs->recv_desc = hv_pkt_iter_first(hvs->chan);<br>
++		hvs->recv_desc = hv_pkt_iter_first_raw(hvs->chan);<br>
+ 		ret = hvs_update_recv_data(hvs);<br>
+ 		if (ret)<br>
+ 			return ret;<br>
+@@ -610,7 +610,7 @@ static ssize_t hvs_stream_dequeue(struct vsock_sock *vsk, struct msghdr *msg,<br>
+ <br>
+ 	hvs->recv_data_len -= to_read;<br>
+ 	if (hvs->recv_data_len == 0) {<br>
+-		hvs->recv_desc = hv_pkt_iter_next(hvs->chan, hvs->recv_desc);<br>
++		hvs->recv_desc = hv_pkt_iter_next_raw(hvs->chan, hvs->recv_desc);<br>
+ 		if (hvs->recv_desc) {<br>
+ 			ret = hvs_update_recv_data(hvs);<br>
+ 			if (ret)<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

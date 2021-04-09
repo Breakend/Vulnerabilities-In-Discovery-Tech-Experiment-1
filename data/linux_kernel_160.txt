@@ -1,0 +1,78 @@
+All callers of pci_p2pdma_map_type() have a struct dev_pgmap and a<br>
+struct device (of the client doing the DMA transfer). Thus move the<br>
+conversion to struct pci_devs for the provider and client into this<br>
+function.<br>
+<br>
+Signed-off-by: Logan Gunthorpe <logang@xxxxxxxxxxxx><br>
+---<br>
+ drivers/pci/p2pdma.c | 29 +++++++++++------------------<br>
+ 1 file changed, 11 insertions(+), 18 deletions(-)<br>
+<br>
+diff --git a/drivers/pci/p2pdma.c b/drivers/pci/p2pdma.c<br>
+index 2574a062a255..bcb1a6d6119d 100644<br>
+--- a/drivers/pci/p2pdma.c<br>
++++ b/drivers/pci/p2pdma.c<br>
+@@ -822,14 +822,21 @@ void pci_p2pmem_publish(struct pci_dev *pdev, bool publish)<br>
+ }<br>
+ EXPORT_SYMBOL_GPL(pci_p2pmem_publish);<br>
+ <br>
+-static enum pci_p2pdma_map_type pci_p2pdma_map_type(struct pci_dev *provider,<br>
+-						    struct pci_dev *client)<br>
++static enum pci_p2pdma_map_type pci_p2pdma_map_type(struct dev_pagemap *pgmap,<br>
++						    struct device *dev)<br>
+ {<br>
++	struct pci_dev *provider = to_p2p_pgmap(pgmap)->provider;<br>
+ 	enum pci_p2pdma_map_type ret;<br>
++	struct pci_dev *client;<br>
+ <br>
+ 	if (!provider->p2pdma)<br>
+ 		return PCI_P2PDMA_MAP_NOT_SUPPORTED;<br>
+ <br>
++	if (!dev_is_pci(dev))<br>
++		return PCI_P2PDMA_MAP_NOT_SUPPORTED;<br>
++<br>
++	client = to_pci_dev(dev);<br>
++<br>
+ 	ret = xa_to_value(xa_load(&provider->p2pdma->map_types,<br>
+ 				  map_types_idx(client)));<br>
+ 	if (ret != PCI_P2PDMA_MAP_UNKNOWN)<br>
+@@ -871,14 +878,8 @@ int pci_p2pdma_map_sg_attrs(struct device *dev, struct scatterlist *sg,<br>
+ {<br>
+ 	struct pci_p2pdma_pagemap *p2p_pgmap =<br>
+ 		to_p2p_pgmap(sg_page(sg)->pgmap);<br>
+-	struct pci_dev *client;<br>
+-<br>
+-	if (WARN_ON_ONCE(!dev_is_pci(dev)))<br>
+-		return 0;<br>
+ <br>
+-	client = to_pci_dev(dev);<br>
+-<br>
+-	switch (pci_p2pdma_map_type(p2p_pgmap->provider, client)) {<br>
++	switch (pci_p2pdma_map_type(sg_page(sg)->pgmap, dev)) {<br>
+ 	case PCI_P2PDMA_MAP_THRU_HOST_BRIDGE:<br>
+ 		return dma_map_sg_attrs(dev, sg, nents, dir, attrs);<br>
+ 	case PCI_P2PDMA_MAP_BUS_ADDR:<br>
+@@ -901,17 +902,9 @@ EXPORT_SYMBOL_GPL(pci_p2pdma_map_sg_attrs);<br>
+ void pci_p2pdma_unmap_sg_attrs(struct device *dev, struct scatterlist *sg,<br>
+ 		int nents, enum dma_data_direction dir, unsigned long attrs)<br>
+ {<br>
+-	struct pci_p2pdma_pagemap *p2p_pgmap =<br>
+-		to_p2p_pgmap(sg_page(sg)->pgmap);<br>
+ 	enum pci_p2pdma_map_type map_type;<br>
+-	struct pci_dev *client;<br>
+-<br>
+-	if (WARN_ON_ONCE(!dev_is_pci(dev)))<br>
+-		return;<br>
+-<br>
+-	client = to_pci_dev(dev);<br>
+ <br>
+-	map_type = pci_p2pdma_map_type(p2p_pgmap->provider, client);<br>
++	map_type = pci_p2pdma_map_type(sg_page(sg)->pgmap, dev);<br>
+ <br>
+ 	if (map_type == PCI_P2PDMA_MAP_THRU_HOST_BRIDGE)<br>
+ 		dma_unmap_sg_attrs(dev, sg, nents, dir, attrs);<br>
+-- <br>
+2.20.1<br>
+<br>
+<br>
+

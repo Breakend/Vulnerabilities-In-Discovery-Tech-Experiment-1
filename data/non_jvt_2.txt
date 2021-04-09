@@ -1,0 +1,27 @@
+ recently heard JVT and found this . As it states,
+
+    JVT is used for synchronous process. It uses Java Objects for communications. Java Objects are sent across the networks.
+
+I googled on it, but couldn't find any useful sources. Any one has a good explanation with how JVT goes in Java and when, how, where... JVT is useful?
+
+I also found from here
+
+    The Java Vision Toolkit (JVT) is a Java Advanced Imaging GUI/library for machine vision and image processing applications. It provides a framework for machine vision and image processing algorithms for 2D and 3D images.
+
+first of all, what is JMS? : Java Message Service (JMS) is an application program interface (API) from Sun Microsystems that supports the formal communication known as messaging between computers in a network. here message can be of any type (Integer, Float, string) and of any size. Like in Socket programming, we use some API to send messages across network.
+
+now, how JVT is related to JMS? : JVT (Java Value Type) is manages entities. it is like an Object. as i specified above, JMS is used to send messages across network and this message can be of any type. This message can also be mixture of types (int + String). to clarify this look at example below:
+
+class CustomerJVT{
+     int CustomerId
+     String CustomerName
+}
+
+Here CustomerJVT is JVT which we can send on network using JMS library easily instead of sending CustomerId and CustomerName separately. isn't it good?
+
+referances: http://www2.sys-con.com/itsg/virtualcd/java/archives/0805/horton/index.html http://docs.oracle.com/javaee/6/tutorial/doc/bncdq.html
+
+I hope it clarifies your issue. If you need any further clarification than let me know.
+
+Thanks,
+

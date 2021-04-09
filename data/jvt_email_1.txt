@@ -1,0 +1,183 @@
+
+Re: [AVT] New I-D on JVT/H.26L packetization (fwd)
+
+Stephen Casner <casner@acm.org> Wed, 06 March 2002 03:23 UTCShow header
+
+Misdirected to avt-admin.
+
+							-- Steve
+
+---------- Forwarded message ----------
+Date: Wed, 06 Mar 2002 02:05:16 +0100
+From: Stephan Wenger <stewe@cs.tu-berlin.de>
+To: philippe.gentric@philips.com, avt-admin@ietf.org, jvt-experts@mail.imtc.org
+Cc: miska.hannuksela@nokia.com, thomas Stockhammer <stockhammer@ei.tum.de>
+Subject: Re: [AVT] New I-D on JVT/H.26L packetization
+
+Folks,
+
+in order to avoid excessive cross-posting I'm going to
+answer on this Email only on the appropriate mailing
+list, which is avt@ietf.org. (the reflector of the AVT group
+in the IETF)  If you are not on this list, I would suggest to
+subscribe.  See www.ietf.org for info how to subscribe to
+IETF mailing lists.
+
+Best regards
+Stephan
+
+At 02:43 PM 3/5/2002 +0100, philippe.gentric@philips.com wrote:
+
+>Stephan,
+>
+>a few remarks about your draft:
+>
+>*****************
+>  I dont see the lack of final status for NAL as a problem, on the contrary
+>I beleive that making sure that the (RTP) transport is independent of
+>the NAL internals is a key design issue.
+>
+>in this respect, you state that:
+>
+>"The RTP payload specification is designed to be
+>    unaware of the bit string in the NALP payload."
+>
+>but you dont state explicitely what is the situation for NALP headers,
+>rather you write:
+>
+>  "JVT  Video-aware network elements such as Gateways can perform many
+>    operations by handling only those byte buffers"
+>
+>but is this in the scope of a RTP payload format ?
+>
+>  I dont think so, being able to re-packetize is a *extremely* nice
+> property of JVT/NAL.
+>
+>Fine, but why would you specify that in the RTP payload ?
+>same for the NALP type byte, why this table of value?
+>
+>******************
+>  I am -as you are- concerned about using the RFC2250 timestamp policy.
+>
+>You write: "Clearly, using the RFC2250-like timestamp disallows the exact
+>media
+>    synchronization between different RTP receivers"
+>
+>if you mean not being able to synchronise with other RTP streams
+>then this is simply not acceptable.
+>
+>Also I dont understand the logic of the choice, specifically the statement:
+>
+>"A consequence of this new feature (it was available
+>    before only in H.263++ [3]) is the complete decoupling of the
+>    transmission time, the decoding time, and the sampling or
+>    presentation time of slices and pictures"
+>
+>seams a bit extreme to me...
+>
+>Another way to look at this issue is to consider that these video codecs
+>behave like audio codecs with an arbitrarily complex interleaving scheme...
+>
+>moreover each fragment (slice) objectively HAS a presentation time stamp
+>which is the CTS (composition time stamp) of the corresponding Access Unit
+>(picture)...
+>
+>so what you need is an interleaving scheme that can re-order the fragments
+>and assign CTS to each ... for which I know a method ;-)
+>
+>the fact that you want to send fragments a long time before they are to be
+>used
+>is a separate (buffer management, etc) issue ...
+>
+>BTW the description of the example of usage of ERPS in 10.1 would need
+>some more details in terms of rationale (why exactly you want to spread
+>the I frame over 10 minutes is unclear)
+>
+>
+>regards,
+>
+>
+>Philippe Gentric
+>Software Architect
+>Philips MP4Net
+>philippe.gentric@philips.com
+>http://www.mpeg-4.philips.com
+>
+>
+>Stephan Wenger <stewe@cs.tu-berlin.de>
+>Sent by: avt-admin@ietf.org
+>
+>02/24/2002 18:27
+>
+>         To:        avt@ietf.org
+>         cc:        thomas Stockhammer <stockhammer@ei.tum.de>
+>miska.hannuksela@nokia.com
+>(bcc: Philippe Gentric/LIM/CE/PHILIPS)
+>         Subject:        [AVT] New I-D on JVT/H.26L packetization
+>
+>         Classification:
+>
+>
+>
+>Folks,
+>
+>My new draft for an RTP packetization scheme for JVT video (aka H.26L, aka
+>forthcoming MPEG-4 Part 10) is now available from the I-D archives as
+>ftp://ftp.ietf.org/internet-drafts/draft-wenger-avt-rtp-jvt-00.txt.
+>
+>This draft is under development by Tom, Miska, and myself since quite some
+>time.  It is submitted by the authors, and not on behalf of the whole JVT
+>group, as there are people in this group who would prefer to see an
+>approach that is more aligned with other payload specifications,
+>particularly with the MPEG-4 multisl draft.
+>
+>While we have had more than 10 turnaround between us authors, this is still
+>a true -00 draft, with a lot of known (and undoubtly many unknown)
+>problems.  Any help on spotting and solving such problems is, as usual,
+>appreciated.  Also, the video coding standard, and particularly the Network
+>Adpatation Layer is not yet set in stone, and we hope to receive valuable
+>input at the AVT meeting to make the video coding itself more network
+>friendly.
+>
+>One of the key problems of the development (and the review) of this draft
+>is that JVT doesn't have a complete, accurate, and up-to-date description
+>of the video syntax, or, more precisely, the syntax of the Network
+>Adaptation Layer.  A document describing this syntax and the rationales
+>behind it is currently in preparation, and I will advise you on this
+>mailing list as soon as it is available.  For now, the references in the
+>draft will have to suffice.
+>
+>Best regards
+>Stephan
+>
+>
+>_______________________________________________
+>Audio/Video Transport Working Group
+>avt@ietf.org
+>https://www1.ietf.org/mailman/listinfo/avt
+>
+
+
+_______________________________________________
+Audio/Video Transport Working Group
+avt@ietf.org
+https://www1.ietf.org/mailman/listinfo/avt
+
+
+    [AVT] New I-D on JVT/H.26L packetization  Stephan Wenger
+    Re: [AVT] New I-D on JVT/H.26L packetization  philippe.gentric
+    Re: [AVT] New I-D on JVT/H.26L packetization  Stephan Wenger
+    Re: [AVT] New I-D on JVT/H.26L packetization (fwd)  Stephen Casner
+    Re: [AVT] New I-D on JVT/H.26L packetization  Colin Perkins
+    Re: [AVT] New I-D on JVT/H.26L packetization  philippe.gentric
+    Re: [AVT] New I-D on JVT/H.26L packetization  Magnus Westerlund
+    Re: [AVT] New I-D on JVT/H.26L packetization  Colin Perkins
+    Re: [AVT] New I-D on JVT/H.26L packetization  Colin Perkins
+    Re: [AVT] New I-D on JVT/H.26L packetization  Stephan Wenger
+    Re: [AVT] New I-D on JVT/H.26L packetization  Stephan Wenger
+    Re: [AVT] New I-D on JVT/H.26L packetization  philippe.gentric
+    Re: [AVT] New I-D on JVT/H.26L packetization  Stephan Wenger
+
+    Hide Navigation Bar
+
+

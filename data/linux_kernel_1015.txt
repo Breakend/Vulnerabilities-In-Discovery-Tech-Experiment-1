@@ -1,0 +1,37 @@
+Fix the following gcc warning:<br>
+<br>
+drivers/gpu/drm/vmwgfx/vmwgfx_cmdbuf_res.c:163:6: warning: variable<br>
+‘ret’ set but not used [-Wunused-but-set-variable].<br>
+<br>
+Reported-by: Abaci Robot <abaci@xxxxxxxxxxxxxxxxx><br>
+Signed-off-by: Jiapeng Chong <jiapeng.chong@xxxxxxxxxxxxxxxxx><br>
+---<br>
+ drivers/gpu/drm/vmwgfx/vmwgfx_cmdbuf_res.c | 3 +--<br>
+ 1 file changed, 1 insertion(+), 2 deletions(-)<br>
+<br>
+diff --git a/drivers/gpu/drm/vmwgfx/vmwgfx_cmdbuf_res.c b/drivers/gpu/drm/vmwgfx/vmwgfx_cmdbuf_res.c<br>
+index 44d858c..0d210f8 100644<br>
+--- a/drivers/gpu/drm/vmwgfx/vmwgfx_cmdbuf_res.c<br>
++++ b/drivers/gpu/drm/vmwgfx/vmwgfx_cmdbuf_res.c<br>
+@@ -160,7 +160,6 @@ void vmw_cmdbuf_res_commit(struct list_head *list)<br>
+ void vmw_cmdbuf_res_revert(struct list_head *list)<br>
+ {<br>
+ 	struct vmw_cmdbuf_res *entry, *next;<br>
+-	int ret;<br>
+ <br>
+ 	list_for_each_entry_safe(entry, next, list, head) {<br>
+ 		switch (entry->state) {<br>
+@@ -168,7 +167,7 @@ void vmw_cmdbuf_res_revert(struct list_head *list)<br>
+ 			vmw_cmdbuf_res_free(entry->man, entry);<br>
+ 			break;<br>
+ 		case VMW_CMDBUF_RES_DEL:<br>
+-			ret = drm_ht_insert_item(&entry->man->resources,<br>
++			drm_ht_insert_item(&entry->man->resources,<br>
+ 						 &entry->hash);<br>
+ 			list_del(&entry->head);<br>
+ 			list_add_tail(&entry->head, &entry->man->list);<br>
+-- <br>
+1.8.3.1<br>
+<br>
+<br>
+

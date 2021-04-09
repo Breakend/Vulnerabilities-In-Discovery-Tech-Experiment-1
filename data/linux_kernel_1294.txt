@@ -1,0 +1,104 @@
+Replace places that contain logic like this:<br>
+	is_hyp_mode_available() && !is_kernel_in_hyp_mode()<br>
+<br>
+With a dedicated boolean function  is_hyp_callable(). This will be needed<br>
+later in kexec in order to sooner switch back to EL2.<br>
+<br>
+Suggested-by: James Morse <james.morse@xxxxxxx><br>
+Signed-off-by: Pavel Tatashin <pasha.tatashin@xxxxxxxxxx><br>
+---<br>
+ arch/arm64/include/asm/virt.h | 5 +++++<br>
+ arch/arm64/kernel/cpu-reset.h | 3 +--<br>
+ arch/arm64/kernel/hibernate.c | 9 +++------<br>
+ arch/arm64/kernel/sdei.c      | 2 +-<br>
+ 4 files changed, 10 insertions(+), 9 deletions(-)<br>
+<br>
+diff --git a/arch/arm64/include/asm/virt.h b/arch/arm64/include/asm/virt.h<br>
+index 7379f35ae2c6..4216c8623538 100644<br>
+--- a/arch/arm64/include/asm/virt.h<br>
++++ b/arch/arm64/include/asm/virt.h<br>
+@@ -128,6 +128,11 @@ static __always_inline bool is_protected_kvm_enabled(void)<br>
+ 		return cpus_have_final_cap(ARM64_KVM_PROTECTED_MODE);<br>
+ }<br>
+ <br>
++static inline bool is_hyp_callable(void)<br>
++{<br>
++	return is_hyp_mode_available() && !is_kernel_in_hyp_mode();<br>
++}<br>
++<br>
+ #endif /* __ASSEMBLY__ */<br>
+ <br>
+ #endif /* ! __ASM__VIRT_H */<br>
+diff --git a/arch/arm64/kernel/cpu-reset.h b/arch/arm64/kernel/cpu-reset.h<br>
+index ed50e9587ad8..1922e7a690f8 100644<br>
+--- a/arch/arm64/kernel/cpu-reset.h<br>
++++ b/arch/arm64/kernel/cpu-reset.h<br>
+@@ -20,8 +20,7 @@ static inline void __noreturn cpu_soft_restart(unsigned long entry,<br>
+ {<br>
+ 	typeof(__cpu_soft_restart) *restart;<br>
+ <br>
+-	unsigned long el2_switch = !is_kernel_in_hyp_mode() &&<br>
+-		is_hyp_mode_available();<br>
++	unsigned long el2_switch = is_hyp_callable();<br>
+ 	restart = (void *)__pa_symbol(__cpu_soft_restart);<br>
+ <br>
+ 	cpu_install_idmap();<br>
+diff --git a/arch/arm64/kernel/hibernate.c b/arch/arm64/kernel/hibernate.c<br>
+index b1cef371df2b..c764574a1acb 100644<br>
+--- a/arch/arm64/kernel/hibernate.c<br>
++++ b/arch/arm64/kernel/hibernate.c<br>
+@@ -48,9 +48,6 @@<br>
+  */<br>
+ extern int in_suspend;<br>
+ <br>
+-/* Do we need to reset el2? */<br>
+-#define el2_reset_needed() (is_hyp_mode_available() && !is_kernel_in_hyp_mode())<br>
+-<br>
+ /* temporary el2 vectors in the __hibernate_exit_text section. */<br>
+ extern char hibernate_el2_vectors[];<br>
+ <br>
+@@ -125,7 +122,7 @@ int arch_hibernation_header_save(void *addr, unsigned int max_size)<br>
+ 	hdr->reenter_kernel	= _cpu_resume;<br>
+ <br>
+ 	/* We can't use __hyp_get_vectors() because kvm may still be loaded */<br>
+-	if (el2_reset_needed())<br>
++	if (is_hyp_callable())<br>
+ 		hdr->__hyp_stub_vectors = __pa_symbol(__hyp_stub_vectors);<br>
+ 	else<br>
+ 		hdr->__hyp_stub_vectors = 0;<br>
+@@ -387,7 +384,7 @@ int swsusp_arch_suspend(void)<br>
+ 		dcache_clean_range(__idmap_text_start, __idmap_text_end);<br>
+ <br>
+ 		/* Clean kvm setup code to PoC? */<br>
+-		if (el2_reset_needed()) {<br>
++		if (is_hyp_callable()) {<br>
+ 			dcache_clean_range(__hyp_idmap_text_start, __hyp_idmap_text_end);<br>
+ 			dcache_clean_range(__hyp_text_start, __hyp_text_end);<br>
+ 		}<br>
+@@ -482,7 +479,7 @@ int swsusp_arch_resume(void)<br>
+ 	 *<br>
+ 	 * We can skip this step if we booted at EL1, or are running with VHE.<br>
+ 	 */<br>
+-	if (el2_reset_needed()) {<br>
++	if (is_hyp_callable()) {<br>
+ 		phys_addr_t el2_vectors = (phys_addr_t)hibernate_exit;<br>
+ 		el2_vectors += hibernate_el2_vectors -<br>
+ 			       __hibernate_exit_text_start;     /* offset */<br>
+diff --git a/arch/arm64/kernel/sdei.c b/arch/arm64/kernel/sdei.c<br>
+index 2c7ca449dd51..af0ac2f920cf 100644<br>
+--- a/arch/arm64/kernel/sdei.c<br>
++++ b/arch/arm64/kernel/sdei.c<br>
+@@ -200,7 +200,7 @@ unsigned long sdei_arch_get_entry_point(int conduit)<br>
+ 	 * dropped to EL1 because we don't support VHE, then we can't support<br>
+ 	 * SDEI.<br>
+ 	 */<br>
+-	if (is_hyp_mode_available() && !is_kernel_in_hyp_mode()) {<br>
++	if (is_hyp_callable()) {<br>
+ 		pr_err("Not supported on this hardware/boot configuration\n");<br>
+ 		goto out_err;<br>
+ 	}<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

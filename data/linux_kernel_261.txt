@@ -1,0 +1,24 @@
+Hi,<br>
+<br>
+On 08/04/2021 17:08:26+0200, Arnd Bergmann wrote:<br>
+><i> arch/arm/boot/dts/at91-sama5d2_ptc_ek.dt.yaml: /: 'etm@73C000' does</i><br>
+><i> not match any of the regexes: '@(0|[1-9a-f][0-9a-f]*)$', '^[^@]+$',</i><br>
+><i> 'pinctrl-[0-9]+'</i><br>
+><i> arch/arm/boot/dts/at91-kizbox3-hs.dt.yaml: /: 'etm@73C000' does not</i><br>
+><i> match any of the regexes: '@(0|[1-9a-f][0-9a-f]*)$', '^[^@]+$',</i><br>
+><i> 'pinctrl-[0-9]+'</i><br>
+><i> </i><br>
+<br>
+This was introduced by 4d930c421e3b ("ARM: dts: at91: sama5d2: add ETB<br>
+and ETM unit name"), trying to fix another warning.<br>
+<br>
+I guess this is because<br>
+Documentation/devicetree/bindings/arm/coresight.txt is not yaml yet.<br>
+<br>
+-- <br>
+Alexandre Belloni, co-owner and COO, Bootlin<br>
+Embedded Linux and Kernel engineering<br>
+<a  rel="nofollow" href="https://bootlin.com">https://bootlin.com</a><br>
+<br>
+<br>
+

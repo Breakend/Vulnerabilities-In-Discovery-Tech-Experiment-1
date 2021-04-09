@@ -1,0 +1,43 @@
+Fixes the following W=1 kernel build warning:<br>
+<br>
+drivers/message/fusion/mptctl.c: In function ‘mptctl_gettargetinfo<br>
+drivers/message/fusion/mptctl.c:1372:7: warning: variable ‘port’ set but not used [-Wunused-but-set-variable]<br>
+<br>
+Reported-by: Hulk Robot <hulkci@xxxxxxxxxx><br>
+Signed-off-by: Zhen Lei <thunder.leizhen@xxxxxxxxxx><br>
+---<br>
+ drivers/message/fusion/mptctl.c | 6 ------<br>
+ 1 file changed, 6 deletions(-)<br>
+<br>
+diff --git a/drivers/message/fusion/mptctl.c b/drivers/message/fusion/mptctl.c<br>
+index 0a9321239e76..72025996cd70 100644<br>
+--- a/drivers/message/fusion/mptctl.c<br>
++++ b/drivers/message/fusion/mptctl.c<br>
+@@ -1367,7 +1367,6 @@ mptctl_gettargetinfo (MPT_ADAPTER *ioc, unsigned long arg)<br>
+ 	int			lun;<br>
+ 	int			maxWordsLeft;<br>
+ 	int			numBytes;<br>
+-	u8			port;<br>
+ 	struct scsi_device 	*sdev;<br>
+ <br>
+ 	if (copy_from_user(&karg, uarg, sizeof(struct mpt_ioctl_targetinfo))) {<br>
+@@ -1379,13 +1378,8 @@ mptctl_gettargetinfo (MPT_ADAPTER *ioc, unsigned long arg)<br>
+ <br>
+ 	dctlprintk(ioc, printk(MYIOC_s_DEBUG_FMT "mptctl_gettargetinfo called.\n",<br>
+ 	    ioc->name));<br>
+-	/* Get the port number and set the maximum number of bytes<br>
+-	 * in the returned structure.<br>
+-	 * Ignore the port setting.<br>
+-	 */<br>
+ 	numBytes = karg.hdr.maxDataSize - sizeof(mpt_ioctl_header);<br>
+ 	maxWordsLeft = numBytes/sizeof(int);<br>
+-	port = karg.hdr.port;<br>
+ <br>
+ 	if (maxWordsLeft <= 0) {<br>
+ 		printk(MYIOC_s_ERR_FMT "%s@%d::mptctl_gettargetinfo() - no memory available!\n",<br>
+-- <br>
+2.21.1<br>
+<br>
+<br>
+<br>
+

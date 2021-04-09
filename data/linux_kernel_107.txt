@@ -1,0 +1,45 @@
+Hi Reinette,<br>
+<br>
+On 31/03/2021 22:36, Reinette Chatre wrote:<br>
+><i> On 3/12/2021 9:58 AM, James Morse wrote:</i><br>
+><i>> resctrl is the defacto Linux ABI for SoC resource partitioning features.</i><br>
+><i>> To support it on another architecture, it needs to be abstracted from</i><br>
+><i>> the features provided by Intel RDT and AMD PQoS, and moved to /fs/.</i><br>
+><i>></i><br>
+><i>> Split struct rdt_domain up too. Move everything that that is particular</i><br>
+><i> </i><br>
+><i> s/that that/that/</i><br>
+><i> </i><br>
+><i>> to resctrl into a new header file. resctrl code paths touching a 'hw'</i><br>
+><i>> struct indicates where an abstraction is needed.</i><br>
+><i> </i><br>
+><i> Similar to previous patch it would help to explain how this split was chosen. For example,</i><br>
+><i> why are the CPUs to which a resource is associated not considered a hardware property?</i><br>
+<br>
+Similarly, because the meaning of those CPUs doesn't differ or change between architectures.<br>
+<br>
+I've expanded the middle paragraph in the commit message to explain why the arch specific<br>
+things are arch specific:<br>
+| Continue by splitting struct rdt_domain, into an architecture private<br>
+| 'hw' struct, which contains the common resctrl structure that would be<br>
+| used by any architecture.<br>
+|<br>
+| The hardware values in ctrl_val and mbps_val need to be accessed via<br>
+| helpers to allow another architecture to convert these into a different<br>
+| format if necessary.<br>
+|<br>
+| After this split, filesystem code code paths touching a 'hw' struct<br>
+| indicates where an abstraction is needed.<br>
+<br>
+and similarly changed the kernel doc comment.<br>
+<br>
+<br>
+Let me know if you prefer some other struct name.<br>
+<br>
+<br>
+Thanks,<br>
+<br>
+James<br>
+<br>
+<br>
+

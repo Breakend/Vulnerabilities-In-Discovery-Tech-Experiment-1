@@ -1,0 +1,190 @@
+On Thu, Apr 08, 2021 at 11:46:15AM +0200, Greg KH wrote:<br>
+><i> On Thu, Apr 08, 2021 at 11:27:02AM +0200, Fabio Aiuto wrote:</i><br>
+><i> > remove declared and assigned unused variables</i><br>
+><i> </i><br>
+><i> You need to be a lot more specific here.</i><br>
+<br>
+Shall I describe that some of these became unused<br>
+after DBG_871X removal?<br>
+<br>
+><i> </i><br>
+><i> > Reported-by: kernel test robot <lkp@xxxxxxxxx></i><br>
+><i> </i><br>
+><i> For all of these?</i><br>
+<br>
+yes, actually, not just the ">>" marked ones, but also<br>
+all others reported in automatic email.<br>
+<br>
+Shall I limit to the marked ones?<br>
+<br>
+Should I put in In-Reply-To the test robot email?<br>
+<br>
+Or just the output of the test robot in the changelog?<br>
+<br>
+><i> </i><br>
+><i> > Signed-off-by: Fabio Aiuto <fabioaiuto83@xxxxxxxxx></i><br>
+><i> > ---</i><br>
+><i> >  drivers/staging/rtl8723bs/core/rtw_cmd.c      |  3 ---</i><br>
+><i> >  .../staging/rtl8723bs/include/rtw_security.h  | 18 -------------</i><br>
+><i> >  .../staging/rtl8723bs/os_dep/ioctl_linux.c    | 26 +++----------------</i><br>
+><i> >  3 files changed, 3 insertions(+), 44 deletions(-)</i><br>
+><i> > </i><br>
+><i> > diff --git a/drivers/staging/rtl8723bs/core/rtw_cmd.c b/drivers/staging/rtl8723bs/core/rtw_cmd.c</i><br>
+><i> > index baf8b1e0f43c..e94eb1138cf1 100644</i><br>
+><i> > --- a/drivers/staging/rtl8723bs/core/rtw_cmd.c</i><br>
+><i> > +++ b/drivers/staging/rtl8723bs/core/rtw_cmd.c</i><br>
+><i> > @@ -387,7 +387,6 @@ int rtw_cmd_thread(void *context)</i><br>
+><i> >  	u8 ret;</i><br>
+><i> >  	struct cmd_obj *pcmd;</i><br>
+><i> >  	u8 *pcmdbuf;</i><br>
+><i> > -	unsigned long cmd_start_time;</i><br>
+><i> >  	u8 (*cmd_hdl)(struct adapter *padapter, u8 *pbuf);</i><br>
+><i> >  	void (*pcmd_callback)(struct adapter *dev, struct cmd_obj *pcmd);</i><br>
+><i> >  	struct adapter *padapter = context;</i><br>
+><i> > @@ -438,8 +437,6 @@ int rtw_cmd_thread(void *context)</i><br>
+><i> >  			continue;</i><br>
+><i> >  		}</i><br>
+><i> >  </i><br>
+><i> > -		cmd_start_time = jiffies;</i><br>
+><i> > -</i><br>
+><i> >  		if (rtw_cmd_filter(pcmdpriv, pcmd) == _FAIL) {</i><br>
+><i> >  			pcmd->res = H2C_DROPPED;</i><br>
+><i> >  			goto post_process;</i><br>
+><i> </i><br>
+><i> How about one patch per variable that is being removed as this was fine,</i><br>
+><i> but others below are not ok.</i><br>
+<br>
+so just one patch per variable removed, right?<br>
+I will send a small patchset instead of this.<br>
+<br>
+><i> </i><br>
+><i> > diff --git a/drivers/staging/rtl8723bs/include/rtw_security.h b/drivers/staging/rtl8723bs/include/rtw_security.h</i><br>
+><i> > index b71f0959108b..5c787e999aab 100644</i><br>
+><i> > --- a/drivers/staging/rtl8723bs/include/rtw_security.h</i><br>
+><i> > +++ b/drivers/staging/rtl8723bs/include/rtw_security.h</i><br>
+><i> > @@ -332,24 +332,6 @@ static inline u32 rotr(u32 val, int bits)</i><br>
+><i> >  /* This is based on SHA256 implementation in LibTomCrypt that was released into</i><br>
+><i> >   * public domain by Tom St Denis. */</i><br>
+><i> >  </i><br>
+><i> > -/* the K array */</i><br>
+><i> > -static const unsigned long K[64] = {</i><br>
+><i> > -	0x428a2f98UL, 0x71374491UL, 0xb5c0fbcfUL, 0xe9b5dba5UL, 0x3956c25bUL,</i><br>
+><i> > -	0x59f111f1UL, 0x923f82a4UL, 0xab1c5ed5UL, 0xd807aa98UL, 0x12835b01UL,</i><br>
+><i> > -	0x243185beUL, 0x550c7dc3UL, 0x72be5d74UL, 0x80deb1feUL, 0x9bdc06a7UL,</i><br>
+><i> > -	0xc19bf174UL, 0xe49b69c1UL, 0xefbe4786UL, 0x0fc19dc6UL, 0x240ca1ccUL,</i><br>
+><i> > -	0x2de92c6fUL, 0x4a7484aaUL, 0x5cb0a9dcUL, 0x76f988daUL, 0x983e5152UL,</i><br>
+><i> > -	0xa831c66dUL, 0xb00327c8UL, 0xbf597fc7UL, 0xc6e00bf3UL, 0xd5a79147UL,</i><br>
+><i> > -	0x06ca6351UL, 0x14292967UL, 0x27b70a85UL, 0x2e1b2138UL, 0x4d2c6dfcUL,</i><br>
+><i> > -	0x53380d13UL, 0x650a7354UL, 0x766a0abbUL, 0x81c2c92eUL, 0x92722c85UL,</i><br>
+><i> > -	0xa2bfe8a1UL, 0xa81a664bUL, 0xc24b8b70UL, 0xc76c51a3UL, 0xd192e819UL,</i><br>
+><i> > -	0xd6990624UL, 0xf40e3585UL, 0x106aa070UL, 0x19a4c116UL, 0x1e376c08UL,</i><br>
+><i> > -	0x2748774cUL, 0x34b0bcb5UL, 0x391c0cb3UL, 0x4ed8aa4aUL, 0x5b9cca4fUL,</i><br>
+><i> > -	0x682e6ff3UL, 0x748f82eeUL, 0x78a5636fUL, 0x84c87814UL, 0x8cc70208UL,</i><br>
+><i> > -	0x90befffaUL, 0xa4506cebUL, 0xbef9a3f7UL, 0xc67178f2UL</i><br>
+><i> > -};</i><br>
+><i> > -</i><br>
+><i> > -</i><br>
+><i> >  /* Various logical functions */</i><br>
+><i> >  #define RORc(x, y) \</i><br>
+><i> >  (((((unsigned long) (x) & 0xFFFFFFFFUL) >> (unsigned long) ((y) & 31)) | \</i><br>
+><i> > diff --git a/drivers/staging/rtl8723bs/os_dep/ioctl_linux.c b/drivers/staging/rtl8723bs/os_dep/ioctl_linux.c</i><br>
+><i> > index a9820d813d8b..8d29ca9ba67f 100644</i><br>
+><i> > --- a/drivers/staging/rtl8723bs/os_dep/ioctl_linux.c</i><br>
+><i> > +++ b/drivers/staging/rtl8723bs/os_dep/ioctl_linux.c</i><br>
+><i> > @@ -33,10 +33,6 @@</i><br>
+><i> >  static u32 rtw_rates[] = {1000000, 2000000, 5500000, 11000000,</i><br>
+><i> >  	6000000, 9000000, 12000000, 18000000, 24000000, 36000000, 48000000, 54000000};</i><br>
+><i> >  </i><br>
+><i> > -static const char * const iw_operation_mode[] = {</i><br>
+><i> > -	"Auto", "Ad-Hoc", "Managed",  "Master", "Repeater", "Secondary", "Monitor"</i><br>
+><i> > -};</i><br>
+><i> > -</i><br>
+><i> >  void indicate_wx_scan_complete_event(struct adapter *padapter)</i><br>
+><i> >  {</i><br>
+><i> >  	union iwreq_data wrqu;</i><br>
+><i> > @@ -1125,7 +1121,6 @@ static int rtw_wx_set_mlme(struct net_device *dev,</i><br>
+><i> >  			     union iwreq_data *wrqu, char *extra)</i><br>
+><i> >  {</i><br>
+><i> >  	int ret = 0;</i><br>
+><i> > -	u16 reason;</i><br>
+><i> >  	struct adapter *padapter = rtw_netdev_priv(dev);</i><br>
+><i> >  	struct iw_mlme *mlme = (struct iw_mlme *)extra;</i><br>
+><i> >  </i><br>
+><i> > @@ -1133,8 +1128,6 @@ static int rtw_wx_set_mlme(struct net_device *dev,</i><br>
+><i> >  	if (mlme == NULL)</i><br>
+><i> >  		return -1;</i><br>
+><i> >  </i><br>
+><i> > -	reason = mlme->reason_code;</i><br>
+><i> > -</i><br>
+><i> >  	switch (mlme->cmd) {</i><br>
+><i> >  	case IW_MLME_DEAUTH:</i><br>
+><i> >  		if (!rtw_set_802_11_disassociate(padapter))</i><br>
+><i> > @@ -2440,7 +2433,6 @@ static int rtw_dbg_port(struct net_device *dev,</i><br>
+><i> >  	u8 major_cmd, minor_cmd;</i><br>
+><i> >  	u16 arg;</i><br>
+><i> >  	u32 extra_arg, *pdata, val32;</i><br>
+><i> > -	struct sta_info *psta;</i><br>
+><i> >  	struct adapter *padapter = rtw_netdev_priv(dev);</i><br>
+><i> >  	struct mlme_priv *pmlmepriv = &(padapter->mlmepriv);</i><br>
+><i> >  	struct mlme_ext_priv *pmlmeext = &padapter->mlmeextpriv;</i><br>
+><i> > @@ -2542,15 +2534,7 @@ static int rtw_dbg_port(struct net_device *dev,</i><br>
+><i> >  </i><br>
+><i> >  					break;</i><br>
+><i> >  				case 0x05:</i><br>
+><i> > -					psta = rtw_get_stainfo(pstapriv, cur_network->network.MacAddress);</i><br>
+><i> > -					if (psta) {</i><br>
+><i> > -						int i;</i><br>
+><i> > -						struct recv_reorder_ctrl *preorder_ctrl;</i><br>
+><i> > -</i><br>
+><i> > -						for (i = 0; i < 16; i++)</i><br>
+><i> > -							preorder_ctrl = &psta->recvreorder_ctrl[i];</i><br>
+><i> > -</i><br>
+><i> > -					}</i><br>
+><i> > +					rtw_get_stainfo(pstapriv, cur_network->network.MacAddress);</i><br>
+><i> </i><br>
+><i> Odd, but ok.</i><br>
+><i> </i><br>
+><i> >  					break;</i><br>
+><i> >  				case 0x06:</i><br>
+><i> >  					{</i><br>
+><i> > @@ -2568,9 +2552,8 @@ static int rtw_dbg_port(struct net_device *dev,</i><br>
+><i> >  					break;</i><br>
+><i> >  				case 0x09:</i><br>
+><i> >  					{</i><br>
+><i> > -						int i, j;</i><br>
+><i> > +						int i;</i><br>
+><i> >  						struct list_head	*plist, *phead;</i><br>
+><i> > -						struct recv_reorder_ctrl *preorder_ctrl;</i><br>
+><i> >  </i><br>
+><i> >  						spin_lock_bh(&pstapriv->sta_hash_lock);</i><br>
+><i> >  </i><br>
+><i> > @@ -2579,13 +2562,10 @@ static int rtw_dbg_port(struct net_device *dev,</i><br>
+><i> >  							plist = get_next(phead);</i><br>
+><i> >  </i><br>
+><i> >  							while (phead != plist) {</i><br>
+><i> > -								psta = container_of(plist, struct sta_info, hash_list);</i><br>
+><i> > +								container_of(plist, struct sta_info, hash_list);</i><br>
+><i> </i><br>
+><i> Did that build???  If so, that's obviously not correct.</i><br>
+><i></i><br>
+<br>
+yes it builds..<br>
+<br>
+><i> >  </i><br>
+><i> >  								plist = get_next(plist);</i><br>
+><i> </i><br>
+><i> So you now have a loop that does nothing?</i><br>
+><i></i><br>
+<br>
+so will I remove the whole loop?<br>
+ <br>
+><i> thanks,</i><br>
+><i> </i><br>
+><i> greg k-h</i><br>
+<br>
+thank you,<br>
+<br>
+fabio<br>
+<br>
+<br>
+

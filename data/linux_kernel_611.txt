@@ -1,0 +1,15 @@
+Hi all,<br>
+<br>
+Commit<br>
+<br>
+  e67fcb31fb0e ("stuff")<br>
+<br>
+is missing a Signed-off-by from its author and comitter.<br>
+<br>
+-- <br>
+Cheers,<br>
+Stephen Rothwell<br>
+<p><strong>Attachment:
+<a href="00526/pgps2v62e48BA.pgp" ><tt>pgps2v62e48BA.pgp</tt></a></strong><br>
+<em>Description:</em> OpenPGP digital signature</p>
+

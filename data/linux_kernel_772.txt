@@ -1,0 +1,33 @@
+
+On 23.03.2021 13:43, Javier González wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+On 23.03.2021 13:31, Christoph Hellwig wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+On Tue, Mar 23, 2021 at 09:37:49AM +0100, Javier González wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+Quick question. It seems like the current quirk simply disables<br>
+write-zeroes. Would you be open for a quirk that aligns with MDTS for<br>
+models that implemented it this way before TP4040?<br>
+</blockquote>
+<br>
+Aligning to MDTS is our current behavior, although all kernels up to<br>
+5.11 had a bug in the calculation.<br>
+</blockquote>
+<br>
+I see. Let me check internally and see what's going on with<br>
+write-zeroes on this model.<br>
+</blockquote>
+<br>
+We still need to confirm, but it seems like MDTS for write-zeroes is<br>
+reported wrong in the FW that Dmitry is using. We can at least reproduce<br>
+it.<br>
+<br>
+Would it be a possibility to add quirk infrastructure to hardcode MDTS<br>
+for FW versions prior TP4040?<br>
+<br>
+Another possibility is to add quirks to the TP4040 support patches to<br>
+enable this - it might also help reduce the list of models currently<br>
+blacklisted for write-zeroes.<br>
+<br>
+<br>
+

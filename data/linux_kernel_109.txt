@@ -1,0 +1,46 @@
+From: Sven Van Asbroeck <thesven73@xxxxxxxxx><br>
+<br>
+This reverts commit 3e21a10fdea3c2e4e4d1b72cb9d720256461af40.<br>
+<br>
+The reverted patch completely breaks all network connectivity on the<br>
+lan7430. tcpdump indicates missing bytes when receiving ping<br>
+packets from an external host:<br>
+<br>
+host$ ping $lan7430_ip<br>
+lan7430$ tcpdump -v<br>
+IP truncated-ip - 2 bytes missing! (tos 0x0, ttl 64, id 21715,<br>
+    offset 0, flags [DF], proto ICMP (1), length 84)<br>
+<br>
+Fixes: 3e21a10fdea3 ("lan743x: trim all 4 bytes of the FCS; not just 2")<br>
+Signed-off-by: Sven Van Asbroeck <thesven73@xxxxxxxxx><br>
+---<br>
+<br>
+To: Bryan Whitehead <bryan.whitehead@xxxxxxxxxxxxx><br>
+To: "David S. Miller" <davem@xxxxxxxxxxxxx><br>
+To: Jakub Kicinski <kuba@xxxxxxxxxx><br>
+To: George McCollister <george.mccollister@xxxxxxxxx><br>
+Cc: UNGLinuxDriver@xxxxxxxxxxxxx<br>
+Cc: netdev@xxxxxxxxxxxxxxx<br>
+Cc: linux-kernel@xxxxxxxxxxxxxxx<br>
+<br>
+ drivers/net/ethernet/microchip/lan743x_main.c | 2 +-<br>
+ 1 file changed, 1 insertion(+), 1 deletion(-)<br>
+<br>
+diff --git a/drivers/net/ethernet/microchip/lan743x_main.c b/drivers/net/ethernet/microchip/lan743x_main.c<br>
+index 1c3e204d727c..dbdfabff3b00 100644<br>
+--- a/drivers/net/ethernet/microchip/lan743x_main.c<br>
++++ b/drivers/net/ethernet/microchip/lan743x_main.c<br>
+@@ -2040,7 +2040,7 @@ lan743x_rx_trim_skb(struct sk_buff *skb, int frame_length)<br>
+ 		dev_kfree_skb_irq(skb);<br>
+ 		return NULL;<br>
+ 	}<br>
+-	frame_length = max_t(int, 0, frame_length - RX_HEAD_PADDING - 4);<br>
++	frame_length = max_t(int, 0, frame_length - RX_HEAD_PADDING - 2);<br>
+ 	if (skb->len > frame_length) {<br>
+ 		skb->tail -= skb->len - frame_length;<br>
+ 		skb->len = frame_length;<br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+

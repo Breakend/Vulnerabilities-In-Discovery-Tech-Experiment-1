@@ -1,0 +1,8 @@
+><i> +		} else {</i><br>
+><i> +			thread_data[t].tid = syscall(SYS_gettid);</i><br>
+<br>
+That always fills in the tid of the setup thread instead of the target<br>
+threads?<br>
+<br>
+<br>
+

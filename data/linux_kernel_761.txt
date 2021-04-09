@@ -1,0 +1,271 @@
+From: Peter Zijlstra <peterz@xxxxxxxxxxxxx><br>
+<br>
+Make perf_event_exit_event() more robust, such that we can use it from<br>
+other contexts. Specifically the up and coming remove_on_exec.<br>
+<br>
+For this to work we need to address a few issues. Remove_on_exec will<br>
+not destroy the entire context, so we cannot rely on TASK_TOMBSTONE to<br>
+disable event_function_call() and we thus have to use<br>
+perf_remove_from_context().<br>
+<br>
+When using perf_remove_from_context(), there's two races to consider.<br>
+The first is against close(), where we can have concurrent tear-down<br>
+of the event. The second is against child_list iteration, which should<br>
+not find a half baked event.<br>
+<br>
+To address this, teach perf_remove_from_context() to special case<br>
+!ctx->is_active and about DETACH_CHILD.<br>
+<br>
+Signed-off-by: Peter Zijlstra (Intel) <peterz@xxxxxxxxxxxxx><br>
+[ elver@xxxxxxxxxx: fix racing parent/child exit in sync_child_event(). ]<br>
+Signed-off-by: Marco Elver <elver@xxxxxxxxxx><br>
+---<br>
+v4:<br>
+* Fix for parent and child racing to exit in sync_child_event().<br>
+<br>
+v3:<br>
+* New dependency for series:<br>
+  <a  rel="nofollow" href="https://lkml.kernel.org/r/YFn/I3aKF+TOjGcl@xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">https://lkml.kernel.org/r/YFn/I3aKF+TOjGcl@xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx</a><br>
+---<br>
+ include/linux/perf_event.h |   1 +<br>
+ kernel/events/core.c       | 142 +++++++++++++++++++++----------------<br>
+ 2 files changed, 80 insertions(+), 63 deletions(-)<br>
+<br>
+diff --git a/include/linux/perf_event.h b/include/linux/perf_event.h<br>
+index 3f7f89ea5e51..3d478abf411c 100644<br>
+--- a/include/linux/perf_event.h<br>
++++ b/include/linux/perf_event.h<br>
+@@ -607,6 +607,7 @@ struct swevent_hlist {<br>
+ #define PERF_ATTACH_TASK_DATA	0x08<br>
+ #define PERF_ATTACH_ITRACE	0x10<br>
+ #define PERF_ATTACH_SCHED_CB	0x20<br>
++#define PERF_ATTACH_CHILD	0x40<br>
+ <br>
+ struct perf_cgroup;<br>
+ struct perf_buffer;<br>
+diff --git a/kernel/events/core.c b/kernel/events/core.c<br>
+index 03db40f6cba9..e77294c7e654 100644<br>
+--- a/kernel/events/core.c<br>
++++ b/kernel/events/core.c<br>
+@@ -2204,6 +2204,26 @@ static void perf_group_detach(struct perf_event *event)<br>
+ 	perf_event__header_size(leader);<br>
+ }<br>
+ <br>
++static void sync_child_event(struct perf_event *child_event);<br>
++<br>
++static void perf_child_detach(struct perf_event *event)<br>
++{<br>
++	struct perf_event *parent_event = event->parent;<br>
++<br>
++	if (!(event->attach_state & PERF_ATTACH_CHILD))<br>
++		return;<br>
++<br>
++	event->attach_state &= ~PERF_ATTACH_CHILD;<br>
++<br>
++	if (WARN_ON_ONCE(!parent_event))<br>
++		return;<br>
++<br>
++	lockdep_assert_held(&parent_event->child_mutex);<br>
++<br>
++	sync_child_event(event);<br>
++	list_del_init(&event->child_list);<br>
++}<br>
++<br>
+ static bool is_orphaned_event(struct perf_event *event)<br>
+ {<br>
+ 	return event->state == PERF_EVENT_STATE_DEAD;<br>
+@@ -2311,6 +2331,7 @@ group_sched_out(struct perf_event *group_event,<br>
+ }<br>
+ <br>
+ #define DETACH_GROUP	0x01UL<br>
++#define DETACH_CHILD	0x02UL<br>
+ <br>
+ /*<br>
+  * Cross CPU call to remove a performance event<br>
+@@ -2334,6 +2355,8 @@ __perf_remove_from_context(struct perf_event *event,<br>
+ 	event_sched_out(event, cpuctx, ctx);<br>
+ 	if (flags & DETACH_GROUP)<br>
+ 		perf_group_detach(event);<br>
++	if (flags & DETACH_CHILD)<br>
++		perf_child_detach(event);<br>
+ 	list_del_event(event, ctx);<br>
+ <br>
+ 	if (!ctx->nr_events && ctx->is_active) {<br>
+@@ -2362,25 +2385,21 @@ static void perf_remove_from_context(struct perf_event *event, unsigned long fla<br>
+ <br>
+ 	lockdep_assert_held(&ctx->mutex);<br>
+ <br>
+-	event_function_call(event, __perf_remove_from_context, (void *)flags);<br>
+-<br>
+ 	/*<br>
+-	 * The above event_function_call() can NO-OP when it hits<br>
+-	 * TASK_TOMBSTONE. In that case we must already have been detached<br>
+-	 * from the context (by perf_event_exit_event()) but the grouping<br>
+-	 * might still be in-tact.<br>
++	 * Because of perf_event_exit_task(), perf_remove_from_context() ought<br>
++	 * to work in the face of TASK_TOMBSTONE, unlike every other<br>
++	 * event_function_call() user.<br>
+ 	 */<br>
+-	WARN_ON_ONCE(event->attach_state & PERF_ATTACH_CONTEXT);<br>
+-	if ((flags & DETACH_GROUP) &&<br>
+-	    (event->attach_state & PERF_ATTACH_GROUP)) {<br>
+-		/*<br>
+-		 * Since in that case we cannot possibly be scheduled, simply<br>
+-		 * detach now.<br>
+-		 */<br>
+-		raw_spin_lock_irq(&ctx->lock);<br>
+-		perf_group_detach(event);<br>
++	raw_spin_lock_irq(&ctx->lock);<br>
++	if (!ctx->is_active) {<br>
++		__perf_remove_from_context(event, __get_cpu_context(ctx),<br>
++					   ctx, (void *)flags);<br>
+ 		raw_spin_unlock_irq(&ctx->lock);<br>
++		return;<br>
+ 	}<br>
++	raw_spin_unlock_irq(&ctx->lock);<br>
++<br>
++	event_function_call(event, __perf_remove_from_context, (void *)flags);<br>
+ }<br>
+ <br>
+ /*<br>
+@@ -12373,14 +12392,17 @@ void perf_pmu_migrate_context(struct pmu *pmu, int src_cpu, int dst_cpu)<br>
+ }<br>
+ EXPORT_SYMBOL_GPL(perf_pmu_migrate_context);<br>
+ <br>
+-static void sync_child_event(struct perf_event *child_event,<br>
+-			       struct task_struct *child)<br>
++static void sync_child_event(struct perf_event *child_event)<br>
+ {<br>
+ 	struct perf_event *parent_event = child_event->parent;<br>
+ 	u64 child_val;<br>
+ <br>
+-	if (child_event->attr.inherit_stat)<br>
+-		perf_event_read_event(child_event, child);<br>
++	if (child_event->attr.inherit_stat) {<br>
++		struct task_struct *task = child_event->ctx->task;<br>
++<br>
++		if (task && task != TASK_TOMBSTONE)<br>
++			perf_event_read_event(child_event, task);<br>
++	}<br>
+ <br>
+ 	child_val = perf_event_count(child_event);<br>
+ <br>
+@@ -12395,60 +12417,53 @@ static void sync_child_event(struct perf_event *child_event,<br>
+ }<br>
+ <br>
+ static void<br>
+-perf_event_exit_event(struct perf_event *child_event,<br>
+-		      struct perf_event_context *child_ctx,<br>
+-		      struct task_struct *child)<br>
++perf_event_exit_event(struct perf_event *event, struct perf_event_context *ctx)<br>
+ {<br>
+-	struct perf_event *parent_event = child_event->parent;<br>
++	struct perf_event *parent_event = event->parent;<br>
++	unsigned long detach_flags = 0;<br>
+ <br>
+-	/*<br>
+-	 * Do not destroy the 'original' grouping; because of the context<br>
+-	 * switch optimization the original events could've ended up in a<br>
+-	 * random child task.<br>
+-	 *<br>
+-	 * If we were to destroy the original group, all group related<br>
+-	 * operations would cease to function properly after this random<br>
+-	 * child dies.<br>
+-	 *<br>
+-	 * Do destroy all inherited groups, we don't care about those<br>
+-	 * and being thorough is better.<br>
+-	 */<br>
+-	raw_spin_lock_irq(&child_ctx->lock);<br>
+-	WARN_ON_ONCE(child_ctx->is_active);<br>
++	if (parent_event) {<br>
++		/*<br>
++		 * Do not destroy the 'original' grouping; because of the<br>
++		 * context switch optimization the original events could've<br>
++		 * ended up in a random child task.<br>
++		 *<br>
++		 * If we were to destroy the original group, all group related<br>
++		 * operations would cease to function properly after this<br>
++		 * random child dies.<br>
++		 *<br>
++		 * Do destroy all inherited groups, we don't care about those<br>
++		 * and being thorough is better.<br>
++		 */<br>
++		detach_flags = DETACH_GROUP | DETACH_CHILD;<br>
++		mutex_lock(&parent_event->child_mutex);<br>
++	}<br>
+ <br>
+-	if (parent_event)<br>
+-		perf_group_detach(child_event);<br>
+-	list_del_event(child_event, child_ctx);<br>
+-	perf_event_set_state(child_event, PERF_EVENT_STATE_EXIT); /* is_event_hup() */<br>
+-	raw_spin_unlock_irq(&child_ctx->lock);<br>
++	perf_remove_from_context(event, detach_flags);<br>
++<br>
++	raw_spin_lock_irq(&ctx->lock);<br>
++	if (event->state > PERF_EVENT_STATE_EXIT)<br>
++		perf_event_set_state(event, PERF_EVENT_STATE_EXIT);<br>
++	raw_spin_unlock_irq(&ctx->lock);<br>
+ <br>
+ 	/*<br>
+-	 * Parent events are governed by their filedesc, retain them.<br>
++	 * Child events can be freed.<br>
+ 	 */<br>
+-	if (!parent_event) {<br>
+-		perf_event_wakeup(child_event);<br>
++	if (parent_event) {<br>
++		mutex_unlock(&parent_event->child_mutex);<br>
++		/*<br>
++		 * Kick perf_poll() for is_event_hup();<br>
++		 */<br>
++		perf_event_wakeup(parent_event);<br>
++		free_event(event);<br>
++		put_event(parent_event);<br>
+ 		return;<br>
+ 	}<br>
+-	/*<br>
+-	 * Child events can be cleaned up.<br>
+-	 */<br>
+-<br>
+-	sync_child_event(child_event, child);<br>
+ <br>
+ 	/*<br>
+-	 * Remove this event from the parent's list<br>
+-	 */<br>
+-	WARN_ON_ONCE(parent_event->ctx->parent_ctx);<br>
+-	mutex_lock(&parent_event->child_mutex);<br>
+-	list_del_init(&child_event->child_list);<br>
+-	mutex_unlock(&parent_event->child_mutex);<br>
+-<br>
+-	/*<br>
+-	 * Kick perf_poll() for is_event_hup().<br>
++	 * Parent events are governed by their filedesc, retain them.<br>
+ 	 */<br>
+-	perf_event_wakeup(parent_event);<br>
+-	free_event(child_event);<br>
+-	put_event(parent_event);<br>
++	perf_event_wakeup(event);<br>
+ }<br>
+ <br>
+ static void perf_event_exit_task_context(struct task_struct *child, int ctxn)<br>
+@@ -12505,7 +12520,7 @@ static void perf_event_exit_task_context(struct task_struct *child, int ctxn)<br>
+ 	perf_event_task(child, child_ctx, 0);<br>
+ <br>
+ 	list_for_each_entry_safe(child_event, next, &child_ctx->event_list, event_entry)<br>
+-		perf_event_exit_event(child_event, child_ctx, child);<br>
++		perf_event_exit_event(child_event, child_ctx);<br>
+ <br>
+ 	mutex_unlock(&child_ctx->mutex);<br>
+ <br>
+@@ -12765,6 +12780,7 @@ inherit_event(struct perf_event *parent_event,<br>
+ 	 */<br>
+ 	raw_spin_lock_irqsave(&child_ctx->lock, flags);<br>
+ 	add_event_to_ctx(child_event, child_ctx);<br>
++	child_event->attach_state |= PERF_ATTACH_CHILD;<br>
+ 	raw_spin_unlock_irqrestore(&child_ctx->lock, flags);<br>
+ <br>
+ 	/*<br>
+-- <br>
+2.31.0.208.g409f899ff0-goog<br>
+<br>
+<br>
+

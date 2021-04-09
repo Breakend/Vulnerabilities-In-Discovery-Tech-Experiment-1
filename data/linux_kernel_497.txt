@@ -1,0 +1,18 @@
+On Wed, Apr 07, 2021 at 02:55:27AM -0700, William A. Kennington III wrote:<br>
+<br>
+><i> ------------[ cut here ]------------</i><br>
+><i> WARNING: CPU: 1 PID: 660 at lib/refcount.c:28 refcount_warn_saturate+0x108/0x174</i><br>
+><i> [<b0396f04>] (refcount_warn_saturate) from [<b03c56a4>] (kobject_put+0x90/0x98)</i><br>
+><i> [<b03c5614>] (kobject_put) from [<b0447b4c>] (put_device+0x20/0x24)</i><br>
+><i>  r4:b6700140</i><br>
+<br>
+Please think hard before including complete backtraces in upstream<br>
+reports, they are very large and contain almost no useful information<br>
+relative to their size so often obscure the relevant content in your<br>
+message. If part of the backtrace is usefully illustrative (it often is<br>
+for search engines if nothing else) then it's usually better to pull out<br>
+the relevant sections.<br>
+<p><strong>Attachment:
+<a href="00632/signature.asc" ><tt>signature.asc</tt></a></strong><br>
+<em>Description:</em> PGP signature</p>
+

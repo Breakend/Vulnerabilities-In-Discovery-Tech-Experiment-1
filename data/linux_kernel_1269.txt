@@ -1,0 +1,59 @@
+
+<br>
+<br>
+Le 08/04/2021 à 05:56, johnny.chenyi@xxxxxxxxxx a écrit :<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+From: Chen Yi <johnny.chenyi@xxxxxxxxxx><br>
+<br>
+Delete one of the header files <asm/interrupt.h> that are included<br>
+twice.<br>
+</blockquote>
+<br>
+Guys, we have been flooded with such tiny patches over the last weeks, some changes being sent 
+several times by different people.
+<br>
+<br>
+That one is included in 
+<a  rel="nofollow" href="https://patchwork.ozlabs.org/project/linuxppc-dev/patch/20210323062916.295346-1-wanjiabing@xxxxxxxx/">https://patchwork.ozlabs.org/project/linuxppc-dev/patch/20210323062916.295346-1-wanjiabing@xxxxxxxx/</a>
+<br>
+<br>
+And was already submitted a few hours earlier by someone else: 
+<a  rel="nofollow" href="https://patchwork.ozlabs.org/project/linuxppc-dev/patch/1616464656-59372-1-git-send-email-zhouchuangao@xxxxxxxx/">https://patchwork.ozlabs.org/project/linuxppc-dev/patch/1616464656-59372-1-git-send-email-zhouchuangao@xxxxxxxx/</a>
+<br>
+<br>
+Could you work all together and cook an overall patch including all duplicate removal from 
+arch/powerpc/ files ?
+<br>
+<br>
+Best way would be I think to file an issue at <a  rel="nofollow" href="https://github.com/linuxppc/issues/issues">https://github.com/linuxppc/issues/issues</a> , then you 
+do a complete analysis and list in the issue all places to be modified, then once the analysis is 
+complete you send a full single patch.
+<br>
+<br>
+Thanks<br>
+Christophe<br>
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+<br>
+Signed-off-by: Chen Yi <johnny.chenyi@xxxxxxxxxx><br>
+---<br>
+  arch/powerpc/kernel/interrupt.c | 1 -<br>
+  1 file changed, 1 deletion(-)<br>
+<br>
+diff --git a/arch/powerpc/kernel/interrupt.c b/arch/powerpc/kernel/interrupt.c<br>
+index c4dd4b8f9cfa..f64ace0208b7 100644<br>
+--- a/arch/powerpc/kernel/interrupt.c<br>
++++ b/arch/powerpc/kernel/interrupt.c<br>
+@@ -7,7 +7,6 @@<br>
+  #include <asm/asm-prototypes.h><br>
+  #include <asm/kup.h><br>
+  #include <asm/cputime.h><br>
+-#include <asm/interrupt.h><br>
+  #include <asm/hw_irq.h><br>
+  #include <asm/interrupt.h><br>
+  #include <asm/kprobes.h><br>
+<br>
+</blockquote>
+<br>
+<br>
+

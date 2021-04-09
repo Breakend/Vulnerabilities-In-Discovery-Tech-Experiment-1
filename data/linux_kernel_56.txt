@@ -1,0 +1,35 @@
+With CONFIG_CFI_CLANG, a callback function passed to<br>
+__queue_delayed_work from a module points to a jump table entry<br>
+defined in the module instead of the one used in the core kernel,<br>
+which breaks function address equality in this check:<br>
+<br>
+  WARN_ON_ONCE(timer->function != delayed_work_timer_fn);<br>
+<br>
+Use WARN_ON_FUNCTION_MISMATCH() instead to disable the warning<br>
+when CFI and modules are both enabled.<br>
+<br>
+Signed-off-by: Sami Tolvanen <samitolvanen@xxxxxxxxxx><br>
+Reviewed-by: Kees Cook <keescook@xxxxxxxxxxxx><br>
+Tested-by: Nathan Chancellor <nathan@xxxxxxxxxx><br>
+---<br>
+ kernel/workqueue.c | 2 +-<br>
+ 1 file changed, 1 insertion(+), 1 deletion(-)<br>
+<br>
+diff --git a/kernel/workqueue.c b/kernel/workqueue.c<br>
+index 79f2319543ce..b19d759e55a5 100644<br>
+--- a/kernel/workqueue.c<br>
++++ b/kernel/workqueue.c<br>
+@@ -1630,7 +1630,7 @@ static void __queue_delayed_work(int cpu, struct workqueue_struct *wq,<br>
+ 	struct work_struct *work = &dwork->work;<br>
+ <br>
+ 	WARN_ON_ONCE(!wq);<br>
+-	WARN_ON_ONCE(timer->function != delayed_work_timer_fn);<br>
++	WARN_ON_FUNCTION_MISMATCH(timer->function, delayed_work_timer_fn);<br>
+ 	WARN_ON_ONCE(timer_pending(timer));<br>
+ 	WARN_ON_ONCE(!list_empty(&work->entry));<br>
+ <br>
+-- <br>
+2.31.1.295.g9ea45b61b8-goog<br>
+<br>
+<br>
+

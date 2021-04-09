@@ -1,0 +1,21 @@
+On Thu, Apr 08, 2021 at 11:48:46AM +0300, Jarkko Sakkinen wrote:<br>
+><i> The regression is that the sgx_nr_free_pages is also incremented by</i><br>
+><i> sgx_free_epc_pages(), and thus it ends up having double the number of</i><br>
+><i> pages available.</i><br>
+<br>
+So when you add a new EPC section with sgx_setup_epc_section(), those<br>
+new pages in "nr_pages" are initially not going to be accounted<br>
+anywhere? Or is that sgx_nr_all_pages? And you do that in your second<br>
+patch...<br>
+<br>
+But those new pages coming in *are* free pages so they should be in the<br>
+free pages count too, IMHO.<br>
+<br>
+-- <br>
+Regards/Gruss,<br>
+    Boris.<br>
+<br>
+<a  rel="nofollow" href="https://people.kernel.org/tglx/notes-about-netiquette">https://people.kernel.org/tglx/notes-about-netiquette</a><br>
+<br>
+<br>
+

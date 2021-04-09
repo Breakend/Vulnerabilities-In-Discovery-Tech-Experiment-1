@@ -1,0 +1,32 @@
+On Thu, 08 Apr 2021 18:56:06 +0200,<br>
+Ville Syrjälä wrote:<br>
+><i> </i><br>
+><i> On Thu, Apr 08, 2021 at 06:34:06PM +0200, Takashi Iwai wrote:</i><br>
+><i> > On Thu, 08 Apr 2021 09:51:18 +0200,</i><br>
+><i> > Takashi Iwai wrote:</i><br>
+><i> > > </i><br>
+><i> > > On Wed, 07 Apr 2021 23:28:48 +0200,</i><br>
+><i> > > Ville Syrjälä wrote:</i><br>
+><i> > > > </i><br>
+><i> > > > Oh, could you ask the bug reporter to attach an acpidump to the</i><br>
+><i> > > > bug? Might be good to have that stuff on record somewhere if/when</i><br>
+><i> > > > someone wants to actually figure out what's going on here.</i><br>
+><i> > > </i><br>
+><i> > > OK, I'll ask.</i><br>
+><i> > </i><br>
+><i> > Available at</i><br>
+><i> >   acpidump: <a  rel="nofollow" href="https://susepaste.org/59777448">https://susepaste.org/59777448</a></i><br>
+><i> >   hwinfo: <a  rel="nofollow" href="https://susepaste.org/86284020">https://susepaste.org/86284020</a></i><br>
+><i> </i><br>
+><i> Those will apparently expire real soon. I took local copies out</i><br>
+><i> of morbid curiosity, but that's not going to help anyone else </i><br>
+><i> in the future. I rather wish bug reporting tools would flat out</i><br>
+><i> refuse to accept any pastebin links.</i><br>
+<br>
+Yeah, don't worry, I'll upload them to Bugzilla later in anyway.<br>
+<br>
+<br>
+Takashi<br>
+<br>
+<br>
+

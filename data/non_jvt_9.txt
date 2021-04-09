@@ -1,0 +1,220 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="generator" content="hypermail 2.4.0, see http://www.hypermail-project.org/" />
+<title>Weekly github digest (WebRTC WG specifications) from W3C Webmaster via GitHub API on 2021-04-06 (public-webrtc@w3.org from April 2021)</title>
+<meta name="Author" content="W3C Webmaster via GitHub API (sysbot+gh&#x40;&#0119;&#0051;&#0046;&#0111;&#0114;&#0103;)" />
+<meta name="Subject" content="Weekly github digest (WebRTC WG specifications)" />
+<meta name="Date" content="2021-04-06" />
+<link rel="stylesheet" href="//www.w3.org/StyleSheets/Mail/public-message" type="text/css" />
+<link rel="alternate stylesheet" title="Shorter view" 
+    href="//www.w3.org/StyleSheets/Mail/style-short.css" />
+<link rel="help" href="/Help/" />
+<link rel="start" href="../" title= "public-webrtc@w3.org archives" />
+</head>
+<body>
+<div class="head">
+<map title="Navigation bar to upper levels" id="upper">
+<p>
+   <a href="//www.w3.org/">W3C home</a> &gt;
+   <a href="/" title="Mailing list archives">Mailing lists</a> &gt;
+   <a href="../../" title="Public mailing lists">Public</a> &gt;
+   <a href="../" title="Index of public-webrtc@w3.org" rel="start">public-webrtc@w3.org</a> &gt;
+   <a href="./" rel="contents" title="Messages received in April 2021">April 2021</a>
+</p>
+</map>
+<h1>Weekly github digest (WebRTC WG specifications)</h1>
+<!-- received="Tue Apr 06 17:00:20 2021" -->
+<!-- isoreceived="20210406170020" -->
+<!-- sent="Tue, 06 Apr 2021 17:00:17 +0000" -->
+<!-- isosent="20210406170017" -->
+<!-- name="W3C Webmaster via GitHub API" -->
+<!-- email="sysbot+gh&#x40;&#0119;&#0051;&#0046;&#0111;&#0114;&#0103;" -->
+<!-- subject="Weekly github digest (WebRTC WG specifications)" -->
+<!-- id="E1lTp3p-0002Bm-PN@uranus.w3.org" -->
+<!-- charset="utf-8" -->
+<!-- expires="-1" -->
+<map id="navbar" name="navbar">
+<ul class="links">
+<li>
+<dfn>This message</dfn>:
+[ <a href="#start" name="options1" id="options1" tabindex="1">Message body</a> ]
+ [ <a href="mailto:public-webrtc&#x40;&#0119;&#0051;&#0046;&#0111;&#0114;&#0103;?Subject=Re%3A%20Weekly%20github%20digest%20(WebRTC%20WG%20specifications)&amp;In-Reply-To=%3CE1lTp3p-0002Bm-PN%40uranus.w3.org%3E&amp;References=%3CE1lTp3p-0002Bm-PN%40uranus.w3.org%3E" accesskey="r" title="respond to this message">Respond</a> ]
+ [ <a href="#options3">More options</a> ]
+</li>
+<li>
+<dfn>Related messages</dfn>:
+<!-- unext="start" -->
+[ <a href="0007.html" title="Elad Alon via GitHub: &quot;[mediacapture-screen-share] Pull Request: Define the  suppressLocalAudioPlayback constraint&quot;">Next message</a> ]
+[ <a href="0005.html" title="Bernard Aboba: &quot;WEBRTC WG Virtual Interim:  April 27, 8 AM Pacific Time&quot;">Previous message</a> ]
+<!-- unextthread="start" -->
+<!-- ureply="end" -->
+</li>
+</ul>
+</map>
+</div>
+<!-- body="start" -->
+<div class="mail">
+<address class="headers">
+<span id="from">
+<dfn>From</dfn>: W3C Webmaster via GitHub API &lt;<a href="mailto:sysbot+gh&#x40;&#0119;&#0051;&#0046;&#0111;&#0114;&#0103;?Subject=Re%3A%20Weekly%20github%20digest%20(WebRTC%20WG%20specifications)&amp;In-Reply-To=%3CE1lTp3p-0002Bm-PN%40uranus.w3.org%3E&amp;References=%3CE1lTp3p-0002Bm-PN%40uranus.w3.org%3E">sysbot+gh&#x40;&#0119;&#0051;&#0046;&#0111;&#0114;&#0103;</a>&gt;
+</span><br />
+<span id="date"><dfn>Date</dfn>: Tue, 06 Apr 2021 17:00:17 +0000</span><br />
+<span id="to"><dfn>To</dfn>: <a href="mailto:public-webrtc&#x40;&#0119;&#0051;&#0046;&#0111;&#0114;&#0103;?Subject=Re%3A%20Weekly%20github%20digest%20(WebRTC%20WG%20specifications)&amp;In-Reply-To=%3CE1lTp3p-0002Bm-PN%40uranus.w3.org%3E&amp;References=%3CE1lTp3p-0002Bm-PN%40uranus.w3.org%3E">public-webrtc&#x40;&#0119;&#0051;&#0046;&#0111;&#0114;&#0103;</a>
+</span><br />
+<span id="message-id"><dfn>Message-Id</dfn>: &lt;E1lTp3p-0002Bm-PN&#64;uranus.w3.org&gt;
+</span><br />
+</address>
+<pre id="body">
+<a name="start" accesskey="j" id="start"></a>
+
+
+Issues
+------
+* w3c/mediacapture-image (+0/-1/💬0)
+  1 issues closed:
+  - Sanitize PTZ capabilities/settings based on PTZ permission <a href="https://github.com/w3c/mediacapture-image/issues/245">https://github.com/w3c/mediacapture-image/issues/245</a> [PTZ] [September 2020 Interim] 
+
+* w3c/mediacapture-output (+0/-1/💬0)
+  1 issues closed:
+  - Revamp integration with user activation <a href="https://github.com/w3c/mediacapture-output/issues/107">https://github.com/w3c/mediacapture-output/issues/107</a> 
+
+* w3c/mediacapture-screen-share (+1/-0/💬6)
+  1 issues created:
+  - Conditional Suppression of Local Audio Playback from Captured Tab (by eladalon1983)
+    <a href="https://github.com/w3c/mediacapture-screen-share/issues/161">https://github.com/w3c/mediacapture-screen-share/issues/161</a> 
+
+  4 issues received 6 new comments:
+  - #161 Conditional Suppression of Local Audio Playback from Captured Tab (1 by jan-ivar)
+    <a href="https://github.com/w3c/mediacapture-screen-share/issues/161">https://github.com/w3c/mediacapture-screen-share/issues/161</a> 
+  - #160 API for Grabbing a Screenshot (1 by eladalon1983)
+    <a href="https://github.com/w3c/mediacapture-screen-share/issues/160">https://github.com/w3c/mediacapture-screen-share/issues/160</a> 
+  - #158 Add ability to crop a MediaStream obtained through the share-this-tab API (1 by eladalon1983)
+    <a href="https://github.com/w3c/mediacapture-screen-share/issues/158">https://github.com/w3c/mediacapture-screen-share/issues/158</a> 
+  - #155 Let pages opt-in to capture. (3 by camillelamy, eladalon1983, jan-ivar)
+    <a href="https://github.com/w3c/mediacapture-screen-share/issues/155">https://github.com/w3c/mediacapture-screen-share/issues/155</a> 
+
+* w3c/webrtc-extensions (+0/-0/💬1)
+  1 issues received 1 new comments:
+  - #72 Add API to control WebRTC encoder, in particular to request key frame (1 by youennf)
+    <a href="https://github.com/w3c/webrtc-extensions/issues/72">https://github.com/w3c/webrtc-extensions/issues/72</a> 
+
+* w3c/webrtc-encoded-transform (+0/-2/💬2)
+  2 issues received 2 new comments:
+  - #66 Update examples to showcase RTCRtpScriptTransform (1 by youennf)
+    <a href="https://github.com/w3c/webrtc-encoded-transform/issues/66">https://github.com/w3c/webrtc-encoded-transform/issues/66</a> 
+  - #48 Consider using TransformStreams instead of exposing ReadableStream/WritableStream (1 by youennf)
+    <a href="https://github.com/w3c/webrtc-encoded-transform/issues/48">https://github.com/w3c/webrtc-encoded-transform/issues/48</a> 
+
+  2 issues closed:
+  - Consider using TransformStreams instead of exposing ReadableStream/WritableStream <a href="https://github.com/w3c/webrtc-encoded-transform/issues/48">https://github.com/w3c/webrtc-encoded-transform/issues/48</a> 
+  - Update examples to showcase RTCRtpScriptTransform <a href="https://github.com/w3c/webrtc-encoded-transform/issues/66">https://github.com/w3c/webrtc-encoded-transform/issues/66</a> 
+
+* w3c/mediacapture-transform (+0/-0/💬1)
+  1 issues received 1 new comments:
+  - #4 Is using ReadableStream/WritableStream the right approach? (1 by guidou)
+    <a href="https://github.com/w3c/mediacapture-transform/issues/4">https://github.com/w3c/mediacapture-transform/issues/4</a> 
+
+
+
+Pull requests
+-------------
+* w3c/webrtc-pc (+1/-4/💬0)
+  1 pull requests submitted:
+  - Update to latest ReSpec version (by dontcallmedom)
+    <a href="https://github.com/w3c/webrtc-pc/pull/2642">https://github.com/w3c/webrtc-pc/pull/2642</a> 
+
+  4 pull requests merged:
+  - Update to latest ReSpec version
+    <a href="https://github.com/w3c/webrtc-pc/pull/2642">https://github.com/w3c/webrtc-pc/pull/2642</a> [Editorial] 
+  - s/last rtp timestamp/rtp timestamp/
+    <a href="https://github.com/w3c/webrtc-pc/pull/2635">https://github.com/w3c/webrtc-pc/pull/2635</a> [Editorial] 
+  - Update to latest ReSpec version
+    <a href="https://github.com/w3c/webrtc-pc/pull/2634">https://github.com/w3c/webrtc-pc/pull/2634</a> [Editorial] 
+  - Improve markup for events definitions
+    <a href="https://github.com/w3c/webrtc-pc/pull/2595">https://github.com/w3c/webrtc-pc/pull/2595</a> [Editorial] [Editors can integrate] 
+
+* w3c/mediacapture-main (+1/-0/💬0)
+  1 pull requests submitted:
+  - Update to latest ReSpec version (by dontcallmedom)
+    <a href="https://github.com/w3c/mediacapture-main/pull/782">https://github.com/w3c/mediacapture-main/pull/782</a> 
+
+* w3c/mediacapture-image (+0/-2/💬0)
+  2 pull requests merged:
+  - Note that required constraints are not allowed for device selection
+    <a href="https://github.com/w3c/mediacapture-image/pull/267">https://github.com/w3c/mediacapture-image/pull/267</a> [PTZ] 
+  - Allow PTZ support to be always exposed in capabilities
+    <a href="https://github.com/w3c/mediacapture-image/pull/260">https://github.com/w3c/mediacapture-image/pull/260</a> [PTZ] 
+
+* w3c/mediacapture-output (+0/-1/💬0)
+  1 pull requests merged:
+  - Switch to transient activation.
+    <a href="https://github.com/w3c/mediacapture-output/pull/118">https://github.com/w3c/mediacapture-output/pull/118</a> 
+
+* w3c/webrtc-extensions (+0/-0/💬3)
+  1 pull requests received 3 new comments:
+  - #37 Add a requestKeyframe() API (3 by fippo, solmaks, youennf)
+    <a href="https://github.com/w3c/webrtc-extensions/pull/37">https://github.com/w3c/webrtc-extensions/pull/37</a> [Icebox] 
+
+
+Repositories tracked by this digest:
+-----------------------------------
+* <a href="https://github.com/w3c/webrtc-pc">https://github.com/w3c/webrtc-pc</a>
+* <a href="https://github.com/w3c/webrtc-identity">https://github.com/w3c/webrtc-identity</a>
+* <a href="https://github.com/w3c/webrtc-stats">https://github.com/w3c/webrtc-stats</a>
+* <a href="https://github.com/w3c/webrtc-charter">https://github.com/w3c/webrtc-charter</a>
+* <a href="https://github.com/w3c/webrtc-priority">https://github.com/w3c/webrtc-priority</a>
+* <a href="https://github.com/w3c/webrtc-ice">https://github.com/w3c/webrtc-ice</a>
+* <a href="https://github.com/w3c/webrtc-nv-use-cases">https://github.com/w3c/webrtc-nv-use-cases</a>
+* <a href="https://github.com/w3c/mediacapture-main">https://github.com/w3c/mediacapture-main</a>
+* <a href="https://github.com/w3c/mediacapture-record">https://github.com/w3c/mediacapture-record</a>
+* <a href="https://github.com/w3c/mediacapture-image">https://github.com/w3c/mediacapture-image</a>
+* <a href="https://github.com/w3c/mediacapture-depth">https://github.com/w3c/mediacapture-depth</a>
+* <a href="https://github.com/w3c/mediacapture-fromelement">https://github.com/w3c/mediacapture-fromelement</a>
+* <a href="https://github.com/w3c/mediacapture-output">https://github.com/w3c/mediacapture-output</a>
+* <a href="https://github.com/w3c/mediacapture-screen-share">https://github.com/w3c/mediacapture-screen-share</a>
+* <a href="https://github.com/w3c/mst-content-hint">https://github.com/w3c/mst-content-hint</a>
+* <a href="https://github.com/w3c/webrtc-svc">https://github.com/w3c/webrtc-svc</a>
+* <a href="https://github.com/w3c/webrtc-extensions">https://github.com/w3c/webrtc-extensions</a>
+* <a href="https://github.com/w3c/webrtc-provisional-stats">https://github.com/w3c/webrtc-provisional-stats</a>
+* <a href="https://github.com/w3c/webrtc-encoded-transform">https://github.com/w3c/webrtc-encoded-transform</a>
+* <a href="https://github.com/w3c/mediacapture-automation">https://github.com/w3c/mediacapture-automation</a>
+* <a href="https://github.com/w3c/mediacapture-transform">https://github.com/w3c/mediacapture-transform</a>
+* <a href="https://github.com/web-platform-tests/wpt">https://github.com/web-platform-tests/wpt</a>
+
+
+-- 
+Sent via github-notify-ml as configured in <a href="https://github.com/w3c/github-notify-ml-config">https://github.com/w3c/github-notify-ml-config</a>
+</pre>
+<span id="received"><dfn>Received on</dfn> Tuesday,  6 April 2021 17:00:20 UTC</span>
+</div>
+<!-- body="end" -->
+<div class="foot">
+<map id="navbarfoot" name="navbarfoot" title="Related messages">
+<ul class="links">
+<li><dfn>This message</dfn>: [ <a href="#start">Message body</a> ]</li>
+<!-- lnext="start" -->
+<li><dfn>Next message</dfn>: <a href="0007.html" title="Next message in the list">Elad Alon via GitHub: "[mediacapture-screen-share] Pull Request: Define the  suppressLocalAudioPlayback constraint"</a></li>
+<li><dfn>Previous message</dfn>: <a href="0005.html" title="Previous message in the list">Bernard Aboba: "WEBRTC WG Virtual Interim:  April 27, 8 AM Pacific Time"</a></li>
+<!-- lnextthread="start" -->
+<!-- lreply="end" -->
+</ul>
+<ul class="links">
+<li><a name="options3" id="options3"></a><dfn>Mail actions</dfn>: [ <a href="mailto:public-webrtc&#x40;&#0119;&#0051;&#0046;&#0111;&#0114;&#0103;?Subject=Re%3A%20Weekly%20github%20digest%20(WebRTC%20WG%20specifications)&amp;In-Reply-To=%3CE1lTp3p-0002Bm-PN%40uranus.w3.org%3E&amp;References=%3CE1lTp3p-0002Bm-PN%40uranus.w3.org%3E">respond to this message</a> ] [ <a href="mailto:public-webrtc&#x40;&#0119;&#0051;&#0046;&#0111;&#0114;&#0103;">mail a new topic</a> ]</li>
+<li><dfn>Contemporary messages sorted</dfn>: [ <a href="index.html#msg6" title="Contemporary messages by date">by date</a> ] [ <a href="thread.html#msg6" title="Contemporary discussion threads">by thread</a> ] [ <a href="subject.html#msg6" title="Contemporary messages by subject">by subject</a> ] [ <a href="author.html#msg6" title="Contemporary messages by author">by author</a> ]</li>
+<li><dfn>Help</dfn>: [ <a href=
+   "/Help/" accesskey="h" rel="help">How to use the archives</a> ] [ <a href=
+   "https://www.w3.org/Search/Mail/Public/search?type-index=public-webrtc&amp;index-type=t">Search in the archives</a> ]
+</li></ul>
+</map>
+</div>
+<!-- trailer="footer" -->
+<p><small><em>
+This archive was generated by <a href="http://www.hypermail-project.org/">hypermail 2.4.0</a>
+: Tuesday,  6 April 2021 17:00:21 UTC
+</em></small></p>
+</body>
+</html>

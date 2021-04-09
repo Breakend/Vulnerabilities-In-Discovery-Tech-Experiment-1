@@ -1,0 +1,46 @@
+On Tue, Apr 06, 2021 at 07:55:14PM +0800, Huang Guobin wrote:<br>
+><i> From: Guobin Huang <huangguobin4@xxxxxxxxxx></i><br>
+><i> </i><br>
+><i> spinlock can be initialized automatically with DEFINE_SPINLOCK()</i><br>
+><i> rather than explicitly calling spin_lock_init().</i><br>
+><i> </i><br>
+><i> Reported-by: Hulk Robot <hulkci@xxxxxxxxxx></i><br>
+><i> Signed-off-by: Guobin Huang <huangguobin4@xxxxxxxxxx></i><br>
+<br>
+Applied to drm-misc-next, thanks for your patch.<br>
+-Daniel<br>
+<br>
+><i> ---</i><br>
+><i>  drivers/gpu/drm/gma500/power.c | 3 +--</i><br>
+><i>  1 file changed, 1 insertion(+), 2 deletions(-)</i><br>
+><i> </i><br>
+><i> diff --git a/drivers/gpu/drm/gma500/power.c b/drivers/gpu/drm/gma500/power.c</i><br>
+><i> index 56ef88237ef6..f07641dfa5a4 100644</i><br>
+><i> --- a/drivers/gpu/drm/gma500/power.c</i><br>
+><i> +++ b/drivers/gpu/drm/gma500/power.c</i><br>
+><i> @@ -36,7 +36,7 @@</i><br>
+><i>  #include <linux/pm_runtime.h></i><br>
+><i>  </i><br>
+><i>  static struct mutex power_mutex;	/* Serialize power ops */</i><br>
+><i> -static spinlock_t power_ctrl_lock;	/* Serialize power claim */</i><br>
+><i> +static DEFINE_SPINLOCK(power_ctrl_lock);	/* Serialize power claim */</i><br>
+><i>  </i><br>
+><i>  /**</i><br>
+><i>   *	gma_power_init		-	initialise power manager</i><br>
+><i> @@ -55,7 +55,6 @@ void gma_power_init(struct drm_device *dev)</i><br>
+><i>  	dev_priv->display_power = true;	/* We start active */</i><br>
+><i>  	dev_priv->display_count = 0;	/* Currently no users */</i><br>
+><i>  	dev_priv->suspended = false;	/* And not suspended */</i><br>
+><i> -	spin_lock_init(&power_ctrl_lock);</i><br>
+><i>  	mutex_init(&power_mutex);</i><br>
+><i>  </i><br>
+><i>  	if (dev_priv->ops->init_pm)</i><br>
+><i> </i><br>
+<br>
+-- <br>
+Daniel Vetter<br>
+Software Engineer, Intel Corporation<br>
+<a  rel="nofollow" href="http://blog.ffwll.ch">http://blog.ffwll.ch</a><br>
+<br>
+<br>
+

@@ -1,0 +1,31 @@
+On Wed, Apr 07, 2021 at 07:43:44PM +0000, Min Li wrote:<br>
+><i> > </i><br>
+><i> > Why do you need 4 files here?  Can't you do this all in one?  There's no need</i><br>
+><i> > for such a small driver to be split up, that just causes added complexity and</i><br>
+><i> > makes things harder to review and understand.</i><br>
+><i> > </i><br>
+><i> </i><br>
+><i> We will add more functions and boards down the road. So the abstraction here is for future consideration  </i><br>
+<br>
+Do not add additional complexity today for stuff that you do not need<br>
+today.  Add it when you need it.<br>
+<br>
+><i> > >  include/uapi/linux/rsmu.h |  64 +++++++++++</i><br>
+><i> > </i><br>
+><i> > Where are you documenting these new custom ioctls?  And why do you even</i><br>
+><i> > need them?</i><br>
+><i> > </i><br>
+><i> </i><br>
+><i> Other than comments in the header itself, no additional documenting. Do you know if Linux has specific place to document custom ioctls? </i><br>
+><i> Renesas software needs to access these ioctls to provide GNSS assisted partial timing support. More specifically, RSMU_GET_STATE would tell us if a specific DPLL</i><br>
+><i> is locked to GNSS and RSMU_GET_FFO would tell us how much of frequency offset for the DPLL to lock to the GNSS.</i><br>
+<br>
+Please provide some sort of documentation and at the least, a pointer to<br>
+the software that uses this so that we can see how it all ties together.<br>
+<br>
+thanks,<br>
+<br>
+greg k-h<br>
+<br>
+<br>
+

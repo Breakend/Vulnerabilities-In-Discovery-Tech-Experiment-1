@@ -1,0 +1,659 @@
+Use a single ITER_XARRAY iterator to describe the portion of a file to be<br>
+transmitted to the server rather than generating a series of small<br>
+ITER_BVEC iterators on the fly.  This will make it easier to implement AIO<br>
+in afs.<br>
+<br>
+In theory we could maybe use one giant ITER_BVEC, but that means<br>
+potentially allocating a huge array of bio_vec structs (max 256 per page)<br>
+when in fact the pagecache already has a structure listing all the relevant<br>
+pages (radix_tree/xarray) that can be walked over.<br>
+<br>
+Signed-off-by: David Howells <dhowells@xxxxxxxxxx><br>
+cc: linux-afs@xxxxxxxxxxxxxxxxxxx<br>
+cc: linux-cachefs@xxxxxxxxxx<br>
+cc: linux-fsdevel@xxxxxxxxxxxxxxx<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/153685395197.14766.16289516750731233933.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/153685395197.14766.16289516750731233933.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a><br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/158861251312.340223.17924900795425422532.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/158861251312.340223.17924900795425422532.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # rfc<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/159465828607.1377938.6903132788463419368.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/159465828607.1377938.6903132788463419368.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a><br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/160588535018.3465195.14509994354240338307.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/160588535018.3465195.14509994354240338307.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # rfc<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161118152415.1232039.6452879415814850025.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161118152415.1232039.6452879415814850025.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # rfc<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161161048194.2537118.13763612220937637316.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161161048194.2537118.13763612220937637316.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v2<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161340411602.1303470.4661108879482218408.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161340411602.1303470.4661108879482218408.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v3<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161539555629.286939.5241869986617154517.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161539555629.286939.5241869986617154517.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v4<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161653811456.2770958.7017388543246759245.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161653811456.2770958.7017388543246759245.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v5<br>
+---<br>
+<br>
+ fs/afs/fsclient.c          |   50 +++++++++------------<br>
+ fs/afs/internal.h          |   15 +++---<br>
+ fs/afs/rxrpc.c             |  103 ++++++--------------------------------------<br>
+ fs/afs/write.c             |  100 ++++++++++++++++++++++++-------------------<br>
+ fs/afs/yfsclient.c         |   25 +++--------<br>
+ include/trace/events/afs.h |   51 ++++++++--------------<br>
+ 6 files changed, 126 insertions(+), 218 deletions(-)<br>
+<br>
+diff --git a/fs/afs/fsclient.c b/fs/afs/fsclient.c<br>
+index 897b37301851..31e6b3635541 100644<br>
+--- a/fs/afs/fsclient.c<br>
++++ b/fs/afs/fsclient.c<br>
+@@ -1055,8 +1055,7 @@ static const struct afs_call_type afs_RXFSStoreData64 = {<br>
+ /*<br>
+  * store a set of pages to a very large file<br>
+  */<br>
+-static void afs_fs_store_data64(struct afs_operation *op,<br>
+-				loff_t pos, loff_t size, loff_t i_size)<br>
++static void afs_fs_store_data64(struct afs_operation *op)<br>
+ {<br>
+ 	struct afs_vnode_param *vp = &op->file[0];<br>
+ 	struct afs_call *call;<br>
+@@ -1071,7 +1070,7 @@ static void afs_fs_store_data64(struct afs_operation *op,<br>
+ 	if (!call)<br>
+ 		return afs_op_nomem(op);<br>
+ <br>
+-	call->send_pages = true;<br>
++	call->write_iter = op->store.write_iter;<br>
+ <br>
+ 	/* marshall the parameters */<br>
+ 	bp = call->request;<br>
+@@ -1087,47 +1086,38 @@ static void afs_fs_store_data64(struct afs_operation *op,<br>
+ 	*bp++ = 0; /* unix mode */<br>
+ 	*bp++ = 0; /* segment size */<br>
+ <br>
+-	*bp++ = htonl(upper_32_bits(pos));<br>
+-	*bp++ = htonl(lower_32_bits(pos));<br>
+-	*bp++ = htonl(upper_32_bits(size));<br>
+-	*bp++ = htonl(lower_32_bits(size));<br>
+-	*bp++ = htonl(upper_32_bits(i_size));<br>
+-	*bp++ = htonl(lower_32_bits(i_size));<br>
++	*bp++ = htonl(upper_32_bits(op->store.pos));<br>
++	*bp++ = htonl(lower_32_bits(op->store.pos));<br>
++	*bp++ = htonl(upper_32_bits(op->store.size));<br>
++	*bp++ = htonl(lower_32_bits(op->store.size));<br>
++	*bp++ = htonl(upper_32_bits(op->store.i_size));<br>
++	*bp++ = htonl(lower_32_bits(op->store.i_size));<br>
+ <br>
+ 	trace_afs_make_fs_call(call, &vp->fid);<br>
+ 	afs_make_op_call(op, call, GFP_NOFS);<br>
+ }<br>
+ <br>
+ /*<br>
+- * store a set of pages<br>
++ * Write data to a file on the server.<br>
+  */<br>
+ void afs_fs_store_data(struct afs_operation *op)<br>
+ {<br>
+ 	struct afs_vnode_param *vp = &op->file[0];<br>
+ 	struct afs_call *call;<br>
+-	loff_t size, pos, i_size;<br>
+ 	__be32 *bp;<br>
+ <br>
+ 	_enter(",%x,{%llx:%llu},,",<br>
+ 	       key_serial(op->key), vp->fid.vid, vp->fid.vnode);<br>
+ <br>
+-	size = (loff_t)op->store.last_to - (loff_t)op->store.first_offset;<br>
+-	if (op->store.first != op->store.last)<br>
+-		size += (loff_t)(op->store.last - op->store.first) << PAGE_SHIFT;<br>
+-	pos = (loff_t)op->store.first << PAGE_SHIFT;<br>
+-	pos += op->store.first_offset;<br>
+-<br>
+-	i_size = i_size_read(&vp->vnode->vfs_inode);<br>
+-	if (pos + size > i_size)<br>
+-		i_size = size + pos;<br>
+-<br>
+ 	_debug("size %llx, at %llx, i_size %llx",<br>
+-	       (unsigned long long) size, (unsigned long long) pos,<br>
+-	       (unsigned long long) i_size);<br>
++	       (unsigned long long)op->store.size,<br>
++	       (unsigned long long)op->store.pos,<br>
++	       (unsigned long long)op->store.i_size);<br>
+ <br>
+-	if (upper_32_bits(pos) || upper_32_bits(i_size) || upper_32_bits(size) ||<br>
+-	    upper_32_bits(pos + size))<br>
+-		return afs_fs_store_data64(op, pos, size, i_size);<br>
++	if (upper_32_bits(op->store.pos) ||<br>
++	    upper_32_bits(op->store.size) ||<br>
++	    upper_32_bits(op->store.i_size))<br>
++		return afs_fs_store_data64(op);<br>
+ <br>
+ 	call = afs_alloc_flat_call(op->net, &afs_RXFSStoreData,<br>
+ 				   (4 + 6 + 3) * 4,<br>
+@@ -1135,7 +1125,7 @@ void afs_fs_store_data(struct afs_operation *op)<br>
+ 	if (!call)<br>
+ 		return afs_op_nomem(op);<br>
+ <br>
+-	call->send_pages = true;<br>
++	call->write_iter = op->store.write_iter;<br>
+ <br>
+ 	/* marshall the parameters */<br>
+ 	bp = call->request;<br>
+@@ -1151,9 +1141,9 @@ void afs_fs_store_data(struct afs_operation *op)<br>
+ 	*bp++ = 0; /* unix mode */<br>
+ 	*bp++ = 0; /* segment size */<br>
+ <br>
+-	*bp++ = htonl(lower_32_bits(pos));<br>
+-	*bp++ = htonl(lower_32_bits(size));<br>
+-	*bp++ = htonl(lower_32_bits(i_size));<br>
++	*bp++ = htonl(lower_32_bits(op->store.pos));<br>
++	*bp++ = htonl(lower_32_bits(op->store.size));<br>
++	*bp++ = htonl(lower_32_bits(op->store.i_size));<br>
+ <br>
+ 	trace_afs_make_fs_call(call, &vp->fid);<br>
+ 	afs_make_op_call(op, call, GFP_NOFS);<br>
+diff --git a/fs/afs/internal.h b/fs/afs/internal.h<br>
+index 83f9f5a540e5..16020725cc68 100644<br>
+--- a/fs/afs/internal.h<br>
++++ b/fs/afs/internal.h<br>
+@@ -107,6 +107,7 @@ struct afs_call {<br>
+ 	void			*request;	/* request data (first part) */<br>
+ 	size_t			iov_len;	/* Size of *iter to be used */<br>
+ 	struct iov_iter		def_iter;	/* Default buffer/data iterator */<br>
++	struct iov_iter		*write_iter;	/* Iterator defining write to be made */<br>
+ 	struct iov_iter		*iter;		/* Iterator currently in use */<br>
+ 	union {	/* Convenience for ->def_iter */<br>
+ 		struct kvec	kvec[1];<br>
+@@ -133,7 +134,6 @@ struct afs_call {<br>
+ 	unsigned char		unmarshall;	/* unmarshalling phase */<br>
+ 	unsigned char		addr_ix;	/* Address in ->alist */<br>
+ 	bool			drop_ref;	/* T if need to drop ref for incoming call */<br>
+-	bool			send_pages;	/* T if data from mapping should be sent */<br>
+ 	bool			need_attention;	/* T if RxRPC poked us */<br>
+ 	bool			async;		/* T if asynchronous */<br>
+ 	bool			upgrade;	/* T to request service upgrade */<br>
+@@ -811,12 +811,13 @@ struct afs_operation {<br>
+ 			afs_lock_type_t type;<br>
+ 		} lock;<br>
+ 		struct {<br>
+-			struct address_space *mapping;	/* Pages being written from */<br>
+-			pgoff_t		first;		/* first page in mapping to deal with */<br>
+-			pgoff_t		last;		/* last page in mapping to deal with */<br>
+-			unsigned	first_offset;	/* offset into mapping[first] */<br>
+-			unsigned	last_to;	/* amount of mapping[last] */<br>
+-			bool		laundering;	/* Laundering page, PG_writeback not set */<br>
++			struct iov_iter	*write_iter;<br>
++			loff_t	pos;<br>
++			loff_t	size;<br>
++			loff_t	i_size;<br>
++			pgoff_t	first;		/* first page in mapping to deal with */<br>
++			pgoff_t	last;		/* last page in mapping to deal with */<br>
++			bool	laundering;	/* Laundering page, PG_writeback not set */<br>
+ 		} store;<br>
+ 		struct {<br>
+ 			struct iattr	*attr;<br>
+diff --git a/fs/afs/rxrpc.c b/fs/afs/rxrpc.c<br>
+index ae68576f822f..23a1a92d64bb 100644<br>
+--- a/fs/afs/rxrpc.c<br>
++++ b/fs/afs/rxrpc.c<br>
+@@ -271,40 +271,6 @@ void afs_flat_call_destructor(struct afs_call *call)<br>
+ 	call->buffer = NULL;<br>
+ }<br>
+ <br>
+-#define AFS_BVEC_MAX 8<br>
+-<br>
+-/*<br>
+- * Load the given bvec with the next few pages.<br>
+- */<br>
+-static void afs_load_bvec(struct afs_call *call, struct msghdr *msg,<br>
+-			  struct bio_vec *bv, pgoff_t first, pgoff_t last,<br>
+-			  unsigned offset)<br>
+-{<br>
+-	struct afs_operation *op = call->op;<br>
+-	struct page *pages[AFS_BVEC_MAX];<br>
+-	unsigned int nr, n, i, to, bytes = 0;<br>
+-<br>
+-	nr = min_t(pgoff_t, last - first + 1, AFS_BVEC_MAX);<br>
+-	n = find_get_pages_contig(op->store.mapping, first, nr, pages);<br>
+-	ASSERTCMP(n, ==, nr);<br>
+-<br>
+-	msg->msg_flags |= MSG_MORE;<br>
+-	for (i = 0; i < nr; i++) {<br>
+-		to = PAGE_SIZE;<br>
+-		if (first + i >= last) {<br>
+-			to = op->store.last_to;<br>
+-			msg->msg_flags &= ~MSG_MORE;<br>
+-		}<br>
+-		bv[i].bv_page = pages[i];<br>
+-		bv[i].bv_len = to - offset;<br>
+-		bv[i].bv_offset = offset;<br>
+-		bytes += to - offset;<br>
+-		offset = 0;<br>
+-	}<br>
+-<br>
+-	iov_iter_bvec(&msg->msg_iter, WRITE, bv, nr, bytes);<br>
+-}<br>
+-<br>
+ /*<br>
+  * Advance the AFS call state when the RxRPC call ends the transmit phase.<br>
+  */<br>
+@@ -317,42 +283,6 @@ static void afs_notify_end_request_tx(struct sock *sock,<br>
+ 	afs_set_call_state(call, AFS_CALL_CL_REQUESTING, AFS_CALL_CL_AWAIT_REPLY);<br>
+ }<br>
+ <br>
+-/*<br>
+- * attach the data from a bunch of pages on an inode to a call<br>
+- */<br>
+-static int afs_send_pages(struct afs_call *call, struct msghdr *msg)<br>
+-{<br>
+-	struct afs_operation *op = call->op;<br>
+-	struct bio_vec bv[AFS_BVEC_MAX];<br>
+-	unsigned int bytes, nr, loop, offset;<br>
+-	pgoff_t first = op->store.first, last = op->store.last;<br>
+-	int ret;<br>
+-<br>
+-	offset = op->store.first_offset;<br>
+-	op->store.first_offset = 0;<br>
+-<br>
+-	do {<br>
+-		afs_load_bvec(call, msg, bv, first, last, offset);<br>
+-		trace_afs_send_pages(call, msg, first, last, offset);<br>
+-<br>
+-		offset = 0;<br>
+-		bytes = msg->msg_iter.count;<br>
+-		nr = msg->msg_iter.nr_segs;<br>
+-<br>
+-		ret = rxrpc_kernel_send_data(op->net->socket, call->rxcall, msg,<br>
+-					     bytes, afs_notify_end_request_tx);<br>
+-		for (loop = 0; loop < nr; loop++)<br>
+-			put_page(bv[loop].bv_page);<br>
+-		if (ret < 0)<br>
+-			break;<br>
+-<br>
+-		first += nr;<br>
+-	} while (first <= last);<br>
+-<br>
+-	trace_afs_sent_pages(call, op->store.first, last, first, ret);<br>
+-	return ret;<br>
+-}<br>
+-<br>
+ /*<br>
+  * Initiate a call and synchronously queue up the parameters for dispatch.  Any<br>
+  * error is stored into the call struct, which the caller must check for.<br>
+@@ -384,21 +314,8 @@ void afs_make_call(struct afs_addr_cursor *ac, struct afs_call *call, gfp_t gfp)<br>
+ 	 * after the initial fixed part.<br>
+ 	 */<br>
+ 	tx_total_len = call->request_size;<br>
+-	if (call->send_pages) {<br>
+-		struct afs_operation *op = call->op;<br>
+-<br>
+-		if (op->store.last == op->store.first) {<br>
+-			tx_total_len += op->store.last_to - op->store.first_offset;<br>
+-		} else {<br>
+-			/* It looks mathematically like you should be able to<br>
+-			 * combine the following lines with the ones above, but<br>
+-			 * unsigned arithmetic is fun when it wraps...<br>
+-			 */<br>
+-			tx_total_len += PAGE_SIZE - op->store.first_offset;<br>
+-			tx_total_len += op->store.last_to;<br>
+-			tx_total_len += (op->store.last - op->store.first - 1) * PAGE_SIZE;<br>
+-		}<br>
+-	}<br>
++	if (call->write_iter)<br>
++		tx_total_len += iov_iter_count(call->write_iter);<br>
+ <br>
+ 	/* If the call is going to be asynchronous, we need an extra ref for<br>
+ 	 * the call to hold itself so the caller need not hang on to its ref.<br>
+@@ -440,7 +357,7 @@ void afs_make_call(struct afs_addr_cursor *ac, struct afs_call *call, gfp_t gfp)<br>
+ 	iov_iter_kvec(&msg.msg_iter, WRITE, iov, 1, call->request_size);<br>
+ 	msg.msg_control		= NULL;<br>
+ 	msg.msg_controllen	= 0;<br>
+-	msg.msg_flags		= MSG_WAITALL | (call->send_pages ? MSG_MORE : 0);<br>
++	msg.msg_flags		= MSG_WAITALL | (call->write_iter ? MSG_MORE : 0);<br>
+ <br>
+ 	ret = rxrpc_kernel_send_data(call->net->socket, rxcall,<br>
+ 				     &msg, call->request_size,<br>
+@@ -448,8 +365,18 @@ void afs_make_call(struct afs_addr_cursor *ac, struct afs_call *call, gfp_t gfp)<br>
+ 	if (ret < 0)<br>
+ 		goto error_do_abort;<br>
+ <br>
+-	if (call->send_pages) {<br>
+-		ret = afs_send_pages(call, &msg);<br>
++	if (call->write_iter) {<br>
++		msg.msg_iter = *call->write_iter;<br>
++		msg.msg_flags &= ~MSG_MORE;<br>
++		trace_afs_send_data(call, &msg);<br>
++<br>
++		ret = rxrpc_kernel_send_data(call->net->socket,<br>
++					     call->rxcall, &msg,<br>
++					     iov_iter_count(&msg.msg_iter),<br>
++					     afs_notify_end_request_tx);<br>
++		*call->write_iter = msg.msg_iter;<br>
++<br>
++		trace_afs_sent_data(call, &msg, ret);<br>
+ 		if (ret < 0)<br>
+ 			goto error_do_abort;<br>
+ 	}<br>
+diff --git a/fs/afs/write.c b/fs/afs/write.c<br>
+index cb24f849e592..6e41b982c71b 100644<br>
+--- a/fs/afs/write.c<br>
++++ b/fs/afs/write.c<br>
+@@ -325,36 +325,27 @@ static void afs_redirty_pages(struct writeback_control *wbc,<br>
+ /*<br>
+  * completion of write to server<br>
+  */<br>
+-static void afs_pages_written_back(struct afs_vnode *vnode,<br>
+-				   pgoff_t first, pgoff_t last)<br>
++static void afs_pages_written_back(struct afs_vnode *vnode, pgoff_t start, pgoff_t last)<br>
+ {<br>
+-	struct pagevec pv;<br>
+-	unsigned count, loop;<br>
++	struct address_space *mapping = vnode->vfs_inode.i_mapping;<br>
++	struct page *page;<br>
++<br>
++	XA_STATE(xas, &mapping->i_pages, start);<br>
+ <br>
+ 	_enter("{%llx:%llu},{%lx-%lx}",<br>
+-	       vnode->fid.vid, vnode->fid.vnode, first, last);<br>
++	       vnode->fid.vid, vnode->fid.vnode, start, last);<br>
+ <br>
+-	pagevec_init(&pv);<br>
++	rcu_read_lock();<br>
+ <br>
+-	do {<br>
+-		_debug("done %lx-%lx", first, last);<br>
++	xas_for_each(&xas, page, last) {<br>
++		ASSERT(PageWriteback(page));<br>
+ <br>
+-		count = last - first + 1;<br>
+-		if (count > PAGEVEC_SIZE)<br>
+-			count = PAGEVEC_SIZE;<br>
+-		pv.nr = find_get_pages_contig(vnode->vfs_inode.i_mapping,<br>
+-					      first, count, pv.pages);<br>
+-		ASSERTCMP(pv.nr, ==, count);<br>
++		detach_page_private(page);<br>
++		trace_afs_page_dirty(vnode, tracepoint_string("clear"), page);<br>
++		page_endio(page, true, 0);<br>
++	}<br>
+ <br>
+-		for (loop = 0; loop < count; loop++) {<br>
+-			detach_page_private(pv.pages[loop]);<br>
+-			trace_afs_page_dirty(vnode, tracepoint_string("clear"),<br>
+-					     pv.pages[loop]);<br>
+-			end_page_writeback(pv.pages[loop]);<br>
+-		}<br>
+-		first += count;<br>
+-		__pagevec_release(&pv);<br>
+-	} while (first <= last);<br>
++	rcu_read_unlock();<br>
+ <br>
+ 	afs_prune_wb_keys(vnode);<br>
+ 	_leave("");<br>
+@@ -411,9 +402,7 @@ static void afs_store_data_success(struct afs_operation *op)<br>
+ 		if (!op->store.laundering)<br>
+ 			afs_pages_written_back(vnode, op->store.first, op->store.last);<br>
+ 		afs_stat_v(vnode, n_stores);<br>
+-		atomic_long_add((op->store.last * PAGE_SIZE + op->store.last_to) -<br>
+-				(op->store.first * PAGE_SIZE + op->store.first_offset),<br>
+-				&afs_v2net(vnode)->n_store_bytes);<br>
++		atomic_long_add(op->store.size, &afs_v2net(vnode)->n_store_bytes);<br>
+ 	}<br>
+ }<br>
+ <br>
+@@ -426,21 +415,21 @@ static const struct afs_operation_ops afs_store_data_operation = {<br>
+ /*<br>
+  * write to a file<br>
+  */<br>
+-static int afs_store_data(struct address_space *mapping,<br>
+-			  pgoff_t first, pgoff_t last,<br>
+-			  unsigned offset, unsigned to, bool laundering)<br>
++static int afs_store_data(struct afs_vnode *vnode, struct iov_iter *iter,<br>
++			  loff_t pos, pgoff_t first, pgoff_t last,<br>
++			  bool laundering)<br>
+ {<br>
+-	struct afs_vnode *vnode = AFS_FS_I(mapping->host);<br>
+ 	struct afs_operation *op;<br>
+ 	struct afs_wb_key *wbk = NULL;<br>
+-	int ret;<br>
++	loff_t size = iov_iter_count(iter), i_size;<br>
++	int ret = -ENOKEY;<br>
+ <br>
+-	_enter("%s{%llx:%llu.%u},%lx,%lx,%x,%x",<br>
++	_enter("%s{%llx:%llu.%u},%llx,%llx",<br>
+ 	       vnode->volume->name,<br>
+ 	       vnode->fid.vid,<br>
+ 	       vnode->fid.vnode,<br>
+ 	       vnode->fid.unique,<br>
+-	       first, last, offset, to);<br>
++	       size, pos);<br>
+ <br>
+ 	ret = afs_get_writeback_key(vnode, &wbk);<br>
+ 	if (ret) {<br>
+@@ -454,13 +443,16 @@ static int afs_store_data(struct address_space *mapping,<br>
+ 		return -ENOMEM;<br>
+ 	}<br>
+ <br>
++	i_size = i_size_read(&vnode->vfs_inode);<br>
++<br>
+ 	afs_op_set_vnode(op, 0, vnode);<br>
+ 	op->file[0].dv_delta = 1;<br>
+-	op->store.mapping = mapping;<br>
++	op->store.write_iter = iter;<br>
++	op->store.pos = pos;<br>
+ 	op->store.first = first;<br>
+ 	op->store.last = last;<br>
+-	op->store.first_offset = offset;<br>
+-	op->store.last_to = to;<br>
++	op->store.size = size;<br>
++	op->store.i_size = max(pos + size, i_size);<br>
+ 	op->store.laundering = laundering;<br>
+ 	op->mtime = vnode->vfs_inode.i_mtime;<br>
+ 	op->flags |= AFS_OPERATION_UNINTR;<br>
+@@ -503,11 +495,12 @@ static int afs_write_back_from_locked_page(struct address_space *mapping,<br>
+ 					   pgoff_t final_page)<br>
+ {<br>
+ 	struct afs_vnode *vnode = AFS_FS_I(mapping->host);<br>
++	struct iov_iter iter;<br>
+ 	struct page *pages[8], *page;<br>
+ 	unsigned long count, priv;<br>
+ 	unsigned n, offset, to, f, t;<br>
+ 	pgoff_t start, first, last;<br>
+-	loff_t i_size, end;<br>
++	loff_t i_size, pos, end;<br>
+ 	int loop, ret;<br>
+ <br>
+ 	_enter(",%lx", primary_page->index);<br>
+@@ -604,15 +597,28 @@ static int afs_write_back_from_locked_page(struct address_space *mapping,<br>
+ <br>
+ 	first = primary_page->index;<br>
+ 	last = first + count - 1;<br>
++	_debug("write back %lx[%u..] to %lx[..%u]", first, offset, last, to);<br>
+ <br>
+-	end = (loff_t)last * PAGE_SIZE + to;<br>
+-	i_size = i_size_read(&vnode->vfs_inode);<br>
++	pos = first;<br>
++	pos <<= PAGE_SHIFT;<br>
++	pos += offset;<br>
++	end = last;<br>
++	end <<= PAGE_SHIFT;<br>
++	end += to;<br>
+ <br>
+-	_debug("write back %lx[%u..] to %lx[..%u]", first, offset, last, to);<br>
++	/* Trim the actual write down to the EOF */<br>
++	i_size = i_size_read(&vnode->vfs_inode);<br>
+ 	if (end > i_size)<br>
+-		to = i_size & ~PAGE_MASK;<br>
++		end = i_size;<br>
++<br>
++	if (pos < i_size) {<br>
++		iov_iter_xarray(&iter, WRITE, &mapping->i_pages, pos, end - pos);<br>
++		ret = afs_store_data(vnode, &iter, pos, first, last, false);<br>
++	} else {<br>
++		/* The dirty region was entirely beyond the EOF. */<br>
++		ret = 0;<br>
++	}<br>
+ <br>
+-	ret = afs_store_data(mapping, first, last, offset, to, false);<br>
+ 	switch (ret) {<br>
+ 	case 0:<br>
+ 		ret = count;<br>
+@@ -912,6 +918,8 @@ int afs_launder_page(struct page *page)<br>
+ {<br>
+ 	struct address_space *mapping = page->mapping;<br>
+ 	struct afs_vnode *vnode = AFS_FS_I(mapping->host);<br>
++	struct iov_iter iter;<br>
++	struct bio_vec bv[1];<br>
+ 	unsigned long priv;<br>
+ 	unsigned int f, t;<br>
+ 	int ret = 0;<br>
+@@ -927,8 +935,14 @@ int afs_launder_page(struct page *page)<br>
+ 			t = afs_page_dirty_to(page, priv);<br>
+ 		}<br>
+ <br>
++		bv[0].bv_page = page;<br>
++		bv[0].bv_offset = f;<br>
++		bv[0].bv_len = t - f;<br>
++		iov_iter_bvec(&iter, WRITE, bv, 1, bv[0].bv_len);<br>
++<br>
+ 		trace_afs_page_dirty(vnode, tracepoint_string("launder"), page);<br>
+-		ret = afs_store_data(mapping, page->index, page->index, t, f, true);<br>
++		ret = afs_store_data(vnode, &iter, (loff_t)page->index << PAGE_SHIFT,<br>
++				     page->index, page->index, true);<br>
+ 	}<br>
+ <br>
+ 	detach_page_private(page);<br>
+diff --git a/fs/afs/yfsclient.c b/fs/afs/yfsclient.c<br>
+index abcec145db4b..363d6dd276c0 100644<br>
+--- a/fs/afs/yfsclient.c<br>
++++ b/fs/afs/yfsclient.c<br>
+@@ -1078,25 +1078,15 @@ void yfs_fs_store_data(struct afs_operation *op)<br>
+ {<br>
+ 	struct afs_vnode_param *vp = &op->file[0];<br>
+ 	struct afs_call *call;<br>
+-	loff_t size, pos, i_size;<br>
+ 	__be32 *bp;<br>
+ <br>
+ 	_enter(",%x,{%llx:%llu},,",<br>
+ 	       key_serial(op->key), vp->fid.vid, vp->fid.vnode);<br>
+ <br>
+-	size = (loff_t)op->store.last_to - (loff_t)op->store.first_offset;<br>
+-	if (op->store.first != op->store.last)<br>
+-		size += (loff_t)(op->store.last - op->store.first) << PAGE_SHIFT;<br>
+-	pos = (loff_t)op->store.first << PAGE_SHIFT;<br>
+-	pos += op->store.first_offset;<br>
+-<br>
+-	i_size = i_size_read(&vp->vnode->vfs_inode);<br>
+-	if (pos + size > i_size)<br>
+-		i_size = size + pos;<br>
+-<br>
+ 	_debug("size %llx, at %llx, i_size %llx",<br>
+-	       (unsigned long long)size, (unsigned long long)pos,<br>
+-	       (unsigned long long)i_size);<br>
++	       (unsigned long long)op->store.size,<br>
++	       (unsigned long long)op->store.pos,<br>
++	       (unsigned long long)op->store.i_size);<br>
+ <br>
+ 	call = afs_alloc_flat_call(op->net, &yfs_RXYFSStoreData64,<br>
+ 				   sizeof(__be32) +<br>
+@@ -1109,8 +1099,7 @@ void yfs_fs_store_data(struct afs_operation *op)<br>
+ 	if (!call)<br>
+ 		return afs_op_nomem(op);<br>
+ <br>
+-	call->key = op->key;<br>
+-	call->send_pages = true;<br>
++	call->write_iter = op->store.write_iter;<br>
+ <br>
+ 	/* marshall the parameters */<br>
+ 	bp = call->request;<br>
+@@ -1118,9 +1107,9 @@ void yfs_fs_store_data(struct afs_operation *op)<br>
+ 	bp = xdr_encode_u32(bp, 0); /* RPC flags */<br>
+ 	bp = xdr_encode_YFSFid(bp, &vp->fid);<br>
+ 	bp = xdr_encode_YFSStoreStatus_mtime(bp, &op->mtime);<br>
+-	bp = xdr_encode_u64(bp, pos);<br>
+-	bp = xdr_encode_u64(bp, size);<br>
+-	bp = xdr_encode_u64(bp, i_size);<br>
++	bp = xdr_encode_u64(bp, op->store.pos);<br>
++	bp = xdr_encode_u64(bp, op->store.size);<br>
++	bp = xdr_encode_u64(bp, op->store.i_size);<br>
+ 	yfs_check_req(call, bp);<br>
+ <br>
+ 	trace_afs_make_fs_call(call, &vp->fid);<br>
+diff --git a/include/trace/events/afs.h b/include/trace/events/afs.h<br>
+index 9203cf6a8c53..3ccf591b2374 100644<br>
+--- a/include/trace/events/afs.h<br>
++++ b/include/trace/events/afs.h<br>
+@@ -886,65 +886,52 @@ TRACE_EVENT(afs_call_done,<br>
+ 		      __entry->rx_call)<br>
+ 	    );<br>
+ <br>
+-TRACE_EVENT(afs_send_pages,<br>
+-	    TP_PROTO(struct afs_call *call, struct msghdr *msg,<br>
+-		     pgoff_t first, pgoff_t last, unsigned int offset),<br>
++TRACE_EVENT(afs_send_data,<br>
++	    TP_PROTO(struct afs_call *call, struct msghdr *msg),<br>
+ <br>
+-	    TP_ARGS(call, msg, first, last, offset),<br>
++	    TP_ARGS(call, msg),<br>
+ <br>
+ 	    TP_STRUCT__entry(<br>
+ 		    __field(unsigned int,		call		)<br>
+-		    __field(pgoff_t,			first		)<br>
+-		    __field(pgoff_t,			last		)<br>
+-		    __field(unsigned int,		nr		)<br>
+-		    __field(unsigned int,		bytes		)<br>
+-		    __field(unsigned int,		offset		)<br>
+ 		    __field(unsigned int,		flags		)<br>
++		    __field(loff_t,			offset		)<br>
++		    __field(loff_t,			count		)<br>
+ 			     ),<br>
+ <br>
+ 	    TP_fast_assign(<br>
+ 		    __entry->call = call->debug_id;<br>
+-		    __entry->first = first;<br>
+-		    __entry->last = last;<br>
+-		    __entry->nr = msg->msg_iter.nr_segs;<br>
+-		    __entry->bytes = msg->msg_iter.count;<br>
+-		    __entry->offset = offset;<br>
+ 		    __entry->flags = msg->msg_flags;<br>
++		    __entry->offset = msg->msg_iter.xarray_start + msg->msg_iter.iov_offset;<br>
++		    __entry->count = iov_iter_count(&msg->msg_iter);<br>
+ 			   ),<br>
+ <br>
+-	    TP_printk(" c=%08x %lx-%lx-%lx b=%x o=%x f=%x",<br>
+-		      __entry->call,<br>
+-		      __entry->first, __entry->first + __entry->nr - 1, __entry->last,<br>
+-		      __entry->bytes, __entry->offset,<br>
++	    TP_printk(" c=%08x o=%llx n=%llx f=%x",<br>
++		      __entry->call, __entry->offset, __entry->count,<br>
+ 		      __entry->flags)<br>
+ 	    );<br>
+ <br>
+-TRACE_EVENT(afs_sent_pages,<br>
+-	    TP_PROTO(struct afs_call *call, pgoff_t first, pgoff_t last,<br>
+-		     pgoff_t cursor, int ret),<br>
++TRACE_EVENT(afs_sent_data,<br>
++	    TP_PROTO(struct afs_call *call, struct msghdr *msg, int ret),<br>
+ <br>
+-	    TP_ARGS(call, first, last, cursor, ret),<br>
++	    TP_ARGS(call, msg, ret),<br>
+ <br>
+ 	    TP_STRUCT__entry(<br>
+ 		    __field(unsigned int,		call		)<br>
+-		    __field(pgoff_t,			first		)<br>
+-		    __field(pgoff_t,			last		)<br>
+-		    __field(pgoff_t,			cursor		)<br>
+ 		    __field(int,			ret		)<br>
++		    __field(loff_t,			offset		)<br>
++		    __field(loff_t,			count		)<br>
+ 			     ),<br>
+ <br>
+ 	    TP_fast_assign(<br>
+ 		    __entry->call = call->debug_id;<br>
+-		    __entry->first = first;<br>
+-		    __entry->last = last;<br>
+-		    __entry->cursor = cursor;<br>
+ 		    __entry->ret = ret;<br>
++		    __entry->offset = msg->msg_iter.xarray_start + msg->msg_iter.iov_offset;<br>
++		    __entry->count = iov_iter_count(&msg->msg_iter);<br>
+ 			   ),<br>
+ <br>
+-	    TP_printk(" c=%08x %lx-%lx c=%lx r=%d",<br>
+-		      __entry->call,<br>
+-		      __entry->first, __entry->last,<br>
+-		      __entry->cursor, __entry->ret)<br>
++	    TP_printk(" c=%08x o=%llx n=%llx r=%x",<br>
++		      __entry->call, __entry->offset, __entry->count,<br>
++		      __entry->ret)<br>
+ 	    );<br>
+ <br>
+ TRACE_EVENT(afs_dir_check_failed,<br>
+<br>
+<br>
+<br>
+

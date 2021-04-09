@@ -1,0 +1,32 @@
+On Wed, 7 Apr 2021 15:26:19 -0700<br>
+Ben Widawsky <ben.widawsky@xxxxxxxxx> wrote:<br>
+<br>
+><i> Trivial cleanup.</i><br>
+<br>
+Obviously correct :)<br>
+<br>
+><i> </i><br>
+><i> Signed-off-by: Ben Widawsky <ben.widawsky@xxxxxxxxx></i><br>
+FWIW<br>
+Acked-by: Jonathan Cameron <Jonathan.Cameron@xxxxxxxxxx><br>
+<br>
+><i> ---</i><br>
+><i>  drivers/cxl/mem.c | 2 +-</i><br>
+><i>  1 file changed, 1 insertion(+), 1 deletion(-)</i><br>
+><i> </i><br>
+><i> diff --git a/drivers/cxl/mem.c b/drivers/cxl/mem.c</i><br>
+><i> index b6fe4e81d38a..99534260034e 100644</i><br>
+><i> --- a/drivers/cxl/mem.c</i><br>
+><i> +++ b/drivers/cxl/mem.c</i><br>
+><i> @@ -935,7 +935,7 @@ static struct cxl_mem *cxl_mem_create(struct pci_dev *pdev, u32 reg_lo,</i><br>
+><i>  	u8 bar;</i><br>
+><i>  	int rc;</i><br>
+><i>  </i><br>
+><i> -	cxlm = devm_kzalloc(&pdev->dev, sizeof(*cxlm), GFP_KERNEL);</i><br>
+><i> +	cxlm = devm_kzalloc(dev, sizeof(*cxlm), GFP_KERNEL);</i><br>
+><i>  	if (!cxlm) {</i><br>
+><i>  		dev_err(dev, "No memory available\n");</i><br>
+><i>  		return NULL;</i><br>
+<br>
+<br>
+

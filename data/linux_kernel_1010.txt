@@ -1,0 +1,46 @@
+Hi Paolo,<br>
+<br>
+On Thu, Apr 08, 2021 at 10:15:16AM +0200, Paolo Bonzini wrote:<br>
+><i> On 07/04/21 19:40, Marcelo Tosatti wrote:</i><br>
+><i> > > diff --git a/arch/x86/kvm/x86.c b/arch/x86/kvm/x86.c</i><br>
+><i> > > index fe806e894212..0a83eff40b43 100644</i><br>
+><i> > > --- a/arch/x86/kvm/x86.c</i><br>
+><i> > > +++ b/arch/x86/kvm/x86.c</i><br>
+><i> > > @@ -2562,10 +2562,12 @@ static void kvm_gen_update_masterclock(struct kvm *kvm)</i><br>
+><i> > >   	kvm_hv_invalidate_tsc_page(kvm);</i><br>
+><i> > > -	spin_lock(&ka->pvclock_gtod_sync_lock);</i><br>
+><i> > >   	kvm_make_mclock_inprogress_request(kvm);</i><br>
+><i> > > +</i><br>
+><i> > Might be good to serialize against two kvm_gen_update_masterclock</i><br>
+><i> > callers? Otherwise one caller could clear KVM_REQ_MCLOCK_INPROGRESS,</i><br>
+><i> > while the other is still at pvclock_update_vm_gtod_copy().</i><br>
+><i> </i><br>
+><i> Makes sense, but this stuff has always seemed unnecessarily complicated to</i><br>
+><i> me.</i><br>
+><i></i><br>
+><i> KVM_REQ_MCLOCK_INPROGRESS is only needed to kick running vCPUs out of the</i><br>
+><i> execution loop; </i><br>
+<br>
+We do not want vcpus with different system_timestamp/tsc_timestamp<br>
+pair:<br>
+<br>
+ * To avoid that problem, do not allow visibility of distinct<br>
+ * system_timestamp/tsc_timestamp values simultaneously: use a master<br>
+ * copy of host monotonic time values. Update that master copy<br>
+ * in lockstep.<br>
+<br>
+So KVM_REQ_MCLOCK_INPROGRESS also ensures that no vcpu enters <br>
+guest mode (via vcpu->requests check before VM-entry) with a <br>
+different system_timestamp/tsc_timestamp pair.<br>
+<br>
+><i> clearing it in kvm_gen_update_masterclock is unnecessary,</i><br>
+><i> because KVM_REQ_CLOCK_UPDATE takes pvclock_gtod_sync_lock too and thus will</i><br>
+><i> already wait for pvclock_update_vm_gtod_copy to end.</i><br>
+><i> </i><br>
+><i> I think it's possible to use a seqcount in KVM_REQ_CLOCK_UPDATE instead of</i><br>
+><i> KVM_REQ_MCLOCK_INPROGRESS.  Both cause the vCPUs to spin. I'll take a look.</i><br>
+><i> </i><br>
+><i> Paolo</i><br>
+<br>
+<br>
+

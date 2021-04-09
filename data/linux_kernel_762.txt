@@ -1,0 +1,163 @@
+The perf subsystem today unifies various tracing and monitoring<br>
+features, from both software and hardware. One benefit of the perf<br>
+subsystem is automatically inheriting events to child tasks, which<br>
+enables process-wide events monitoring with low overheads. By default<br>
+perf events are non-intrusive, not affecting behaviour of the tasks<br>
+being monitored.<br>
+<br>
+For certain use-cases, however, it makes sense to leverage the<br>
+generality of the perf events subsystem and optionally allow the tasks<br>
+being monitored to receive signals on events they are interested in.<br>
+This patch series adds the option to synchronously signal user space on<br>
+events.<br>
+<br>
+To better support process-wide synchronous self-monitoring, without<br>
+events propagating to children that do not share the current process's<br>
+shared environment, two pre-requisite patches are added to optionally<br>
+restrict inheritance to CLONE_THREAD, and remove events on exec (without<br>
+affecting the parent).<br>
+<br>
+Examples how to use these features can be found in the tests added at<br>
+the end of the series. In addition to the tests added, the series has<br>
+also been subjected to syzkaller fuzzing (focus on 'kernel/events/'<br>
+coverage).<br>
+<br>
+Motivation and Example Uses<br>
+---------------------------<br>
+<br>
+1. 	Our immediate motivation is low-overhead sampling-based race<br>
+	detection for user space [1]. By using perf_event_open() at<br>
+	process initialization, we can create hardware<br>
+	breakpoint/watchpoint events that are propagated automatically<br>
+	to all threads in a process. As far as we are aware, today no<br>
+	existing kernel facility (such as ptrace) allows us to set up<br>
+	process-wide watchpoints with minimal overheads (that are<br>
+	comparable to mprotect() of whole pages).<br>
+<br>
+2.	Other low-overhead error detectors that rely on detecting<br>
+	accesses to certain memory locations or code, process-wide and<br>
+	also only in a specific set of subtasks or threads.<br>
+<br>
+[1] <a  rel="nofollow" href="https://llvm.org/devmtg/2020-09/slides/Morehouse-GWP-Tsan.pdf">https://llvm.org/devmtg/2020-09/slides/Morehouse-GWP-Tsan.pdf</a><br>
+<br>
+Other ideas for use-cases we found interesting, but should only<br>
+illustrate the range of potential to further motivate the utility (we're<br>
+sure there are more):<br>
+<br>
+3.	Code hot patching without full stop-the-world. Specifically, by<br>
+	setting a code breakpoint to entry to the patched routine, then<br>
+	send signals to threads and check that they are not in the<br>
+	routine, but without stopping them further. If any of the<br>
+	threads will enter the routine, it will receive SIGTRAP and<br>
+	pause.<br>
+<br>
+4.	Safepoints without mprotect(). Some Java implementations use<br>
+	"load from a known memory location" as a safepoint. When threads<br>
+	need to be stopped, the page containing the location is<br>
+	mprotect()ed and threads get a signal. This could be replaced with<br>
+	a watchpoint, which does not require a whole page nor DTLB<br>
+	shootdowns.<br>
+<br>
+5.	Threads receiving signals on performance events to<br>
+	throttle/unthrottle themselves.<br>
+<br>
+6.	Tracking data flow globally.<br>
+<br>
+Changelog<br>
+---------<br>
+v4:<br>
+* Fix for parent and child racing to exit in sync_child_event().<br>
+* Fix race between irq_work running and task's sighand being released by<br>
+  release_task().<br>
+* Generalize setting si_perf and si_addr independent of event type;<br>
+  introduces perf_event_attr::sig_data, which can be set by user space<br>
+  to be propagated to si_perf.<br>
+* Warning in perf_sigtrap() if ctx->task and current mismatch; we expect<br>
+  this on architectures that do not properly implement<br>
+  arch_irq_work_raise().<br>
+* Require events that want sigtrap to be associated with a task.<br>
+* Dropped "perf: Add breakpoint information to siginfo on SIGTRAP"<br>
+  in favor of more generic solution (perf_event_attr::sig_data).<br>
+<br>
+v3: <br>
+* Add patch "perf: Rework perf_event_exit_event()" to beginning of<br>
+  series, courtesy of Peter Zijlstra.<br>
+* Rework "perf: Add support for event removal on exec" based on<br>
+  the added "perf: Rework perf_event_exit_event()".<br>
+* Fix kselftests to work with more recent libc, due to the way it forces<br>
+  using the kernel's own siginfo_t.<br>
+* Add basic perf-tool built-in test.<br>
+<br>
+v2/RFC: <a  rel="nofollow" href="https://lkml.kernel.org/r/20210310104139.679618-1-elver@xxxxxxxxxx">https://lkml.kernel.org/r/20210310104139.679618-1-elver@xxxxxxxxxx</a><br>
+* Patch "Support only inheriting events if cloned with CLONE_THREAD"<br>
+  added to series.<br>
+* Patch "Add support for event removal on exec" added to series.<br>
+* Patch "Add kselftest for process-wide sigtrap handling" added to<br>
+  series.<br>
+* Patch "Add kselftest for remove_on_exec" added to series.<br>
+* Implicitly restrict inheriting events if sigtrap, but the child was<br>
+  cloned with CLONE_CLEAR_SIGHAND, because it is not generally safe if<br>
+  the child cleared all signal handlers to continue sending SIGTRAP.<br>
+* Various minor fixes (see details in patches).<br>
+<br>
+v1/RFC: <a  rel="nofollow" href="https://lkml.kernel.org/r/20210223143426.2412737-1-elver@xxxxxxxxxx">https://lkml.kernel.org/r/20210223143426.2412737-1-elver@xxxxxxxxxx</a><br>
+<br>
+Pre-series: The discussion at [2] led to the changes in this series. The<br>
+approach taken in "Add support for SIGTRAP on perf events" to trigger<br>
+the signal was suggested by Peter Zijlstra in [3].<br>
+<br>
+[2] <a  rel="nofollow" href="https://lore.kernel.org/lkml/CACT4Y+YPrXGw+AtESxAgPyZ84TYkNZdP0xpocX2jwVAbZD=-XQ@xxxxxxxxxxxxxx/">https://lore.kernel.org/lkml/CACT4Y+YPrXGw+AtESxAgPyZ84TYkNZdP0xpocX2jwVAbZD=-XQ@xxxxxxxxxxxxxx/</a><br>
+<br>
+[3] <a  rel="nofollow" href="https://lore.kernel.org/lkml/YBv3rAT566k+6zjg@xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/lkml/YBv3rAT566k+6zjg@xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/</a><br>
+<br>
+Marco Elver (9):<br>
+  perf: Apply PERF_EVENT_IOC_MODIFY_ATTRIBUTES to children<br>
+  perf: Support only inheriting events if cloned with CLONE_THREAD<br>
+  perf: Add support for event removal on exec<br>
+  signal: Introduce TRAP_PERF si_code and si_perf to siginfo<br>
+  perf: Add support for SIGTRAP on perf events<br>
+  selftests/perf_events: Add kselftest for process-wide sigtrap handling<br>
+  selftests/perf_events: Add kselftest for remove_on_exec<br>
+  tools headers uapi: Sync tools/include/uapi/linux/perf_event.h<br>
+  perf test: Add basic stress test for sigtrap handling<br>
+<br>
+Peter Zijlstra (1):<br>
+  perf: Rework perf_event_exit_event()<br>
+<br>
+ arch/m68k/kernel/signal.c                     |   3 +<br>
+ arch/x86/kernel/signal_compat.c               |   5 +-<br>
+ fs/signalfd.c                                 |   4 +<br>
+ include/linux/compat.h                        |   2 +<br>
+ include/linux/perf_event.h                    |   9 +-<br>
+ include/linux/signal.h                        |   1 +<br>
+ include/uapi/asm-generic/siginfo.h            |   6 +-<br>
+ include/uapi/linux/perf_event.h               |  12 +-<br>
+ include/uapi/linux/signalfd.h                 |   4 +-<br>
+ kernel/events/core.c                          | 302 +++++++++++++-----<br>
+ kernel/fork.c                                 |   2 +-<br>
+ kernel/signal.c                               |  11 +<br>
+ tools/include/uapi/linux/perf_event.h         |  12 +-<br>
+ tools/perf/tests/Build                        |   1 +<br>
+ tools/perf/tests/builtin-test.c               |   5 +<br>
+ tools/perf/tests/sigtrap.c                    | 150 +++++++++<br>
+ tools/perf/tests/tests.h                      |   1 +<br>
+ .../testing/selftests/perf_events/.gitignore  |   3 +<br>
+ tools/testing/selftests/perf_events/Makefile  |   6 +<br>
+ tools/testing/selftests/perf_events/config    |   1 +<br>
+ .../selftests/perf_events/remove_on_exec.c    | 260 +++++++++++++++<br>
+ tools/testing/selftests/perf_events/settings  |   1 +<br>
+ .../selftests/perf_events/sigtrap_threads.c   | 210 ++++++++++++<br>
+ 23 files changed, 924 insertions(+), 87 deletions(-)<br>
+ create mode 100644 tools/perf/tests/sigtrap.c<br>
+ create mode 100644 tools/testing/selftests/perf_events/.gitignore<br>
+ create mode 100644 tools/testing/selftests/perf_events/Makefile<br>
+ create mode 100644 tools/testing/selftests/perf_events/config<br>
+ create mode 100644 tools/testing/selftests/perf_events/remove_on_exec.c<br>
+ create mode 100644 tools/testing/selftests/perf_events/settings<br>
+ create mode 100644 tools/testing/selftests/perf_events/sigtrap_threads.c<br>
+<br>
+-- <br>
+2.31.0.208.g409f899ff0-goog<br>
+<br>
+<br>
+

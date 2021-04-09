@@ -1,0 +1,49 @@
+<br>
+<br>
+On 4/8/21 12:17 PM, Mark Brown wrote:<br>
+><i> On Mon, Apr 05, 2021 at 03:43:10PM -0500, madvenka@xxxxxxxxxxxxxxxxxxx wrote:</i><br>
+><i> </i><br>
+><i>> These checks will involve checking the return PC to see if it falls inside</i><br>
+><i>> any special functions where the stack trace is considered unreliable.</i><br>
+><i>> Implement the infrastructure needed for this.</i><br>
+><i> </i><br>
+><i> Following up again based on an off-list discussion with Mark Rutland:</i><br>
+><i> while I think this is a reasonable implementation for specifically</i><br>
+><i> listing functions that cause problems we could make life easier for</i><br>
+><i> ourselves by instead using annotations at the call sites to put things</i><br>
+><i> into sections which indicate that they're unsafe for unwinding, we can</i><br>
+><i> then check for any address in one of those sections (or possibly do the</i><br>
+><i> reverse and check for any address in a section we specifically know is</i><br>
+><i> safe) rather than having to enumerate problematic functions in the</i><br>
+><i> unwinder.  This also has the advantage of not having a list that's</i><br>
+><i> separate to the functions themselves so it's less likely that the</i><br>
+><i> unwinder will get out of sync with the rest of the code as things evolve.</i><br>
+><i> </i><br>
+><i> We already have SYM_CODE_START() annotations in the code for assembly</i><br>
+><i> functions that aren't using the standard calling convention which should</i><br>
+><i> help a lot here, we could add a variant of that for things that we know</i><br>
+><i> are safe on stacks (like those we expect to find at the bottom of</i><br>
+><i> stacks).</i><br>
+><i> </i><br>
+<br>
+As I already mentioned before, I like the idea of sections. The only reason that I did<br>
+not try it was that I have to address FTRACE trampolines and the kretprobe_trampoline<br>
+(and optprobes in the future).<br>
+<br>
+I have the following options:<br>
+<br>
+1. Create a common section (I will have to come up with an appropriate name) and put<br>
+   all such functions in that one section.<br>
+<br>
+2. Create one section for each logical type (exception section, ftrace section and<br>
+   kprobe section) or some such.<br>
+<br>
+3. Use the section idea only for the el1 exceptions. For the others use the current<br>
+   special_functions[] approach.<br>
+<br>
+Which one do you and Mark Rutland prefer? Or, is there another choice?<br>
+<br>
+Madhavan<br>
+<br>
+<br>
+

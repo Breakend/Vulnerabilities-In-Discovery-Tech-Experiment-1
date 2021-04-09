@@ -1,0 +1,195 @@
+	CPU0 ------ ak4613<br>
+	CPU1 ------ PCM3168A-p	/* 1ch/2ch */<br>
+	CPU2 --/		/* 3ch/4ch */<br>
+	CPU3 --/		/* 5ch/6ch */<br>
+	CPU4 --/		/* 7ch/8ch */<br>
+	CPU5 ------ PCM3168A-c	/* 1ch/2ch */<br>
+	CPU6 --/		/* 3ch/4ch */<br>
+	CPU7 --/		/* 5ch/6ch */<br>
+<br>
+aplay   -D plughw:0,0 xxx.wav // ak4613<br>
+aplay   -D plughw:0,1 xxx.wav // PCM3168A playback 1ch/2ch<br>
+aplay   -D plughw:0,2 xxx.wav // PCM3168A playback 3ch/4ch<br>
+aplay   -D plughw:0,3 xxx.wav // PCM3168A playback 5ch/6ch<br>
+aplay   -D plughw:0,4 xxx.wav // PCM3168A playback 7ch/8ch<br>
+arecord -D plughw:0,5 xxx     // PCM8168A capture  1ch/2ch<br>
+arecord -D plughw:0,6 xxx     // PCM8168A capture  3ch/4ch<br>
+arecord -D plughw:0,7 xxx     // PCM8168A capture  5ch/6ch<br>
+<br>
+It seems 1 sound card DAI number is limited by SNDRV_MINOR().<br>
+Because of this size limit, total 8 DAI seems maximam.<br>
+So, this patch removes HDMI so far.<br>
+<br>
+Signed-off-by: Kuninori Morimoto <kuninori.morimoto.gx@xxxxxxxxxxx><br>
+---<br>
+ arch/arm64/boot/dts/renesas/ulcb-kf.dtsi | 103 +++++++++++++++++++++--<br>
+ 1 file changed, 94 insertions(+), 9 deletions(-)<br>
+<br>
+diff --git a/arch/arm64/boot/dts/renesas/ulcb-kf.dtsi b/arch/arm64/boot/dts/renesas/ulcb-kf.dtsi<br>
+index 202177706cde..5eaf97ea7480 100644<br>
+--- a/arch/arm64/boot/dts/renesas/ulcb-kf.dtsi<br>
++++ b/arch/arm64/boot/dts/renesas/ulcb-kf.dtsi<br>
+@@ -115,18 +115,39 @@<br>
+ 					#size-cells = <0>;<br>
+ 					mclk-fs = <512>;<br>
+ 					port@0 {<br>
++						prefix = "pcm3168a";<br>
++						convert-channels = <8>; /* TDM Split */<br>
+ 						reg = <0>;<br>
+-						pcm3168a_endpoint_p: endpoint {<br>
++						pcm3168a_endpoint_p: endpoint@0 {<br>
+ 							remote-endpoint = <&rsnd_for_pcm3168a_play>;<br>
+ 							clocks = <&clksndsel>;<br>
+ 						};<br>
++						pcm3168a_endpoint_p2: endpoint@1 {<br>
++							remote-endpoint = <&rsnd_for_pcm3168a_play2>;<br>
++						};<br>
++						pcm3168a_endpoint_p3: endpoint@2 {<br>
++							remote-endpoint = <&rsnd_for_pcm3168a_play3>;<br>
++						};<br>
++						pcm3168a_endpoint_p4: endpoint@3 {<br>
++							remote-endpoint = <&rsnd_for_pcm3168a_play4>;<br>
++						};<br>
+ 					};<br>
+ 					port@1 {<br>
++						prefix = "pcm3168a";<br>
++						convert-channels = <6>; /* TDM Split */<br>
+ 						reg = <1>;<br>
+-						pcm3168a_endpoint_c: endpoint {<br>
++						pcm3168a_endpoint_c: endpoint@0 {<br>
+ 							remote-endpoint = <&rsnd_for_pcm3168a_capture>;<br>
+ 							clocks = <&clksndsel>;<br>
+ 						};<br>
++						pcm3168a_endpoint_c2: endpoint@1 {<br>
++							remote-endpoint = <&rsnd_for_pcm3168a_capture2>;<br>
++							clocks = <&clksndsel>;<br>
++						};<br>
++						pcm3168a_endpoint_c3: endpoint@2 {<br>
++							remote-endpoint = <&rsnd_for_pcm3168a_capture3>;<br>
++							clocks = <&clksndsel>;<br>
++						};<br>
+ 					};<br>
+ 				};<br>
+ 			};<br>
+@@ -298,29 +319,83 @@<br>
+ 	ports {<br>
+ 		/* rsnd_port0/1 are on salvator-common */<br>
+ 		rsnd_port2: port@2 {<br>
++			#address-cells = <1>;<br>
++			#size-cells = <0>;<br>
+ 			reg = <2>;<br>
+-			rsnd_for_pcm3168a_play: endpoint {<br>
++			rsnd_for_pcm3168a_play: endpoint@2 {<br>
++				reg = <2>;<br>
+ 				remote-endpoint = <&pcm3168a_endpoint_p>;<br>
+ <br>
+ 				dai-format = "i2s";<br>
+ 				bitclock-master = <&rsnd_for_pcm3168a_play>;<br>
+ 				frame-master = <&rsnd_for_pcm3168a_play>;<br>
+-				dai-tdm-slot-num = <8>;<br>
+ <br>
+-				playback = <&ssi3>;<br>
++				playback = <&ssiu30 &ssi3>;<br>
++			};<br>
++			rsnd_for_pcm3168a_play2: endpoint@3 {<br>
++				reg = <3>;<br>
++				remote-endpoint = <&pcm3168a_endpoint_p2>;<br>
++<br>
++				dai-format = "i2s";<br>
++				bitclock-master = <&rsnd_for_pcm3168a_play2>;<br>
++				frame-master = <&rsnd_for_pcm3168a_play2>;<br>
++<br>
++				playback = <&ssiu31 &ssi3>;<br>
++			};<br>
++			rsnd_for_pcm3168a_play3: endpoint@4 {<br>
++				reg = <4>;<br>
++				remote-endpoint = <&pcm3168a_endpoint_p3>;<br>
++<br>
++				dai-format = "i2s";<br>
++				bitclock-master = <&rsnd_for_pcm3168a_play3>;<br>
++				frame-master = <&rsnd_for_pcm3168a_play3>;<br>
++<br>
++				playback = <&ssiu32 &ssi3>;<br>
++			};<br>
++			rsnd_for_pcm3168a_play4: endpoint@5 {<br>
++				reg = <5>;<br>
++				remote-endpoint = <&pcm3168a_endpoint_p4>;<br>
++<br>
++				dai-format = "i2s";<br>
++				bitclock-master = <&rsnd_for_pcm3168a_play4>;<br>
++				frame-master = <&rsnd_for_pcm3168a_play4>;<br>
++<br>
++				playback = <&ssiu33 &ssi3>;<br>
+ 			};<br>
+ 		};<br>
+ 		rsnd_port3: port@3 {<br>
++			#address-cells = <1>;<br>
++			#size-cells = <0>;<br>
+ 			reg = <3>;<br>
+-			rsnd_for_pcm3168a_capture: endpoint {<br>
++			rsnd_for_pcm3168a_capture: endpoint@6 {<br>
++				reg = <6>;<br>
+ 				remote-endpoint = <&pcm3168a_endpoint_c>;<br>
+ <br>
+ 				dai-format = "i2s";<br>
+ 				bitclock-master = <&rsnd_for_pcm3168a_capture>;<br>
+ 				frame-master = <&rsnd_for_pcm3168a_capture>;<br>
+-				dai-tdm-slot-num = <6>;<br>
+ <br>
+-				capture  = <&ssi4>;<br>
++				capture  = <&ssiu40 &ssi4>;<br>
++			};<br>
++			rsnd_for_pcm3168a_capture2: endpoint@7 {<br>
++				reg = <7>;<br>
++				remote-endpoint = <&pcm3168a_endpoint_c2>;<br>
++<br>
++				dai-format = "i2s";<br>
++				bitclock-master = <&rsnd_for_pcm3168a_capture2>;<br>
++				frame-master = <&rsnd_for_pcm3168a_capture2>;<br>
++<br>
++				capture  = <&ssiu41 &ssi4>;<br>
++			};<br>
++			rsnd_for_pcm3168a_capture3: endpoint@8 {<br>
++				reg = <8>;<br>
++				remote-endpoint = <&pcm3168a_endpoint_c3>;<br>
++<br>
++				dai-format = "i2s";<br>
++				bitclock-master = <&rsnd_for_pcm3168a_capture3>;<br>
++				frame-master = <&rsnd_for_pcm3168a_capture3>;<br>
++<br>
++				capture  = <&ssiu42 &ssi4>;<br>
+ 			};<br>
+ 		};<br>
+ 	};<br>
+@@ -359,8 +434,18 @@<br>
+ };<br>
+ <br>
+ &sound_card {<br>
++	compatible = "audio-graph-scu-card";<br>
++<br>
++	routing =	"pcm3168a Playback", "DAI2 Playback",<br>
++			"pcm3168a Playback", "DAI3 Playback",<br>
++			"pcm3168a Playback", "DAI4 Playback",<br>
++			"pcm3168a Playback", "DAI5 Playback",<br>
++			"DAI6 Capture", "pcm3168a Capture",<br>
++			"DAI7 Capture", "pcm3168a Capture",<br>
++			"DAI8 Capture", "pcm3168a Capture";<br>
++<br>
+ 	dais = <&rsnd_port0	/* ak4613 */<br>
+-		&rsnd_port1	/* HDMI0  */<br>
++//		&rsnd_port1	/* HDMI0  */<br>
+ 		&rsnd_port2	/* pcm3168a playback */<br>
+ 		&rsnd_port3	/* pcm3168a capture  */<br>
+ 		>;<br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+<br>
+Thank you for your help !!<br>
+Best regards<br>
+---<br>
+Kuninori Morimoto<br>
+<br>
+<br>
+

@@ -1,0 +1,33 @@
+Enable SMMU management for the MC firmware by adding the required<br>
+iommus property in the device tree node.<br>
+<br>
+Signed-off-by: Laurentiu Tudor <laurentiu.tudor@xxxxxxx><br>
+---<br>
+ arch/arm64/boot/dts/freescale/fsl-lx2160a.dtsi | 1 +<br>
+ 1 file changed, 1 insertion(+)<br>
+<br>
+diff --git a/arch/arm64/boot/dts/freescale/fsl-lx2160a.dtsi b/arch/arm64/boot/dts/freescale/fsl-lx2160a.dtsi<br>
+index b032f3890c8c..f46f0d0905b5 100644<br>
+--- a/arch/arm64/boot/dts/freescale/fsl-lx2160a.dtsi<br>
++++ b/arch/arm64/boot/dts/freescale/fsl-lx2160a.dtsi<br>
+@@ -868,6 +868,7 @@<br>
+ 			msi-parent = <&its>;<br>
+ 			/* iommu-map property is fixed up by u-boot */<br>
+ 			iommu-map = <0 &smmu 0 0>;<br>
++			iommus = <&smmu 0x4000>;<br>
+ 			dma-coherent;<br>
+ 			#address-cells = <3>;<br>
+ 			#size-cells = <1>;<br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+--------------AE161A00404C95FFAA71826B<br>
+Content-Type: text/x-patch; charset=UTF-8;<br>
+ name="0002-bus-fsl-mc-make-mc-work-with-smmu-disable-bypass-on.patch"<br>
+Content-Transfer-Encoding: 7bit<br>
+Content-Disposition: attachment;<br>
+ filename*0="0002-bus-fsl-mc-make-mc-work-with-smmu-disable-bypass-on.pat";<br>
+ filename*1="ch"<br>
+<br>
+

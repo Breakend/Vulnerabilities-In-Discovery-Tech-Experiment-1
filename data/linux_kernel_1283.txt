@@ -1,0 +1,187 @@
+Now, that we have linear map page tables configured, keep MMU enabled<br>
+to allow faster relocation of segments to final destination.<br>
+<br>
+<br>
+Cavium ThunderX2:<br>
+Kernel Image size: 38M Iniramfs size: 46M Total relocation size: 84M<br>
+MMU-disabled:<br>
+relocation	7.489539915s<br>
+MMU-enabled:<br>
+relocation	0.03946095s<br>
+<br>
+Broadcom Stingray:<br>
+The performance data: for a moderate size kernel + initramfs: 25M the<br>
+relocation was taking 0.382s, with enabled MMU it now takes<br>
+0.019s only or x20 improvement.<br>
+<br>
+The time is proportional to the size of relocation, therefore if initramfs<br>
+is larger, 100M it could take over a second.<br>
+<br>
+Signed-off-by: Pavel Tatashin <pasha.tatashin@xxxxxxxxxx><br>
+---<br>
+ arch/arm64/include/asm/kexec.h      |  3 +++<br>
+ arch/arm64/kernel/asm-offsets.c     |  1 +<br>
+ arch/arm64/kernel/machine_kexec.c   | 16 ++++++++++----<br>
+ arch/arm64/kernel/relocate_kernel.S | 33 +++++++++++++++++++----------<br>
+ 4 files changed, 38 insertions(+), 15 deletions(-)<br>
+<br>
+diff --git a/arch/arm64/include/asm/kexec.h b/arch/arm64/include/asm/kexec.h<br>
+index 59ac166daf53..5fc87b51f8a9 100644<br>
+--- a/arch/arm64/include/asm/kexec.h<br>
++++ b/arch/arm64/include/asm/kexec.h<br>
+@@ -97,8 +97,11 @@ struct kimage_arch {<br>
+ 	phys_addr_t dtb_mem;<br>
+ 	phys_addr_t kern_reloc;<br>
+ 	phys_addr_t el2_vectors;<br>
++	phys_addr_t ttbr0;<br>
+ 	phys_addr_t ttbr1;<br>
+ 	phys_addr_t zero_page;<br>
++	unsigned long phys_offset;<br>
++	unsigned long t0sz;<br>
+ 	/* Core ELF header buffer */<br>
+ 	void *elf_headers;<br>
+ 	unsigned long elf_headers_mem;<br>
+diff --git a/arch/arm64/kernel/asm-offsets.c b/arch/arm64/kernel/asm-offsets.c<br>
+index 609362b5aa76..ec7bb80aedc8 100644<br>
+--- a/arch/arm64/kernel/asm-offsets.c<br>
++++ b/arch/arm64/kernel/asm-offsets.c<br>
+@@ -159,6 +159,7 @@ int main(void)<br>
+   DEFINE(KIMAGE_ARCH_DTB_MEM,		offsetof(struct kimage, arch.dtb_mem));<br>
+   DEFINE(KIMAGE_ARCH_EL2_VECTORS,	offsetof(struct kimage, arch.el2_vectors));<br>
+   DEFINE(KIMAGE_ARCH_ZERO_PAGE,		offsetof(struct kimage, arch.zero_page));<br>
++  DEFINE(KIMAGE_ARCH_PHYS_OFFSET,	offsetof(struct kimage, arch.phys_offset));<br>
+   DEFINE(KIMAGE_ARCH_TTBR1,		offsetof(struct kimage, arch.ttbr1));<br>
+   DEFINE(KIMAGE_HEAD,			offsetof(struct kimage, head));<br>
+   DEFINE(KIMAGE_START,			offsetof(struct kimage, start));<br>
+diff --git a/arch/arm64/kernel/machine_kexec.c b/arch/arm64/kernel/machine_kexec.c<br>
+index c875ef522e53..d5c8aefc66f3 100644<br>
+--- a/arch/arm64/kernel/machine_kexec.c<br>
++++ b/arch/arm64/kernel/machine_kexec.c<br>
+@@ -190,6 +190,11 @@ int machine_kexec_post_load(struct kimage *kimage)<br>
+ 	reloc_size = __relocate_new_kernel_end - __relocate_new_kernel_start;<br>
+ 	memcpy(reloc_code, __relocate_new_kernel_start, reloc_size);<br>
+ 	kimage->arch.kern_reloc = __pa(reloc_code);<br>
++	rc = trans_pgd_idmap_page(&info, &kimage->arch.ttbr0,<br>
++				  &kimage->arch.t0sz, reloc_code);<br>
++	if (rc)<br>
++		return rc;<br>
++	kimage->arch.phys_offset = virt_to_phys(kimage) - (long)kimage;<br>
+ <br>
+ 	/* Flush the reloc_code in preparation for its execution. */<br>
+ 	__flush_dcache_area(reloc_code, reloc_size);<br>
+@@ -223,9 +228,9 @@ void machine_kexec(struct kimage *kimage)<br>
+ 	local_daif_mask();<br>
+ <br>
+ 	/*<br>
+-	 * Both restart and cpu_soft_restart will shutdown the MMU, disable data<br>
++	 * Both restart and kernel_reloc will shutdown the MMU, disable data<br>
+ 	 * caches. However, restart will start new kernel or purgatory directly,<br>
+-	 * cpu_soft_restart will transfer control to arm64_relocate_new_kernel<br>
++	 * kernel_reloc contains the body of arm64_relocate_new_kernel<br>
+ 	 * In kexec case, kimage->start points to purgatory assuming that<br>
+ 	 * kernel entry and dtb address are embedded in purgatory by<br>
+ 	 * userspace (kexec-tools).<br>
+@@ -239,10 +244,13 @@ void machine_kexec(struct kimage *kimage)<br>
+ 		restart(is_hyp_callable(), kimage->start, kimage->arch.dtb_mem,<br>
+ 			0, 0);<br>
+ 	} else {<br>
++		void (*kernel_reloc)(struct kimage *kimage);<br>
++<br>
+ 		if (is_hyp_callable())<br>
+ 			__hyp_set_vectors(kimage->arch.el2_vectors);<br>
+-		cpu_soft_restart(kimage->arch.kern_reloc,<br>
+-				 virt_to_phys(kimage), 0, 0);<br>
++		cpu_install_ttbr0(kimage->arch.ttbr0, kimage->arch.t0sz);<br>
++		kernel_reloc = (void *)kimage->arch.kern_reloc;<br>
++		kernel_reloc(kimage);<br>
+ 	}<br>
+ <br>
+ 	BUG(); /* Should never get here. */<br>
+diff --git a/arch/arm64/kernel/relocate_kernel.S b/arch/arm64/kernel/relocate_kernel.S<br>
+index e83b6380907d..433a57b3d76e 100644<br>
+--- a/arch/arm64/kernel/relocate_kernel.S<br>
++++ b/arch/arm64/kernel/relocate_kernel.S<br>
+@@ -4,6 +4,8 @@<br>
+  *<br>
+  * Copyright (C) Linaro.<br>
+  * Copyright (C) Huawei Futurewei Technologies.<br>
++ * Copyright (C) 2020, Microsoft Corporation.<br>
++ * Pavel Tatashin <pasha.tatashin@xxxxxxxxxx><br>
+  */<br>
+ <br>
+ #include <linux/kexec.h><br>
+@@ -15,6 +17,15 @@<br>
+ #include <asm/sysreg.h><br>
+ #include <asm/virt.h><br>
+ <br>
++.macro turn_off_mmu tmp1, tmp2<br>
++	mrs	\tmp1, sctlr_el1<br>
++	mov_q	\tmp2, SCTLR_ELx_FLAGS<br>
++	bic	\tmp1, \tmp1, \tmp2<br>
++	pre_disable_mmu_workaround<br>
++	msr	sctlr_el1, \tmp1<br>
++	isb<br>
++.endm<br>
++<br>
+ .pushsection    ".kexec_relocate.text", "ax"<br>
+ /*<br>
+  * arm64_relocate_new_kernel - Put a 2nd stage image in place and boot it.<br>
+@@ -32,22 +43,21 @@ SYM_CODE_START(arm64_relocate_new_kernel)<br>
+ 	ldr	x18, [x0, #KIMAGE_ARCH_ZERO_PAGE] /* x18 = zero page for BBM */<br>
+ 	ldr	x17, [x0, #KIMAGE_ARCH_TTBR1]	/* x17 = linear map copy */<br>
+ 	ldr	x16, [x0, #KIMAGE_HEAD]		/* x16 = kimage_head */<br>
+-	mov	x14, xzr			/* x14 = entry ptr */<br>
+-	mov	x13, xzr			/* x13 = copy dest */<br>
++	ldr	x22, [x0, #KIMAGE_ARCH_PHYS_OFFSET]	/* x22 phys_offset */<br>
+ 	raw_dcache_line_size x15, x1		/* x15 = dcache line size */<br>
+ 	break_before_make_ttbr_switch	x18, x17, x1, x2 /* set linear map */<br>
+ .Lloop:<br>
+ 	and	x12, x16, PAGE_MASK		/* x12 = addr */<br>
+-<br>
++	sub	x12, x12, x22			/* Convert x12 to virt */<br>
+ 	/* Test the entry flags. */<br>
+ .Ltest_source:<br>
+ 	tbz	x16, IND_SOURCE_BIT, .Ltest_indirection<br>
+ <br>
+ 	/* Invalidate dest page to PoC. */<br>
+-	mov	x2, x13<br>
+-	mov	x1, #PAGE_SIZE<br>
+-	dcache_by_myline_op ivac, sy, x2, x1, x15, x20<br>
++	mov	x19, x13<br>
+ 	copy_page x13, x12, x1, x2, x3, x4, x5, x6, x7, x8<br>
++	mov	x1, #PAGE_SIZE<br>
++	dcache_by_myline_op civac, sy, x19, x1, x15, x20<br>
+ 	b	.Lnext<br>
+ .Ltest_indirection:<br>
+ 	tbz	x16, IND_INDIRECTION_BIT, .Ltest_destination<br>
+@@ -64,19 +74,20 @@ SYM_CODE_START(arm64_relocate_new_kernel)<br>
+ 	ic	iallu<br>
+ 	dsb	nsh<br>
+ 	isb<br>
++	ldr	x4, [x0, #KIMAGE_START]			/* relocation start */<br>
++	ldr	x1, [x0, #KIMAGE_ARCH_EL2_VECTORS]	/* relocation start */<br>
++	ldr	x0, [x0, #KIMAGE_ARCH_DTB_MEM]		/* dtb address */<br>
++	turn_off_mmu x12, x13<br>
+ <br>
+ 	/* Start new image. */<br>
+-	ldr	x1, [x0, #KIMAGE_ARCH_EL2_VECTORS]	/* relocation start */<br>
+ 	cbz	x1, .Lel1<br>
+-	ldr	x1, [x0, #KIMAGE_START]		/* relocation start */<br>
+-	ldr	x2, [x0, #KIMAGE_ARCH_DTB_MEM]	/* dtb address */<br>
++	mov	x1, x4				/* relocation start */<br>
++	mov	x2, x0				/* dtb address */<br>
+ 	mov	x3, xzr<br>
+ 	mov	x4, xzr<br>
+ 	mov     x0, #HVC_SOFT_RESTART<br>
+ 	hvc	#0				/* Jumps from el2 */<br>
+ .Lel1:<br>
+-	ldr	x4, [x0, #KIMAGE_START]		/* relocation start */<br>
+-	ldr	x0, [x0, #KIMAGE_ARCH_DTB_MEM]	/* dtb address */<br>
+ 	mov	x2, xzr<br>
+ 	mov	x3, xzr<br>
+ 	br	x4				/* Jumps from el1 */<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

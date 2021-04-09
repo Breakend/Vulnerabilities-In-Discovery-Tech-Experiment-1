@@ -1,0 +1,28 @@
+++<br>
+<br>
+On 4/8/21 11:25 AM, Dinghao Liu wrote:<br>
+><i> When platform_get_irq() fails, a pairing PM usage counter</i><br>
+><i> increment is needed to keep the counter balanced. It's the</i><br>
+><i> same for the following error paths.</i><br>
+><i> </i><br>
+><i> Signed-off-by: Dinghao Liu <dinghao.liu@xxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  drivers/spi/spi-zynqmp-gqspi.c | 1 +</i><br>
+><i>  1 file changed, 1 insertion(+)</i><br>
+><i> </i><br>
+><i> diff --git a/drivers/spi/spi-zynqmp-gqspi.c b/drivers/spi/spi-zynqmp-gqspi.c</i><br>
+><i> index c8fa6ee18ae7..95963a2de64a 100644</i><br>
+><i> --- a/drivers/spi/spi-zynqmp-gqspi.c</i><br>
+><i> +++ b/drivers/spi/spi-zynqmp-gqspi.c</i><br>
+><i> @@ -1197,6 +1197,7 @@ static int zynqmp_qspi_probe(struct platform_device *pdev)</i><br>
+><i>  	return 0;</i><br>
+><i>  </i><br>
+><i>  clk_dis_all:</i><br>
+><i> +	pm_runtime_get_noresume(&pdev->dev);</i><br>
+><i>  	pm_runtime_set_suspended(&pdev->dev);</i><br>
+><i>  	pm_runtime_disable(&pdev->dev);</i><br>
+><i>  	clk_disable_unprepare(xqspi->refclk);</i><br>
+><i> </i><br>
+<br>
+<br>
+

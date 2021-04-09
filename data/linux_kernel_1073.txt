@@ -1,0 +1,47 @@
+On Wed, Apr 7, 2021 at 10:07 PM Nick Desaulniers<br>
+<ndesaulniers@xxxxxxxxxx> wrote:<br>
+><i></i><br>
+><i> On Tue, Apr 6, 2021 at 11:15 PM Gioh Kim <gi-oh.kim@xxxxxxxxx> wrote:</i><br>
+><i> ></i><br>
+><i> > As the name shows, it checks if strings are equal in case insensitive</i><br>
+><i> > manner.</i><br>
+><i> ></i><br>
+><i> > For example, drivers/infiniband/ulp/rtrs/rtrs-clt-sysfs.c uses</i><br>
+><i> > strncasecmp to check that the input via sysfs is "mi". But it would</i><br>
+><i> > work even-if the input is "min-wrongcommand".</i><br>
+><i> ></i><br>
+><i> > I found some more cases using strncasecmp to check the entire string</i><br>
+><i> > such as rtrs-clt-sysfs.c does. drivers/pnp/interface.c checks</i><br>
+><i> > "disable" command with strncasecmp but it would also work if the</i><br>
+><i> > command is "disable-wrong".</i><br>
+><i></i><br>
+><i> Reviewed-by: Nick Desaulniers <ndesaulniers@xxxxxxxxxx></i><br>
+><i></i><br>
+><i> I do wonder if these (sysfs_streqcase and sysfs_streq) could or should</i><br>
+><i> be conditionally available on CONFIG_SYSFS=y; don't pay for what you</i><br>
+><i> don't use (without needing CONFIG_LD_DEAD_CODE_DATA_ELIMINATION=y)?</i><br>
+<br>
+Good idea.<br>
+Thank you.<br>
+<br>
+><i></i><br>
+><i> Also, it might be nice to share the second half of the function with</i><br>
+><i> sysfs_streq via a new static function.  Though it will just get</i><br>
+><i> inlined in both for CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y, it might</i><br>
+><i> help the compiler if CONFIG_CC_OPTIMIZE_FOR_SIZE=y was instead chosen</i><br>
+><i> if the compiler cannot outline/deduplicate the shared code.  At the</i><br>
+><i> least, there's less duplication between two very similar functions; if</i><br>
+><i> one changes then authors may need to be careful to update both.</i><br>
+<br>
+Yes, they are exactly the same.<br>
+I will make an inline function for the common code.<br>
+<br>
+><i></i><br>
+><i> Are either of those concerns worth a v3? ¯\_(ツ)_/¯</i><br>
+<br>
+Sure, I will not forget to add 'V2'.<br>
+<br>
+Thank you for kind review.<br>
+<br>
+<br>
+

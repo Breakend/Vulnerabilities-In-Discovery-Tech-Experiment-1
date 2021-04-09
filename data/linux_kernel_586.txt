@@ -1,0 +1,54 @@
+When using self-hosted vmemmap pages, the number of pages passed to<br>
+{online,offline}_pages might not fully span sections, but they always<br>
+fully span pageblocks.<br>
+Relax the check account for that case.<br>
+<br>
+Signed-off-by: Oscar Salvador <osalvador@xxxxxxx><br>
+Reviewed-by: David Hildenbrand <david@xxxxxxxxxx><br>
+---<br>
+ mm/memory_hotplug.c | 18 ++++++++++++++----<br>
+ 1 file changed, 14 insertions(+), 4 deletions(-)<br>
+<br>
+diff --git a/mm/memory_hotplug.c b/mm/memory_hotplug.c<br>
+index 0cdbbfbc5757..25e59d5dc13c 100644<br>
+--- a/mm/memory_hotplug.c<br>
++++ b/mm/memory_hotplug.c<br>
+@@ -838,9 +838,14 @@ int __ref online_pages(unsigned long pfn, unsigned long nr_pages,<br>
+ 	int ret;<br>
+ 	struct memory_notify arg;<br>
+ <br>
+-	/* We can only online full sections (e.g., SECTION_IS_ONLINE) */<br>
++	/* We can only offline full sections (e.g., SECTION_IS_ONLINE).<br>
++	 * However, when using e.g: memmap_on_memory, some pages are initialized<br>
++	 * prior to calling in here. The remaining amount of pages must be<br>
++	 * pageblock aligned.<br>
++	 */<br>
+ 	if (WARN_ON_ONCE(!nr_pages ||<br>
+-			 !IS_ALIGNED(pfn | nr_pages, PAGES_PER_SECTION)))<br>
++			 !IS_ALIGNED(pfn, pageblock_nr_pages) ||<br>
++			 !IS_ALIGNED(pfn + nr_pages, PAGES_PER_SECTION)))<br>
+ 		return -EINVAL;<br>
+ <br>
+ 	mem_hotplug_begin();<br>
+@@ -1573,9 +1578,14 @@ int __ref offline_pages(unsigned long start_pfn, unsigned long nr_pages)<br>
+ 	int ret, node;<br>
+ 	char *reason;<br>
+ <br>
+-	/* We can only offline full sections (e.g., SECTION_IS_ONLINE) */<br>
++	/* We can only offline full sections (e.g., SECTION_IS_ONLINE).<br>
++	 * However, when using e.g: memmap_on_memory, some pages are initialized<br>
++	 * prior to calling in here. The remaining amount of pages must be<br>
++	 * pageblock aligned.<br>
++	 */<br>
+ 	if (WARN_ON_ONCE(!nr_pages ||<br>
+-			 !IS_ALIGNED(start_pfn | nr_pages, PAGES_PER_SECTION)))<br>
++			 !IS_ALIGNED(start_pfn, pageblock_nr_pages) ||<br>
++			 !IS_ALIGNED(start_pfn + nr_pages, PAGES_PER_SECTION)))<br>
+ 		return -EINVAL;<br>
+ <br>
+ 	mem_hotplug_begin();<br>
+-- <br>
+2.16.3<br>
+<br>
+<br>
+

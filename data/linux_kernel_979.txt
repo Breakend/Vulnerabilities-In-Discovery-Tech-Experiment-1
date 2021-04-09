@@ -1,0 +1,89 @@
+On Thu, 8 Apr 2021 at 15:17, Andy Shevchenko <andy.shevchenko@xxxxxxxxx> wrote:<br>
+><i></i><br>
+><i> On Thu, Apr 8, 2021 at 11:33 AM Naresh Kamboju</i><br>
+><i> <naresh.kamboju@xxxxxxxxxx> wrote:</i><br>
+><i> > On Thu, 8 Apr 2021 at 04:21, Andy Shevchenko <andy.shevchenko@xxxxxxxxx> wrote:</i><br>
+><i> > > On Thu, Apr 8, 2021 at 12:38 AM Naresh Kamboju</i><br>
+><i> > > <naresh.kamboju@xxxxxxxxxx> wrote:</i><br>
+><i> > > ></i><br>
+><i> > > > While running kselftest recently added gpio gpio-sim.sh test case the following</i><br>
+><i> > > > warning was triggered on Linux next tag 20210330 tag running on arm64 juno</i><br>
+><i> > > > and hikey devices.</i><br>
+><i> > > ></i><br>
+><i> > > > GOOD: next-20210326</i><br>
+><i> > > > BAD: next-20210330</i><br>
+><i> > > ></i><br>
+><i> > > > This is still happening today on Linux next tag 20210407.</i><br>
+><i> > ></i><br>
+><i> > > Can you add the following</i><br>
+><i> > ></i><br>
+><i> > >   sysfs_attr_init(attrs[i]);</i><br>
+><i> > ></i><br>
+><i> > > to the end of the loop in gpio_sim_setup_sysfs()?</i><br>
+><i> ></i><br>
+><i> > Do you mean like this,</i><br>
+><i> ></i><br>
+><i> > diff --git a/drivers/gpio/gpio-sim.c b/drivers/gpio/gpio-sim.c</i><br>
+><i> > index ea17289a869c..5fe67ccf45f7 100644</i><br>
+><i> > --- a/drivers/gpio/gpio-sim.c</i><br>
+><i> > +++ b/drivers/gpio/gpio-sim.c</i><br>
+><i> > @@ -296,6 +296,7 @@ static int gpio_sim_setup_sysfs(struct gpio_sim_chip *chip)</i><br>
+><i> >                 dev_attr->store = gpio_sim_sysfs_line_store;</i><br>
+><i> ></i><br>
+><i> >                 attrs[i] = &dev_attr->attr;</i><br>
+><i> > +               sysfs_attr_init(attrs[i]);</i><br>
+><i> >         }</i><br>
+><i> ></i><br>
+><i> >         chip->attr_group.name = "line-ctrl";</i><br>
+><i></i><br>
+><i> Precisely.</i><br>
+<br>
+As per your suggestions the above line added and build tested<br>
+the reported issue is fixed now.<br>
+<br>
+Reported-by: Naresh Kamboju <naresh.kamboju@xxxxxxxxxx><br>
+Tested-by: Naresh Kamboju <naresh.kamboju@xxxxxxxxxx><br>
+<br>
+><i></i><br>
+><i> > > If it fixes an issue I'll send a formal patch.</i><br>
+><i> ></i><br>
+><i> > I will build and test this and report here.</i><br>
+<br>
+OTOH,<br>
+LKFT builds kernel and rootfs on host and runs tests on various target<br>
+devices. While doing this process "make install" is not installing required<br>
+test files like gpio-mockup-cdev and gpio-line-name.<br>
+<br>
+# ./gpio-mockup.sh: line 106: ./gpio-mockup-cdev: No such file or directory<br>
+# ./gpio-sim.sh: line 100: ./gpio-line-name: No such file or directory<br>
+<br>
+Test run log:<br>
+------------------<br>
+# selftests: gpio: gpio-mockup.sh<br>
+# 1.  Module load tests<br>
+# 1.1.  dynamic allocation of gpio<br>
+# ./gpio-mockup.sh: line 106: ./gpio-mockup-cdev: No such file or directory<br>
+# test failed: line value is 127 when 1 was expected<br>
+# GPIO gpio-mockup test FAIL<br>
+not ok 1 selftests: gpio: gpio-mockup.sh # exit=1<br>
+# selftests: gpio: gpio-sim.sh<br>
+# 1. chip_name and dev_name attributes<br>
+# 1.1. Chip name is communicated to user<br>
+# 1.2. chip_name returns 'none' if the chip is still pending<br>
+# 1.3. Device name is communicated to user<br>
+# 1.4. dev_name returns 'none' if chip is still pending<br>
+# 2. Creating simulated chips<br>
+# 2.1. Default number of lines is 1<br>
+# 2.2. Number of lines can be specified<br>
+# 2.3. Label can be set<br>
+# 2.4. Label can be left empty<br>
+# 2.5. Line names can be configured<br>
+# ./gpio-sim.sh: line 100: ./gpio-line-name: No such file or directory<br>
+# line name is incorrect<br>
+# GPIO gpio-sim test FAIL<br>
+not ok 2 selftests: gpio: gpio-sim.sh # exit=1<br>
+<br>
+- Naresh<br>
+<br>
+<br>
+

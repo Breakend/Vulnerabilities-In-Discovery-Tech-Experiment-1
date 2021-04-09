@@ -1,0 +1,83 @@
+Add a flags member to the dma_map_ops structure with one flag to<br>
+indicate support for PCI P2PDMA.<br>
+<br>
+Also, add a helper to check if a device supports PCI P2PDMA.<br>
+<br>
+Signed-off-by: Logan Gunthorpe <logang@xxxxxxxxxxxx><br>
+---<br>
+ include/linux/dma-map-ops.h |  3 +++<br>
+ include/linux/dma-mapping.h |  5 +++++<br>
+ kernel/dma/mapping.c        | 18 ++++++++++++++++++<br>
+ 3 files changed, 26 insertions(+)<br>
+<br>
+diff --git a/include/linux/dma-map-ops.h b/include/linux/dma-map-ops.h<br>
+index 51872e736e7b..481892822104 100644<br>
+--- a/include/linux/dma-map-ops.h<br>
++++ b/include/linux/dma-map-ops.h<br>
+@@ -12,6 +12,9 @@<br>
+ struct cma;<br>
+ <br>
+ struct dma_map_ops {<br>
++	unsigned int flags;<br>
++#define DMA_F_PCI_P2PDMA_SUPPORTED     (1 << 0)<br>
++<br>
+ 	void *(*alloc)(struct device *dev, size_t size,<br>
+ 			dma_addr_t *dma_handle, gfp_t gfp,<br>
+ 			unsigned long attrs);<br>
+diff --git a/include/linux/dma-mapping.h b/include/linux/dma-mapping.h<br>
+index 50b8f586cf59..c31980ecca62 100644<br>
+--- a/include/linux/dma-mapping.h<br>
++++ b/include/linux/dma-mapping.h<br>
+@@ -146,6 +146,7 @@ int dma_mmap_attrs(struct device *dev, struct vm_area_struct *vma,<br>
+ 		unsigned long attrs);<br>
+ bool dma_can_mmap(struct device *dev);<br>
+ int dma_supported(struct device *dev, u64 mask);<br>
++bool dma_pci_p2pdma_supported(struct device *dev);<br>
+ int dma_set_mask(struct device *dev, u64 mask);<br>
+ int dma_set_coherent_mask(struct device *dev, u64 mask);<br>
+ u64 dma_get_required_mask(struct device *dev);<br>
+@@ -247,6 +248,10 @@ static inline int dma_supported(struct device *dev, u64 mask)<br>
+ {<br>
+ 	return 0;<br>
+ }<br>
++static inline bool dma_pci_p2pdma_supported(struct device *dev)<br>
++{<br>
++	return 0;<br>
++}<br>
+ static inline int dma_set_mask(struct device *dev, u64 mask)<br>
+ {<br>
+ 	return -EIO;<br>
+diff --git a/kernel/dma/mapping.c b/kernel/dma/mapping.c<br>
+index 923089c4267b..ce44a0fcc4e5 100644<br>
+--- a/kernel/dma/mapping.c<br>
++++ b/kernel/dma/mapping.c<br>
+@@ -573,6 +573,24 @@ int dma_supported(struct device *dev, u64 mask)<br>
+ }<br>
+ EXPORT_SYMBOL(dma_supported);<br>
+ <br>
++bool dma_pci_p2pdma_supported(struct device *dev)<br>
++{<br>
++	const struct dma_map_ops *ops = get_dma_ops(dev);<br>
++<br>
++	/* if ops is not set, dma direct will be used which supports P2PDMA */<br>
++	if (!ops)<br>
++		return true;<br>
++<br>
++	/*<br>
++	 * Note: dma_ops_bypass is not checked here because P2PDMA should<br>
++	 * not be used with dma mapping ops that do not have support even<br>
++	 * if the specific device is bypassing them.<br>
++	 */<br>
++<br>
++	return ops->flags & DMA_F_PCI_P2PDMA_SUPPORTED;<br>
++}<br>
++EXPORT_SYMBOL_GPL(dma_pci_p2pdma_supported);<br>
++<br>
+ #ifdef CONFIG_ARCH_HAS_DMA_SET_MASK<br>
+ void arch_dma_set_mask(struct device *dev, u64 mask);<br>
+ #else<br>
+-- <br>
+2.20.1<br>
+<br>
+<br>
+

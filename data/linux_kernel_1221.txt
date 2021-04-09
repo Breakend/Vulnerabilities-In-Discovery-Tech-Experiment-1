@@ -1,0 +1,531 @@
+Hi Bjorn, Lorenzo,<br>
+<br>
+Just gentle ping for this patch set, please kindly let me know your<br>
+comments about this patch set.<br>
+<br>
+Thanks.<br>
+<br>
+On Wed, 2021-03-24 at 11:05 +0800, Jianjun Wang wrote:<br>
+><i> MediaTek's PCIe host controller has three generation HWs, the new</i><br>
+><i> generation HW is an individual bridge, it supports Gen3 speed and</i><br>
+><i> compatible with Gen2, Gen1 speed.</i><br>
+><i> </i><br>
+><i> Add support for new Gen3 controller which can be found on MT8192.</i><br>
+><i> </i><br>
+><i> Signed-off-by: Jianjun Wang <jianjun.wang@xxxxxxxxxxxx></i><br>
+><i> Acked-by: Ryder Lee <ryder.lee@xxxxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  drivers/pci/controller/Kconfig              |  13 +</i><br>
+><i>  drivers/pci/controller/Makefile             |   1 +</i><br>
+><i>  drivers/pci/controller/pcie-mediatek-gen3.c | 464 ++++++++++++++++++++</i><br>
+><i>  3 files changed, 478 insertions(+)</i><br>
+><i>  create mode 100644 drivers/pci/controller/pcie-mediatek-gen3.c</i><br>
+><i> </i><br>
+><i> diff --git a/drivers/pci/controller/Kconfig b/drivers/pci/controller/Kconfig</i><br>
+><i> index 5aa8977d7b0f..1e925ac47279 100644</i><br>
+><i> --- a/drivers/pci/controller/Kconfig</i><br>
+><i> +++ b/drivers/pci/controller/Kconfig</i><br>
+><i> @@ -233,6 +233,19 @@ config PCIE_MEDIATEK</i><br>
+><i>  	  Say Y here if you want to enable PCIe controller support on</i><br>
+><i>  	  MediaTek SoCs.</i><br>
+><i>  </i><br>
+><i> +config PCIE_MEDIATEK_GEN3</i><br>
+><i> +	tristate "MediaTek Gen3 PCIe controller"</i><br>
+><i> +	depends on ARCH_MEDIATEK || COMPILE_TEST</i><br>
+><i> +	depends on PCI_MSI_IRQ_DOMAIN</i><br>
+><i> +	help</i><br>
+><i> +	  Adds support for PCIe Gen3 MAC controller for MediaTek SoCs.</i><br>
+><i> +	  This PCIe controller is compatible with Gen3, Gen2 and Gen1 speed,</i><br>
+><i> +	  and support up to 256 MSI interrupt numbers for</i><br>
+><i> +	  multi-function devices.</i><br>
+><i> +</i><br>
+><i> +	  Say Y here if you want to enable Gen3 PCIe controller support on</i><br>
+><i> +	  MediaTek SoCs.</i><br>
+><i> +</i><br>
+><i>  config VMD</i><br>
+><i>  	depends on PCI_MSI && X86_64 && SRCU</i><br>
+><i>  	tristate "Intel Volume Management Device Driver"</i><br>
+><i> diff --git a/drivers/pci/controller/Makefile b/drivers/pci/controller/Makefile</i><br>
+><i> index e4559f2182f2..579973327815 100644</i><br>
+><i> --- a/drivers/pci/controller/Makefile</i><br>
+><i> +++ b/drivers/pci/controller/Makefile</i><br>
+><i> @@ -27,6 +27,7 @@ obj-$(CONFIG_PCIE_ROCKCHIP) += pcie-rockchip.o</i><br>
+><i>  obj-$(CONFIG_PCIE_ROCKCHIP_EP) += pcie-rockchip-ep.o</i><br>
+><i>  obj-$(CONFIG_PCIE_ROCKCHIP_HOST) += pcie-rockchip-host.o</i><br>
+><i>  obj-$(CONFIG_PCIE_MEDIATEK) += pcie-mediatek.o</i><br>
+><i> +obj-$(CONFIG_PCIE_MEDIATEK_GEN3) += pcie-mediatek-gen3.o</i><br>
+><i>  obj-$(CONFIG_PCIE_MICROCHIP_HOST) += pcie-microchip-host.o</i><br>
+><i>  obj-$(CONFIG_VMD) += vmd.o</i><br>
+><i>  obj-$(CONFIG_PCIE_BRCMSTB) += pcie-brcmstb.o</i><br>
+><i> diff --git a/drivers/pci/controller/pcie-mediatek-gen3.c b/drivers/pci/controller/pcie-mediatek-gen3.c</i><br>
+><i> new file mode 100644</i><br>
+><i> index 000000000000..3546e53b3c85</i><br>
+><i> --- /dev/null</i><br>
+><i> +++ b/drivers/pci/controller/pcie-mediatek-gen3.c</i><br>
+><i> @@ -0,0 +1,464 @@</i><br>
+><i> +// SPDX-License-Identifier: GPL-2.0</i><br>
+><i> +/*</i><br>
+><i> + * MediaTek PCIe host controller driver.</i><br>
+><i> + *</i><br>
+><i> + * Copyright (c) 2020 MediaTek Inc.</i><br>
+><i> + * Author: Jianjun Wang <jianjun.wang@xxxxxxxxxxxx></i><br>
+><i> + */</i><br>
+><i> +</i><br>
+><i> +#include <linux/clk.h></i><br>
+><i> +#include <linux/delay.h></i><br>
+><i> +#include <linux/iopoll.h></i><br>
+><i> +#include <linux/kernel.h></i><br>
+><i> +#include <linux/module.h></i><br>
+><i> +#include <linux/pci.h></i><br>
+><i> +#include <linux/phy/phy.h></i><br>
+><i> +#include <linux/platform_device.h></i><br>
+><i> +#include <linux/pm_domain.h></i><br>
+><i> +#include <linux/pm_runtime.h></i><br>
+><i> +#include <linux/reset.h></i><br>
+><i> +</i><br>
+><i> +#include "../pci.h"</i><br>
+><i> +</i><br>
+><i> +#define PCIE_SETTING_REG		0x80</i><br>
+><i> +#define PCIE_PCI_IDS_1			0x9c</i><br>
+><i> +#define PCI_CLASS(class)		(class << 8)</i><br>
+><i> +#define PCIE_RC_MODE			BIT(0)</i><br>
+><i> +</i><br>
+><i> +#define PCIE_CFGNUM_REG			0x140</i><br>
+><i> +#define PCIE_CFG_DEVFN(devfn)		((devfn) & GENMASK(7, 0))</i><br>
+><i> +#define PCIE_CFG_BUS(bus)		(((bus) << 8) & GENMASK(15, 8))</i><br>
+><i> +#define PCIE_CFG_BYTE_EN(bytes)		(((bytes) << 16) & GENMASK(19, 16))</i><br>
+><i> +#define PCIE_CFG_FORCE_BYTE_EN		BIT(20)</i><br>
+><i> +#define PCIE_CFG_OFFSET_ADDR		0x1000</i><br>
+><i> +#define PCIE_CFG_HEADER(bus, devfn) \</i><br>
+><i> +	(PCIE_CFG_BUS(bus) | PCIE_CFG_DEVFN(devfn))</i><br>
+><i> +</i><br>
+><i> +#define PCIE_RST_CTRL_REG		0x148</i><br>
+><i> +#define PCIE_MAC_RSTB			BIT(0)</i><br>
+><i> +#define PCIE_PHY_RSTB			BIT(1)</i><br>
+><i> +#define PCIE_BRG_RSTB			BIT(2)</i><br>
+><i> +#define PCIE_PE_RSTB			BIT(3)</i><br>
+><i> +</i><br>
+><i> +#define PCIE_LTSSM_STATUS_REG		0x150</i><br>
+><i> +</i><br>
+><i> +#define PCIE_LINK_STATUS_REG		0x154</i><br>
+><i> +#define PCIE_PORT_LINKUP		BIT(8)</i><br>
+><i> +</i><br>
+><i> +#define PCIE_TRANS_TABLE_BASE_REG	0x800</i><br>
+><i> +#define PCIE_ATR_SRC_ADDR_MSB_OFFSET	0x4</i><br>
+><i> +#define PCIE_ATR_TRSL_ADDR_LSB_OFFSET	0x8</i><br>
+><i> +#define PCIE_ATR_TRSL_ADDR_MSB_OFFSET	0xc</i><br>
+><i> +#define PCIE_ATR_TRSL_PARAM_OFFSET	0x10</i><br>
+><i> +#define PCIE_ATR_TLB_SET_OFFSET		0x20</i><br>
+><i> +</i><br>
+><i> +#define PCIE_MAX_TRANS_TABLES		8</i><br>
+><i> +#define PCIE_ATR_EN			BIT(0)</i><br>
+><i> +#define PCIE_ATR_SIZE(size) \</i><br>
+><i> +	(((((size) - 1) << 1) & GENMASK(6, 1)) | PCIE_ATR_EN)</i><br>
+><i> +#define PCIE_ATR_ID(id)			((id) & GENMASK(3, 0))</i><br>
+><i> +#define PCIE_ATR_TYPE_MEM		PCIE_ATR_ID(0)</i><br>
+><i> +#define PCIE_ATR_TYPE_IO		PCIE_ATR_ID(1)</i><br>
+><i> +#define PCIE_ATR_TLP_TYPE(type)		(((type) << 16) & GENMASK(18, 16))</i><br>
+><i> +#define PCIE_ATR_TLP_TYPE_MEM		PCIE_ATR_TLP_TYPE(0)</i><br>
+><i> +#define PCIE_ATR_TLP_TYPE_IO		PCIE_ATR_TLP_TYPE(2)</i><br>
+><i> +</i><br>
+><i> +/**</i><br>
+><i> + * struct mtk_pcie_port - PCIe port information</i><br>
+><i> + * @dev: pointer to PCIe device</i><br>
+><i> + * @base: IO mapped register base</i><br>
+><i> + * @reg_base: physical register base</i><br>
+><i> + * @mac_reset: MAC reset control</i><br>
+><i> + * @phy_reset: PHY reset control</i><br>
+><i> + * @phy: PHY controller block</i><br>
+><i> + * @clks: PCIe clocks</i><br>
+><i> + * @num_clks: PCIe clocks count for this port</i><br>
+><i> + */</i><br>
+><i> +struct mtk_pcie_port {</i><br>
+><i> +	struct device *dev;</i><br>
+><i> +	void __iomem *base;</i><br>
+><i> +	phys_addr_t reg_base;</i><br>
+><i> +	struct reset_control *mac_reset;</i><br>
+><i> +	struct reset_control *phy_reset;</i><br>
+><i> +	struct phy *phy;</i><br>
+><i> +	struct clk_bulk_data *clks;</i><br>
+><i> +	int num_clks;</i><br>
+><i> +};</i><br>
+><i> +</i><br>
+><i> +/**</i><br>
+><i> + * mtk_pcie_config_tlp_header() - Configure a configuration TLP header</i><br>
+><i> + * @bus: PCI bus to query</i><br>
+><i> + * @devfn: device/function number</i><br>
+><i> + * @where: offset in config space</i><br>
+><i> + * @size: data size in TLP header</i><br>
+><i> + *</i><br>
+><i> + * Set byte enable field and device information in configuration TLP header.</i><br>
+><i> + */</i><br>
+><i> +static void mtk_pcie_config_tlp_header(struct pci_bus *bus, unsigned int devfn,</i><br>
+><i> +					int where, int size)</i><br>
+><i> +{</i><br>
+><i> +	struct mtk_pcie_port *port = bus->sysdata;</i><br>
+><i> +	int bytes;</i><br>
+><i> +	u32 val;</i><br>
+><i> +</i><br>
+><i> +	bytes = (GENMASK(size - 1, 0) & 0xf) << (where & 0x3);</i><br>
+><i> +</i><br>
+><i> +	val = PCIE_CFG_FORCE_BYTE_EN | PCIE_CFG_BYTE_EN(bytes) |</i><br>
+><i> +	      PCIE_CFG_HEADER(bus->number, devfn);</i><br>
+><i> +</i><br>
+><i> +	writel_relaxed(val, port->base + PCIE_CFGNUM_REG);</i><br>
+><i> +}</i><br>
+><i> +</i><br>
+><i> +static void __iomem *mtk_pcie_map_bus(struct pci_bus *bus, unsigned int devfn,</i><br>
+><i> +				      int where)</i><br>
+><i> +{</i><br>
+><i> +	struct mtk_pcie_port *port = bus->sysdata;</i><br>
+><i> +</i><br>
+><i> +	return port->base + PCIE_CFG_OFFSET_ADDR + where;</i><br>
+><i> +}</i><br>
+><i> +</i><br>
+><i> +static int mtk_pcie_config_read(struct pci_bus *bus, unsigned int devfn,</i><br>
+><i> +				int where, int size, u32 *val)</i><br>
+><i> +{</i><br>
+><i> +	mtk_pcie_config_tlp_header(bus, devfn, where, size);</i><br>
+><i> +</i><br>
+><i> +	return pci_generic_config_read32(bus, devfn, where, size, val);</i><br>
+><i> +}</i><br>
+><i> +</i><br>
+><i> +static int mtk_pcie_config_write(struct pci_bus *bus, unsigned int devfn,</i><br>
+><i> +				 int where, int size, u32 val)</i><br>
+><i> +{</i><br>
+><i> +	mtk_pcie_config_tlp_header(bus, devfn, where, size);</i><br>
+><i> +</i><br>
+><i> +	if (size <= 2)</i><br>
+><i> +		val <<= (where & 0x3) * 8;</i><br>
+><i> +</i><br>
+><i> +	return pci_generic_config_write32(bus, devfn, where, 4, val);</i><br>
+><i> +}</i><br>
+><i> +</i><br>
+><i> +static struct pci_ops mtk_pcie_ops = {</i><br>
+><i> +	.map_bus = mtk_pcie_map_bus,</i><br>
+><i> +	.read  = mtk_pcie_config_read,</i><br>
+><i> +	.write = mtk_pcie_config_write,</i><br>
+><i> +};</i><br>
+><i> +</i><br>
+><i> +static int mtk_pcie_set_trans_table(struct mtk_pcie_port *port,</i><br>
+><i> +				    resource_size_t cpu_addr,</i><br>
+><i> +				    resource_size_t pci_addr,</i><br>
+><i> +				    resource_size_t size,</i><br>
+><i> +				    unsigned long type, int num)</i><br>
+><i> +{</i><br>
+><i> +	void __iomem *table;</i><br>
+><i> +	u32 val;</i><br>
+><i> +</i><br>
+><i> +	if (num >= PCIE_MAX_TRANS_TABLES) {</i><br>
+><i> +		dev_err(port->dev, "not enough translate table for addr: %#llx, limited to [%d]\n",</i><br>
+><i> +			(unsigned long long)cpu_addr, PCIE_MAX_TRANS_TABLES);</i><br>
+><i> +		return -ENODEV;</i><br>
+><i> +	}</i><br>
+><i> +</i><br>
+><i> +	table = port->base + PCIE_TRANS_TABLE_BASE_REG +</i><br>
+><i> +		num * PCIE_ATR_TLB_SET_OFFSET;</i><br>
+><i> +</i><br>
+><i> +	writel_relaxed(lower_32_bits(cpu_addr) | PCIE_ATR_SIZE(fls(size) - 1),</i><br>
+><i> +		       table);</i><br>
+><i> +	writel_relaxed(upper_32_bits(cpu_addr),</i><br>
+><i> +		       table + PCIE_ATR_SRC_ADDR_MSB_OFFSET);</i><br>
+><i> +	writel_relaxed(lower_32_bits(pci_addr),</i><br>
+><i> +		       table + PCIE_ATR_TRSL_ADDR_LSB_OFFSET);</i><br>
+><i> +	writel_relaxed(upper_32_bits(pci_addr),</i><br>
+><i> +		       table + PCIE_ATR_TRSL_ADDR_MSB_OFFSET);</i><br>
+><i> +</i><br>
+><i> +	if (type == IORESOURCE_IO)</i><br>
+><i> +		val = PCIE_ATR_TYPE_IO | PCIE_ATR_TLP_TYPE_IO;</i><br>
+><i> +	else</i><br>
+><i> +		val = PCIE_ATR_TYPE_MEM | PCIE_ATR_TLP_TYPE_MEM;</i><br>
+><i> +</i><br>
+><i> +	writel_relaxed(val, table + PCIE_ATR_TRSL_PARAM_OFFSET);</i><br>
+><i> +</i><br>
+><i> +	return 0;</i><br>
+><i> +}</i><br>
+><i> +</i><br>
+><i> +static int mtk_pcie_startup_port(struct mtk_pcie_port *port)</i><br>
+><i> +{</i><br>
+><i> +	struct resource_entry *entry;</i><br>
+><i> +	struct pci_host_bridge *host = pci_host_bridge_from_priv(port);</i><br>
+><i> +	unsigned int table_index = 0;</i><br>
+><i> +	int err;</i><br>
+><i> +	u32 val;</i><br>
+><i> +</i><br>
+><i> +	/* Set as RC mode */</i><br>
+><i> +	val = readl_relaxed(port->base + PCIE_SETTING_REG);</i><br>
+><i> +	val |= PCIE_RC_MODE;</i><br>
+><i> +	writel_relaxed(val, port->base + PCIE_SETTING_REG);</i><br>
+><i> +</i><br>
+><i> +	/* Set class code */</i><br>
+><i> +	val = readl_relaxed(port->base + PCIE_PCI_IDS_1);</i><br>
+><i> +	val &= ~GENMASK(31, 8);</i><br>
+><i> +	val |= PCI_CLASS(PCI_CLASS_BRIDGE_PCI << 8);</i><br>
+><i> +	writel_relaxed(val, port->base + PCIE_PCI_IDS_1);</i><br>
+><i> +</i><br>
+><i> +	/* Assert all reset signals */</i><br>
+><i> +	val = readl_relaxed(port->base + PCIE_RST_CTRL_REG);</i><br>
+><i> +	val |= PCIE_MAC_RSTB | PCIE_PHY_RSTB | PCIE_BRG_RSTB | PCIE_PE_RSTB;</i><br>
+><i> +	writel_relaxed(val, port->base + PCIE_RST_CTRL_REG);</i><br>
+><i> +</i><br>
+><i> +	/*</i><br>
+><i> +	 * Described in PCIe CEM specification setctions 2.2 (PERST# Signal)</i><br>
+><i> +	 * and 2.2.1 (Initial Power-Up (G3 to S0)).</i><br>
+><i> +	 * The deassertion of PERST# should be delayed 100ms (TPVPERL)</i><br>
+><i> +	 * for the power and clock to become stable.</i><br>
+><i> +	 */</i><br>
+><i> +	msleep(100);</i><br>
+><i> +</i><br>
+><i> +	/* De-assert reset signals */</i><br>
+><i> +	val &= ~(PCIE_MAC_RSTB | PCIE_PHY_RSTB | PCIE_BRG_RSTB | PCIE_PE_RSTB);</i><br>
+><i> +	writel_relaxed(val, port->base + PCIE_RST_CTRL_REG);</i><br>
+><i> +</i><br>
+><i> +	/* Check if the link is up or not */</i><br>
+><i> +	err = readl_poll_timeout(port->base + PCIE_LINK_STATUS_REG, val,</i><br>
+><i> +				 !!(val & PCIE_PORT_LINKUP), 20,</i><br>
+><i> +				 PCI_PM_D3COLD_WAIT * USEC_PER_MSEC);</i><br>
+><i> +	if (err) {</i><br>
+><i> +		val = readl_relaxed(port->base + PCIE_LTSSM_STATUS_REG);</i><br>
+><i> +		dev_err(port->dev, "PCIe link down, ltssm reg val: %#x\n", val);</i><br>
+><i> +		return err;</i><br>
+><i> +	}</i><br>
+><i> +</i><br>
+><i> +	/* Set PCIe translation windows */</i><br>
+><i> +	resource_list_for_each_entry(entry, &host->windows) {</i><br>
+><i> +		struct resource *res = entry->res;</i><br>
+><i> +		unsigned long type = resource_type(res);</i><br>
+><i> +		resource_size_t cpu_addr;</i><br>
+><i> +		resource_size_t pci_addr;</i><br>
+><i> +		resource_size_t size;</i><br>
+><i> +		const char *range_type;</i><br>
+><i> +</i><br>
+><i> +		if (type == IORESOURCE_IO) {</i><br>
+><i> +			cpu_addr = pci_pio_to_address(res->start);</i><br>
+><i> +			range_type = "IO";</i><br>
+><i> +		} else if (type == IORESOURCE_MEM) {</i><br>
+><i> +			cpu_addr = res->start;</i><br>
+><i> +			range_type = "MEM";</i><br>
+><i> +		} else {</i><br>
+><i> +			continue;</i><br>
+><i> +		}</i><br>
+><i> +</i><br>
+><i> +		pci_addr = res->start - entry->offset;</i><br>
+><i> +		size = resource_size(res);</i><br>
+><i> +		err = mtk_pcie_set_trans_table(port, cpu_addr, pci_addr, size,</i><br>
+><i> +					       type, table_index);</i><br>
+><i> +		if (err)</i><br>
+><i> +			return err;</i><br>
+><i> +</i><br>
+><i> +		dev_dbg(port->dev, "set %s trans window[%d]: cpu_addr = %#llx, pci_addr = %#llx, size = %#llx\n",</i><br>
+><i> +			range_type, table_index, (unsigned long long)cpu_addr,</i><br>
+><i> +			(unsigned long long)pci_addr, (unsigned long long)size);</i><br>
+><i> +</i><br>
+><i> +		table_index++;</i><br>
+><i> +	}</i><br>
+><i> +</i><br>
+><i> +	return 0;</i><br>
+><i> +}</i><br>
+><i> +</i><br>
+><i> +static int mtk_pcie_parse_port(struct mtk_pcie_port *port)</i><br>
+><i> +{</i><br>
+><i> +	struct device *dev = port->dev;</i><br>
+><i> +	struct platform_device *pdev = to_platform_device(dev);</i><br>
+><i> +	struct resource *regs;</i><br>
+><i> +	int ret;</i><br>
+><i> +</i><br>
+><i> +	regs = platform_get_resource_byname(pdev, IORESOURCE_MEM, "pcie-mac");</i><br>
+><i> +	port->base = devm_ioremap_resource(dev, regs);</i><br>
+><i> +	if (IS_ERR(port->base)) {</i><br>
+><i> +		dev_err(dev, "failed to map register base\n");</i><br>
+><i> +		return PTR_ERR(port->base);</i><br>
+><i> +	}</i><br>
+><i> +</i><br>
+><i> +	port->reg_base = regs->start;</i><br>
+><i> +</i><br>
+><i> +	port->phy_reset = devm_reset_control_get_optional_exclusive(dev, "phy");</i><br>
+><i> +	if (IS_ERR(port->phy_reset)) {</i><br>
+><i> +		ret = PTR_ERR(port->phy_reset);</i><br>
+><i> +		if (ret != -EPROBE_DEFER)</i><br>
+><i> +			dev_err(dev, "failed to get PHY reset\n");</i><br>
+><i> +</i><br>
+><i> +		return ret;</i><br>
+><i> +	}</i><br>
+><i> +</i><br>
+><i> +	port->mac_reset = devm_reset_control_get_optional_exclusive(dev, "mac");</i><br>
+><i> +	if (IS_ERR(port->mac_reset)) {</i><br>
+><i> +		ret = PTR_ERR(port->mac_reset);</i><br>
+><i> +		if (ret != -EPROBE_DEFER)</i><br>
+><i> +			dev_err(dev, "failed to get MAC reset\n");</i><br>
+><i> +</i><br>
+><i> +		return ret;</i><br>
+><i> +	}</i><br>
+><i> +</i><br>
+><i> +	port->phy = devm_phy_optional_get(dev, "pcie-phy");</i><br>
+><i> +	if (IS_ERR(port->phy)) {</i><br>
+><i> +		ret = PTR_ERR(port->phy);</i><br>
+><i> +		if (ret != -EPROBE_DEFER)</i><br>
+><i> +			dev_err(dev, "failed to get PHY\n");</i><br>
+><i> +</i><br>
+><i> +		return ret;</i><br>
+><i> +	}</i><br>
+><i> +</i><br>
+><i> +	port->num_clks = devm_clk_bulk_get_all(dev, &port->clks);</i><br>
+><i> +	if (port->num_clks < 0) {</i><br>
+><i> +		dev_err(dev, "failed to get clocks\n");</i><br>
+><i> +		return port->num_clks;</i><br>
+><i> +	}</i><br>
+><i> +</i><br>
+><i> +	return 0;</i><br>
+><i> +}</i><br>
+><i> +</i><br>
+><i> +static int mtk_pcie_power_up(struct mtk_pcie_port *port)</i><br>
+><i> +{</i><br>
+><i> +	struct device *dev = port->dev;</i><br>
+><i> +	int err;</i><br>
+><i> +</i><br>
+><i> +	/* PHY power on and enable pipe clock */</i><br>
+><i> +	reset_control_deassert(port->phy_reset);</i><br>
+><i> +</i><br>
+><i> +	err = phy_init(port->phy);</i><br>
+><i> +	if (err) {</i><br>
+><i> +		dev_err(dev, "failed to initialize PHY\n");</i><br>
+><i> +		goto err_phy_init;</i><br>
+><i> +	}</i><br>
+><i> +</i><br>
+><i> +	err = phy_power_on(port->phy);</i><br>
+><i> +	if (err) {</i><br>
+><i> +		dev_err(dev, "failed to power on PHY\n");</i><br>
+><i> +		goto err_phy_on;</i><br>
+><i> +	}</i><br>
+><i> +</i><br>
+><i> +	/* MAC power on and enable transaction layer clocks */</i><br>
+><i> +	reset_control_deassert(port->mac_reset);</i><br>
+><i> +</i><br>
+><i> +	pm_runtime_enable(dev);</i><br>
+><i> +	pm_runtime_get_sync(dev);</i><br>
+><i> +</i><br>
+><i> +	err = clk_bulk_prepare_enable(port->num_clks, port->clks);</i><br>
+><i> +	if (err) {</i><br>
+><i> +		dev_err(dev, "failed to enable clocks\n");</i><br>
+><i> +		goto err_clk_init;</i><br>
+><i> +	}</i><br>
+><i> +</i><br>
+><i> +	return 0;</i><br>
+><i> +</i><br>
+><i> +err_clk_init:</i><br>
+><i> +	pm_runtime_put_sync(dev);</i><br>
+><i> +	pm_runtime_disable(dev);</i><br>
+><i> +	reset_control_assert(port->mac_reset);</i><br>
+><i> +	phy_power_off(port->phy);</i><br>
+><i> +err_phy_on:</i><br>
+><i> +	phy_exit(port->phy);</i><br>
+><i> +err_phy_init:</i><br>
+><i> +	reset_control_assert(port->phy_reset);</i><br>
+><i> +</i><br>
+><i> +	return err;</i><br>
+><i> +}</i><br>
+><i> +</i><br>
+><i> +static void mtk_pcie_power_down(struct mtk_pcie_port *port)</i><br>
+><i> +{</i><br>
+><i> +	clk_bulk_disable_unprepare(port->num_clks, port->clks);</i><br>
+><i> +</i><br>
+><i> +	pm_runtime_put_sync(port->dev);</i><br>
+><i> +	pm_runtime_disable(port->dev);</i><br>
+><i> +	reset_control_assert(port->mac_reset);</i><br>
+><i> +</i><br>
+><i> +	phy_power_off(port->phy);</i><br>
+><i> +	phy_exit(port->phy);</i><br>
+><i> +	reset_control_assert(port->phy_reset);</i><br>
+><i> +}</i><br>
+><i> +</i><br>
+><i> +static int mtk_pcie_setup(struct mtk_pcie_port *port)</i><br>
+><i> +{</i><br>
+><i> +	int err;</i><br>
+><i> +</i><br>
+><i> +	err = mtk_pcie_parse_port(port);</i><br>
+><i> +	if (err)</i><br>
+><i> +		return err;</i><br>
+><i> +</i><br>
+><i> +	/* Don't touch the hardware registers before power up */</i><br>
+><i> +	err = mtk_pcie_power_up(port);</i><br>
+><i> +	if (err)</i><br>
+><i> +		return err;</i><br>
+><i> +</i><br>
+><i> +	/* Try link up */</i><br>
+><i> +	err = mtk_pcie_startup_port(port);</i><br>
+><i> +	if (err)</i><br>
+><i> +		goto err_setup;</i><br>
+><i> +</i><br>
+><i> +	return 0;</i><br>
+><i> +</i><br>
+><i> +err_setup:</i><br>
+><i> +	mtk_pcie_power_down(port);</i><br>
+><i> +</i><br>
+><i> +	return err;</i><br>
+><i> +}</i><br>
+><i> +</i><br>
+><i> +static int mtk_pcie_probe(struct platform_device *pdev)</i><br>
+><i> +{</i><br>
+><i> +	struct device *dev = &pdev->dev;</i><br>
+><i> +	struct mtk_pcie_port *port;</i><br>
+><i> +	struct pci_host_bridge *host;</i><br>
+><i> +	int err;</i><br>
+><i> +</i><br>
+><i> +	host = devm_pci_alloc_host_bridge(dev, sizeof(*port));</i><br>
+><i> +	if (!host)</i><br>
+><i> +		return -ENOMEM;</i><br>
+><i> +</i><br>
+><i> +	port = pci_host_bridge_priv(host);</i><br>
+><i> +</i><br>
+><i> +	port->dev = dev;</i><br>
+><i> +	platform_set_drvdata(pdev, port);</i><br>
+><i> +</i><br>
+><i> +	err = mtk_pcie_setup(port);</i><br>
+><i> +	if (err)</i><br>
+><i> +		return err;</i><br>
+><i> +</i><br>
+><i> +	host->ops = &mtk_pcie_ops;</i><br>
+><i> +	host->sysdata = port;</i><br>
+><i> +</i><br>
+><i> +	err = pci_host_probe(host);</i><br>
+><i> +	if (err) {</i><br>
+><i> +		mtk_pcie_power_down(port);</i><br>
+><i> +		return err;</i><br>
+><i> +	}</i><br>
+><i> +</i><br>
+><i> +	return 0;</i><br>
+><i> +}</i><br>
+><i> +</i><br>
+><i> +static int mtk_pcie_remove(struct platform_device *pdev)</i><br>
+><i> +{</i><br>
+><i> +	struct mtk_pcie_port *port = platform_get_drvdata(pdev);</i><br>
+><i> +	struct pci_host_bridge *host = pci_host_bridge_from_priv(port);</i><br>
+><i> +</i><br>
+><i> +	pci_lock_rescan_remove();</i><br>
+><i> +	pci_stop_root_bus(host->bus);</i><br>
+><i> +	pci_remove_root_bus(host->bus);</i><br>
+><i> +	pci_unlock_rescan_remove();</i><br>
+><i> +</i><br>
+><i> +	mtk_pcie_power_down(port);</i><br>
+><i> +</i><br>
+><i> +	return 0;</i><br>
+><i> +}</i><br>
+><i> +</i><br>
+><i> +static const struct of_device_id mtk_pcie_of_match[] = {</i><br>
+><i> +	{ .compatible = "mediatek,mt8192-pcie" },</i><br>
+><i> +	{},</i><br>
+><i> +};</i><br>
+><i> +</i><br>
+><i> +static struct platform_driver mtk_pcie_driver = {</i><br>
+><i> +	.probe = mtk_pcie_probe,</i><br>
+><i> +	.remove = mtk_pcie_remove,</i><br>
+><i> +	.driver = {</i><br>
+><i> +		.name = "mtk-pcie",</i><br>
+><i> +		.of_match_table = mtk_pcie_of_match,</i><br>
+><i> +	},</i><br>
+><i> +};</i><br>
+><i> +</i><br>
+><i> +module_platform_driver(mtk_pcie_driver);</i><br>
+><i> +MODULE_LICENSE("GPL v2");</i><br>
+<br>
+

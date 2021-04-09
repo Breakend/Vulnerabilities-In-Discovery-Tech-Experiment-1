@@ -1,0 +1,375 @@
+This is a program that demonstrates how the speed of code under Linux can<br>
+vary significantly between runs, due to the direct-mapped external caches<br>
+and large cache miss penalties on most current motherboards, which are bad<br>
+for a virtual memory OS like Linux. Only 64 pages fit into a 256K cache, so<br>
+cache conflicts are very common. Also, because of the large amount of<br>
+physical memory fragmentation in Linux, the amount of conflicts varies<br>
+greatly; there can be a serious slowdown if you're unlucky (and even in the<br>
+average case).<br>
+<p>
+It seems that the cache miss penalty is quite severe on most motherboards<br>
+(it's 30-40 cycles on mine). The bottom line is that a motherboard that<br>
+handles cache misses quickly (like the Headland/Shasta chipset that was<br>
+mentioned some time ago) is extremely benificial in Linux. <br>
+<p>
+To calculate the cache miss penalty, run the program a few times,<br>
+while running memory-intensive stuff in between. Use the slowest and<br>
+fastest run as follows:<br>
+<p>
+cache miss penalty in seconds =<br>
+	(Tslow - Tfast) / (SUMslow - SUMfast) / 25600<br>
+<p>
+where<br>
+	Tslow is the time taken in the slowest run,<br>
+	SUMslow the value of sum in the slowest run,<br>
+	and similarly for Tfast and SUMfast (sum is proportional to<br>
+	the number of cache misses).<br>
+<p>
+Compile with optimization (i.e. -O2). The constants are set for<br>
+a 256K cache.<br>
+<p>
+I don't know much about cache design, this is just timing and math; there <br>
+may be some totally wrong assumptions. <br>
+<p>
+I think it would be interesting to get some idea of how severe the cache<br>
+miss penalty actually is on different motherboards. <br>
+<p>
+hhanemaa@cs.ruu.nl<br>
+<p>
+-------------------------------------------------------------------------<br>
+/*<br>
+<p>
+	This is a program to test the effects of page-thrashing with a<br>
+	direct-mapped external cache, which is what almost all current<br>
+	motherboards seem to be equipped with. It can also be used to<br>
+	calculate the cache miss penalty. It assumes that the core<br>
+	memory as read from /proc/kcore or /dev/kmem is stored in the same<br>
+	order in physical memory (which is the case).<br>
+<p>
+	How it works:<br>
+	First, it allocates a 256K buffer using malloc(), and writes a<br>
+	signature at the start of each of the 64 4K pages in the buffer.<br>
+	It then scans all core memory looking for signatures, and records<br>
+	where in (presumably) physical memory each of the 64 pages are mapped,<br>
+	and writes an ASCII map to stdout.<br>
+<p>
+	Assuming a direct-mapped cache where pages at memory offset p map<br>
+	into offset (p mod 256K) in the external cache, it counts and reports<br>
+	how many pages of the buffer map into the same place ('cache page') in<br>
+	the external cache. It also reports how contiguous the buffer is in<br>
+	memory (linear contiguousness is defined as pages adjacent in virtual<br>
+	memory that are also adjacent in physical memory).<br>
+<p>
+	Finally, a benchmark is run that linearly accesses the 256K buffer a<br>
+	number of times.<br>
+<p>
+	On my machine with 5Mb of memory, right after rebooting Linux the<br>
+	buffer seems to be allocated contiguously in physical memory (no<br>
+	cache conflicts), and the benchmark takes about 0.5s. It quickly<br>
+	becomes slower, and after having run some programs, the buffer is<br>
+	usually heavily fragmented in physical memory, and about half of the<br>
+	pages conflict in the external cache; the benchmark takes about 1.5s,<br>
+	and the time seems to be directly related to the number of cache<br>
+	conflicts. This is on a	i486 running at 40 MHz in a motherboard<br>
+	with a probably slow memory architecture. The internal cache probably<br>
+	doesn't interfere too much (it may help to get the actual benchmark<br>
+	code page out of the way). I think the dynamic buffer cache is the<br>
+	major factor in memory fragmentation.<br>
+<p>
+	I think	the benchmark does say something about how fast moderately<br>
+	memory-intensive programs (and the kernel) run (although highly<br>
+	CPU-dependent tasks rely mostly on the internal cache).<br>
+<p>
+	This means that most motherboards have a very bad cache/memory<br>
+	architecture as far as a real virtual memory OS like Linux is<br>
+	concerned, and that getting a motherboard with a good chipset (like<br>
+	the Headland/Shasta chipset mentioned some time ago that can handle<br>
+	cache misses quickly) is enormously benificial. If cache misses are<br>
+	handled quickly, the external cache doesn't matter much. A very	large<br>
+	cache (like 1024K) should help a lot if cache misses are costly.<br>
+<p>
+	It also means that since a buffer stays at the same place in memory<br>
+	during the life of a (long, memory intensive) process (ignoring<br>
+	swapping), the theoretical possibility of making sure that buffers<br>
+	are allocated so that cache conflicts are minimized is interesting.<br>
+<p>
+	This may be somewhat voodoo cachonomics, though. And I don't know<br>
+	much about how the kernel allocates memory (other than that it quickly<br>
+	produces fragmentation, which is reasonably unavoidable).<br>
+<p>
+<p>
+	Here are some results from my machine. It seems that the time taken<br>
+	is surprisingly predictable from the number of cache conflicts, which<br>
+	also seems to be accurately predictable (sum).<br>
+<p>
+	For comparision purposes, the timing for sum = 0 and sum ~ 36 (in the<br>
+	average range) are useful, as is the maximum observed value of sum.<br>
+<p>
+	p(n) = #'cache pages' into which n pages map:<br>
+    n = 1   2   3   4					sum	time<br>
+(1)	64  						0	0.58<br>
+	60  2						4	0.70<br>
+	38  13						26	1.24<br>
+	36  14						28	1.30<br>
+	34  15						30	1.37<br>
+	32  8   4   1					32	1.40<br>
+	29  10	5					35	1.46<br>
+	27  14	3					37	1.52<br>
+	26  16	2					38	1.54<br>
+	25  15	3					39	1.57<br>
+	23  16	3					41	1.62<br>
+	22  15  4					42	1.65<br>
+	0   0   0   4 (worst case, theoretical)		64     ~2.18<br>
+(2)	50  7						14	0.86<br>
+	46  9						18	0.94<br>
+	32  16						32	1.22<br>
+	28  18						36	1.30<br>
+	24  14  4					40	1.39<br>
+	21  20  1					43	1.44<br>
+(3)							0	0.50<br>
+							28	1.22<br>
+<p>
+	sum = p(2) * 2 + p(3) * 3 + p(4) * 4 + ...<br>
+	This is proportional to the expected number of cache conflicts.<br>
+	Note that p(1) + p(2) * 2 + ... should be equal to 64 (NU_PAGES).<br>
+	The optimal situation is p(1) = 64.<br>
+<p>
+	(1) i486 at 40 MHz, USAi chipset, 5M memory, 256K direct-mapped<br>
+	    write-back cache, 1/1/2 cache read/write/DRAM waitstates.<br>
+	    I now attempt to calculate the cache miss penalty:<br>
+<p>
+	    Time seems to be approx. 0.58 + sum * 0.025.<br>
+	    Given 4096 / 16 = 256 cache lines in a page and 100 iterations,<br>
+	    100 * 256 = 25600 cache misses for each 'sum', the cache miss<br>
+	    penalty seems to be:<br>
+<p>
+		0.025 / 25600 = 980ns per 16-byte cache line, which is about<br>
+		40 cycles at 40 MHz (ugh!).<br>
+<p>
+	(2) DRAM waitstates set to 1 (which seems stable as long as my<br>
+	    motherboard doesn't do DMA):<br>
+<p>
+	    Time approx. base + sum * 0.020.<br>
+	    Cache miss penalty: 0.020 / 25600 = 780ns, about 31 cycles.<br>
+<p>
+	(3) Running at 33 Mhz, 0 cache read/write waitstates, 1 DRAM.<br>
+<p>
+	    Cache miss penalty: 0.72 / 28 / 25600 = 1004ns (~30 cycles)<br>
+<p>
+	For NU_PAGES = 256 (1024K):<br>
+<p>
+    n = 1   2   3   4   5   6   7   8   9   10		sum	time<br>
+	4   7   15  15  12  4   1   3   2		252	8.77<br>
+	2   8   17  18  7   4   2   4   0   1		254	8.82<br>
+	0   0   0   64	(worst case, observed)		256	8.86<br>
+<p>
+	With a 1024K buffer, the cache miss penalty is about the only factor.<br>
+<p>
+	More useful is NU_PAGES = 16 (64K):<br>
+<p>
+	1   2   3<br>
+	16						0	0.13<br>
+	14  1						2	0.19<br>
+	13  0   1 (average)				3	0.21<br>
+	12  2						4	0.24<br>
+	8   4						8	0.34<br>
+<p>
+*/<br>
+<p>
+<p>
+#include <stdlib.h><br>
+#include <stdio.h><br>
+#include <time.h><br>
+#include <sys/stat.h><br>
+#include <sys/time.h><br>
+<p>
+<p>
+#define NU_PAGES 64		/* Number of 4K pages to test with. */<br>
+#define CACHE_PAGES 64		/* Number of pages in direct-mapped cache. */<br>
+				/* 64 for 256K cache, 32 for 128K cache etc. */<br>
+#define USE_PROC		/* USE_PROC: use /proc/kcore (pl14). */<br>
+				/* USE_KMEM: use /dev/kmem (worse). */<br>
+<p>
+<p>
+#define SIGLENGTH 8<br>
+#define BENCHMARK_LOOPS 100<br>
+<p>
+unsigned char *buf;		/* Buffer used to test with. */<br>
+unsigned char sig[SIGLENGTH];	/* Signature string to detect pages. */<br>
+int count;			/* Number of pages detected. */<br>
+int size;			/* Size of /proc/kcore. */<br>
+int *map;			/* Map of memory pages. */<br>
+<p>
+<p>
+void create_buffer() {<br>
+	int i;<br>
+	printf("Allocating %d pages.\n", NU_PAGES);<br>
+	buf = malloc(NU_PAGES * 4096);	/* Allocate 4K pages. */<br>
+	printf("Writing %d signatures.\n", NU_PAGES);<br>
+	/* Create signature. */<br>
+	srand(clock());<br>
+	for (i = 0; i < SIGLENGTH; i++)<br>
+		sig[i] = random();<br>
+	for (i = 0; i < NU_PAGES; i++) {<br>
+		/* Write signature. */<br>
+		memcpy(buf + i * 4096, sig, SIGLENGTH);<br>
+		buf[i * 4096 + SIGLENGTH] = i;	/* ID byte. */<br>
+	}<br>
+}<br>
+<p>
+void detect_pages() {<br>
+	FILE *f;<br>
+	struct stat st;<br>
+	char *tmpbuf;<br>
+	int i, n;<br>
+#ifdef USE_KMEM<br>
+	f = fopen("/dev/kmem", "rb");<br>
+	if (f == NULL) {<br>
+		printf("Error: Cannot open /dev/kmem.\n");<br>
+		exit(-1);<br>
+	}<br>
+	tmpbuf = alloca(16384);<br>
+	size = 0;<br>
+	while ((n = fread(tmpbuf, 1, 16384, f)) != 0) {<br>
+		size += n;<br>
+		if (size % (1024 * 1024) == 0)<br>
+			printf("%d ", size / (1024 * 1024));<br>
+	}<br>
+	printf("\n/dev/kmem size is %d bytes.\n", size);<br>
+#endif<br>
+#ifdef USE_PROC<br>
+	f = fopen("/proc/kcore", "rb");<br>
+	if (f == NULL) {<br>
+		printf("Error: /proc/kcore does not exist (need 0.99pl14).\n");<br>
+		exit(-1);<br>
+	}<br>
+	fstat(fileno(f), &st);<br>
+	size = st.st_size;<br>
+	printf("/proc/kcore size is %d bytes.\n", size);<br>
+#endif<br>
+	/* Build map. */<br>
+	count = 0;<br>
+	map = malloc(sizeof(int) * size / 4096);<br>
+	for (i = 0; i < size / 4096; i++) {<br>
+		unsigned char buf[64];<br>
+		fseek(f, i * 4096, SEEK_SET);<br>
+		fread(buf, 1, 64, f);<br>
+		map[i] = 0x100;<br>
+		if (memcmp(sig, buf, SIGLENGTH) == 0) {<br>
+			/* This page belongs to the buffer. */<br>
+			map[i] = buf[SIGLENGTH];	/* ID byte */<br>
+			count++;<br>
+		}<br>
+	}<br>
+	printf("Pages detected: %d (should be %d).\n", count, NU_PAGES);<br>
+	fclose(f);<br>
+}<br>
+<p>
+void print_map() {<br>
+	int i;<br>
+	int *cachepage;<br>
+	int conflictcount[NU_PAGES + 1];<br>
+		/* Allow for worst-case scenario. */<br>
+	int contiguouscount, linearcontiguouscount, sum;<br>
+	/* Count how many pages cache into each 'cache page', assuming a */<br>
+	/* direct-mapped external cache. */<br>
+	cachepage = malloc(sizeof(int) * CACHE_PAGES);<br>
+	for (i = 0; i < CACHE_PAGES; i++)<br>
+		cachepage[i] = 0;<br>
+	printf("Map of physical address space (%d out of %d pages marked):\n",<br>
+		NU_PAGES, size / 4096);<br>
+	contiguouscount = 0;<br>
+	linearcontiguouscount = 0;<br>
+	for (i = 0; i < size / 4096; i++) {<br>
+		if (map[i] == 0x100)<br>
+			printf(".");<br>
+		else {			/* Page is in buffer. */<br>
+			printf("#");<br>
+			/* Increase count of 'cache page'. */<br>
+			cachepage[i % CACHE_PAGES]++;<br>
+			if (i > 0)<br>
+				if (map[i - 1] != 0x100) {<br>
+					contiguouscount++;<br>
+					if (map[i - 1] == map[i] - 1)<br>
+						linearcontiguouscount++;<br>
+					if (map[i - 1] == map[i] + 1)<br>
+						linearcontiguouscount++;<br>
+				}<br>
+		}<br>
+	}<br>
+	printf("\n");<br>
+<p>
+	printf("Contiguousness: %d%% (%d out of %d), linear contiguousness: "<br>
+		"%d%%\n",<br>
+		contiguouscount * 100 / (NU_PAGES - 1), contiguouscount,<br>
+		NU_PAGES - 1, linearcontiguouscount * 100 / (NU_PAGES - 1));<br>
+<p>
+	for (i = 0; i < NU_PAGES; i++)<br>
+		conflictcount[i] = 0;<br>
+	for (i = 0; i < CACHE_PAGES; i++)<br>
+		conflictcount[cachepage[i]]++;<br>
+	printf("Cache 'pages' occupation histogram (assuming %dK "<br>
+		"direct-mapped cache):\n", CACHE_PAGES * 4);<br>
+	sum = 0;<br>
+	for (i = 0; i < NU_PAGES; i++)<br>
+		if (conflictcount[i] > 0) {<br>
+			printf("%d: %d  ", i, conflictcount[i]);<br>
+			if (i > 1)<br>
+				sum += i * conflictcount[i];<br>
+		}<br>
+	printf(" sum: %d (proportional to #cache misses)\n", sum);<br>
+}<br>
+<p>
+void volatilize( int v ) {<br>
+	static int val;<br>
+	val = v;<br>
+}<br>
+<p>
+void benchmark() {<br>
+	struct timeval startclock, endclock;<br>
+        int diffclock;<br>
+	int i, j;<br>
+	int page[NU_PAGES];<br>
+	for (i = 0; i < NU_PAGES; i++)<br>
+		page[i] = i;	/* Access pages linearly. */<br>
+	printf("Benchmarking...\n");<br>
+	gettimeofday(&startclock,0);<br>
+	for (i = 0; i < BENCHMARK_LOOPS; i++)<br>
+		for (j = 0; j < NU_PAGES; j++) {<br>
+			unsigned char *p;<br>
+			int k, v;<br>
+			v = 0;<br>
+			p = buf + page[j] * 4096;<br>
+			/* Read a byte in each 16-byte chunk of the page. */<br>
+			/* (reading a 32-bit word would make more sense, */<br>
+			/* but it doesn't really matter). */<br>
+			for (k = 0; k < 4096 / 128; k++) {<br>
+				v += *p;<br>
+				v += *(p + 16);<br>
+				v += *(p + 32);<br>
+				v += *(p + 48);<br>
+				v += *(p + 64);<br>
+				v += *(p + 80);<br>
+				v += *(p + 96);<br>
+				v += *(p + 112);<br>
+				p += 128;<br>
+			}<br>
+			volatilize(v);<br>
+		}<br>
+	gettimeofday(&endclock,0);<br>
+	diffclock = (endclock.tv_sec -startclock.tv_sec)*1000000<br>
+                  + (endclock.tv_usec-startclock.tv_usec);<br>
+	printf("Time taken: %d.%03d\n"<br>
+               , diffclock / 1000000, (diffclock % 1000000)/1000);<br>
+}<br>
+<p>
+void main() {<br>
+	create_buffer();<br>
+	detect_pages();<br>
+	print_map();<br>
+	benchmark();<br>
+	exit(0);<br>
+}<br>
+<p>
+<p>
+--+5n6rz5pIUxbDcmJ--<br>

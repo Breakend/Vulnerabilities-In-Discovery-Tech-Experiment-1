@@ -1,0 +1,55 @@
+On 08.04.2021 20:35, Sven Van Asbroeck wrote:<br>
+><i> Hi George,</i><br>
+><i> </i><br>
+><i> On Thu, Apr 8, 2021 at 2:26 PM Sven Van Asbroeck <thesven73@xxxxxxxxx> wrote:</i><br>
+><i>></i><br>
+><i>> George, I will send a patch for you to try shortly. Except if you're</i><br>
+><i>> already ahead :)</i><br>
+><i> </i><br>
+><i> Would this work for you? It does for me.</i><br>
+><i> </i><br>
+><i> diff --git a/drivers/net/ethernet/microchip/lan743x_main.c</i><br>
+><i> b/drivers/net/ethernet/microchip/lan743x_main.c</i><br>
+><i> index dbdfabff3b00..7b6794aa8ea9 100644</i><br>
+><i> --- a/drivers/net/ethernet/microchip/lan743x_main.c</i><br>
+><i> +++ b/drivers/net/ethernet/microchip/lan743x_main.c</i><br>
+><i> @@ -885,8 +885,8 @@ static int lan743x_mac_set_mtu(struct</i><br>
+><i> lan743x_adapter *adapter, int new_mtu)</i><br>
+><i>         }</i><br>
+><i> </i><br>
+><i>         mac_rx &= ~(MAC_RX_MAX_SIZE_MASK_);</i><br>
+><i> -       mac_rx |= (((new_mtu + ETH_HLEN + 4) << MAC_RX_MAX_SIZE_SHIFT_) &</i><br>
+><i> -                 MAC_RX_MAX_SIZE_MASK_);</i><br>
+><i> +       mac_rx |= (((new_mtu + ETH_HLEN + ETH_FCS_LEN)</i><br>
+><i> +                 << MAC_RX_MAX_SIZE_SHIFT_) & MAC_RX_MAX_SIZE_MASK_);</i><br>
+><i>         lan743x_csr_write(adapter, MAC_RX, mac_rx);</i><br>
+><i> </i><br>
+><i>         if (enabled) {</i><br>
+><i> @@ -1944,7 +1944,7 @@ static int lan743x_rx_init_ring_element(struct</i><br>
+><i> lan743x_rx *rx, int index)</i><br>
+><i>         struct sk_buff *skb;</i><br>
+><i>         dma_addr_t dma_ptr;</i><br>
+><i> </i><br>
+><i> -       buffer_length = netdev->mtu + ETH_HLEN + 4 + RX_HEAD_PADDING;</i><br>
+><i> +       buffer_length = netdev->mtu + ETH_HLEN + ETH_FCS_LEN + RX_HEAD_PADDING;</i><br>
+><i> </i><br>
+<br>
+A completely unrelated question:<br>
+How about VLAN packets with a 802.1Q tag? Should VLAN_ETH_HLEN be used?<br>
+<br>
+<br>
+><i>         descriptor = &rx->ring_cpu_ptr[index];</i><br>
+><i>         buffer_info = &rx->buffer_info[index];</i><br>
+><i> @@ -2040,7 +2040,7 @@ lan743x_rx_trim_skb(struct sk_buff *skb, int frame_length)</i><br>
+><i>                 dev_kfree_skb_irq(skb);</i><br>
+><i>                 return NULL;</i><br>
+><i>         }</i><br>
+><i> -       frame_length = max_t(int, 0, frame_length - RX_HEAD_PADDING - 2);</i><br>
+><i> +       frame_length = max_t(int, 0, frame_length - ETH_FCS_LEN);</i><br>
+><i>         if (skb->len > frame_length) {</i><br>
+><i>                 skb->tail -= skb->len - frame_length;</i><br>
+><i>                 skb->len = frame_length;</i><br>
+><i> </i><br>
+<br>
+<br>
+

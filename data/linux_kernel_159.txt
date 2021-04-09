@@ -1,0 +1,50 @@
+Attempt to find the mapping type for P2PDMA pages on the first<br>
+DMA map attempt if it has not been done ahead of time.<br>
+<br>
+Previously, the mapping type was expected to be calculated ahead of<br>
+time, but if pages are to come from userspace then there's no<br>
+way to ensure the path was checked ahead of time.<br>
+<br>
+Signed-off-by: Logan Gunthorpe <logang@xxxxxxxxxxxx><br>
+---<br>
+ drivers/pci/p2pdma.c | 12 +++++++++---<br>
+ 1 file changed, 9 insertions(+), 3 deletions(-)<br>
+<br>
+diff --git a/drivers/pci/p2pdma.c b/drivers/pci/p2pdma.c<br>
+index 473a08940fbc..2574a062a255 100644<br>
+--- a/drivers/pci/p2pdma.c<br>
++++ b/drivers/pci/p2pdma.c<br>
+@@ -825,11 +825,18 @@ EXPORT_SYMBOL_GPL(pci_p2pmem_publish);<br>
+ static enum pci_p2pdma_map_type pci_p2pdma_map_type(struct pci_dev *provider,<br>
+ 						    struct pci_dev *client)<br>
+ {<br>
++	enum pci_p2pdma_map_type ret;<br>
++<br>
+ 	if (!provider->p2pdma)<br>
+ 		return PCI_P2PDMA_MAP_NOT_SUPPORTED;<br>
+ <br>
+-	return xa_to_value(xa_load(&provider->p2pdma->map_types,<br>
+-				   map_types_idx(client)));<br>
++	ret = xa_to_value(xa_load(&provider->p2pdma->map_types,<br>
++				  map_types_idx(client)));<br>
++	if (ret != PCI_P2PDMA_MAP_UNKNOWN)<br>
++		return ret;<br>
++<br>
++	return upstream_bridge_distance_warn(provider, client, NULL,<br>
++					     GFP_ATOMIC);<br>
+ }<br>
+ <br>
+ static int __pci_p2pdma_map_sg(struct pci_p2pdma_pagemap *p2p_pgmap,<br>
+@@ -877,7 +884,6 @@ int pci_p2pdma_map_sg_attrs(struct device *dev, struct scatterlist *sg,<br>
+ 	case PCI_P2PDMA_MAP_BUS_ADDR:<br>
+ 		return __pci_p2pdma_map_sg(p2p_pgmap, dev, sg, nents);<br>
+ 	default:<br>
+-		WARN_ON_ONCE(1);<br>
+ 		return 0;<br>
+ 	}<br>
+ }<br>
+-- <br>
+2.20.1<br>
+<br>
+<br>
+

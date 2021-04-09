@@ -1,0 +1,31 @@
+On Tue, Mar 30, 2021 at 8:40 AM Wan Jiabing <wanjiabing@xxxxxxxx> wrote:<br>
+><i></i><br>
+><i> struct rapl_package is declared twice. One has been declared</i><br>
+><i> at 80th line.</i><br>
+><i> By reviewing the code, it should declare struct rapl_domain</i><br>
+><i> rather than rapl_package. Modify it.</i><br>
+><i></i><br>
+><i> Signed-off-by: Wan Jiabing <wanjiabing@xxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  include/linux/intel_rapl.h | 2 +-</i><br>
+><i>  1 file changed, 1 insertion(+), 1 deletion(-)</i><br>
+><i></i><br>
+><i> diff --git a/include/linux/intel_rapl.h b/include/linux/intel_rapl.h</i><br>
+><i> index 50b8398ffd21..93780834fc8f 100644</i><br>
+><i> --- a/include/linux/intel_rapl.h</i><br>
+><i> +++ b/include/linux/intel_rapl.h</i><br>
+><i> @@ -33,7 +33,7 @@ enum rapl_domain_reg_id {</i><br>
+><i>         RAPL_DOMAIN_REG_MAX,</i><br>
+><i>  };</i><br>
+><i></i><br>
+><i> -struct rapl_package;</i><br>
+><i> +struct rapl_domain;</i><br>
+><i></i><br>
+><i>  enum rapl_primitives {</i><br>
+><i>         ENERGY_COUNTER,</i><br>
+><i> --</i><br>
+<br>
+Applied as 5.13 material with edited subject and changelog, thanks!<br>
+<br>
+<br>
+

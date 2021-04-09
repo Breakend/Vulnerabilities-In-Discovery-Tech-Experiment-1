@@ -1,0 +1,64 @@
+From: Quanyang Wang <quanyang.wang@xxxxxxxxxxxxx><br>
+<br>
+When Ctrl+C occurs during the process of zynqmp_qspi_exec_op, the function<br>
+wait_for_completion_interruptible_timeout will return a non-zero value<br>
+-ERESTARTSYS immediately. This will disrupt the SPI memory operation<br>
+because the data transmitting may begin before the command or address<br>
+transmitting completes. Use wait_for_completion_timeout to prevent<br>
+the process from being interruptible.<br>
+<br>
+This patch fixes the error as below:<br>
+root@xilinx-zynqmp:~# flash_erase /dev/mtd3 0 0<br>
+Erasing 4 Kibyte @ 3d000 --  4 % complete<br>
+    (Press Ctrl+C)<br>
+[  169.581911] zynqmp-qspi ff0f0000.spi: Chip select timed out<br>
+[  170.585907] zynqmp-qspi ff0f0000.spi: Chip select timed out<br>
+[  171.589910] zynqmp-qspi ff0f0000.spi: Chip select timed out<br>
+[  172.593910] zynqmp-qspi ff0f0000.spi: Chip select timed out<br>
+[  173.597907] zynqmp-qspi ff0f0000.spi: Chip select timed out<br>
+[  173.603480] spi-nor spi0.0: Erase operation failed.<br>
+[  173.608368] spi-nor spi0.0: Attempted to modify a protected sector.<br>
+<br>
+Fixes: 1c26372e5aa9 ("spi: spi-zynqmp-gqspi: Update driver to use spi-mem framework")<br>
+Signed-off-by: Quanyang Wang <quanyang.wang@xxxxxxxxxxxxx><br>
+Reviewed-by: Amit Kumar Mahapatra <amit.kumar-mahapatra@xxxxxxxxxx><br>
+---<br>
+ drivers/spi/spi-zynqmp-gqspi.c | 6 +++---<br>
+ 1 file changed, 3 insertions(+), 3 deletions(-)<br>
+<br>
+diff --git a/drivers/spi/spi-zynqmp-gqspi.c b/drivers/spi/spi-zynqmp-gqspi.c<br>
+index c8fa6ee18ae7..d49ab6575553 100644<br>
+--- a/drivers/spi/spi-zynqmp-gqspi.c<br>
++++ b/drivers/spi/spi-zynqmp-gqspi.c<br>
+@@ -973,7 +973,7 @@ static int zynqmp_qspi_exec_op(struct spi_mem *mem,<br>
+ 		zynqmp_gqspi_write(xqspi, GQSPI_IER_OFST,<br>
+ 				   GQSPI_IER_GENFIFOEMPTY_MASK |<br>
+ 				   GQSPI_IER_TXNOT_FULL_MASK);<br>
+-		if (!wait_for_completion_interruptible_timeout<br>
++		if (!wait_for_completion_timeout<br>
+ 		    (&xqspi->data_completion, msecs_to_jiffies(1000))) {<br>
+ 			err = -ETIMEDOUT;<br>
+ 			kfree(tmpbuf);<br>
+@@ -1001,7 +1001,7 @@ static int zynqmp_qspi_exec_op(struct spi_mem *mem,<br>
+ 				   GQSPI_IER_TXEMPTY_MASK |<br>
+ 				   GQSPI_IER_GENFIFOEMPTY_MASK |<br>
+ 				   GQSPI_IER_TXNOT_FULL_MASK);<br>
+-		if (!wait_for_completion_interruptible_timeout<br>
++		if (!wait_for_completion_timeout<br>
+ 		    (&xqspi->data_completion, msecs_to_jiffies(1000))) {<br>
+ 			err = -ETIMEDOUT;<br>
+ 			goto return_err;<br>
+@@ -1076,7 +1076,7 @@ static int zynqmp_qspi_exec_op(struct spi_mem *mem,<br>
+ 						   GQSPI_IER_RXEMPTY_MASK);<br>
+ 			}<br>
+ 		}<br>
+-		if (!wait_for_completion_interruptible_timeout<br>
++		if (!wait_for_completion_timeout<br>
+ 		    (&xqspi->data_completion, msecs_to_jiffies(1000)))<br>
+ 			err = -ETIMEDOUT;<br>
+ 	}<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

@@ -1,0 +1,28 @@
+><i> </i><br>
+><i> Why?</i><br>
+><i> </i><br>
+<br>
+Because I need to manipulate name by adding the index to it during run time and use it as miscdev's name <br>
+<br>
+	snprintf(rsmu->name, sizeof(rsmu->name), "rsmu%d", rsmu->index);<br>
+	rsmu->miscdev.name = rsmu->name;<br>
+><i> </i><br>
+><i> Then why are you saving it off?</i><br>
+><i> </i><br>
+<br>
+For things like dev_err(rsmu->dev, "Undefined RSMU IOCTL");<br>
+<br>
+><i> </i><br>
+><i> Ok, that should be documented a bit, it wasn't obvious :)</i><br>
+><i> </i><br>
+<br>
+Will do for the next patch<br>
+<br>
+><i> </i><br>
+><i> So you can just look it up from the name?</i><br>
+><i> </i><br>
+<br>
+name is based on this index in the first place<br>
+<br>
+<br>
+

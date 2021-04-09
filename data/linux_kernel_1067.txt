@@ -1,0 +1,17 @@
+On Thu, 8 Apr 2021 15:26:58 +0800, Dinghao Liu wrote:<br>
+><i> pm_runtime_get_sync() will increase the runtime PM counter</i><br>
+><i> even it returns an error. Thus a pairing decrement is needed</i><br>
+><i> to prevent refcount leak. Fix this by replacing this API with</i><br>
+><i> pm_runtime_resume_and_get(), which will not change the runtime</i><br>
+><i> PM counter on error.</i><br>
+<br>
+Applied to pci/tegra, thanks!<br>
+<br>
+[1/1] PCI: tegra: Fix runtime PM imbalance in pex_ep_event_pex_rst_deassert<br>
+      <a  rel="nofollow" href="https://git.kernel.org/lpieralisi/pci/c/571cdd5294">https://git.kernel.org/lpieralisi/pci/c/571cdd5294</a><br>
+<br>
+Thanks,<br>
+Lorenzo<br>
+<br>
+<br>
+

@@ -1,0 +1,39 @@
+ On Mon, Mar 29, 2021 at 02:32:55AM +0300, Dmitry Osipenko wrote:<br>
+><i> All consumer-grade Android and Chromebook devices show a splash screen</i><br>
+><i> on boot and then display is left enabled when kernel is booted. This</i><br>
+><i> behaviour is unacceptable in a case of implicit IOMMU domains to which</i><br>
+><i> devices are attached during kernel boot since devices, like display</i><br>
+><i> controller, may perform DMA at that time. We can work around this problem</i><br>
+><i> by deferring the enable of SMMU translation for a specific devices,</i><br>
+><i> like a display controller, until the first IOMMU mapping is created,</i><br>
+><i> which works good enough in practice because by that time h/w is already</i><br>
+><i> stopped.</i><br>
+><i> </i><br>
+><i> Signed-off-by: Dmitry Osipenko <digetx@xxxxxxxxx></i><br>
+<br>
+For both patches:<br>
+Acked-by: Nicolin Chen <nicoleotsuka@xxxxxxxxx><br>
+Tested-by: Nicolin Chen <nicoleotsuka@xxxxxxxxx><br>
+<br>
+The WAR looks good to me. Perhaps Thierry would give some input.<br>
+<br>
+Another topic:<br>
+I think this may help work around the mc-errors, which we have<br>
+been facing on Tegra210 also when we enable IOMMU_DOMAIN_DMA.<br>
+(attached a test patch rebasing on these two)<br>
+<br>
+However, GPU would also report errors using DMA domain:<br>
+<br>
+ nouveau 57000000.gpu: acr: firmware unavailable<br>
+ nouveau 57000000.gpu: pmu: firmware unavailable<br>
+ nouveau 57000000.gpu: gr: firmware unavailable<br>
+ tegra-mc 70019000.memory-controller: gpusrd: read @0x00000000fffbe200: Security violation (TrustZone violation)<br>
+ nouveau 57000000.gpu: DRM: failed to create kernel channel, -22<br>
+ tegra-mc 70019000.memory-controller: gpusrd: read @0x00000000fffad000: Security violation (TrustZone violation)<br>
+ nouveau 57000000.gpu: fifo: SCHED_ERROR 20 []<br>
+ nouveau 57000000.gpu: fifo: SCHED_ERROR 20 []<br>
+<br>
+Looking at the address, seems that GPU allocated memory in 32-bit<br>
+physical address space behind SMMU, so a violation happened after<br>
+turning on DMA domain I guess... <br>
+ 

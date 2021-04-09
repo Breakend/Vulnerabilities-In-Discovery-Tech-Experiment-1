@@ -1,0 +1,42 @@
+On Thu, Apr 08, 2021 at 07:26:08PM +0800, Zhihao Cheng wrote:<br>
+><i> Fix to return a negative error code from the error handling</i><br>
+><i> case instead of 0, as done elsewhere in this function.</i><br>
+><i> </i><br>
+><i> Fixes: 3a253caaad11 ("char: tpm: add i2c driver for cr50")</i><br>
+><i> Reported-by: Hulk Robot <hulkci@xxxxxxxxxx></i><br>
+><i> Signed-off-by: Zhihao Cheng <chengzhihao1@xxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  drivers/char/tpm/tpm_tis_i2c_cr50.c | 1 +</i><br>
+><i>  1 file changed, 1 insertion(+)</i><br>
+><i> </i><br>
+><i> diff --git a/drivers/char/tpm/tpm_tis_i2c_cr50.c b/drivers/char/tpm/tpm_tis_i2c_cr50.c</i><br>
+><i> index ec9a65e7887d..e908da78fbf4 100644</i><br>
+><i> --- a/drivers/char/tpm/tpm_tis_i2c_cr50.c</i><br>
+><i> +++ b/drivers/char/tpm/tpm_tis_i2c_cr50.c</i><br>
+><i> @@ -483,6 +483,7 @@ static int tpm_cr50_i2c_tis_recv(struct tpm_chip *chip, u8 *buf, size_t buf_len)</i><br>
+><i>  	expected = be32_to_cpup((__be32 *)(buf + 2));</i><br>
+><i>  	if (expected > buf_len) {</i><br>
+><i>  		dev_err(&chip->dev, "Buffer too small to receive i2c data\n");</i><br>
+><i> +		rc = -EIO;</i><br>
+><i>  		goto out_err;</i><br>
+><i>  	}</i><br>
+><i>  </i><br>
+><i> -- </i><br>
+><i> 2.25.4</i><br>
+><i> </i><br>
+<br>
+We are using E2BIG in similar situations in a few places:<br>
+<br>
+❯ git grep E2BIG drivers/char/tpm<br>
+drivers/char/tpm/tpm-dev-common.c:              return -E2BIG;<br>
+drivers/char/tpm/tpm-interface.c:               return -E2BIG;<br>
+drivers/char/tpm/tpm_crb.c:             return -E2BIG;<br>
+drivers/char/tpm/tpm_i2c_atmel.c:               return -E2BIG;<br>
+drivers/char/tpm/tpm_i2c_infineon.c:            return -E2BIG;<br>
+<br>
+So, I tend to think that also in here it'd be better to use E2BIG.<br>
+<br>
+/Jarkko<br>
+<br>
+<br>
+

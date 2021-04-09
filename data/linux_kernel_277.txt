@@ -1,0 +1,32 @@
+From: Tomer Tayar <ttayar@xxxxxxxxx><br>
+<br>
+Clearing QM errors by the driver will prevent these H/W blocks from<br>
+stopping in case they are configured to stop on errors, so perform this<br>
+clearing only if this mode is not in use.<br>
+<br>
+Signed-off-by: Tomer Tayar <ttayar@xxxxxxxxx><br>
+Reviewed-by: Oded Gabbay <ogabbay@xxxxxxxxxx><br>
+Signed-off-by: Oded Gabbay <ogabbay@xxxxxxxxxx><br>
+---<br>
+ drivers/misc/habanalabs/gaudi/gaudi.c | 3 ++-<br>
+ 1 file changed, 2 insertions(+), 1 deletion(-)<br>
+<br>
+diff --git a/drivers/misc/habanalabs/gaudi/gaudi.c b/drivers/misc/habanalabs/gaudi/gaudi.c<br>
+index 03d3fb643e79..791434278904 100644<br>
+--- a/drivers/misc/habanalabs/gaudi/gaudi.c<br>
++++ b/drivers/misc/habanalabs/gaudi/gaudi.c<br>
+@@ -7086,7 +7086,8 @@ static void gaudi_handle_qman_err_generic(struct hl_device *hdev,<br>
+ 		}<br>
+ <br>
+ 		/* Write 1 clear errors */<br>
+-		WREG32(glbl_sts_addr + 4 * i, glbl_sts_clr_val);<br>
++		if (!hdev->stop_on_err)<br>
++			WREG32(glbl_sts_addr + 4 * i, glbl_sts_clr_val);<br>
+ 	}<br>
+ <br>
+ 	arb_err_val = RREG32(arb_err_addr);<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

@@ -1,0 +1,63 @@
+On Thu, Apr 08, 2021 at 11:52:40AM +0300, Jarkko Sakkinen wrote:<br>
+><i> On Wed, Apr 07, 2021 at 06:15:33PM +0200, Borislav Petkov wrote:</i><br>
+><i> > On Wed, Apr 07, 2021 at 07:09:11PM +0300, Jarkko Sakkinen wrote:</i><br>
+><i> > > I left out "epc" because they are already prefixed with "sgx_".</i><br>
+><i> > </i><br>
+><i> > Are there any other "page" types which are going to be figurating in</i><br>
+><i> > some pseudofs or is "sgx" == "epc" in this case?</i><br>
+><i> > </i><br>
+><i> > > debugfs was my first shot, but for sure these could be sysfs.</i><br>
+><i> > </i><br>
+><i> > Ok, let's keep it in debugfs for now, it can always be made an ABI later</i><br>
+><i> > and moved to sysfs. But pls document what those are and what they do and</i><br>
+><i> > that when in debugfs, there are no guarantees that these interfaces will</i><br>
+><i> > be there in the future.</i><br>
+><i> </i><br>
+><i> I think these attributes are quite useful information to have available so</i><br>
+><i> I'd go actually doing sysfs attributes and create</i><br>
+><i> Documentation/ABI/stable/sysfs-driver-sgx to document them.</i><br>
+><i> </i><br>
+><i> Given that they would go then to the sysfs directory of the driver, then</i><br>
+><i> probably the legit names for the attributes ought to be:</i><br>
+><i> </i><br>
+><i> - nr_all_epc_pages</i><br>
+><i> - nr_free_epc_pages</i><br>
+><i> </i><br>
+><i> What do you think?</i><br>
+<br>
+Actually I think read-only sysctl attributes would be a better idea.<br>
+<br>
+The rationale for this is that we have two misc devices sgx_enclave and<br>
+sgx_provision, and these are global attributes even applicable to KVM.<br>
+<br>
+It does not matter functionality-wise, but API-wise it'd look stupid to<br>
+directly associate to sgx_enclave.<br>
+<br>
+I.e. I'd add something along the lines of <br>
+<br>
+static struct ctl_path x86_sysctl_path[] = {<br>
+        { .procname = "kernel", },<br>
+	{ .procname = "x86", },<br>
+	{ }<br>
+};<br>
+<br>
+static struct ctl_table x86_sysctl_table[] = {<br>
+	{<br>
+		.procname       = "sgx_nr_all_pages",<br>
+		.mode           = 0444,<br>
+                /* rest ... */<br>
+	},<br>
+	{<br>
+		.procname       = "sgx_nr_free_pages",<br>
+		.mode           = 0444,<br>
+                /* rest ... */<br>
+	},<br>
+	{ }<br>
+};<br>
+<br>
+And write Documentation/x86/proc.rst.<br>
+<br>
+/Jarkko<br>
+<br>
+<br>
+

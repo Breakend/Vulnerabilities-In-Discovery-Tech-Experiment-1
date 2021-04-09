@@ -1,0 +1,29 @@
+
+<br>
+On 4/8/21 7:14 AM, Vitaly Kuznetsov wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
++ /*<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
++	 * Two Dimensional paging CR3<br>
++	 * EPTP for Intel<br>
++	 * nCR3 for AMD<br>
++	 */<br>
++	u64 tdp_pointer;<br>
+  };<br>
+</blockquote>
+'struct kvm_vcpu_hv' is only allocated when we emulate Hyper-V in KVM<br>
+(run Windows/Hyper-V guests on top of KVM). Remote TLB flush is used<br>
+when we run KVM on Hyper-V and this is a very different beast. Let's not<br>
+mix these things together. I understand that some unification is needed<br>
+to bring the AMD specific feature but let's do it differently.<br>
+<br>
+E.g. 'ept_pointer' and friends from 'struct kvm_vmx' can just go to<br>
+'struct kvm_vcpu_arch' (in case they really need to be unified).<br>
+</blockquote>
+Ahh yes, thanks for catching this. Will fix this in the next version.<br>
+<br>
+Thanks,<br>
+Vineeth<br>
+<br>
+<br>
+

@@ -1,0 +1,75 @@
+Log unmarshalling errors reported by the peer (ie. it can't parse what we<br>
+sent it).  Limit the maximum number of messages to 3.<br>
+<br>
+Signed-off-by: David Howells <dhowells@xxxxxxxxxx><br>
+cc: linux-afs@xxxxxxxxxxxxxxxxxxx<br>
+cc: linux-cachefs@xxxxxxxxxx<br>
+cc: linux-fsdevel@xxxxxxxxxxxxxxx<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/159465826250.1377938.16372395422217583913.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/159465826250.1377938.16372395422217583913.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a><br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/160588532584.3465195.15618385466614028590.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/160588532584.3465195.15618385466614028590.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # rfc<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161118149739.1232039.208060911149801695.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161118149739.1232039.208060911149801695.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # rfc<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161161046033.2537118.7779717661044373273.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161161046033.2537118.7779717661044373273.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v2<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161340409118.1303470.17812607349396199116.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161340409118.1303470.17812607349396199116.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v3<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161539552964.286939.16503232687974398308.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161539552964.286939.16503232687974398308.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v4<br>
+Link: <a  rel="nofollow" href="https://lore.kernel.org/r/161653808989.2770958.11530765353025697860.stgit@xxxxxxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/r/161653808989.2770958.11530765353025697860.stgit@xxxxxxxxxxxxxxxxxxxxxx/</a> # v5<br>
+---<br>
+<br>
+ fs/afs/rxrpc.c |   34 ++++++++++++++++++++++++++++++++++<br>
+ 1 file changed, 34 insertions(+)<br>
+<br>
+diff --git a/fs/afs/rxrpc.c b/fs/afs/rxrpc.c<br>
+index 0ec38b758f29..ae68576f822f 100644<br>
+--- a/fs/afs/rxrpc.c<br>
++++ b/fs/afs/rxrpc.c<br>
+@@ -500,6 +500,39 @@ void afs_make_call(struct afs_addr_cursor *ac, struct afs_call *call, gfp_t gfp)<br>
+ 	_leave(" = %d", ret);<br>
+ }<br>
+ <br>
++/*<br>
++ * Log remote abort codes that indicate that we have a protocol disagreement<br>
++ * with the server.<br>
++ */<br>
++static void afs_log_error(struct afs_call *call, s32 remote_abort)<br>
++{<br>
++	static int max = 0;<br>
++	const char *msg;<br>
++	int m;<br>
++<br>
++	switch (remote_abort) {<br>
++	case RX_EOF:		 msg = "unexpected EOF";	break;<br>
++	case RXGEN_CC_MARSHAL:	 msg = "client marshalling";	break;<br>
++	case RXGEN_CC_UNMARSHAL: msg = "client unmarshalling";	break;<br>
++	case RXGEN_SS_MARSHAL:	 msg = "server marshalling";	break;<br>
++	case RXGEN_SS_UNMARSHAL: msg = "server unmarshalling";	break;<br>
++	case RXGEN_DECODE:	 msg = "opcode decode";		break;<br>
++	case RXGEN_SS_XDRFREE:	 msg = "server XDR cleanup";	break;<br>
++	case RXGEN_CC_XDRFREE:	 msg = "client XDR cleanup";	break;<br>
++	case -32:		 msg = "insufficient data";	break;<br>
++	default:<br>
++		return;<br>
++	}<br>
++<br>
++	m = max;<br>
++	if (m < 3) {<br>
++		max = m + 1;<br>
++		pr_notice("kAFS: Peer reported %s failure on %s [%pISp]\n",<br>
++			  msg, call->type->name,<br>
++			  &call->alist->addrs[call->addr_ix].transport);<br>
++	}<br>
++}<br>
++<br>
+ /*<br>
+  * deliver messages to a call<br>
+  */<br>
+@@ -563,6 +596,7 @@ static void afs_deliver_to_call(struct afs_call *call)<br>
+ 			goto out;<br>
+ 		case -ECONNABORTED:<br>
+ 			ASSERTCMP(state, ==, AFS_CALL_COMPLETE);<br>
++			afs_log_error(call, call->abort_code);<br>
+ 			goto done;<br>
+ 		case -ENOTSUPP:<br>
+ 			abort_code = RXGEN_OPCODE;<br>
+<br>
+<br>
+<br>
+

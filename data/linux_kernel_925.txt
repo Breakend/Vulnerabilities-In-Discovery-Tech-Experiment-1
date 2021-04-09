@@ -1,0 +1,25 @@
+On 2021/4/8 17:33, Oliver Neukum wrote:<br>
+><i> Am Donnerstag, den 08.04.2021, 17:11 +0800 schrieb Longfang Liu:</i><br>
+><i>> Some types of EHCI controllers do not have SBRN registers.</i><br>
+><i>> By comparing the white list, the operation of reading the SBRN</i><br>
+><i>> registers is skipped.</i><br>
+><i>></i><br>
+><i>> Subsequent EHCI controller types without SBRN registers can be</i><br>
+><i>> directly added to the white list.</i><br>
+><i> </i><br>
+><i> Hi,</i><br>
+><i> </i><br>
+><i> shouldn't this set a flag for a missing functionality?</i><br>
+><i> </i><br>
+><i> 	Regards</i><br>
+><i> 		Oliver</i><br>
+><i> </i><br>
+><i> </i><br>
+><i> .</i><br>
+><i> </i><br>
+This flag is ehci->sbrn.<br>
+Thanks,<br>
+Longfang<br>
+<br>
+<br>
+

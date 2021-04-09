@@ -1,0 +1,34 @@
+On Wed, Apr 07, 2021 at 03:44:35PM +0000, Parav Pandit wrote:<br>
+<br>
+><i> > If it returns EOPNOTUPP then the remove is never called so if it allocated</i><br>
+><i> > memory and left it allocated then it is leaking memory.</i><br>
+><i> > </i><br>
+><i> I probably confused you. There is no leak today because add_one</i><br>
+><i> allocates memory, and later on when SA/CM etc per port cap is not</i><br>
+><i> present, it is unused left there which is freed on remove_one().</i><br>
+><i> Returning EOPNOTUPP is fine at start of add_one() before allocation.</i><br>
+<br>
+Most of ULPs are OK, eg umad does:<br>
+<br>
+	umad_dev = kzalloc(struct_size(umad_dev, ports, e - s + 1), GFP_KERNEL);<br>
+	if (!umad_dev)<br>
+		return -ENOMEM;<br>
+	for (i = s; i <= e; ++i) {<br>
+		if (!rdma_cap_ib_mad(device, i))<br>
+			continue;<br>
+<br>
+	if (!count) {<br>
+		ret = -EOPNOTSUPP;<br>
+		goto free;<br>
+free:<br>
+	/* balances kref_init */<br>
+	ib_umad_dev_put(umad_dev);<br>
+<br>
+It looks like only cm.c and cma.c need fixing, just fix those two.<br>
+<br>
+The CM using ULPs have a different issue though..<br>
+<br>
+Jason<br>
+<br>
+<br>
+

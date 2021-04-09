@@ -1,0 +1,183 @@
+Hi Baolu,<br>
+<br>
+><i> -----Original Message-----</i><br>
+><i> From: Lu Baolu [<a  rel="nofollow" href="mailto:baolu.lu@xxxxxxxxxxxxxxx">mailto:baolu.lu@xxxxxxxxxxxxxxx</a>]</i><br>
+><i> Sent: Thursday, April 8, 2021 12:32 PM</i><br>
+><i> To: Longpeng (Mike, Cloud Infrastructure Service Product Dept.)</i><br>
+><i> <longpeng2@xxxxxxxxxx>; iommu@xxxxxxxxxxxxxxxxxxxxxxxxxx;</i><br>
+><i> linux-kernel@xxxxxxxxxxxxxxx</i><br>
+><i> Cc: baolu.lu@xxxxxxxxxxxxxxx; David Woodhouse <dwmw2@xxxxxxxxxxxxx>; Nadav</i><br>
+><i> Amit <nadav.amit@xxxxxxxxx>; Alex Williamson <alex.williamson@xxxxxxxxxx>;</i><br>
+><i> Kevin Tian <kevin.tian@xxxxxxxxx>; Gonglei (Arei) <arei.gonglei@xxxxxxxxxx>;</i><br>
+><i> stable@xxxxxxxxxxxxxxx</i><br>
+><i> Subject: Re: [PATCH] iommu/vt-d: Force to flush iotlb before creating superpage</i><br>
+><i> </i><br>
+><i> Hi Longpeng,</i><br>
+><i> </i><br>
+><i> On 4/7/21 2:35 PM, Longpeng (Mike, Cloud Infrastructure Service Product</i><br>
+><i> Dept.) wrote:</i><br>
+><i> > Hi Baolu,</i><br>
+><i> ></i><br>
+><i> >> -----Original Message-----</i><br>
+><i> >> From: Lu Baolu [<a  rel="nofollow" href="mailto:baolu.lu@xxxxxxxxxxxxxxx">mailto:baolu.lu@xxxxxxxxxxxxxxx</a>]</i><br>
+><i> >> Sent: Friday, April 2, 2021 12:44 PM</i><br>
+><i> >> To: Longpeng (Mike, Cloud Infrastructure Service Product Dept.)</i><br>
+><i> >> <longpeng2@xxxxxxxxxx>; iommu@xxxxxxxxxxxxxxxxxxxxxxxxxx;</i><br>
+><i> >> linux-kernel@xxxxxxxxxxxxxxx</i><br>
+><i> >> Cc: baolu.lu@xxxxxxxxxxxxxxx; David Woodhouse <dwmw2@xxxxxxxxxxxxx>;</i><br>
+><i> >> Nadav Amit <nadav.amit@xxxxxxxxx>; Alex Williamson</i><br>
+><i> >> <alex.williamson@xxxxxxxxxx>; Kevin Tian <kevin.tian@xxxxxxxxx>;</i><br>
+><i> >> Gonglei (Arei) <arei.gonglei@xxxxxxxxxx>; stable@xxxxxxxxxxxxxxx</i><br>
+><i> >> Subject: Re: [PATCH] iommu/vt-d: Force to flush iotlb before creating</i><br>
+><i> >> superpage</i><br>
+><i> >></i><br>
+><i> >> Hi Longpeng,</i><br>
+><i> >></i><br>
+><i> >> On 4/1/21 3:18 PM, Longpeng(Mike) wrote:</i><br>
+><i> >>> diff --git a/drivers/iommu/intel/iommu.c</i><br>
+><i> >>> b/drivers/iommu/intel/iommu.c index ee09323..cbcb434 100644</i><br>
+><i> >>> --- a/drivers/iommu/intel/iommu.c</i><br>
+><i> >>> +++ b/drivers/iommu/intel/iommu.c</i><br>
+><i> >>> @@ -2342,9 +2342,20 @@ static inline int</i><br>
+><i> >>> hardware_largepage_caps(struct</i><br>
+><i> >> dmar_domain *domain,</i><br>
+><i> >>>    				 * removed to make room for superpage(s).</i><br>
+><i> >>>    				 * We're adding new large pages, so make sure</i><br>
+><i> >>>    				 * we don't remove their parent tables.</i><br>
+><i> >>> +				 *</i><br>
+><i> >>> +				 * We also need to flush the iotlb before creating</i><br>
+><i> >>> +				 * superpage to ensure it does not perserves any</i><br>
+><i> >>> +				 * obsolete info.</i><br>
+><i> >>>    				 */</i><br>
+><i> >>> -				dma_pte_free_pagetable(domain, iov_pfn, end_pfn,</i><br>
+><i> >>> -						       largepage_lvl + 1);</i><br>
+><i> >>> +				if (dma_pte_present(pte)) {</i><br>
+><i> >></i><br>
+><i> >> The dma_pte_free_pagetable() clears a batch of PTEs. So checking</i><br>
+><i> >> current PTE is insufficient. How about removing this check and always</i><br>
+><i> >> performing cache invalidation?</i><br>
+><i> >></i><br>
+><i> ></i><br>
+><i> > Um...the PTE here may be present( e.g. 4K mapping --> superpage mapping )</i><br>
+><i> orNOT-present ( e.g. create a totally new superpage mapping ), but we only need to</i><br>
+><i> call free_pagetable and flush_iotlb in the former case, right ?</i><br>
+><i> </i><br>
+><i> But this code covers multiple PTEs and perhaps crosses the page boundary.</i><br>
+><i> </i><br>
+><i> How about moving this code into a separated function and check PTE presence</i><br>
+><i> there. A sample code could look like below: [compiled but not tested!]</i><br>
+><i> </i><br>
+><i> diff --git a/drivers/iommu/intel/iommu.c b/drivers/iommu/intel/iommu.c index</i><br>
+><i> d334f5b4e382..0e04d450c38a 100644</i><br>
+><i> --- a/drivers/iommu/intel/iommu.c</i><br>
+><i> +++ b/drivers/iommu/intel/iommu.c</i><br>
+><i> @@ -2300,6 +2300,41 @@ static inline int hardware_largepage_caps(struct</i><br>
+><i> dmar_domain *domain,</i><br>
+><i>          return level;</i><br>
+><i>   }</i><br>
+><i> </i><br>
+><i> +/*</i><br>
+><i> + * Ensure that old small page tables are removed to make room for</i><br>
+><i> superpage(s).</i><br>
+><i> + * We're going to add new large pages, so make sure we don't remove</i><br>
+><i> their parent</i><br>
+><i> + * tables. The IOTLB/devTLBs should be flushed if any PDE/PTEs are cleared.</i><br>
+><i> + */</i><br>
+><i> +static void switch_to_super_page(struct dmar_domain *domain,</i><br>
+><i> +                                unsigned long start_pfn,</i><br>
+><i> +                                unsigned long end_pfn, int level) {</i><br>
+<br>
+Maybe "swith_to" will lead people to think "remove old and then setup new", so how about something like "remove_room_for_super_page" or "prepare_for_super_page" ?<br>
+<br>
+><i> +       unsigned long lvl_pages = lvl_to_nr_pages(level);</i><br>
+><i> +       struct dma_pte *pte = NULL;</i><br>
+><i> +       int i;</i><br>
+><i> +</i><br>
+><i> +       while (start_pfn <= end_pfn) {</i><br>
+<br>
+start_pfn < end_pfn ?<br>
+<br>
+><i> +               if (!pte)</i><br>
+><i> +                       pte = pfn_to_dma_pte(domain, start_pfn, &level);</i><br>
+><i> +</i><br>
+><i> +               if (dma_pte_present(pte)) {</i><br>
+><i> +                       dma_pte_free_pagetable(domain, start_pfn,</i><br>
+><i> +                                              start_pfn + lvl_pages - 1,</i><br>
+><i> +                                              level + 1);</i><br>
+><i> +</i><br>
+><i> +                       for_each_domain_iommu(i, domain)</i><br>
+><i> +                               iommu_flush_iotlb_psi(g_iommus[i],</i><br>
+><i> domain,</i><br>
+><i> +                                                     start_pfn,</i><br>
+><i> lvl_pages,</i><br>
+><i> +                                                     0, 0);</i><br>
+><i> +               }</i><br>
+><i> +</i><br>
+><i> +               pte++;</i><br>
+><i> +               start_pfn += lvl_pages;</i><br>
+><i> +               if (first_pte_in_page(pte))</i><br>
+><i> +                       pte = NULL;</i><br>
+><i> +       }</i><br>
+><i> +}</i><br>
+><i> +</i><br>
+><i>   static int</i><br>
+><i>   __domain_mapping(struct dmar_domain *domain, unsigned long iov_pfn,</i><br>
+><i>                   unsigned long phys_pfn, unsigned long nr_pages, int prot)</i><br>
+><i> @@ -2341,22 +2376,11 @@ __domain_mapping(struct dmar_domain *domain,</i><br>
+><i> unsigned long iov_pfn,</i><br>
+><i>                                  return -ENOMEM;</i><br>
+><i>                          /* It is large page*/</i><br>
+><i>                          if (largepage_lvl > 1) {</i><br>
+><i> -                               unsigned long nr_superpages, end_pfn;</i><br>
+><i> +                               unsigned long end_pfn;</i><br>
+><i> </i><br>
+><i>                                  pteval |= DMA_PTE_LARGE_PAGE;</i><br>
+><i> -                               lvl_pages = lvl_to_nr_pages(largepage_lvl);</i><br>
+><i> -</i><br>
+><i> -                               nr_superpages = nr_pages / lvl_pages;</i><br>
+><i> -                               end_pfn = iov_pfn + nr_superpages *</i><br>
+><i> lvl_pages - 1;</i><br>
+><i> -</i><br>
+><i> -                               /*</i><br>
+><i> -                                * Ensure that old small page tables are</i><br>
+><i> -                                * removed to make room for superpage(s).</i><br>
+><i> -                                * We're adding new large pages, so make</i><br>
+><i> sure</i><br>
+><i> -                                * we don't remove their parent tables.</i><br>
+><i> -                                */</i><br>
+><i> -                               dma_pte_free_pagetable(domain, iov_pfn,</i><br>
+><i> end_pfn,</i><br>
+><i> -                                                      largepage_lvl +</i><br>
+><i> 1);</i><br>
+><i> +                               end_pfn = ((iov_pfn + nr_pages) &</i><br>
+><i> level_mask(largepage_lvl)) - 1;</i><br>
+><i> +                               switch_to_super_page(domain, iov_pfn,</i><br>
+><i> end_pfn, largepage_lvl);</i><br>
+><i>                          } else {</i><br>
+><i>                                  pteval &=</i><br>
+><i> ~(uint64_t)DMA_PTE_LARGE_PAGE;</i><br>
+><i>                          }</i><br>
+><i> </i><br>
+><i> I will send you the diff patch off list. Any thoughts?</i><br>
+><i> </i><br>
+<br>
+The solution looks good to me. <br>
+<br>
+It's free for you to send this patch if you want, I'll send V2 if you have no plan to send it :)<br>
+<br>
+><i> Best regards,</i><br>
+><i> baolu</i><br>
+><i> </i><br>
+><i> ></i><br>
+><i> >>> +					int i;</i><br>
+><i> >>> +</i><br>
+><i> >>> +					dma_pte_free_pagetable(domain, iov_pfn, end_pfn,</i><br>
+><i> >>> +							       largepage_lvl + 1);</i><br>
+><i> >>> +					for_each_domain_iommu(i, domain)</i><br>
+><i> >>> +						iommu_flush_iotlb_psi(g_iommus[i], domain,</i><br>
+><i> >>> +								      iov_pfn, nr_pages, 0, 0);</i><br>
+><i> >>> +</i><br>
+><i> >></i><br>
+><i> >> Best regards,</i><br>
+><i> >> baolu</i><br>
+

@@ -1,0 +1,141 @@
+Adds bit perf_event_attr::remove_on_exec, to support removing an event<br>
+from a task on exec.<br>
+<br>
+This option supports the case where an event is supposed to be<br>
+process-wide only, and should not propagate beyond exec, to limit<br>
+monitoring to the original process image only.<br>
+<br>
+Suggested-by: Peter Zijlstra <peterz@xxxxxxxxxxxxx><br>
+Signed-off-by: Marco Elver <elver@xxxxxxxxxx><br>
+---<br>
+v3:<br>
+* Rework based on Peter's "perf: Rework perf_event_exit_event()" added<br>
+  to the beginning of the series. Intermediate attempts between v2 and<br>
+  this v3 can be found here:<br>
+	  <a  rel="nofollow" href="https://lkml.kernel.org/r/YFm6aakSRlF2nWtu@xxxxxxxxxxxxxxxx">https://lkml.kernel.org/r/YFm6aakSRlF2nWtu@xxxxxxxxxxxxxxxx</a><br>
+<br>
+v2:<br>
+* Add patch to series.<br>
+---<br>
+ include/uapi/linux/perf_event.h |  3 +-<br>
+ kernel/events/core.c            | 70 +++++++++++++++++++++++++++++----<br>
+ 2 files changed, 64 insertions(+), 9 deletions(-)<br>
+<br>
+diff --git a/include/uapi/linux/perf_event.h b/include/uapi/linux/perf_event.h<br>
+index 813efb65fea8..8c5b9f5ad63f 100644<br>
+--- a/include/uapi/linux/perf_event.h<br>
++++ b/include/uapi/linux/perf_event.h<br>
+@@ -390,7 +390,8 @@ struct perf_event_attr {<br>
+ 				text_poke      :  1, /* include text poke events */<br>
+ 				build_id       :  1, /* use build id in mmap2 events */<br>
+ 				inherit_thread :  1, /* children only inherit if cloned with CLONE_THREAD */<br>
+-				__reserved_1   : 28;<br>
++				remove_on_exec :  1, /* event is removed from task on exec */<br>
++				__reserved_1   : 27;<br>
+ <br>
+ 	union {<br>
+ 		__u32		wakeup_events;	  /* wakeup every n events */<br>
+diff --git a/kernel/events/core.c b/kernel/events/core.c<br>
+index de2917b3c59e..19c045ff2b9c 100644<br>
+--- a/kernel/events/core.c<br>
++++ b/kernel/events/core.c<br>
+@@ -4247,6 +4247,57 @@ static void perf_event_enable_on_exec(int ctxn)<br>
+ 		put_ctx(clone_ctx);<br>
+ }<br>
+ <br>
++static void perf_remove_from_owner(struct perf_event *event);<br>
++static void perf_event_exit_event(struct perf_event *event,<br>
++				  struct perf_event_context *ctx);<br>
++<br>
++/*<br>
++ * Removes all events from the current task that have been marked<br>
++ * remove-on-exec, and feeds their values back to parent events.<br>
++ */<br>
++static void perf_event_remove_on_exec(int ctxn)<br>
++{<br>
++	struct perf_event_context *ctx, *clone_ctx = NULL;<br>
++	struct perf_event *event, *next;<br>
++	LIST_HEAD(free_list);<br>
++	unsigned long flags;<br>
++	bool modified = false;<br>
++<br>
++	ctx = perf_pin_task_context(current, ctxn);<br>
++	if (!ctx)<br>
++		return;<br>
++<br>
++	mutex_lock(&ctx->mutex);<br>
++<br>
++	if (WARN_ON_ONCE(ctx->task != current))<br>
++		goto unlock;<br>
++<br>
++	list_for_each_entry_safe(event, next, &ctx->event_list, event_entry) {<br>
++		if (!event->attr.remove_on_exec)<br>
++			continue;<br>
++<br>
++		if (!is_kernel_event(event))<br>
++			perf_remove_from_owner(event);<br>
++<br>
++		modified = true;<br>
++<br>
++		perf_event_exit_event(event, ctx);<br>
++	}<br>
++<br>
++	raw_spin_lock_irqsave(&ctx->lock, flags);<br>
++	if (modified)<br>
++		clone_ctx = unclone_ctx(ctx);<br>
++	--ctx->pin_count;<br>
++	raw_spin_unlock_irqrestore(&ctx->lock, flags);<br>
++<br>
++unlock:<br>
++	mutex_unlock(&ctx->mutex);<br>
++<br>
++	put_ctx(ctx);<br>
++	if (clone_ctx)<br>
++		put_ctx(clone_ctx);<br>
++}<br>
++<br>
+ struct perf_read_data {<br>
+ 	struct perf_event *event;<br>
+ 	bool group;<br>
+@@ -7559,18 +7610,18 @@ void perf_event_exec(void)<br>
+ 	struct perf_event_context *ctx;<br>
+ 	int ctxn;<br>
+ <br>
+-	rcu_read_lock();<br>
+ 	for_each_task_context_nr(ctxn) {<br>
+-		ctx = current->perf_event_ctxp[ctxn];<br>
+-		if (!ctx)<br>
+-			continue;<br>
+-<br>
+ 		perf_event_enable_on_exec(ctxn);<br>
++		perf_event_remove_on_exec(ctxn);<br>
+ <br>
+-		perf_iterate_ctx(ctx, perf_event_addr_filters_exec, NULL,<br>
+-				   true);<br>
++		rcu_read_lock();<br>
++		ctx = rcu_dereference(current->perf_event_ctxp[ctxn]);<br>
++		if (ctx) {<br>
++			perf_iterate_ctx(ctx, perf_event_addr_filters_exec,<br>
++					 NULL, true);<br>
++		}<br>
++		rcu_read_unlock();<br>
+ 	}<br>
+-	rcu_read_unlock();<br>
+ }<br>
+ <br>
+ struct remote_output {<br>
+@@ -11652,6 +11703,9 @@ static int perf_copy_attr(struct perf_event_attr __user *uattr,<br>
+ 	if (!attr->inherit && attr->inherit_thread)<br>
+ 		return -EINVAL;<br>
+ <br>
++	if (attr->remove_on_exec && attr->enable_on_exec)<br>
++		return -EINVAL;<br>
++<br>
+ out:<br>
+ 	return ret;<br>
+ <br>
+-- <br>
+2.31.0.208.g409f899ff0-goog<br>
+<br>
+<br>
+

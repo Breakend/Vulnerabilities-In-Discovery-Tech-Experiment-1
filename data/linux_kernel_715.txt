@@ -1,0 +1,107 @@
+On Fri, 5 Mar 2021 at 09:12, Sean Christopherson <seanjc@xxxxxxxxxx> wrote:<br>
+><i></i><br>
+><i> Check the validity of the PDPTRs before allocating any of the PAE roots,</i><br>
+><i> otherwise a bad PDPTR will cause KVM to leak any previously allocated</i><br>
+><i> roots.</i><br>
+><i></i><br>
+><i> Signed-off-by: Sean Christopherson <seanjc@xxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  arch/x86/kvm/mmu/mmu.c | 20 ++++++++++++++------</i><br>
+><i>  1 file changed, 14 insertions(+), 6 deletions(-)</i><br>
+><i></i><br>
+><i> diff --git a/arch/x86/kvm/mmu/mmu.c b/arch/x86/kvm/mmu/mmu.c</i><br>
+><i> index 7ebfbc77b050..9fc2b46f8541 100644</i><br>
+><i> --- a/arch/x86/kvm/mmu/mmu.c</i><br>
+><i> +++ b/arch/x86/kvm/mmu/mmu.c</i><br>
+><i> @@ -3269,7 +3269,7 @@ static int mmu_alloc_direct_roots(struct kvm_vcpu *vcpu)</i><br>
+><i>  static int mmu_alloc_shadow_roots(struct kvm_vcpu *vcpu)</i><br>
+><i>  {</i><br>
+><i>         struct kvm_mmu *mmu = vcpu->arch.mmu;</i><br>
+><i> -       u64 pdptr, pm_mask;</i><br>
+><i> +       u64 pdptrs[4], pm_mask;</i><br>
+><i>         gfn_t root_gfn, root_pgd;</i><br>
+><i>         hpa_t root;</i><br>
+><i>         int i;</i><br>
+><i> @@ -3280,6 +3280,17 @@ static int mmu_alloc_shadow_roots(struct kvm_vcpu *vcpu)</i><br>
+><i>         if (mmu_check_root(vcpu, root_gfn))</i><br>
+><i>                 return 1;</i><br>
+><i></i><br>
+><i> +       if (mmu->root_level == PT32E_ROOT_LEVEL) {</i><br>
+><i> +               for (i = 0; i < 4; ++i) {</i><br>
+><i> +                       pdptrs[i] = mmu->get_pdptr(vcpu, i);</i><br>
+><i> +                       if (!(pdptrs[i] & PT_PRESENT_MASK))</i><br>
+><i> +                               continue;</i><br>
+><i> +</i><br>
+><i> +                       if (mmu_check_root(vcpu, pdptrs[i] >> PAGE_SHIFT))</i><br>
+><i> +                               return 1;</i><br>
+><i> +               }</i><br>
+><i> +       }</i><br>
+><i> +</i><br>
+<br>
+I saw this splatting:<br>
+<br>
+ BUG: sleeping function called from invalid context at<br>
+arch/x86/kvm/kvm_cache_regs.h:115<br>
+ in_atomic(): 1, irqs_disabled(): 0, non_block: 0, pid: 3090, name:<br>
+qemu-system-x86<br>
+ 3 locks held by qemu-system-x86/3090:<br>
+  #0: ffff8d499f8d00d0 (&vcpu->mutex){+.+.}-{3:3}, at:<br>
+kvm_vcpu_ioctl+0x8e/0x680 [kvm]<br>
+  #1: ffffb1b540f873e8 (&kvm->srcu){....}-{0:0}, at:<br>
+vcpu_enter_guest+0xb30/0x1b10 [kvm]<br>
+  #2: ffffb1b540f7d018 (&(kvm)->mmu_lock){+.+.}-{2:2}, at:<br>
+kvm_mmu_load+0xb5/0x540 [kvm]<br>
+ Preemption disabled at:<br>
+ [<ffffffffc0787365>] kvm_mmu_load+0xb5/0x540 [kvm]<br>
+ CPU: 2 PID: 3090 Comm: qemu-system-x86 Tainted: G        W  OE<br>
+5.12.0-rc3+ #3<br>
+ Call Trace:<br>
+  dump_stack+0x87/0xb7<br>
+  ___might_sleep+0x202/0x250<br>
+  __might_sleep+0x4a/0x80<br>
+  kvm_pdptr_read+0x20/0x60 [kvm]<br>
+  kvm_mmu_load+0x3bd/0x540 [kvm]<br>
+  vcpu_enter_guest+0x1297/0x1b10 [kvm]<br>
+  kvm_arch_vcpu_ioctl_run+0x372/0x690 [kvm]<br>
+  kvm_vcpu_ioctl+0x3ca/0x680 [kvm]<br>
+  __x64_sys_ioctl+0x27a/0x800<br>
+  do_syscall_64+0x38/0x50<br>
+  entry_SYSCALL_64_after_hwframe+0x44/0xae<br>
+<br>
+There is a might_sleep() in kvm_pdptr_read(), however, the original<br>
+commit didn't explain more. I can send a formal one if the below fix<br>
+is acceptable.<br>
+<br>
+diff --git a/arch/x86/kvm/mmu/mmu.c b/arch/x86/kvm/mmu/mmu.c<br>
+index efb41f3..f33026f 100644<br>
+--- a/arch/x86/kvm/mmu/mmu.c<br>
++++ b/arch/x86/kvm/mmu/mmu.c<br>
+@@ -3289,17 +3289,24 @@ static int mmu_alloc_shadow_roots(struct kvm_vcpu *vcpu)<br>
+     if (mmu_check_root(vcpu, root_gfn))<br>
+         return 1;<br>
+<br>
++    write_unlock(&vcpu->kvm->mmu_lock);<br>
+     if (mmu->root_level == PT32E_ROOT_LEVEL) {<br>
+         for (i = 0; i < 4; ++i) {<br>
+             pdptrs[i] = mmu->get_pdptr(vcpu, i);<br>
+             if (!(pdptrs[i] & PT_PRESENT_MASK))<br>
+                 continue;<br>
+<br>
+-            if (mmu_check_root(vcpu, pdptrs[i] >> PAGE_SHIFT))<br>
++            if (mmu_check_root(vcpu, pdptrs[i] >> PAGE_SHIFT)) {<br>
++                write_lock(&vcpu->kvm->mmu_lock);<br>
+                 return 1;<br>
++            }<br>
+         }<br>
+     }<br>
+<br>
++    write_lock(&vcpu->kvm->mmu_lock);<br>
++    if (make_mmu_pages_available(vcpu))<br>
++        return -ENOSPC;<br>
++<br>
+     /*<br>
+      * Do we shadow a long mode page table? If so we need to<br>
+      * write-protect the guests page table root.<br>
+<br>
+<br>
+

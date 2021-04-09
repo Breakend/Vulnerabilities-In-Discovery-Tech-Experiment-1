@@ -1,0 +1,170 @@
+To perform the kexec relocations with the MMU enabled, we need a copy<br>
+of the linear map.<br>
+<br>
+Create one, and install it from the relocation code. This has to be done<br>
+from the assembly code as it will be idmapped with TTBR0. The kernel<br>
+runs in TTRB1, so can't use the break-before-make sequence on the mapping<br>
+it is executing from.<br>
+<br>
+The makes no difference yet as the relocation code runs with the MMU<br>
+disabled.<br>
+<br>
+Co-developed-by: James Morse <james.morse@xxxxxxx><br>
+Signed-off-by: Pavel Tatashin <pasha.tatashin@xxxxxxxxxx><br>
+---<br>
+ arch/arm64/include/asm/assembler.h  | 19 +++++++++++++++++++<br>
+ arch/arm64/include/asm/kexec.h      |  2 ++<br>
+ arch/arm64/kernel/asm-offsets.c     |  2 ++<br>
+ arch/arm64/kernel/hibernate-asm.S   | 20 --------------------<br>
+ arch/arm64/kernel/machine_kexec.c   | 16 ++++++++++++++--<br>
+ arch/arm64/kernel/relocate_kernel.S |  3 +++<br>
+ 6 files changed, 40 insertions(+), 22 deletions(-)<br>
+<br>
+diff --git a/arch/arm64/include/asm/assembler.h b/arch/arm64/include/asm/assembler.h<br>
+index 29061b76aab6..3ce8131ad660 100644<br>
+--- a/arch/arm64/include/asm/assembler.h<br>
++++ b/arch/arm64/include/asm/assembler.h<br>
+@@ -425,6 +425,25 @@ USER(\label, ic	ivau, \tmp2)			// invalidate I line PoU<br>
+ 	isb<br>
+ 	.endm<br>
+ <br>
++/*<br>
++ * To prevent the possibility of old and new partial table walks being visible<br>
++ * in the tlb, switch the ttbr to a zero page when we invalidate the old<br>
++ * records. D4.7.1 'General TLB maintenance requirements' in ARM DDI 0487A.i<br>
++ * Even switching to our copied tables will cause a changed output address at<br>
++ * each stage of the walk.<br>
++ */<br>
++	.macro break_before_make_ttbr_switch zero_page, page_table, tmp, tmp2<br>
++	phys_to_ttbr \tmp, \zero_page<br>
++	msr	ttbr1_el1, \tmp<br>
++	isb<br>
++	tlbi	vmalle1<br>
++	dsb	nsh<br>
++	phys_to_ttbr \tmp, \page_table<br>
++	offset_ttbr1 \tmp, \tmp2<br>
++	msr	ttbr1_el1, \tmp<br>
++	isb<br>
++	.endm<br>
++<br>
+ /*<br>
+  * reset_pmuserenr_el0 - reset PMUSERENR_EL0 if PMUv3 present<br>
+  */<br>
+diff --git a/arch/arm64/include/asm/kexec.h b/arch/arm64/include/asm/kexec.h<br>
+index 305cf0840ed3..59ac166daf53 100644<br>
+--- a/arch/arm64/include/asm/kexec.h<br>
++++ b/arch/arm64/include/asm/kexec.h<br>
+@@ -97,6 +97,8 @@ struct kimage_arch {<br>
+ 	phys_addr_t dtb_mem;<br>
+ 	phys_addr_t kern_reloc;<br>
+ 	phys_addr_t el2_vectors;<br>
++	phys_addr_t ttbr1;<br>
++	phys_addr_t zero_page;<br>
+ 	/* Core ELF header buffer */<br>
+ 	void *elf_headers;<br>
+ 	unsigned long elf_headers_mem;<br>
+diff --git a/arch/arm64/kernel/asm-offsets.c b/arch/arm64/kernel/asm-offsets.c<br>
+index 2e3278df1fc3..609362b5aa76 100644<br>
+--- a/arch/arm64/kernel/asm-offsets.c<br>
++++ b/arch/arm64/kernel/asm-offsets.c<br>
+@@ -158,6 +158,8 @@ int main(void)<br>
+ #ifdef CONFIG_KEXEC_CORE<br>
+   DEFINE(KIMAGE_ARCH_DTB_MEM,		offsetof(struct kimage, arch.dtb_mem));<br>
+   DEFINE(KIMAGE_ARCH_EL2_VECTORS,	offsetof(struct kimage, arch.el2_vectors));<br>
++  DEFINE(KIMAGE_ARCH_ZERO_PAGE,		offsetof(struct kimage, arch.zero_page));<br>
++  DEFINE(KIMAGE_ARCH_TTBR1,		offsetof(struct kimage, arch.ttbr1));<br>
+   DEFINE(KIMAGE_HEAD,			offsetof(struct kimage, head));<br>
+   DEFINE(KIMAGE_START,			offsetof(struct kimage, start));<br>
+   BLANK();<br>
+diff --git a/arch/arm64/kernel/hibernate-asm.S b/arch/arm64/kernel/hibernate-asm.S<br>
+index 8ccca660034e..a31e621ba867 100644<br>
+--- a/arch/arm64/kernel/hibernate-asm.S<br>
++++ b/arch/arm64/kernel/hibernate-asm.S<br>
+@@ -15,26 +15,6 @@<br>
+ #include <asm/page.h><br>
+ #include <asm/virt.h><br>
+ <br>
+-/*<br>
+- * To prevent the possibility of old and new partial table walks being visible<br>
+- * in the tlb, switch the ttbr to a zero page when we invalidate the old<br>
+- * records. D4.7.1 'General TLB maintenance requirements' in ARM DDI 0487A.i<br>
+- * Even switching to our copied tables will cause a changed output address at<br>
+- * each stage of the walk.<br>
+- */<br>
+-.macro break_before_make_ttbr_switch zero_page, page_table, tmp, tmp2<br>
+-	phys_to_ttbr \tmp, \zero_page<br>
+-	msr	ttbr1_el1, \tmp<br>
+-	isb<br>
+-	tlbi	vmalle1<br>
+-	dsb	nsh<br>
+-	phys_to_ttbr \tmp, \page_table<br>
+-	offset_ttbr1 \tmp, \tmp2<br>
+-	msr	ttbr1_el1, \tmp<br>
+-	isb<br>
+-.endm<br>
+-<br>
+-<br>
+ /*<br>
+  * Resume from hibernate<br>
+  *<br>
+diff --git a/arch/arm64/kernel/machine_kexec.c b/arch/arm64/kernel/machine_kexec.c<br>
+index f1451d807708..c875ef522e53 100644<br>
+--- a/arch/arm64/kernel/machine_kexec.c<br>
++++ b/arch/arm64/kernel/machine_kexec.c<br>
+@@ -153,6 +153,8 @@ static void *kexec_page_alloc(void *arg)<br>
+ <br>
+ int machine_kexec_post_load(struct kimage *kimage)<br>
+ {<br>
++	int rc;<br>
++	pgd_t *trans_pgd;<br>
+ 	void *reloc_code = page_to_virt(kimage->control_code_page);<br>
+ 	long reloc_size;<br>
+ 	struct trans_pgd_info info = {<br>
+@@ -169,12 +171,22 @@ int machine_kexec_post_load(struct kimage *kimage)<br>
+ <br>
+ 	kimage->arch.el2_vectors = 0;<br>
+ 	if (is_hyp_callable()) {<br>
+-		int rc = trans_pgd_copy_el2_vectors(&info,<br>
+-						    &kimage->arch.el2_vectors);<br>
++		rc = trans_pgd_copy_el2_vectors(&info,<br>
++						&kimage->arch.el2_vectors);<br>
+ 		if (rc)<br>
+ 			return rc;<br>
+ 	}<br>
+ <br>
++	/* Create a copy of the linear map */<br>
++	trans_pgd = kexec_page_alloc(kimage);<br>
++	if (!trans_pgd)<br>
++		return -ENOMEM;<br>
++	rc = trans_pgd_create_copy(&info, &trans_pgd, PAGE_OFFSET, PAGE_END);<br>
++	if (rc)<br>
++		return rc;<br>
++	kimage->arch.ttbr1 = __pa(trans_pgd);<br>
++	kimage->arch.zero_page = __pa(empty_zero_page);<br>
++<br>
+ 	reloc_size = __relocate_new_kernel_end - __relocate_new_kernel_start;<br>
+ 	memcpy(reloc_code, __relocate_new_kernel_start, reloc_size);<br>
+ 	kimage->arch.kern_reloc = __pa(reloc_code);<br>
+diff --git a/arch/arm64/kernel/relocate_kernel.S b/arch/arm64/kernel/relocate_kernel.S<br>
+index 7a600ba33ae1..e83b6380907d 100644<br>
+--- a/arch/arm64/kernel/relocate_kernel.S<br>
++++ b/arch/arm64/kernel/relocate_kernel.S<br>
+@@ -29,10 +29,13 @@<br>
+  */<br>
+ SYM_CODE_START(arm64_relocate_new_kernel)<br>
+ 	/* Setup the list loop variables. */<br>
++	ldr	x18, [x0, #KIMAGE_ARCH_ZERO_PAGE] /* x18 = zero page for BBM */<br>
++	ldr	x17, [x0, #KIMAGE_ARCH_TTBR1]	/* x17 = linear map copy */<br>
+ 	ldr	x16, [x0, #KIMAGE_HEAD]		/* x16 = kimage_head */<br>
+ 	mov	x14, xzr			/* x14 = entry ptr */<br>
+ 	mov	x13, xzr			/* x13 = copy dest */<br>
+ 	raw_dcache_line_size x15, x1		/* x15 = dcache line size */<br>
++	break_before_make_ttbr_switch	x18, x17, x1, x2 /* set linear map */<br>
+ .Lloop:<br>
+ 	and	x12, x16, PAGE_MASK		/* x12 = addr */<br>
+ <br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

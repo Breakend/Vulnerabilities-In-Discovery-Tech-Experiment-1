@@ -1,0 +1,92 @@
+From: Steven Rostedt <rostedt@xxxxxxxxxxx><br>
+<br>
+To have nanosecond output displayed in a more human readable format, its<br>
+nicer to convert it to a seconds format (XXX.YYYYYYYYY). The problem is that<br>
+to do so, the numbers must be divided by NSEC_PER_SEC, and moded too. But as<br>
+these numbers are 64 bit, this can not be done simply with '/' and '%'<br>
+operators, but must use do_div() instead.<br>
+<br>
+Instead of performing the expensive do_div() in the hot path of the<br>
+tracepoint, it is more efficient to perform it during the output phase. But<br>
+passing in do_div() can confuse the parser, and do_div() doesn't work<br>
+exactly like a normal C function. It modifies the number in place, and we<br>
+don't want to modify the actual values in the ring buffer.<br>
+<br>
+Two helper functions are now created:<br>
+<br>
+  __print_ns_to_secs() and __print_ns_without_secs()<br>
+<br>
+They both take a value of nanoseconds, and the former will return that<br>
+number divided by NSEC_PER_SEC, and the latter will mod it with NSEC_PER_SEC<br>
+giving a way to print a nice human readable format:<br>
+<br>
+ __print_fmt("time=%llu.%09u",<br>
+	__print_ns_to_secs(REC->nsec_val),<br>
+	__print_ns_without_secs(REC->nsec_val))<br>
+<br>
+Cc: Jonathan Corbet <corbet@xxxxxxx><br>
+Cc: Steven Rostedt <rostedt@xxxxxxxxxxx><br>
+Cc: Ingo Molnar <mingo@xxxxxxxxxx><br>
+Cc: Peter Zijlstra <peterz@xxxxxxxxxxxxx><br>
+Cc: Thomas Gleixner <tglx@xxxxxxxxxxxxx><br>
+Cc: Alexandre Chartre <alexandre.chartre@xxxxxxxxxx><br>
+Cc: Clark Willaims <williams@xxxxxxxxxx><br>
+Cc: John Kacur <jkacur@xxxxxxxxxx><br>
+Cc: Juri Lelli <juri.lelli@xxxxxxxxxx><br>
+Cc: linux-doc@xxxxxxxxxxxxxxx<br>
+Cc: linux-kernel@xxxxxxxxxxxxxxx<br>
+Signed-off-by: Steven Rostedt <rostedt@xxxxxxxxxxx><br>
+Signed-off-by: Daniel Bristot de Oliveira <bristot@xxxxxxxxxx><br>
+<br>
+---<br>
+ include/trace/trace_events.h | 25 +++++++++++++++++++++++++<br>
+ 1 file changed, 25 insertions(+)<br>
+<br>
+diff --git a/include/trace/trace_events.h b/include/trace/trace_events.h<br>
+index 8268bf747d6f..c60fd1037b91 100644<br>
+--- a/include/trace/trace_events.h<br>
++++ b/include/trace/trace_events.h<br>
+@@ -33,6 +33,21 @@<br>
+ 	static const char TRACE_SYSTEM_STRING[] =	\<br>
+ 		__stringify(TRACE_SYSTEM)<br>
+ <br>
++#undef __print_ns_to_secs<br>
++#define __print_ns_to_secs(value)			\<br>
++	({						\<br>
++		u64 ____val = (u64)value;		\<br>
++		do_div(____val, NSEC_PER_SEC);		\<br>
++		____val;				\<br>
++	})<br>
++<br>
++#undef __print_ns_without_secs<br>
++#define __print_ns_without_secs(value)			\<br>
++	({						\<br>
++		u64 ____val = (u64)value;		\<br>
++		(u32) do_div(____val, NSEC_PER_SEC);	\<br>
++	})<br>
++<br>
+ TRACE_MAKE_SYSTEM_STR();<br>
+ <br>
+ #undef TRACE_DEFINE_ENUM<br>
+@@ -736,6 +751,16 @@ static inline void ftrace_test_probe_##call(void)			\<br>
+ #undef __print_array<br>
+ #undef __print_hex_dump<br>
+ <br>
++/*<br>
++ * The below is not executed in the kernel. It is only what is<br>
++ * displayed in the print format for userspace to parse.<br>
++ */<br>
++#undef __print_ns_to_secs<br>
++#define __print_ns_to_secs(val) val / 1000000000UL<br>
++<br>
++#undef __print_ns_without_secs<br>
++#define __print_ns_without_secs(val) val % 1000000000UL<br>
++<br>
+ #undef TP_printk<br>
+ #define TP_printk(fmt, args...) "\"" fmt "\", "  __stringify(args)<br>
+ <br>
+-- <br>
+2.30.2<br>
+<br>
+<br>
+

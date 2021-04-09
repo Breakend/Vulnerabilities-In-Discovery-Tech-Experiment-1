@@ -1,0 +1,50 @@
+Hi, Rob, <br>
+<br>
+The error is resulted from some un-merged patch.<br>
+<br>
+Please note that the patch depends MT8192 clock patches which haven't yet been accepted.<br>
+<a  rel="nofollow" href="https://patchwork.kernel.org/project/linux-mediatek/patch/20210324104110.13383-7-chun-jie.chen@xxxxxxxxxxxx/">https://patchwork.kernel.org/project/linux-mediatek/patch/20210324104110.13383-7-chun-jie.chen@xxxxxxxxxxxx/</a><br>
+<br>
+Thanks for your review.<br>
+<br>
+On Wed, 2021-04-07 at 09:28 -0500, Rob Herring wrote:<br>
+><i> On Wed, 07 Apr 2021 11:28:03 +0800, Flora Fu wrote:</i><br>
+><i> > Document the bindings for APU power domain on MediaTek SoC.</i><br>
+><i> > </i><br>
+><i> > Signed-off-by: Flora Fu <flora.fu@xxxxxxxxxxxx></i><br>
+><i> > ---</i><br>
+><i> >  .../soc/mediatek/mediatek,apu-pm.yaml         | 146 ++++++++++++++++++</i><br>
+><i> >  1 file changed, 146 insertions(+)</i><br>
+><i> >  create mode 100644 Documentation/devicetree/bindings/soc/mediatek/mediatek,apu-pm.yaml</i><br>
+><i> > </i><br>
+><i> </i><br>
+><i> My bot found errors running 'make DT_CHECKER_FLAGS=-m dt_binding_check'</i><br>
+><i> on your patch (DT_CHECKER_FLAGS is new in v5.13):</i><br>
+><i> </i><br>
+><i> yamllint warnings/errors:</i><br>
+><i> </i><br>
+><i> dtschema/dtc warnings/errors:</i><br>
+><i> Documentation/devicetree/bindings/soc/mediatek/mediatek,apu-pm.example.dts:19:18: fatal error: dt-bindings/clock/mt8192-clk.h: No such file or directory</i><br>
+><i>    19 |         #include <dt-bindings/clock/mt8192-clk.h></i><br>
+><i>       |                  ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~</i><br>
+><i> compilation terminated.</i><br>
+><i> make[1]: *** [scripts/Makefile.lib:377: Documentation/devicetree/bindings/soc/mediatek/mediatek,apu-pm.example.dt.yaml] Error 1</i><br>
+><i> make[1]: *** Waiting for unfinished jobs....</i><br>
+><i> make: *** [Makefile:1414: dt_binding_check] Error 2</i><br>
+><i> </i><br>
+><i> See <a  rel="nofollow" href="https://urldefense.com/v3/__https://patchwork.ozlabs.org/patch/1463115__;!!CTRNKA9wMg0ARbw!0XUn1LcNHfvUShNClpM_yH73TAR9qdm29SZMckasoCQ8UzeKS-vZW0QUu3Ssn-s6$">https://urldefense.com/v3/__https://patchwork.ozlabs.org/patch/1463115__;!!CTRNKA9wMg0ARbw!0XUn1LcNHfvUShNClpM_yH73TAR9qdm29SZMckasoCQ8UzeKS-vZW0QUu3Ssn-s6$</a> </i><br>
+><i> </i><br>
+><i> This check can fail if there are any dependencies. The base for a patch</i><br>
+><i> series is generally the most recent rc1.</i><br>
+><i> </i><br>
+><i> If you already ran 'make dt_binding_check' and didn't see the above</i><br>
+><i> error(s), then make sure 'yamllint' is installed and dt-schema is up to</i><br>
+><i> date:</i><br>
+><i> </i><br>
+><i> pip3 install dtschema --upgrade</i><br>
+><i> </i><br>
+><i> Please check and re-submit.</i><br>
+><i> </i><br>
+<br>
+<br>
+

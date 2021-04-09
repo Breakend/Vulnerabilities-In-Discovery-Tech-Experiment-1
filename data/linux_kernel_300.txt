@@ -1,0 +1,40 @@
+On 2021-04-04 18:04, Jarkko Sakkinen wrote:<br>
+><i> On Fri, Apr 02, 2021 at 08:31:19PM +0200, Jethro Beekman wrote:</i><br>
+><i>> On 2021-04-02 17:53, Dave Hansen wrote:</i><br>
+><i>>> On 4/2/21 1:38 AM, Jethro Beekman wrote:</i><br>
+><i>>>>> So, we're talking here about pages that have been EEADDED, but for</i><br>
+><i>>>>> which we do not want to include the entire contents of the page?</i><br>
+><i>>>>> Do these contents always include the beginning of the page, or can</i><br>
+><i>>>>> the holes be anywhere?</i><br>
+><i>>>> Holes can be anywhere, and EEXTEND calls need not be sequential in</i><br>
+><i>>>> memory address or even relate to the most recently EADDed page.</i><br>
+><i>>></i><br>
+><i>>> I think you're referring to the SGX architecture itself here.  The</i><br>
+><i>>> architecture permits this, right?</i><br>
+><i>></i><br>
+><i>> Yes.</i><br>
+><i>></i><br>
+><i>>> But, why would an enclave loader application ever do this? </i><br>
+><i>></i><br>
+><i>> e.g. to save space</i><br>
+><i>></i><br>
+><i>>> Is this something we want to support in Linux?</i><br>
+><i>></i><br>
+><i>> Why not? Is there a good reason to not fully support this part of the CPU architecture?</i><br>
+><i> </i><br>
+><i> Yes, in generic sense :-)</i><br>
+><i> </i><br>
+><i> If one would disagree, that would be same as saying that everything should</i><br>
+><i> execute in ring-0 because that only gives "full support".</i><br>
+<br>
+How is that the same? Please make an effort to reasonably interpret what I'm saying.<br>
+<br>
+--<br>
+Jethro Beekman | Fortanix<br>
+<br>
+<br>
+<br>
+<p><strong>Attachment:
+<a href="00856/smime.p7s" ><tt>smime.p7s</tt></a></strong><br>
+<em>Description:</em> S/MIME Cryptographic Signature</p>
+

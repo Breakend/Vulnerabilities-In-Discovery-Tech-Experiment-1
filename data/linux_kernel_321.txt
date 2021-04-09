@@ -1,0 +1,26 @@
+On Wed, Mar 24, 2021 at 7:26 PM Claudius Heine <ch@xxxxxxx> wrote:<br>
+><i></i><br>
+><i> Hi Jagan,</i><br>
+><i></i><br>
+><i> On 2021-02-14 18:44, Jagan Teki wrote:</i><br>
+><i> > SN65DSI83/84/85 devices are MIPI DSI to LVDS based bridge</i><br>
+><i> > controller IC's from Texas Instruments.</i><br>
+><i> ></i><br>
+><i> > SN65DSI83 - Single Channel DSI to Single-link LVDS bridge</i><br>
+><i> > SN65DSI84 - Single Channel DSI to Dual-link LVDS bridge</i><br>
+><i> > SN65DSI85 - Dual Channel DSI to Dual-link LVDS bridge</i><br>
+><i> ></i><br>
+><i> > Right now the bridge driver is supporting Channel A with single</i><br>
+><i> > link, so dt-bindings documented according to it.</i><br>
+><i></i><br>
+><i> Do you know when we can expect a v4 for this?</i><br>
+><i></i><br>
+><i> I am currently working on top of your patch set to setup a dual-link</i><br>
+><i> LVDS bridge of SN65DSI84.</i><br>
+<br>
+Yes, I'm planning to send v4 this week. will keep you in CC. thanks!<br>
+<br>
+Jagan.<br>
+<br>
+<br>
+

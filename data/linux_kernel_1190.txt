@@ -1,0 +1,18 @@
+On Thu, 8 Apr 2021 08:18:21 +0200<br>
+Greg KH <gregkh@xxxxxxxxxxxxxxxxxxx> wrote:<br>
+<br>
+><i> And I would love a taint for rmmod, but what is that going to help out</i><br>
+><i> with?</i><br>
+<br>
+Just like any other taint. If a rmmod can cause the system to lose<br>
+integrity, the rmmod could cause a subtle issue that manifests itself into<br>
+something more serious and may look unrelated. If you have a bug report<br>
+with the rmmod taint, one could ask to try to recreate the bug without<br>
+doing rmmod. Or perhaps we have a similar bug reports that all show the<br>
+rmmod taint. That would give us an impression that something was removed<br>
+and caused the system to lose stability.<br>
+<br>
+-- Steve<br>
+<br>
+<br>
+

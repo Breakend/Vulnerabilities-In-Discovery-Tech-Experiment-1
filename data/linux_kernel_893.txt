@@ -1,0 +1,292 @@
+Hi Yanan,<br>
+<br>
+On 4/8/21 10:23 AM, wangyanan (Y) wrote:<br>
+><i> Hi Alex,</i><br>
+><i></i><br>
+><i> On 2021/4/7 23:31, Alexandru Elisei wrote:</i><br>
+><i>> Hi Yanan,</i><br>
+><i>></i><br>
+><i>> On 3/26/21 3:16 AM, Yanan Wang wrote:</i><br>
+><i>>> We currently uniformly permorm CMOs of D-cache and I-cache in function</i><br>
+><i>>> user_mem_abort before calling the fault handlers. If we get concurrent</i><br>
+><i>>> guest faults(e.g. translation faults, permission faults) or some really</i><br>
+><i>>> unnecessary guest faults caused by BBM, CMOs for the first vcpu are</i><br>
+><i>> I can't figure out what BBM means.</i><br>
+><i> Just as Will has explained, it's Break-Before-Make rule. When we need to</i><br>
+><i> replace an old table entry with a new one, we should firstly invalidate</i><br>
+><i> the old table entry(Break), before installation of the new entry(Make).</i><br>
+<br>
+Got it, thank you and Will for the explanation.<br>
+<br>
+><i></i><br>
+><i></i><br>
+><i> And I think this patch mainly introduces benefits in two specific scenarios:</i><br>
+><i> 1) In a VM startup, it will improve efficiency of handling page faults incurred</i><br>
+><i> by vCPUs, when initially populating stage2 page tables.</i><br>
+><i> 2) After live migration, the heavy workload will be resumed on the destination</i><br>
+><i> VMs, however all the stage2 page tables need to be rebuilt.</i><br>
+><i>>> necessary while the others later are not.</i><br>
+><i>>></i><br>
+><i>>> By moving CMOs to the fault handlers, we can easily identify conditions</i><br>
+><i>>> where they are really needed and avoid the unnecessary ones. As it's a</i><br>
+><i>>> time consuming process to perform CMOs especially when flushing a block</i><br>
+><i>>> range, so this solution reduces much load of kvm and improve efficiency</i><br>
+><i>>> of the page table code.</i><br>
+><i>>></i><br>
+><i>>> So let's move both clean of D-cache and invalidation of I-cache to the</i><br>
+><i>>> map path and move only invalidation of I-cache to the permission path.</i><br>
+><i>>> Since the original APIs for CMOs in mmu.c are only called in function</i><br>
+><i>>> user_mem_abort, we now also move them to pgtable.c.</i><br>
+><i>>></i><br>
+><i>>> Signed-off-by: Yanan Wang <wangyanan55@xxxxxxxxxx></i><br>
+><i>>> ---</i><br>
+><i>>>   arch/arm64/include/asm/kvm_mmu.h | 31 ---------------</i><br>
+><i>>>   arch/arm64/kvm/hyp/pgtable.c     | 68 +++++++++++++++++++++++++-------</i><br>
+><i>>>   arch/arm64/kvm/mmu.c             | 23 ++---------</i><br>
+><i>>>   3 files changed, 57 insertions(+), 65 deletions(-)</i><br>
+><i>>></i><br>
+><i>>> diff --git a/arch/arm64/include/asm/kvm_mmu.h b/arch/arm64/include/asm/kvm_mmu.h</i><br>
+><i>>> index 90873851f677..c31f88306d4e 100644</i><br>
+><i>>> --- a/arch/arm64/include/asm/kvm_mmu.h</i><br>
+><i>>> +++ b/arch/arm64/include/asm/kvm_mmu.h</i><br>
+><i>>> @@ -177,37 +177,6 @@ static inline bool vcpu_has_cache_enabled(struct kvm_vcpu</i><br>
+><i>>> *vcpu)</i><br>
+><i>>>       return (vcpu_read_sys_reg(vcpu, SCTLR_EL1) & 0b101) == 0b101;</i><br>
+><i>>>   }</i><br>
+><i>>>   -static inline void __clean_dcache_guest_page(kvm_pfn_t pfn, unsigned long</i><br>
+><i>>> size)</i><br>
+><i>>> -{</i><br>
+><i>>> -    void *va = page_address(pfn_to_page(pfn));</i><br>
+><i>>> -</i><br>
+><i>>> -    /*</i><br>
+><i>>> -     * With FWB, we ensure that the guest always accesses memory using</i><br>
+><i>>> -     * cacheable attributes, and we don't have to clean to PoC when</i><br>
+><i>>> -     * faulting in pages. Furthermore, FWB implies IDC, so cleaning to</i><br>
+><i>>> -     * PoU is not required either in this case.</i><br>
+><i>>> -     */</i><br>
+><i>>> -    if (cpus_have_const_cap(ARM64_HAS_STAGE2_FWB))</i><br>
+><i>>> -        return;</i><br>
+><i>>> -</i><br>
+><i>>> -    kvm_flush_dcache_to_poc(va, size);</i><br>
+><i>>> -}</i><br>
+><i>>> -</i><br>
+><i>>> -static inline void __invalidate_icache_guest_page(kvm_pfn_t pfn,</i><br>
+><i>>> -                          unsigned long size)</i><br>
+><i>>> -{</i><br>
+><i>>> -    if (icache_is_aliasing()) {</i><br>
+><i>>> -        /* any kind of VIPT cache */</i><br>
+><i>>> -        __flush_icache_all();</i><br>
+><i>>> -    } else if (is_kernel_in_hyp_mode() || !icache_is_vpipt()) {</i><br>
+><i>>> -        /* PIPT or VPIPT at EL2 (see comment in __kvm_tlb_flush_vmid_ipa) */</i><br>
+><i>>> -        void *va = page_address(pfn_to_page(pfn));</i><br>
+><i>>> -</i><br>
+><i>>> -        invalidate_icache_range((unsigned long)va,</i><br>
+><i>>> -                    (unsigned long)va + size);</i><br>
+><i>>> -    }</i><br>
+><i>>> -}</i><br>
+><i>>> -</i><br>
+><i>>>   void kvm_set_way_flush(struct kvm_vcpu *vcpu);</i><br>
+><i>>>   void kvm_toggle_cache(struct kvm_vcpu *vcpu, bool was_enabled);</i><br>
+><i>>>   diff --git a/arch/arm64/kvm/hyp/pgtable.c b/arch/arm64/kvm/hyp/pgtable.c</i><br>
+><i>>> index 4d177ce1d536..829a34eea526 100644</i><br>
+><i>>> --- a/arch/arm64/kvm/hyp/pgtable.c</i><br>
+><i>>> +++ b/arch/arm64/kvm/hyp/pgtable.c</i><br>
+><i>>> @@ -464,6 +464,43 @@ static int stage2_map_set_prot_attr(enum kvm_pgtable_prot</i><br>
+><i>>> prot,</i><br>
+><i>>>       return 0;</i><br>
+><i>>>   }</i><br>
+><i>>>   +static bool stage2_pte_cacheable(kvm_pte_t pte)</i><br>
+><i>>> +{</i><br>
+><i>>> +    u64 memattr = pte & KVM_PTE_LEAF_ATTR_LO_S2_MEMATTR;</i><br>
+><i>>> +    return memattr == PAGE_S2_MEMATTR(NORMAL);</i><br>
+><i>>> +}</i><br>
+><i>>> +</i><br>
+><i>>> +static bool stage2_pte_executable(kvm_pte_t pte)</i><br>
+><i>>> +{</i><br>
+><i>>> +    return !(pte & KVM_PTE_LEAF_ATTR_HI_S2_XN);</i><br>
+><i>>> +}</i><br>
+><i>>> +</i><br>
+><i>>> +static void stage2_flush_dcache(void *addr, u64 size)</i><br>
+><i>>> +{</i><br>
+><i>>> +    /*</i><br>
+><i>>> +     * With FWB, we ensure that the guest always accesses memory using</i><br>
+><i>>> +     * cacheable attributes, and we don't have to clean to PoC when</i><br>
+><i>>> +     * faulting in pages. Furthermore, FWB implies IDC, so cleaning to</i><br>
+><i>>> +     * PoU is not required either in this case.</i><br>
+><i>>> +     */</i><br>
+><i>>> +    if (cpus_have_const_cap(ARM64_HAS_STAGE2_FWB))</i><br>
+><i>>> +        return;</i><br>
+><i>>> +</i><br>
+><i>>> +    __flush_dcache_area(addr, size);</i><br>
+><i>>> +}</i><br>
+><i>>> +</i><br>
+><i>>> +static void stage2_invalidate_icache(void *addr, u64 size)</i><br>
+><i>>> +{</i><br>
+><i>>> +    if (icache_is_aliasing()) {</i><br>
+><i>>> +        /* Flush any kind of VIPT icache */</i><br>
+><i>>> +        __flush_icache_all();</i><br>
+><i>>> +    } else if (is_kernel_in_hyp_mode() || !icache_is_vpipt()) {</i><br>
+><i>>> +        /* PIPT or VPIPT at EL2 */</i><br>
+><i>>> +        invalidate_icache_range((unsigned long)addr,</i><br>
+><i>>> +                    (unsigned long)addr + size);</i><br>
+><i>>> +    }</i><br>
+><i>>> +}</i><br>
+><i>>> +</i><br>
+><i>>>   static int stage2_map_walker_try_leaf(u64 addr, u64 end, u32 level,</i><br>
+><i>>>                         kvm_pte_t *ptep,</i><br>
+><i>>>                         struct stage2_map_data *data)</i><br>
+><i>>> @@ -495,6 +532,13 @@ static int stage2_map_walker_try_leaf(u64 addr, u64 end,</i><br>
+><i>>> u32 level,</i><br>
+><i>>>           put_page(page);</i><br>
+><i>>>       }</i><br>
+><i>>>   +    /* Perform CMOs before installation of the new PTE */</i><br>
+><i>>> +    if (!kvm_pte_valid(old) || stage2_pte_cacheable(old))</i><br>
+><i>> I'm not sure why the stage2_pte_cacheable(old) condition is needed.</i><br>
+><i>></i><br>
+><i>> kvm_handle_guest_abort() handles three types of stage 2 data or instruction</i><br>
+><i>> aborts: translation faults (fault_status == FSC_FAULT), access faults</i><br>
+><i>> (fault_status == FSC_ACCESS) and permission faults (fault_status == FSC_PERM).</i><br>
+><i>></i><br>
+><i>> Access faults are handled in handle_access_fault(), which means user_mem_abort()</i><br>
+><i>> handles translation and permission faults.</i><br>
+><i> Yes, and we are certain that it's a translation fault here in</i><br>
+><i> stage2_map_walker_try_leaf.</i><br>
+><i>> The original code did the dcache clean</i><br>
+><i>> + inval when not a permission fault, which means the CMO was done only on a</i><br>
+><i>> translation fault. Translation faults mean that the IPA was not mapped, so the old</i><br>
+><i>> entry will always be invalid. Even if we're coalescing multiple last level leaf</i><br>
+><i>> entries int oa  block mapping, the table entry which is replaced is invalid</i><br>
+><i>> because it's marked as such in stage2_map_walk_table_pre().</i><br>
+><i>></i><br>
+><i>> Is there something I'm missing?</i><br>
+><i> I originally thought that we could possibly have a translation fault on a valid</i><br>
+><i> stage2 table</i><br>
+><i> descriptor due to some special cases, and that's the reason</i><br>
+><i> stage2_pte_cacheable(old)</i><br>
+><i> condition exits, but I can't image any scenario like this.</i><br>
+><i></i><br>
+><i> I think your above explanation is right, maybe I should just drop that condition.</i><br>
+><i>></i><br>
+><i>>> +        stage2_flush_dcache(__va(phys), granule);</i><br>
+><i>>> +</i><br>
+><i>>> +    if (stage2_pte_executable(new))</i><br>
+><i>>> +        stage2_invalidate_icache(__va(phys), granule);</i><br>
+><i>> This, together with the stage2_attr_walker() changes below, look identical to the</i><br>
+><i>> current code in user_mem_abort(). The executable permission is set on an exec</i><br>
+><i>> fault (instruction abort not on a stage 2 translation table walk), and as a result</i><br>
+><i>> of the fault we either need to map a new page here, or relax permissions in</i><br>
+><i>> kvm_pgtable_stage2_relax_perms() -> stage2_attr_walker() below.</i><br>
+><i> I agree.</i><br>
+><i> Do you mean this part of change is right?</i><br>
+<br>
+Yes, I was trying to explain that the behaviour with regard to icache invalidation<br>
+from this patch is identical to the current behaviour of user_mem_abort ()<br>
+(without this patch).<br>
+<br>
+Thanks,<br>
+<br>
+Alex<br>
+<br>
+><i></i><br>
+><i> Thanks,</i><br>
+><i> Yanan</i><br>
+><i>> Thanks,</i><br>
+><i>></i><br>
+><i>> Alex</i><br>
+><i>></i><br>
+><i>>> +</i><br>
+><i>>>       smp_store_release(ptep, new);</i><br>
+><i>>>       get_page(page);</i><br>
+><i>>>       data->phys += granule;</i><br>
+><i>>> @@ -651,20 +695,6 @@ int kvm_pgtable_stage2_map(struct kvm_pgtable *pgt, u64</i><br>
+><i>>> addr, u64 size,</i><br>
+><i>>>       return ret;</i><br>
+><i>>>   }</i><br>
+><i>>>   -static void stage2_flush_dcache(void *addr, u64 size)</i><br>
+><i>>> -{</i><br>
+><i>>> -    if (cpus_have_const_cap(ARM64_HAS_STAGE2_FWB))</i><br>
+><i>>> -        return;</i><br>
+><i>>> -</i><br>
+><i>>> -    __flush_dcache_area(addr, size);</i><br>
+><i>>> -}</i><br>
+><i>>> -</i><br>
+><i>>> -static bool stage2_pte_cacheable(kvm_pte_t pte)</i><br>
+><i>>> -{</i><br>
+><i>>> -    u64 memattr = pte & KVM_PTE_LEAF_ATTR_LO_S2_MEMATTR;</i><br>
+><i>>> -    return memattr == PAGE_S2_MEMATTR(NORMAL);</i><br>
+><i>>> -}</i><br>
+><i>>> -</i><br>
+><i>>>   static int stage2_unmap_walker(u64 addr, u64 end, u32 level, kvm_pte_t *ptep,</i><br>
+><i>>>                      enum kvm_pgtable_walk_flags flag,</i><br>
+><i>>>                      void * const arg)</i><br>
+><i>>> @@ -743,8 +773,16 @@ static int stage2_attr_walker(u64 addr, u64 end, u32</i><br>
+><i>>> level, kvm_pte_t *ptep,</i><br>
+><i>>>        * but worst-case the access flag update gets lost and will be</i><br>
+><i>>>        * set on the next access instead.</i><br>
+><i>>>        */</i><br>
+><i>>> -    if (data->pte != pte)</i><br>
+><i>>> +    if (data->pte != pte) {</i><br>
+><i>>> +        /*</i><br>
+><i>>> +         * Invalidate the instruction cache before updating</i><br>
+><i>>> +         * if we are going to add the executable permission.</i><br>
+><i>>> +         */</i><br>
+><i>>> +        if (!stage2_pte_executable(*ptep) && stage2_pte_executable(pte))</i><br>
+><i>>> +            stage2_invalidate_icache(kvm_pte_follow(pte),</i><br>
+><i>>> +                         kvm_granule_size(level));</i><br>
+><i>>>           WRITE_ONCE(*ptep, pte);</i><br>
+><i>>> +    }</i><br>
+><i>>>         return 0;</i><br>
+><i>>>   }</i><br>
+><i>>> diff --git a/arch/arm64/kvm/mmu.c b/arch/arm64/kvm/mmu.c</i><br>
+><i>>> index 77cb2d28f2a4..1eec9f63bc6f 100644</i><br>
+><i>>> --- a/arch/arm64/kvm/mmu.c</i><br>
+><i>>> +++ b/arch/arm64/kvm/mmu.c</i><br>
+><i>>> @@ -609,16 +609,6 @@ void kvm_arch_mmu_enable_log_dirty_pt_masked(struct kvm</i><br>
+><i>>> *kvm,</i><br>
+><i>>>       kvm_mmu_write_protect_pt_masked(kvm, slot, gfn_offset, mask);</i><br>
+><i>>>   }</i><br>
+><i>>>   -static void clean_dcache_guest_page(kvm_pfn_t pfn, unsigned long size)</i><br>
+><i>>> -{</i><br>
+><i>>> -    __clean_dcache_guest_page(pfn, size);</i><br>
+><i>>> -}</i><br>
+><i>>> -</i><br>
+><i>>> -static void invalidate_icache_guest_page(kvm_pfn_t pfn, unsigned long size)</i><br>
+><i>>> -{</i><br>
+><i>>> -    __invalidate_icache_guest_page(pfn, size);</i><br>
+><i>>> -}</i><br>
+><i>>> -</i><br>
+><i>>>   static void kvm_send_hwpoison_signal(unsigned long address, short lsb)</i><br>
+><i>>>   {</i><br>
+><i>>>       send_sig_mceerr(BUS_MCEERR_AR, (void __user *)address, lsb, current);</i><br>
+><i>>> @@ -882,13 +872,8 @@ static int user_mem_abort(struct kvm_vcpu *vcpu,</i><br>
+><i>>> phys_addr_t fault_ipa,</i><br>
+><i>>>       if (writable)</i><br>
+><i>>>           prot |= KVM_PGTABLE_PROT_W;</i><br>
+><i>>>   -    if (fault_status != FSC_PERM && !device)</i><br>
+><i>>> -        clean_dcache_guest_page(pfn, vma_pagesize);</i><br>
+><i>>> -</i><br>
+><i>>> -    if (exec_fault) {</i><br>
+><i>>> +    if (exec_fault)</i><br>
+><i>>>           prot |= KVM_PGTABLE_PROT_X;</i><br>
+><i>>> -        invalidate_icache_guest_page(pfn, vma_pagesize);</i><br>
+><i>>> -    }</i><br>
+><i>>>         if (device)</i><br>
+><i>>>           prot |= KVM_PGTABLE_PROT_DEVICE;</i><br>
+><i>>> @@ -1144,10 +1129,10 @@ int kvm_set_spte_hva(struct kvm *kvm, unsigned long</i><br>
+><i>>> hva, pte_t pte)</i><br>
+><i>>>       trace_kvm_set_spte_hva(hva);</i><br>
+><i>>>         /*</i><br>
+><i>>> -     * We've moved a page around, probably through CoW, so let's treat it</i><br>
+><i>>> -     * just like a translation fault and clean the cache to the PoC.</i><br>
+><i>>> +     * We've moved a page around, probably through CoW, so let's treat</i><br>
+><i>>> +     * it just like a translation fault and the map handler will clean</i><br>
+><i>>> +     * the cache to the PoC.</i><br>
+><i>>>        */</i><br>
+><i>>> -    clean_dcache_guest_page(pfn, PAGE_SIZE);</i><br>
+><i>>>       handle_hva_to_gpa(kvm, hva, end, &kvm_set_spte_handler, &pfn);</i><br>
+><i>>>       return 0;</i><br>
+><i>>>   }</i><br>
+><i>> .</i><br>
+<br>
+<br>
+

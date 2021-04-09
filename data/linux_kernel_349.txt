@@ -1,0 +1,70 @@
+
+On 08.04.21 16:18, Catalin Marinas wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+On Wed, Apr 07, 2021 at 04:52:54PM +0100, Steven Price wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+On 07/04/2021 16:14, Catalin Marinas wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+On Wed, Apr 07, 2021 at 11:20:18AM +0100, Steven Price wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+On 31/03/2021 19:43, Catalin Marinas wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+When a slot is added by the VMM, if it asked for MTE in guest (I guess<br>
+that's an opt-in by the VMM, haven't checked the other patches), can we<br>
+reject it if it's is going to be mapped as Normal Cacheable but it is a<br>
+ZONE_DEVICE (i.e. !kvm_is_device_pfn() + one of David's suggestions to<br>
+check for ZONE_DEVICE)? This way we don't need to do more expensive<br>
+checks in set_pte_at().<br>
+</blockquote>
+<br>
+The problem is that KVM allows the VMM to change the memory backing a slot<br>
+while the guest is running. This is obviously useful for the likes of<br>
+migration, but ultimately means that even if you were to do checks at the<br>
+time of slot creation, you would need to repeat the checks at set_pte_at()<br>
+time to ensure a mischievous VMM didn't swap the page for a problematic one.<br>
+</blockquote>
+<br>
+Does changing the slot require some KVM API call? Can we intercept it<br>
+and do the checks there?<br>
+</blockquote>
+<br>
+As David has already replied - KVM uses MMU notifiers, so there's not really<br>
+a good place to intercept this before the fault.<br>
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+Maybe a better alternative for the time being is to add a new<br>
+kvm_is_zone_device_pfn() and force KVM_PGTABLE_PROT_DEVICE if it returns<br>
+true _and_ the VMM asked for MTE in guest. We can then only set<br>
+PG_mte_tagged if !device.<br>
+</blockquote>
+<br>
+KVM already has a kvm_is_device_pfn(), and yes I agree restricting the MTE<br>
+checks to only !kvm_is_device_pfn() makes sense (I have the fix in my branch<br>
+locally).<br>
+</blockquote>
+<br>
+Indeed, you can skip it if kvm_is_device_pfn(). In addition, with MTE,<br>
+I'd also mark a pfn as 'device' in user_mem_abort() if<br>
+pfn_to_online_page() is NULL as we don't want to map it as Cacheable in<br>
+Stage 2. It's unlikely that we'll trip over this path but just in case.<br>
+<br>
+(can we have a ZONE_DEVICE _online_ pfn or by definition they are<br>
+considered offline?)<br>
+</blockquote>
+<br>
+By definition (and implementation) offline. When you get a page = 
+pfn_to_online_page() with page != NULL, that one should never be 
+ZONE_DEVICE (otherwise it would be a BUG).
+<br>
+<br>
+As I said, things are different when exposing dax memory via dax/kmem to 
+the buddy. But then, we are no longer talking about ZONE_DEVICE.
+<br>
+<br>
+--<br>
+Thanks,<br>
+<br>
+David / dhildenb<br>
+<br>
+<br>
+

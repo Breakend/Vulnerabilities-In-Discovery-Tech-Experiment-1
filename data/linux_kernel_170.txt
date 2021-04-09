@@ -1,0 +1,63 @@
+From: Tom Lendacky <thomas.lendacky@xxxxxxx><br>
+<br>
+Access to the GHCB is mainly in the VMGEXIT path and it is known that the<br>
+GHCB will be mapped. But there are two paths where it is possible the GHCB<br>
+might not be mapped.<br>
+<br>
+The sev_vcpu_deliver_sipi_vector() routine will update the GHCB to inform<br>
+the caller of the AP Reset Hold NAE event that a SIPI has been delivered.<br>
+However, if a SIPI is performed without a corresponding AP Reset Hold,<br>
+then the GHCB might not be mapped (depending on the previous VMEXIT),<br>
+which will result in a NULL pointer dereference.<br>
+<br>
+The svm_complete_emulated_msr() routine will update the GHCB to inform<br>
+the caller of a RDMSR/WRMSR operation about any errors. While it is likely<br>
+that the GHCB will be mapped in this situation, add a safe guard<br>
+in this path to be certain a NULL pointer dereference is not encountered.<br>
+<br>
+Fixes: f1c6366e3043 ("KVM: SVM: Add required changes to support intercepts under SEV-ES")<br>
+Fixes: 647daca25d24 ("KVM: SVM: Add support for booting APs in an SEV-ES guest")<br>
+Signed-off-by: Tom Lendacky <thomas.lendacky@xxxxxxx><br>
+<br>
+---<br>
+<br>
+Changes from v1:<br>
+- Added the svm_complete_emulated_msr() path as suggested by Sean<br>
+  Christopherson<br>
+- Add a WARN_ON_ONCE() to the sev_vcpu_deliver_sipi_vector() path<br>
+---<br>
+ arch/x86/kvm/svm/sev.c | 3 +++<br>
+ arch/x86/kvm/svm/svm.c | 2 +-<br>
+ 2 files changed, 4 insertions(+), 1 deletion(-)<br>
+<br>
+diff --git a/arch/x86/kvm/svm/sev.c b/arch/x86/kvm/svm/sev.c<br>
+index 83e00e524513..7ac67615c070 100644<br>
+--- a/arch/x86/kvm/svm/sev.c<br>
++++ b/arch/x86/kvm/svm/sev.c<br>
+@@ -2105,5 +2105,8 @@ void sev_vcpu_deliver_sipi_vector(struct kvm_vcpu *vcpu, u8 vector)<br>
+ 	 * the guest will set the CS and RIP. Set SW_EXIT_INFO_2 to a<br>
+ 	 * non-zero value.<br>
+ 	 */<br>
++	if (WARN_ON_ONCE(!svm->ghcb))<br>
++		return;<br>
++<br>
+ 	ghcb_set_sw_exit_info_2(svm->ghcb, 1);<br>
+ }<br>
+diff --git a/arch/x86/kvm/svm/svm.c b/arch/x86/kvm/svm/svm.c<br>
+index 271196400495..534e52ba6045 100644<br>
+--- a/arch/x86/kvm/svm/svm.c<br>
++++ b/arch/x86/kvm/svm/svm.c<br>
+@@ -2759,7 +2759,7 @@ static int svm_get_msr(struct kvm_vcpu *vcpu, struct msr_data *msr_info)<br>
+ static int svm_complete_emulated_msr(struct kvm_vcpu *vcpu, int err)<br>
+ {<br>
+ 	struct vcpu_svm *svm = to_svm(vcpu);<br>
+-	if (!sev_es_guest(vcpu->kvm) || !err)<br>
++	if (!err || !sev_es_guest(vcpu->kvm) || WARN_ON_ONCE(!svm->ghcb))<br>
+ 		return kvm_complete_insn_gp(vcpu, err);<br>
+ <br>
+ 	ghcb_set_sw_exit_info_1(svm->ghcb, 1);<br>
+-- <br>
+2.31.0<br>
+<br>
+<br>
+

@@ -1,0 +1,38 @@
+On Tue, Apr 06, 2021 at 10:38:36AM -0700, Daniel Walker wrote:<br>
+><i> On Fri, Apr 02, 2021 at 03:18:21PM +0000, Christophe Leroy wrote:</i><br>
+><i> > -config CMDLINE_BOOL</i><br>
+><i> > -	bool "Built-in kernel command line"</i><br>
+><i> > -	help</i><br>
+><i> > -	  For most systems, it is firmware or second stage bootloader that</i><br>
+><i> > -	  by default specifies the kernel command line options.  However,</i><br>
+><i> > -	  it might be necessary or advantageous to either override the</i><br>
+><i> > -	  default kernel command line or add a few extra options to it.</i><br>
+><i> > -	  For such cases, this option allows you to hardcode your own</i><br>
+><i> > -	  command line options directly into the kernel.  For that, you</i><br>
+><i> > -	  should choose 'Y' here, and fill in the extra boot arguments</i><br>
+><i> > -	  in CONFIG_CMDLINE.</i><br>
+><i> > -</i><br>
+><i> > -	  The built-in options will be concatenated to the default command</i><br>
+><i> > -	  line if CMDLINE_OVERRIDE is set to 'N'. Otherwise, the default</i><br>
+><i> > -	  command line will be ignored and replaced by the built-in string.</i><br>
+><i> > -</i><br>
+><i> > -	  Most MIPS systems will normally expect 'N' here and rely upon</i><br>
+><i> > -	  the command line from the firmware or the second-stage bootloader.</i><br>
+><i> > -</i><br>
+><i> </i><br>
+><i> </i><br>
+><i> See how you complained that I have CMDLINE_BOOL in my changed, and you think it</i><br>
+><i> shouldn't exist.</i><br>
+><i> </i><br>
+><i> Yet here mips has it, and you just deleted it with no feature parity in your</i><br>
+><i> changes for this.</i><br>
+<br>
+AFAICT, CMDLINE_BOOL equates to a non-empty or empty CONFIG_CMDLINE. You <br>
+seem to need it just because you have CMDLINE_PREPEND and <br>
+CMDLINE_APPEND. If that's not it, what feature is missing? CMDLINE_BOOL <br>
+is not a feature, but an implementation detail.<br>
+<br>
+Rob<br>
+<br>
+<br>
+

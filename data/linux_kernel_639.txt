@@ -1,0 +1,56 @@
+Hi Tim,<br>
+<br>
+On Mon, Apr 5, 2021 at 11:08 AM Tim Chen <tim.c.chen@xxxxxxxxxxxxxxx> wrote:<br>
+><i></i><br>
+><i> Traditionally, all memory is DRAM.  Some DRAM might be closer/faster than</i><br>
+><i> others NUMA wise, but a byte of media has about the same cost whether it</i><br>
+><i> is close or far.  But, with new memory tiers such as Persistent Memory</i><br>
+><i> (PMEM).  there is a choice between fast/expensive DRAM and slow/cheap</i><br>
+><i> PMEM.</i><br>
+><i></i><br>
+><i> The fast/expensive memory lives in the top tier of the memory hierachy.</i><br>
+><i></i><br>
+><i> Previously, the patchset</i><br>
+><i> [PATCH 00/10] [v7] Migrate Pages in lieu of discard</i><br>
+><i> <a  rel="nofollow" href="https://lore.kernel.org/linux-mm/20210401183216.443C4443@xxxxxxxxxxxxxxxxxx/">https://lore.kernel.org/linux-mm/20210401183216.443C4443@xxxxxxxxxxxxxxxxxx/</a></i><br>
+><i> provides a mechanism to demote cold pages from DRAM node into PMEM.</i><br>
+><i></i><br>
+><i> And the patchset</i><br>
+><i> [PATCH 0/6] [RFC v6] NUMA balancing: optimize memory placement for memory tiering system</i><br>
+><i> <a  rel="nofollow" href="https://lore.kernel.org/linux-mm/20210311081821.138467-1-ying.huang@xxxxxxxxx/">https://lore.kernel.org/linux-mm/20210311081821.138467-1-ying.huang@xxxxxxxxx/</a></i><br>
+><i> provides a mechanism to promote hot pages in PMEM to the DRAM node</i><br>
+><i> leveraging autonuma.</i><br>
+><i></i><br>
+><i> The two patchsets together keep the hot pages in DRAM and colder pages</i><br>
+><i> in PMEM.</i><br>
+<br>
+Thanks for working on this as this is becoming more and more important<br>
+particularly in the data centers where memory is a big portion of the<br>
+cost.<br>
+<br>
+I see you have responded to Michal and I will add my more specific<br>
+response there. Here I wanted to give my high level concern regarding<br>
+using v1's soft limit like semantics for top tier memory.<br>
+<br>
+This patch series aims to distribute/partition top tier memory between<br>
+jobs of different priorities. We want high priority jobs to have<br>
+preferential access to the top tier memory and we don't want low<br>
+priority jobs to hog the top tier memory.<br>
+<br>
+Using v1's soft limit like behavior can potentially cause high<br>
+priority jobs to stall to make enough space on top tier memory on<br>
+their allocation path and I think this patchset is aiming to reduce<br>
+that impact by making kswapd do that work. However I think the more<br>
+concerning issue is the low priority job hogging the top tier memory.<br>
+<br>
+The possible ways the low priority job can hog the top tier memory are<br>
+by allocating non-movable memory or by mlocking the memory. (Oh there<br>
+is also pinning the memory but I don't know if there is a user api to<br>
+pin memory?) For the mlocked memory, you need to either modify the<br>
+reclaim code or use a different mechanism for demoting cold memory.<br>
+<br>
+Basically I am saying we should put the upfront control (limit) on the<br>
+usage of top tier memory by the jobs.<br>
+<br>
+<br>
+

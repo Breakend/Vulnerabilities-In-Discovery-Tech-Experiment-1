@@ -1,0 +1,77 @@
+On Mon, Apr 05, 2021 at 01:18:15PM -0700, Matthias Kaehlcke wrote:<br>
+><i> Code for platform_device_create() and of_platform_device_create() is</i><br>
+<br>
+platform_device_create()?<br>
+<br>
+><i> only generated if CONFIG_OF_ADDRESS=y. Add stubs to avoid unresolved</i><br>
+><i> symbols when CONFIG_OF_ADDRESS is not set.</i><br>
+><i> </i><br>
+><i> Signed-off-by: Matthias Kaehlcke <mka@xxxxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i> </i><br>
+><i> Changes in v7:</i><br>
+><i> - none</i><br>
+><i> </i><br>
+><i> Changes in v6:</i><br>
+><i> - patch added to the series</i><br>
+><i> </i><br>
+><i>  include/linux/of_platform.h | 22 ++++++++++++++++++----</i><br>
+><i>  1 file changed, 18 insertions(+), 4 deletions(-)</i><br>
+><i> </i><br>
+><i> diff --git a/include/linux/of_platform.h b/include/linux/of_platform.h</i><br>
+><i> index 84a966623e78..d15b6cd5e1c3 100644</i><br>
+><i> --- a/include/linux/of_platform.h</i><br>
+><i> +++ b/include/linux/of_platform.h</i><br>
+><i> @@ -61,16 +61,18 @@ static inline struct platform_device *of_find_device_by_node(struct device_node</i><br>
+><i>  }</i><br>
+><i>  #endif</i><br>
+><i>  </i><br>
+><i> +extern int of_platform_bus_probe(struct device_node *root,</i><br>
+><i> +				 const struct of_device_id *matches,</i><br>
+><i> +				 struct device *parent);</i><br>
+<br>
+This is also only built for CONFIG_OF_ADDRESS. But there's no need for <br>
+an empty function as it is powerpc only and should never have a new <br>
+user.<br>
+<br>
+><i> +</i><br>
+><i> +#ifdef CONFIG_OF_ADDRESS</i><br>
+><i>  /* Platform devices and busses creation */</i><br>
+><i>  extern struct platform_device *of_platform_device_create(struct device_node *np,</i><br>
+><i>  						   const char *bus_id,</i><br>
+><i>  						   struct device *parent);</i><br>
+><i>  </i><br>
+><i>  extern int of_platform_device_destroy(struct device *dev, void *data);</i><br>
+><i> -extern int of_platform_bus_probe(struct device_node *root,</i><br>
+><i> -				 const struct of_device_id *matches,</i><br>
+><i> -				 struct device *parent);</i><br>
+><i> -#ifdef CONFIG_OF_ADDRESS</i><br>
+><i> +</i><br>
+><i>  extern int of_platform_populate(struct device_node *root,</i><br>
+><i>  				const struct of_device_id *matches,</i><br>
+><i>  				const struct of_dev_auxdata *lookup,</i><br>
+><i> @@ -84,6 +86,18 @@ extern int devm_of_platform_populate(struct device *dev);</i><br>
+><i>  </i><br>
+><i>  extern void devm_of_platform_depopulate(struct device *dev);</i><br>
+><i>  #else</i><br>
+><i> +/* Platform devices and busses creation */</i><br>
+><i> +static inline struct platform_device *of_platform_device_create(struct device_node *np,</i><br>
+><i> +								const char *bus_id,</i><br>
+><i> +								struct device *parent)</i><br>
+><i> +{</i><br>
+><i> +	return NULL;</i><br>
+><i> +}</i><br>
+><i> +static inline int of_platform_device_destroy(struct device *dev, void *data)</i><br>
+><i> +{</i><br>
+><i> +	return -ENODEV;</i><br>
+><i> +}</i><br>
+><i> +</i><br>
+><i>  static inline int of_platform_populate(struct device_node *root,</i><br>
+><i>  					const struct of_device_id *matches,</i><br>
+><i>  					const struct of_dev_auxdata *lookup,</i><br>
+><i> -- </i><br>
+><i> 2.31.0.208.g409f899ff0-goog</i><br>
+><i> </i><br>
+<br>
+<br>
+

@@ -1,0 +1,59 @@
+
+<br>
+Hey Bjorn,<br>
+<br>
+Thanks for the patch!<br>
+<br>
+On 1/8/21 4:55 AM, Bjorn Andersson wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+Given that no validation of how much data the firmware loader read in<br>
+for a given segment truncated segment files would best case result in a<br>
+hash verification failure, without any indication of what went wrong.<br>
+<br>
+Improve this by validating that the firmware loader did return the<br>
+amount of data requested.<br>
+<br>
+Fixes: 445c2410a449 ("soc: qcom: mdt_loader: Use request_firmware_into_buf()")<br>
+Signed-off-by: Bjorn Andersson <bjorn.andersson@xxxxxxxxxx><br>
+---<br>
+  drivers/soc/qcom/mdt_loader.c | 8 ++++++++<br>
+  1 file changed, 8 insertions(+)<br>
+<br>
+diff --git a/drivers/soc/qcom/mdt_loader.c b/drivers/soc/qcom/mdt_loader.c<br>
+index 24cd193dec55..e01d18e9ad2b 100644<br>
+--- a/drivers/soc/qcom/mdt_loader.c<br>
++++ b/drivers/soc/qcom/mdt_loader.c<br>
+@@ -253,6 +253,14 @@ static int __qcom_mdt_load(struct device *dev, const struct firmware *fw,<br>
+  				break;<br>
+  			}<br>
+  
++			if (seg_fw->size != phdr->p_filesz) {
+<br>
++				dev_err(dev,<br>
++					"failed to load segment %d from truncated file %s\n",<br>
++					i, fw_name);<br>
++				ret = -EINVAL;<br>
++				break;<br>
+</blockquote>
+<br>
+seg_fw has to be released on error condition as well.<br>
+With ^^ fixed you can have my R-b.<br>
+<br>
+Reviewed-by: Sibi Sankar <sibis@xxxxxxxxxxxxxx><br>
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
++			}<br>
++<br>
+  			release_firmware(seg_fw);<br>
+  		}<br>
+  
+
+<br></blockquote>
+<br>
+--<br>
+Qualcomm Innovation Center, Inc.<br>
+Qualcomm Innovation Center, Inc, is a member of Code Aurora Forum,<br>
+a Linux Foundation Collaborative Project<br>
+<br>
+<br>
+

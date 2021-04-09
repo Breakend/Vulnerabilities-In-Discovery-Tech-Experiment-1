@@ -1,0 +1,84 @@
+This generates a "mask" byte array of size mask_len bytes as a<br>
+concatenation of digests, where each digest is calculated on a<br>
+concatenation of an input seed and a running counter to fill up<br>
+mask_len bytes - as described by RFC8017 sec B.2.1. "MGF1".<br>
+<br>
+The mask is useful for RSA signing/verification process with<br>
+encoding RSASSA-PSS.<br>
+<br>
+Reference: <a  rel="nofollow" href="https://tools.ietf.org/html/rfc8017#appendix-B.2.1">https://tools.ietf.org/html/rfc8017#appendix-B.2.1</a><br>
+Signed-off-by: Varad Gautam <varad.gautam@xxxxxxxx><br>
+---<br>
+ crypto/rsa-psspad.c | 54 +++++++++++++++++++++++++++++++++++++++++++++<br>
+ 1 file changed, 54 insertions(+)<br>
+<br>
+diff --git a/crypto/rsa-psspad.c b/crypto/rsa-psspad.c<br>
+index eec303bb55b2d..ed5374c381513 100644<br>
+--- a/crypto/rsa-psspad.c<br>
++++ b/crypto/rsa-psspad.c<br>
+@@ -51,6 +51,60 @@ static int psspad_set_sig_params(struct crypto_akcipher *tfm,<br>
+ 	return 0;<br>
+ }<br>
+ <br>
++/* MGF1 per RFC8017 B.2.1. */<br>
++static int pkcs1_mgf1(u8 *seed, unsigned int seed_len,<br>
++		      struct shash_desc *desc,<br>
++		      u8 *mask, unsigned int mask_len)<br>
++{<br>
++	unsigned int pos, h_len, i, c;<br>
++	u8 *tmp;<br>
++	int ret = 0;<br>
++<br>
++	h_len = crypto_shash_digestsize(desc->tfm);<br>
++<br>
++	pos = i = 0;<br>
++	while ((i < (mask_len / h_len) + 1) && pos < mask_len) {<br>
++		/* Compute T = T || Hash(mgfSeed || C) into mask at pos. */<br>
++		c = cpu_to_be32(i);<br>
++<br>
++		ret = crypto_shash_init(desc);<br>
++		if (ret < 0)<br>
++			goto out_err;<br>
++<br>
++		ret = crypto_shash_update(desc, seed, seed_len);<br>
++		if (ret < 0)<br>
++			goto out_err;<br>
++<br>
++		ret = crypto_shash_update(desc, (u8 *) &c, sizeof(c));<br>
++		if (ret < 0)<br>
++			goto out_err;<br>
++<br>
++		if (mask_len - pos >= h_len) {<br>
++			ret = crypto_shash_final(desc, mask + pos);<br>
++			pos += h_len;<br>
++		} else {<br>
++			tmp = kzalloc(h_len, GFP_KERNEL);<br>
++			if (!tmp) {<br>
++				ret = -ENOMEM;<br>
++				goto out_err;<br>
++			}<br>
++			ret = crypto_shash_final(desc, tmp);<br>
++			/* copy the last hash */<br>
++			memcpy(mask + pos, tmp, mask_len - pos);<br>
++			kfree(tmp);<br>
++			pos = mask_len;<br>
++		}<br>
++		if (ret < 0) {<br>
++			goto out_err;<br>
++		}<br>
++<br>
++		i++;<br>
++	}<br>
++<br>
++out_err:<br>
++	return ret;<br>
++}<br>
++<br>
+ static int psspad_s_v_e_d(struct akcipher_request *req)<br>
+ {<br>
+ 	return -EOPNOTSUPP;<br>
+-- <br>
+2.30.2<br>
+<br>
+<br>
+

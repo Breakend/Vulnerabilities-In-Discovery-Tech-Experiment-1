@@ -1,0 +1,60 @@
+Remove the 3 users of tty_notice() and replace them with calls to<br>
+dev_notice() which provides more information about the tty that has the<br>
+error and uses the standard formatting logic.<br>
+<br>
+Cc: Tetsuo Handa <penguin-kernel@xxxxxxxxxxxxxxxxxxx><br>
+Cc: Jiri Slaby <jirislaby@xxxxxxxxxx><br>
+Signed-off-by: Greg Kroah-Hartman <gregkh@xxxxxxxxxxxxxxxxxxx><br>
+---<br>
+ drivers/tty/tty.h    | 1 -<br>
+ drivers/tty/tty_io.c | 6 +++---<br>
+ 2 files changed, 3 insertions(+), 4 deletions(-)<br>
+<br>
+diff --git a/drivers/tty/tty.h b/drivers/tty/tty.h<br>
+index eda037c48317..0323bc2cd6ba 100644<br>
+--- a/drivers/tty/tty.h<br>
++++ b/drivers/tty/tty.h<br>
+@@ -10,7 +10,6 @@<br>
+ 	fn("%s %s: " f, tty_driver_name(tty), tty_name(tty), ##__VA_ARGS__)<br>
+ <br>
+ #define tty_debug(tty, f, ...)	tty_msg(pr_debug, tty, f, ##__VA_ARGS__)<br>
+-#define tty_notice(tty, f, ...)	tty_msg(pr_notice, tty, f, ##__VA_ARGS__)<br>
+ #define tty_warn(tty, f, ...)	tty_msg(pr_warn, tty, f, ##__VA_ARGS__)<br>
+ <br>
+ #define tty_info_ratelimited(tty, f, ...) \<br>
+diff --git a/drivers/tty/tty_io.c b/drivers/tty/tty_io.c<br>
+index f8b96f3674af..0079ffd0cb9c 100644<br>
+--- a/drivers/tty/tty_io.c<br>
++++ b/drivers/tty/tty_io.c<br>
+@@ -3059,7 +3059,7 @@ void __do_SAK(struct tty_struct *tty)<br>
+ 	read_lock(&tasklist_lock);<br>
+ 	/* Kill the entire session */<br>
+ 	do_each_pid_task(session, PIDTYPE_SID, p) {<br>
+-		tty_notice(tty, "SAK: killed process %d (%s): by session\n",<br>
++		dev_notice(tty->dev, "SAK: killed process %d (%s): by session\n",<br>
+ 			   task_pid_nr(p), p->comm);<br>
+ 		group_send_sig_info(SIGKILL, SEND_SIG_PRIV, p, PIDTYPE_SID);<br>
+ 	} while_each_pid_task(session, PIDTYPE_SID, p);<br>
+@@ -3067,7 +3067,7 @@ void __do_SAK(struct tty_struct *tty)<br>
+ 	/* Now kill any processes that happen to have the tty open */<br>
+ 	do_each_thread(g, p) {<br>
+ 		if (p->signal->tty == tty) {<br>
+-			tty_notice(tty, "SAK: killed process %d (%s): by controlling tty\n",<br>
++			dev_notice(tty->dev, "SAK: killed process %d (%s): by controlling tty\n",<br>
+ 				   task_pid_nr(p), p->comm);<br>
+ 			group_send_sig_info(SIGKILL, SEND_SIG_PRIV, p, PIDTYPE_SID);<br>
+ 			continue;<br>
+@@ -3075,7 +3075,7 @@ void __do_SAK(struct tty_struct *tty)<br>
+ 		task_lock(p);<br>
+ 		i = iterate_fd(p->files, 0, this_tty, tty);<br>
+ 		if (i != 0) {<br>
+-			tty_notice(tty, "SAK: killed process %d (%s): by fd#%d\n",<br>
++			dev_notice(tty->dev, "SAK: killed process %d (%s): by fd#%d\n",<br>
+ 				   task_pid_nr(p), p->comm, i - 1);<br>
+ 			group_send_sig_info(SIGKILL, SEND_SIG_PRIV, p, PIDTYPE_SID);<br>
+ 		}<br>
+-- <br>
+2.31.1<br>
+<br>
+<br>
+

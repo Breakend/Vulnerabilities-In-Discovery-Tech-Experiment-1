@@ -1,0 +1,113 @@
+On Wed, Apr 07, 2021 at 04:37:23PM +0300, Leon Romanovsky wrote:<br>
+><i> On Wed, Apr 07, 2021 at 06:36:01PM +0530, ameynarkhede03@xxxxxxxxx wrote:</i><br>
+><i> > On 21/04/07 03:30PM, Leon Romanovsky wrote:</i><br>
+><i> > > On Wed, Apr 07, 2021 at 01:53:56PM +0530, ameynarkhede03@xxxxxxxxx wrote:</i><br>
+><i> > > > On 21/04/07 10:23AM, Leon Romanovsky wrote:</i><br>
+><i> > > > > On Tue, Apr 06, 2021 at 08:16:26AM -0600, Alex Williamson wrote:</i><br>
+><i> > > > > > On Sun, 4 Apr 2021 11:04:32 +0300</i><br>
+><i> > > > > > Leon Romanovsky <leon@xxxxxxxxxx> wrote:</i><br>
+><i> > > > > ></i><br>
+><i> > > > > > > On Thu, Apr 01, 2021 at 10:56:16AM -0600, Alex Williamson wrote:</i><br>
+><i> > > > > > > > On Thu, 1 Apr 2021 15:27:37 +0300</i><br>
+><i> > > > > > > > Leon Romanovsky <leon@xxxxxxxxxx> wrote:</i><br>
+><i> > > > > > > ></i><br>
+><i> > > > > > > > > On Thu, Apr 01, 2021 at 05:37:16AM +0000, Raphael Norwitz wrote:</i><br>
+><i> > > > > > > > > > Slot resets are bus resets with additional logic to prevent a device</i><br>
+><i> > > > > > > > > > from being removed during the reset. Currently slot and bus resets have</i><br>
+><i> > > > > > > > > > separate implementations in pci.c, complicating higher level logic. As</i><br>
+><i> > > > > > > > > > discussed on the mailing list, they should be combined into a generic</i><br>
+><i> > > > > > > > > > function which performs an SBR. This change adds a function,</i><br>
+><i> > > > > > > > > > pci_reset_bus_function(), which first attempts a slot reset and then</i><br>
+><i> > > > > > > > > > attempts a bus reset if -ENOTTY is returned, such that there is now a</i><br>
+><i> > > > > > > > > > single device agnostic function to perform an SBR.</i><br>
+><i> > > > > > > > > ></i><br>
+><i> > > > > > > > > > This new function is also needed to add SBR reset quirks and therefore</i><br>
+><i> > > > > > > > > > is exposed in pci.h.</i><br>
+><i> > > > > > > > > ></i><br>
+><i> > > > > > > > > > Link: <a  rel="nofollow" href="https://urldefense.proofpoint.com/v2/url?u=https-3A__lkml.org_lkml_2021_3_23_911&d=DwIBAg&c=s883GpUCOChKOHiocYtGcg&r=In4gmR1pGzKB8G5p6LUrWqkSMec2L5EtXZow_FZNJZk&m=dn12ruIb9lwgcFMNKBZzri1m3zoTBFlkHnrF48PChs4&s=iEm1FGjLlWUpKJQYMwCHc1crraEzAgN10pCzyEzbrWI&e=">https://urldefense.proofpoint.com/v2/url?u=https-3A__lkml.org_lkml_2021_3_23_911&d=DwIBAg&c=s883GpUCOChKOHiocYtGcg&r=In4gmR1pGzKB8G5p6LUrWqkSMec2L5EtXZow_FZNJZk&m=dn12ruIb9lwgcFMNKBZzri1m3zoTBFlkHnrF48PChs4&s=iEm1FGjLlWUpKJQYMwCHc1crraEzAgN10pCzyEzbrWI&e=</a> </i><br>
+><i> > > > > > > > > ></i><br>
+><i> > > > > > > > > > Suggested-by: Alex Williamson <alex.williamson@xxxxxxxxxx></i><br>
+><i> > > > > > > > > > Signed-off-by: Amey Narkhede <ameynarkhede03@xxxxxxxxx></i><br>
+><i> > > > > > > > > > Signed-off-by: Raphael Norwitz <raphael.norwitz@xxxxxxxxxxx></i><br>
+><i> > > > > > > > > > ---</i><br>
+><i> > > > > > > > > >  drivers/pci/pci.c   | 17 +++++++++--------</i><br>
+><i> > > > > > > > > >  include/linux/pci.h |  1 +</i><br>
+><i> > > > > > > > > >  2 files changed, 10 insertions(+), 8 deletions(-)</i><br>
+><i> > > > > > > > > ></i><br>
+><i> > > > > > > > > > diff --git a/drivers/pci/pci.c b/drivers/pci/pci.c</i><br>
+><i> > > > > > > > > > index 16a17215f633..12a91af2ade4 100644</i><br>
+><i> > > > > > > > > > --- a/drivers/pci/pci.c</i><br>
+><i> > > > > > > > > > +++ b/drivers/pci/pci.c</i><br>
+><i> > > > > > > > > > @@ -4982,6 +4982,13 @@ static int pci_dev_reset_slot_function(struct pci_dev *dev, int probe)</i><br>
+><i> > > > > > > > > >  	return pci_reset_hotplug_slot(dev->slot->hotplug, probe);</i><br>
+><i> > > > > > > > > >  }</i><br>
+><i> > > > > > > > > ></i><br>
+><i> > > > > > > > > > +int pci_reset_bus_function(struct pci_dev *dev, int probe)</i><br>
+><i> > > > > > > > > > +{</i><br>
+><i> > > > > > > > > > +	int rc = pci_dev_reset_slot_function(dev, probe);</i><br>
+><i> > > > > > > > > > +</i><br>
+><i> > > > > > > > > > +	return (rc == -ENOTTY) ? pci_parent_bus_reset(dev, probe) : rc;</i><br>
+><i> > > > > > > > ></i><br>
+><i> > > > > > > > > The previous coding style is preferable one in the Linux kernel.</i><br>
+><i> > > > > > > > > int rc = pci_dev_reset_slot_function(dev, probe);</i><br>
+><i> > > > > > > > > if (rc != -ENOTTY)</i><br>
+><i> > > > > > > > >   return rc;</i><br>
+><i> > > > > > > > > return pci_parent_bus_reset(dev, probe);</i><br>
+><i> > > > > > > ></i><br>
+><i> > > > > > > ></i><br>
+><i> > > > > > > > That'd be news to me, do you have a reference?  I've never seen</i><br>
+><i> > > > > > > > complaints for ternaries previously.  Thanks,</i><br>
+><i> > > > > > ></i><br>
+><i> > > > > > > The complaint is not to ternaries, but to the function call as one of</i><br>
+><i> > > > > > > the parameters, that makes it harder to read.</i><br>
+><i> > > > > ></i><br>
+><i> > > > > > Sorry, I don't find a function call as a parameter to a ternary to be</i><br>
+><i> > > > > > extraordinary, nor do I find it to be a discouraged usage model within</i><br>
+><i> > > > > > the kernel.  This seems like a pretty low bar for hard to read code.</i><br>
+><i> > > > ></i><br>
+><i> > > > > It is up to us where this bar is set.</i><br>
+><i> > > > ></i><br>
+><i> > > > > Thanks</i><br>
+><i> > > > On the side note there are plenty of places where this pattern is used</i><br>
+><i> > > > though</i><br>
+><i> > > > for example -</i><br>
+><i> > > > kernel/time/clockevents.c:328:</i><br>
+><i> > > > return force ? clockevents_program_min_delta(dev) : -ETIME;</i><br>
+><i> > > ></i><br>
+><i> > > > kernel/trace/trace_kprobe.c:233:</i><br>
+><i> > > > return tk ? within_error_injection_list(trace_kprobe_address(tk)) :</i><br>
+><i> > > >        false;</i><br>
+><i> > > ></i><br>
+><i> > > > kernel/signal.c:3104:</i><br>
+><i> > > > return oset ? put_compat_sigset(oset, &old_set, sizeof(*oset)) : 0;</i><br>
+><i> > > > etc</i><br>
+><i> > ></i><br>
+><i> > > Did you look when they were introduced?</i><br>
+><i> > ></i><br>
+><i> > > Thanks</i><br>
+><i> > ></i><br>
+><i> > that code trace_kprobe in 2 years old.</i><br>
+><i> > If you want more recent example checkout</i><br>
+><i> > drivers/pci/controller/pcie-brcmstb.c:1112,1117:</i><br>
+><i> > return pcie->rescal ? brcm_phy_cntl(pcie, 1) : 0;</i><br>
+><i> > which was introduced 7 months ago.</i><br>
+><i> > There are lot of examples in pci.c also.</i><br>
+><i> </i><br>
+><i> Yeah, I know, copy-paste is a powerful tool.</i><br>
+><i> </i><br>
+><i> Can we please progress with this patch instead of doing</i><br>
+><i> archaeological research?</i><br>
+><i> </i><br>
+><i> Thanks</i><br>
+><i></i><br>
+<br>
+I don't have a strong view on the style guidelines being discussed here.<br>
+<br>
+I just sent a V2 replacing the ternary function parameter with your<br>
+suggestion.<br>
+<br>
+><i> > </i><br>
+><i> > Thanks,</i><br>
+><i> > Amey</i><br>
+<br>
+

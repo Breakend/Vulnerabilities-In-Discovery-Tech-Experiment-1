@@ -1,0 +1,40 @@
+On Thu, Apr 8, 2021 at 5:18 PM Andy Shevchenko<br>
+<andriy.shevchenko@xxxxxxxxxxxxxxx> wrote:<br>
+><i></i><br>
+><i> On Thu, Apr 08, 2021 at 05:04:32PM +0200, Rafael J. Wysocki wrote:</i><br>
+><i> > On Thu, Apr 8, 2021 at 4:50 PM Andy Shevchenko</i><br>
+><i> > <andriy.shevchenko@xxxxxxxxxxxxxxx> wrote:</i><br>
+><i> > > On Thu, Apr 08, 2021 at 04:15:37PM +0200, Rafael J. Wysocki wrote:</i><br>
+><i> > > > On Wed, Mar 31, 2021 at 1:06 PM Heikki Krogerus</i><br>
+><i> > > > <heikki.krogerus@xxxxxxxxxxxxxxx> wrote:</i><br>
+><i> > > > ></i><br>
+><i> > > > > On Mon, Mar 29, 2021 at 06:12:02PM +0300, Andy Shevchenko wrote:</i><br>
+><i> > > > > > Currently we have a slightly twisted logic in swnode_register().</i><br>
+><i> > > > > > It frees resources that it doesn't allocate on error path and</i><br>
+><i> > > > > > in once case it relies on the ->release() implementation.</i><br>
+><i> > > > > ></i><br>
+><i> > > > > > Untwist the logic by freeing resources explicitly when swnode_register()</i><br>
+><i> > > > > > fails. Currently it happens only in fwnode_create_software_node().</i><br>
+><i> > > > > ></i><br>
+><i> > > > > > Signed-off-by: Andy Shevchenko <andriy.shevchenko@xxxxxxxxxxxxxxx></i><br>
+><i> > > > ></i><br>
+><i> > > > > It all looks OK to me. FWIW, for the whole series:</i><br>
+><i> > > > ></i><br>
+><i> > > > > Reviewed-by: Heikki Krogerus <heikki.krogerus@xxxxxxxxxxxxxxx></i><br>
+><i> > > ></i><br>
+><i> > > > Whole series applied (with some minor changelog edits) as 5.13 material, thanks!</i><br>
+><i> > ></i><br>
+><i> > > It seems Greg applied it already. Was it dropped there?</i><br>
+><i> ></i><br>
+><i> > Did he?</i><br>
+><i> ></i><br>
+><i> > OK, so please let me know if it's still there in the Greg's tree.</i><br>
+><i></i><br>
+><i> Here [1] what I see. Seems still there.</i><br>
+><i></i><br>
+><i> [1]: <a  rel="nofollow" href="https://git.kernel.org/pub/scm/linux/kernel/git/gregkh/driver-core.git/commit/?h=driver-core-next&id=6e11b376fd74356e32d842be588e12dc9bf6e197">https://git.kernel.org/pub/scm/linux/kernel/git/gregkh/driver-core.git/commit/?h=driver-core-next&id=6e11b376fd74356e32d842be588e12dc9bf6e197</a></i><br>
+<br>
+I will not be applying it then, sorry for the confusion.<br>
+<br>
+<br>
+

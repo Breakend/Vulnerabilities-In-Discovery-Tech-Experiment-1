@@ -1,0 +1,95 @@
+Hi,<br>
+<br>
+On Tue, Apr 06, 2021 at 01:28:29PM +0800, zhuguangqing83@xxxxxxxxx wrote:<br>
+><i> From: Guangqing Zhu <zhuguangqing83@xxxxxxxxx></i><br>
+><i> </i><br>
+><i> Coccinelle noticed:</i><br>
+><i>  1. drivers/power/supply/pm2301_charger.c:1089:7-27: ERROR: Threaded IRQ</i><br>
+><i>     with no primary handler requested without IRQF_ONESHOT</i><br>
+><i>  2. drivers/power/supply/tps65090-charger.c:303:8-33: ERROR: Threaded IRQ</i><br>
+><i>     with no primary handler requested without IRQF_ONESHOT</i><br>
+><i>  3. drivers/power/supply/tps65217_charger.c:239:8-33: ERROR: Threaded IRQ</i><br>
+><i>     with no primary handler requested without IRQF_ONESHOT</i><br>
+><i>  4. drivers/power/supply/lp8788-charger.c:502:8-28: ERROR: Threaded IRQ</i><br>
+><i>     with no primary handler requested without IRQF_ONESHOT</i><br>
+><i> </i><br>
+><i> Signed-off-by: Guangqing Zhu <zhuguangqing83@xxxxxxxxx></i><br>
+><i> ---</i><br>
+<br>
+I merged a patch fixing missing IRQF_ONESHOT flags in power-supply<br>
+from dongjian two weeks ago as 2469b836fa83. Please make sure you<br>
+are basing your work on up to date for-next branches before sending<br>
+out patches!<br>
+<br>
+Thanks,<br>
+<br>
+-- Sebastian<br>
+<br>
+><i>  drivers/power/supply/lp8788-charger.c   | 2 +-</i><br>
+><i>  drivers/power/supply/pm2301_charger.c   | 2 +-</i><br>
+><i>  drivers/power/supply/tps65090-charger.c | 3 ++-</i><br>
+><i>  drivers/power/supply/tps65217_charger.c | 4 ++--</i><br>
+><i>  4 files changed, 6 insertions(+), 5 deletions(-)</i><br>
+><i> </i><br>
+><i> diff --git a/drivers/power/supply/lp8788-charger.c b/drivers/power/supply/lp8788-charger.c</i><br>
+><i> index e7931ffb7151..397e5a03b7d9 100644</i><br>
+><i> --- a/drivers/power/supply/lp8788-charger.c</i><br>
+><i> +++ b/drivers/power/supply/lp8788-charger.c</i><br>
+><i> @@ -501,7 +501,7 @@ static int lp8788_set_irqs(struct platform_device *pdev,</i><br>
+><i>  </i><br>
+><i>  		ret = request_threaded_irq(virq, NULL,</i><br>
+><i>  					lp8788_charger_irq_thread,</i><br>
+><i> -					0, name, pchg);</i><br>
+><i> +					IRQF_ONESHOT, name, pchg);</i><br>
+><i>  		if (ret)</i><br>
+><i>  			break;</i><br>
+><i>  	}</i><br>
+><i> diff --git a/drivers/power/supply/pm2301_charger.c b/drivers/power/supply/pm2301_charger.c</i><br>
+><i> index ac06ecf7fc9c..a3bfb9612b17 100644</i><br>
+><i> --- a/drivers/power/supply/pm2301_charger.c</i><br>
+><i> +++ b/drivers/power/supply/pm2301_charger.c</i><br>
+><i> @@ -1089,7 +1089,7 @@ static int pm2xxx_wall_charger_probe(struct i2c_client *i2c_client,</i><br>
+><i>  	ret = request_threaded_irq(gpio_to_irq(pm2->pdata->gpio_irq_number),</i><br>
+><i>  				NULL,</i><br>
+><i>  				pm2xxx_charger_irq[0].isr,</i><br>
+><i> -				pm2->pdata->irq_type,</i><br>
+><i> +				pm2->pdata->irq_type | IRQF_ONESHOT,</i><br>
+><i>  				pm2xxx_charger_irq[0].name, pm2);</i><br>
+><i>  </i><br>
+><i>  	if (ret != 0) {</i><br>
+><i> diff --git a/drivers/power/supply/tps65090-charger.c b/drivers/power/supply/tps65090-charger.c</i><br>
+><i> index 6b0098e5a88b..d55bcc341854 100644</i><br>
+><i> --- a/drivers/power/supply/tps65090-charger.c</i><br>
+><i> +++ b/drivers/power/supply/tps65090-charger.c</i><br>
+><i> @@ -301,7 +301,8 @@ static int tps65090_charger_probe(struct platform_device *pdev)</i><br>
+><i>  </i><br>
+><i>  	if (irq != -ENXIO) {</i><br>
+><i>  		ret = devm_request_threaded_irq(&pdev->dev, irq, NULL,</i><br>
+><i> -			tps65090_charger_isr, 0, "tps65090-charger", cdata);</i><br>
+><i> +			tps65090_charger_isr, IRQF_ONESHOT,</i><br>
+><i> +			"tps65090-charger", cdata);</i><br>
+><i>  		if (ret) {</i><br>
+><i>  			dev_err(cdata->dev,</i><br>
+><i>  				"Unable to register irq %d err %d\n", irq,</i><br>
+><i> diff --git a/drivers/power/supply/tps65217_charger.c b/drivers/power/supply/tps65217_charger.c</i><br>
+><i> index 814c2b81fdfe..cba3967ff275 100644</i><br>
+><i> --- a/drivers/power/supply/tps65217_charger.c</i><br>
+><i> +++ b/drivers/power/supply/tps65217_charger.c</i><br>
+><i> @@ -238,8 +238,8 @@ static int tps65217_charger_probe(struct platform_device *pdev)</i><br>
+><i>  	for (i = 0; i < NUM_CHARGER_IRQS; i++) {</i><br>
+><i>  		ret = devm_request_threaded_irq(&pdev->dev, irq[i], NULL,</i><br>
+><i>  						tps65217_charger_irq,</i><br>
+><i> -						0, "tps65217-charger",</i><br>
+><i> -						charger);</i><br>
+><i> +						IRQF_ONESHOT,</i><br>
+><i> +						"tps65217-charger", charger);</i><br>
+><i>  		if (ret) {</i><br>
+><i>  			dev_err(charger->dev,</i><br>
+><i>  				"Unable to register irq %d err %d\n", irq[i],</i><br>
+><i> -- </i><br>
+><i> 2.17.1</i><br>
+><i> </i><br>
+<p><strong>Attachment:
+<a href="00580/signature.asc" ><tt>signature.asc</tt></a></strong><br>
+<em>Description:</em> PGP signature</p>
+

@@ -1,0 +1,18 @@
+According to Documentation/core-api/printk-formats.rst,<br>
+Use the correct print format. Printing an unsigned int value should use %u<br>
+instead of %d. Otherwise printk() might end up displaying negative numbers.<br>
+<br>
+Kai Ye (2):<br>
+  crypto/atmel - use the correct print format<br>
+  crypto: hisilicon/sec_drv - use the correct print format<br>
+<br>
+ drivers/crypto/atmel-i2c.c             | 2 +-<br>
+ drivers/crypto/atmel-sha.c             | 4 ++--<br>
+ drivers/crypto/hisilicon/sec/sec_drv.c | 6 +++---<br>
+ 3 files changed, 6 insertions(+), 6 deletions(-)<br>
+<br>
+-- <br>
+2.8.1<br>
+<br>
+<br>
+

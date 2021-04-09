@@ -1,0 +1,109 @@
+With current implementation the port power is being disabled,<br>
+which is not required by the programming guide. Also, if there<br>
+is a system which works only in "DWC2_POWER_DOWN_PARAM_NONE"<br>
+(clock gating) mode the current implementation does not set<br>
+Gate hclk bit in pcgctl register.<br>
+<br>
+Rearranges and updates the implementation of entering to partial<br>
+power down power saving mode when PC is suspended to get<br>
+rid of many "if" statements and removes disabling of port power.<br>
+<br>
+NOTE: Switch case statement is used for hibernation partial<br>
+power down and clock gating mode determination. In this patch<br>
+only Partial Power Down is implemented the Hibernation and<br>
+clock gating implementations are planned to be added.<br>
+<br>
+Signed-off-by: Artur Petrosyan <Arthur.Petrosyan@xxxxxxxxxxxx><br>
+---<br>
+ Changes in v3:<br>
+ - None<br>
+ Changes in v2:<br>
+ - None<br>
+<br>
+ drivers/usb/dwc2/hcd.c | 53 ++++++++++++++----------------------------<br>
+ 1 file changed, 18 insertions(+), 35 deletions(-)<br>
+<br>
+diff --git a/drivers/usb/dwc2/hcd.c b/drivers/usb/dwc2/hcd.c<br>
+index cb52bc41bfb8..34030bafdff4 100644<br>
+--- a/drivers/usb/dwc2/hcd.c<br>
++++ b/drivers/usb/dwc2/hcd.c<br>
+@@ -4367,8 +4367,6 @@ static int _dwc2_hcd_suspend(struct usb_hcd *hcd)<br>
+ 	struct dwc2_hsotg *hsotg = dwc2_hcd_to_hsotg(hcd);<br>
+ 	unsigned long flags;<br>
+ 	int ret = 0;<br>
+-	u32 hprt0;<br>
+-	u32 pcgctl;<br>
+ <br>
+ 	spin_lock_irqsave(&hsotg->lock, flags);<br>
+ <br>
+@@ -4384,47 +4382,32 @@ static int _dwc2_hcd_suspend(struct usb_hcd *hcd)<br>
+ 	if (hsotg->op_state == OTG_STATE_B_PERIPHERAL)<br>
+ 		goto unlock;<br>
+ <br>
+-	if (hsotg->params.power_down != DWC2_POWER_DOWN_PARAM_PARTIAL ||<br>
+-	    hsotg->flags.b.port_connect_status == 0)<br>
++	if (hsotg->bus_suspended)<br>
+ 		goto skip_power_saving;<br>
+ <br>
+-	/*<br>
+-	 * Drive USB suspend and disable port Power<br>
+-	 * if usb bus is not suspended.<br>
+-	 */<br>
+-	if (!hsotg->bus_suspended) {<br>
+-		hprt0 = dwc2_read_hprt0(hsotg);<br>
+-		if (hprt0 & HPRT0_CONNSTS) {<br>
+-			hprt0 |= HPRT0_SUSP;<br>
+-			if (hsotg->params.power_down == DWC2_POWER_DOWN_PARAM_PARTIAL)<br>
+-				hprt0 &= ~HPRT0_PWR;<br>
+-			dwc2_writel(hsotg, hprt0, HPRT0);<br>
+-		}<br>
+-		if (hsotg->params.power_down == DWC2_POWER_DOWN_PARAM_PARTIAL) {<br>
+-			spin_unlock_irqrestore(&hsotg->lock, flags);<br>
+-			dwc2_vbus_supply_exit(hsotg);<br>
+-			spin_lock_irqsave(&hsotg->lock, flags);<br>
+-		} else {<br>
+-			pcgctl = readl(hsotg->regs + PCGCTL);<br>
+-			pcgctl |= PCGCTL_STOPPCLK;<br>
+-			writel(pcgctl, hsotg->regs + PCGCTL);<br>
+-		}<br>
+-	}<br>
++	if (hsotg->flags.b.port_connect_status == 0)<br>
++		goto skip_power_saving;<br>
+ <br>
+-	if (hsotg->params.power_down == DWC2_POWER_DOWN_PARAM_PARTIAL) {<br>
++	switch (hsotg->params.power_down) {<br>
++	case DWC2_POWER_DOWN_PARAM_PARTIAL:<br>
+ 		/* Enter partial_power_down */<br>
+ 		ret = dwc2_enter_partial_power_down(hsotg);<br>
+-		if (ret) {<br>
+-			if (ret != -ENOTSUPP)<br>
+-				dev_err(hsotg->dev,<br>
+-					"enter partial_power_down failed\n");<br>
+-			goto skip_power_saving;<br>
+-		}<br>
+-<br>
+-		/* After entering partial_power_down, hardware is no more accessible */<br>
++		if (ret)<br>
++			dev_err(hsotg->dev,<br>
++				"enter partial_power_down failed\n");<br>
++		/* After entering suspend, hardware is not accessible */<br>
+ 		clear_bit(HCD_FLAG_HW_ACCESSIBLE, &hcd->flags);<br>
++		break;<br>
++	case DWC2_POWER_DOWN_PARAM_HIBERNATION:<br>
++	case DWC2_POWER_DOWN_PARAM_NONE:<br>
++	default:<br>
++		goto skip_power_saving;<br>
+ 	}<br>
+ <br>
++	spin_unlock_irqrestore(&hsotg->lock, flags);<br>
++	dwc2_vbus_supply_exit(hsotg);<br>
++	spin_lock_irqsave(&hsotg->lock, flags);<br>
++<br>
+ 	/* Ask phy to be suspended */<br>
+ 	if (!IS_ERR_OR_NULL(hsotg->uphy)) {<br>
+ 		spin_unlock_irqrestore(&hsotg->lock, flags);<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

@@ -1,0 +1,56 @@
+
+On 08.04.21 11:56, Mike Rapoport wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+On Thu, Apr 08, 2021 at 11:20:11AM +0200, David Hildenbrand wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+Random drivers should not override a user configuration of core knobs<br>
+(e.g., CONFIG_DMA_CMA=n). Use "imply" instead, to still respect<br>
+dependencies and manual overrides.<br>
+<br>
+"This is similar to "select" as it enforces a lower limit on another<br>
+  symbol except that the "implied" symbol's value may still be set to n<br>
+  from a direct dependency or with a visible prompt."<br>
+<br>
+Implying DRM_CMA should be sufficient, as that depends on CMA.<br>
+</blockquote>
+<br>
+           ^ DMA_CMA<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+<br>
+Note: If this is a real dependency, we should use "depends on DMA_CMA"<br>
+instead -  but I assume the driver can work without CMA just fine --<br>
+esp. when we wouldn't have HAVE_DMA_CONTIGUOUS right now.<br>
+<br>
+Signed-off-by: David Hildenbrand <david@xxxxxxxxxx><br>
+---<br>
+  drivers/gpu/drm/aspeed/Kconfig  | 3 +--<br>
+  drivers/gpu/drm/etnaviv/Kconfig | 3 +--<br>
+  2 files changed, 2 insertions(+), 4 deletions(-)<br>
+<br>
+diff --git a/drivers/gpu/drm/aspeed/Kconfig b/drivers/gpu/drm/aspeed/Kconfig<br>
+index 5e95bcea43e9..a055f763d230 100644<br>
+--- a/drivers/gpu/drm/aspeed/Kconfig<br>
++++ b/drivers/gpu/drm/aspeed/Kconfig<br>
+@@ -6,9 +6,8 @@ config DRM_ASPEED_GFX<br>
+  	depends on MMU<br>
+  	select DRM_KMS_HELPER<br>
+  	select DRM_KMS_CMA_HELPER<br>
+-	select DMA_CMA if HAVE_DMA_CONTIGUOUS<br>
+-	select CMA if HAVE_DMA_CONTIGUOUS<br>
+  	select MFD_SYSCON<br>
++	imply DRM_CMA<br>
+</blockquote>
+<br>
+Ditto<br>
+</blockquote>
+<br>
+Gah, thanks!<br>
+<br>
+<br>
+--<br>
+Thanks,<br>
+<br>
+David / dhildenb<br>
+<br>
+<br>
+

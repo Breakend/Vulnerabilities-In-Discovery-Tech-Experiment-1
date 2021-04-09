@@ -1,0 +1,56 @@
+On Thu, Apr 8, 2021 at 7:52 AM Gioh Kim <gi-oh.kim@xxxxxxxxx> wrote:<br>
+><i></i><br>
+><i> On Thu, Apr 8, 2021 at 3:14 PM Jinpu Wang <jinpu.wang@xxxxxxxxx> wrote:</i><br>
+><i> ></i><br>
+><i> > On Thu, Apr 8, 2021 at 3:06 PM Gioh Kim <gi-oh.kim@xxxxxxxxx> wrote:</i><br>
+><i> > ></i><br>
+><i> > > As the name shows, it checks if strings are equal in case insensitive</i><br>
+><i> > > manner.</i><br>
+><i> > ></i><br>
+><i> > > For example, drivers/infiniband/ulp/rtrs/rtrs-clt-sysfs.c uses</i><br>
+><i> > > strncasecmp to check that the input via sysfs is "mi". But it would</i><br>
+><i> > > work even-if the input is "min-wrongcommand".</i><br>
+><i> > ></i><br>
+><i> > > I found some more cases using strncasecmp to check the entire string</i><br>
+><i> > > such as rtrs-clt-sysfs.c does. drivers/pnp/interface.c checks</i><br>
+><i> > > "disable" command with strncasecmp but it would also work if the</i><br>
+><i> > > command is "disable-wrong".</i><br>
+><i> > ></i><br>
+><i> > > Signed-off-by: Gioh Kim <gi-oh.kim@xxxxxxxxx></i><br>
+<br>
+v4 LGTM, thanks.<br>
+<br>
+Reviewed-by: Nick Desaulniers <ndesaulniers@xxxxxxxxxx><br>
+<br>
+><i> > you should add the</i><br>
+><i> > Reported-by: kernel test robot <lkp@xxxxxxxxx></i><br>
+><i> > > ---</i><br>
+><i> > you can add the changelog here after the ---</i><br>
+><i> > v4->v3:  removed #ifdef CONFIG_SYSFS ~ #endif.</i><br>
+><i> ></i><br>
+><i> > The string comparison doesn't depends on CONFIG_SYSFS at all.</i><br>
+><i> ></i><br>
+><i> > It looks good to me.</i><br>
+><i> > Reviewed-by: Jack Wang <jinpu.wang@xxxxxxxxx></i><br>
+><i> ></i><br>
+><i> ></i><br>
+><i></i><br>
+><i> Yes, I got two build error reports for v3.</i><br>
+><i> Should I send v5 including "Reported-by: kernel test robot <lkp@xxxxxxxxx>" tag?</i><br>
+<br>
+I don't think that's necessary.  I would use that tag if I was fixing<br>
+an issue reported by the bot; but v4 is basically the same as v2 in<br>
+regards to the issue 0day bot reported with v3. v3 just demonstrates<br>
+that there are drivers with possibly incorrect Kconfig dependencies<br>
+(missing a dependency on SYSFS perhaps). So the underlying problem was<br>
+not reported by 0day bot; 0day bot just helped avoid issues from v3.<br>
+<br>
+Fixing the Kconfig dependencies would be nice to have, but not a<br>
+requirement IMO to this feature/functionality.<br>
+<br>
+-- <br>
+Thanks,<br>
+~Nick Desaulniers<br>
+<br>
+<br>
+

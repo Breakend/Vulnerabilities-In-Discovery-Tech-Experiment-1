@@ -1,0 +1,89 @@
+On Wed, Mar 24, 2021 at 11:44:19AM -0500, Brijesh Singh wrote:<br>
+><i> @@ -88,6 +89,13 @@ struct sev_es_runtime_data {</i><br>
+><i>  	 * is currently unsupported in SEV-ES guests.</i><br>
+><i>  	 */</i><br>
+><i>  	unsigned long dr7;</i><br>
+><i> +</i><br>
+><i> +	/*</i><br>
+><i> +	 * SEV-SNP requires that the GHCB must be registered before using it.</i><br>
+><i> +	 * The flag below will indicate whether the GHCB is registered, if its</i><br>
+><i> +	 * not registered then sev_es_get_ghcb() will perform the registration.</i><br>
+><i> +	 */</i><br>
+><i> +	bool ghcb_registered;</i><br>
+<br>
+snp_ghcb_registered<br>
+<br>
+because it is SNP-specific.<br>
+<br>
+><i>  };</i><br>
+><i>  </i><br>
+><i>  struct ghcb_state {</i><br>
+><i> @@ -196,6 +204,12 @@ static __always_inline struct ghcb *sev_es_get_ghcb(struct ghcb_state *state)</i><br>
+><i>  		data->ghcb_active = true;</i><br>
+><i>  	}</i><br>
+><i>  </i><br>
+><i> +	/* SEV-SNP guest requires that GHCB must be registered before using it. */</i><br>
+><i> +	if (sev_snp_active() && !data->ghcb_registered) {</i><br>
+><i> +		sev_snp_register_ghcb(__pa(ghcb));</i><br>
+><i> +		data->ghcb_registered = true;</i><br>
+<br>
+This needs to be set to true in the function itself, in the success<br>
+case.<br>
+<br>
+><i> +static inline u64 sev_es_rd_ghcb_msr(void)</i><br>
+><i> +{</i><br>
+><i> +	return __rdmsr(MSR_AMD64_SEV_ES_GHCB);</i><br>
+><i> +}</i><br>
+><i> +</i><br>
+><i> +static inline void sev_es_wr_ghcb_msr(u64 val)</i><br>
+><i> +{</i><br>
+><i> +	u32 low, high;</i><br>
+><i> +</i><br>
+><i> +	low  = (u32)(val);</i><br>
+><i> +	high = (u32)(val >> 32);</i><br>
+><i> +</i><br>
+><i> +	native_wrmsr(MSR_AMD64_SEV_ES_GHCB, low, high);</i><br>
+><i> +}</i><br>
+<br>
+Those copies will go away once you create the common sev.c<br>
+<br>
+><i> +</i><br>
+><i> +/* Provides sev_es_terminate() */</i><br>
+><i> +#include "sev-common-shared.c"</i><br>
+><i> +</i><br>
+><i> +void sev_snp_register_ghcb(unsigned long paddr)</i><br>
+><i> +{</i><br>
+><i> +	u64 pfn = paddr >> PAGE_SHIFT;</i><br>
+><i> +	u64 old, val;</i><br>
+><i> +</i><br>
+><i> +	/* save the old GHCB MSR */</i><br>
+><i> +	old = sev_es_rd_ghcb_msr();</i><br>
+><i> +</i><br>
+><i> +	/* Issue VMGEXIT */</i><br>
+><i> +	sev_es_wr_ghcb_msr(GHCB_REGISTER_GPA_REQ_VAL(pfn));</i><br>
+><i> +	VMGEXIT();</i><br>
+><i> +</i><br>
+><i> +	val = sev_es_rd_ghcb_msr();</i><br>
+><i> +</i><br>
+><i> +	/* If the response GPA is not ours then abort the guest */</i><br>
+><i> +	if ((GHCB_SEV_GHCB_RESP_CODE(val) != GHCB_REGISTER_GPA_RESP) ||</i><br>
+><i> +	    (GHCB_REGISTER_GPA_RESP_VAL(val) != pfn))</i><br>
+><i> +		sev_es_terminate(GHCB_SEV_ES_REASON_GENERAL_REQUEST);</i><br>
+><i> +</i><br>
+><i> +	/* Restore the GHCB MSR value */</i><br>
+><i> +	sev_es_wr_ghcb_msr(old);</i><br>
+><i> +}</i><br>
+<br>
+This is an almost identical copy of the version in compressed/. Move to<br>
+the shared file?<br>
+<br>
+Thx.<br>
+<br>
+-- <br>
+Regards/Gruss,<br>
+    Boris.<br>
+<br>
+<a  rel="nofollow" href="https://people.kernel.org/tglx/notes-about-netiquette">https://people.kernel.org/tglx/notes-about-netiquette</a><br>
+<br>
+<br>
+

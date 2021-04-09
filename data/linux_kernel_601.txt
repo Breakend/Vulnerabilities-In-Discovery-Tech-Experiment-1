@@ -1,0 +1,27 @@
+Linus,<br>
+<br>
+The following changes since commit 55626ca9c6909d077eca71bccbe15fef6e5ad917:<br>
+<br>
+  selftests: kvm: Check that TSC page value is small after KVM_SET_CLOCK(0) (2021-04-01 05:14:19 -0400)<br>
+<br>
+are available in the Git repository at:<br>
+<br>
+  <a  rel="nofollow" href="https://git.kernel.org/pub/scm/virt/kvm/kvm.git">https://git.kernel.org/pub/scm/virt/kvm/kvm.git</a> tags/for-linus<br>
+<br>
+for you to fetch changes up to 315f02c60d9425b38eb8ad7f21b8a35e40db23f9:<br>
+<br>
+  KVM: x86/mmu: preserve pending TLB flush across calls to kvm_tdp_mmu_zap_sp (2021-04-08 07:48:18 -0400)<br>
+<br>
+----------------------------------------------------------------<br>
+A lone x86 patch, for a bug found while developing a backport to<br>
+stable versions.<br>
+<br>
+----------------------------------------------------------------<br>
+Paolo Bonzini (1):<br>
+      KVM: x86/mmu: preserve pending TLB flush across calls to kvm_tdp_mmu_zap_sp<br>
+<br>
+ arch/x86/kvm/mmu/mmu.c | 2 +-<br>
+ 1 file changed, 1 insertion(+), 1 deletion(-)<br>
+<br>
+<br>
+

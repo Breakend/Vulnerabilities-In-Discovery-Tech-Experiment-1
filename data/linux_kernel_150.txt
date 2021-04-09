@@ -1,0 +1,78 @@
+Convert to using dma_map_sg_p2pdma() for PCI p2pdma pages.<br>
+<br>
+This should be equivalent but allows for heterogeneous scatterlists<br>
+with both P2PDMA and regular pages. However, P2PDMA support will be<br>
+slightly more restricted (only dma-direct and dma-iommu are currently<br>
+supported).<br>
+<br>
+Signed-off-by: Logan Gunthorpe <logang@xxxxxxxxxxxx><br>
+---<br>
+ drivers/nvme/host/pci.c | 28 ++++++++--------------------<br>
+ 1 file changed, 8 insertions(+), 20 deletions(-)<br>
+<br>
+diff --git a/drivers/nvme/host/pci.c b/drivers/nvme/host/pci.c<br>
+index 14f092973792..a1ed07ff38b7 100644<br>
+--- a/drivers/nvme/host/pci.c<br>
++++ b/drivers/nvme/host/pci.c<br>
+@@ -577,17 +577,6 @@ static void nvme_free_sgls(struct nvme_dev *dev, struct request *req)<br>
+ <br>
+ }<br>
+ <br>
+-static void nvme_unmap_sg(struct nvme_dev *dev, struct request *req)<br>
+-{<br>
+-	struct nvme_iod *iod = blk_mq_rq_to_pdu(req);<br>
+-<br>
+-	if (is_pci_p2pdma_page(sg_page(iod->sg)))<br>
+-		pci_p2pdma_unmap_sg(dev->dev, iod->sg, iod->nents,<br>
+-				    rq_dma_dir(req));<br>
+-	else<br>
+-		dma_unmap_sg(dev->dev, iod->sg, iod->nents, rq_dma_dir(req));<br>
+-}<br>
+-<br>
+ static void nvme_unmap_data(struct nvme_dev *dev, struct request *req)<br>
+ {<br>
+ 	struct nvme_iod *iod = blk_mq_rq_to_pdu(req);<br>
+@@ -600,7 +589,7 @@ static void nvme_unmap_data(struct nvme_dev *dev, struct request *req)<br>
+ <br>
+ 	WARN_ON_ONCE(!iod->nents);<br>
+ <br>
+-	nvme_unmap_sg(dev, req);<br>
++	dma_unmap_sg(dev->dev, iod->sg, iod->nents, rq_dma_dir(req));<br>
+ 	if (iod->npages == 0)<br>
+ 		dma_pool_free(dev->prp_small_pool, nvme_pci_iod_list(req)[0],<br>
+ 			      iod->first_dma);<br>
+@@ -868,14 +857,13 @@ static blk_status_t nvme_map_data(struct nvme_dev *dev, struct request *req,<br>
+ 	if (!iod->nents)<br>
+ 		goto out_free_sg;<br>
+ <br>
+-	if (is_pci_p2pdma_page(sg_page(iod->sg)))<br>
+-		nr_mapped = pci_p2pdma_map_sg_attrs(dev->dev, iod->sg,<br>
+-				iod->nents, rq_dma_dir(req), DMA_ATTR_NO_WARN);<br>
+-	else<br>
+-		nr_mapped = dma_map_sg_attrs(dev->dev, iod->sg, iod->nents,<br>
+-					     rq_dma_dir(req), DMA_ATTR_NO_WARN);<br>
+-	if (!nr_mapped)<br>
++	nr_mapped = dma_map_sg_p2pdma_attrs(dev->dev, iod->sg, iod->nents,<br>
++				     rq_dma_dir(req), DMA_ATTR_NO_WARN);<br>
++	if (nr_mapped < 0) {<br>
++		if (nr_mapped != -ENOMEM)<br>
++			ret = BLK_STS_TARGET;<br>
+ 		goto out_free_sg;<br>
++	}<br>
+ <br>
+ 	iod->use_sgl = nvme_pci_use_sgls(dev, req);<br>
+ 	if (iod->use_sgl)<br>
+@@ -887,7 +875,7 @@ static blk_status_t nvme_map_data(struct nvme_dev *dev, struct request *req,<br>
+ 	return BLK_STS_OK;<br>
+ <br>
+ out_unmap_sg:<br>
+-	nvme_unmap_sg(dev, req);<br>
++	dma_unmap_sg(dev->dev, iod->sg, iod->nents, rq_dma_dir(req));<br>
+ out_free_sg:<br>
+ 	mempool_free(iod->sg, dev->iod_mempool);<br>
+ 	return ret;<br>
+-- <br>
+2.20.1<br>
+<br>
+<br>
+

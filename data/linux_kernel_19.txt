@@ -1,0 +1,64 @@
+Hi Linus,<br>
+<br>
+Nothing very exciting here, just a few small bug fixes. No red flags<br>
+for this release have shown up.<br>
+<br>
+Thanks,<br>
+Jason<br>
+<br>
+The following changes since commit a5e13c6df0e41702d2b2c77c8ad41677ebb065b3:<br>
+<br>
+  Linux 5.12-rc5 (2021-03-28 15:48:16 -0700)<br>
+<br>
+are available in the Git repository at:<br>
+<br>
+  git://git.kernel.org/pub/scm/linux/kernel/git/rdma/rdma.git tags/for-linus<br>
+<br>
+for you to fetch changes up to d1c803a9ccd7bd3aff5e989ccfb39ed3b799b975:<br>
+<br>
+  RDMA/addr: Be strict with gid size (2021-04-08 16:14:56 -0300)<br>
+<br>
+----------------------------------------------------------------<br>
+RDMA 5.12 third rc pull request<br>
+<br>
+Several bug fixes:<br>
+<br>
+- Regression from the last pull request in cxgb4 related to the ipv6 fixes<br>
+<br>
+- KASAN crasher in rtrs<br>
+<br>
+- oops in hfi1 related to a buggy BIOS<br>
+<br>
+- Userspace could oops qedr's XRC support<br>
+<br>
+- Uninitialized memory when parsing a LS_NLA_TYPE_DGID netlink message<br>
+<br>
+----------------------------------------------------------------<br>
+Kamal Heib (1):<br>
+      RDMA/qedr: Fix kernel panic when trying to access recv_cq<br>
+<br>
+Leon Romanovsky (1):<br>
+      RDMA/addr: Be strict with gid size<br>
+<br>
+Md Haris Iqbal (1):<br>
+      RDMA/rtrs-clt: Close rtrs client conn before destroying rtrs clt session files<br>
+<br>
+Mike Marciniszyn (1):<br>
+      IB/hfi1: Fix probe time panic when AIP is enabled with a buggy BIOS<br>
+<br>
+Potnuri Bharat Teja (1):<br>
+      RDMA/cxgb4: check for ipv6 address properly while destroying listener<br>
+<br>
+ drivers/infiniband/core/addr.c         |  4 +++-<br>
+ drivers/infiniband/hw/cxgb4/cm.c       |  3 ++-<br>
+ drivers/infiniband/hw/hfi1/affinity.c  | 21 +++++----------------<br>
+ drivers/infiniband/hw/hfi1/hfi.h       |  1 +<br>
+ drivers/infiniband/hw/hfi1/init.c      | 10 +++++++++-<br>
+ drivers/infiniband/hw/hfi1/netdev_rx.c |  3 +--<br>
+ drivers/infiniband/hw/qedr/verbs.c     |  3 ++-<br>
+ drivers/infiniband/ulp/rtrs/rtrs-clt.c |  2 +-<br>
+ 8 files changed, 24 insertions(+), 23 deletions(-)<br>
+<p><strong>Attachment:
+<a href="01286/signature.asc" ><tt>signature.asc</tt></a></strong><br>
+<em>Description:</em> PGP signature</p>
+

@@ -1,0 +1,37 @@
+On Wed, Apr 07, 2021 at 08:12:10PM +0000, Min Li wrote:<br>
+><i> > </i><br>
+><i> > Why not use the miscdev name field?</i><br>
+><i> > </i><br>
+><i> miscdev name field is just a char pointer and I need an static array to manipulate the name with index</i><br>
+<br>
+Why?<br>
+<br>
+><i> > So it's a parent?  Why not make this a real platform_device pointer and not</i><br>
+><i> > a device pointer?</i><br>
+><i> > </i><br>
+><i> </i><br>
+><i> It is not parent and mfd field is the parent</i><br>
+<br>
+Then why are you saving it off?<br>
+<br>
+><i> > What operations?</i><br>
+><i> > </i><br>
+><i> </i><br>
+><i> The MFD driver will create 2 devices, one is for phc driver and another one is this driver.</i><br>
+><i> The lock is to make sure these 2 driver's operations are synchronized. </i><br>
+<br>
+Ok, that should be documented a bit, it wasn't obvious :)<br>
+<br>
+><i> > Index into what?</i><br>
+><i> > </i><br>
+><i> </i><br>
+><i> index is passed by mfd driver and will be used as part of device name such as "rsmu0"</i><br>
+<br>
+So you can just look it up from the name?<br>
+<br>
+thanks,<br>
+<br>
+greg k-h<br>
+<br>
+<br>
+

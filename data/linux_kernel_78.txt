@@ -1,0 +1,35 @@
+The clocks are configured by devm_clk_bulk_get_all() in this driver. In<br>
+case of any error the clocks freeing will be handled automatically.<br>
+There is no need to explicitly free the clocks. Fix the same.<br>
+<br>
+Fixes: 84770f028fab ("usb: dwc3: Add driver for Xilinx platforms")<br>
+Signed-off-by: Manish Narani <manish.narani@xxxxxxxxxx><br>
+---<br>
+ drivers/usb/dwc3/dwc3-xilinx.c | 2 --<br>
+ 1 file changed, 2 deletions(-)<br>
+<br>
+diff --git a/drivers/usb/dwc3/dwc3-xilinx.c b/drivers/usb/dwc3/dwc3-xilinx.c<br>
+index f42f4cb..9cc3ad7 100644<br>
+--- a/drivers/usb/dwc3/dwc3-xilinx.c<br>
++++ b/drivers/usb/dwc3/dwc3-xilinx.c<br>
+@@ -271,7 +271,6 @@ static int dwc3_xlnx_probe(struct platform_device *pdev)<br>
+ <br>
+ err_clk_put:<br>
+ 	clk_bulk_disable_unprepare(priv_data->num_clocks, priv_data->clks);<br>
+-	clk_bulk_put_all(priv_data->num_clocks, priv_data->clks);<br>
+ <br>
+ 	return ret;<br>
+ }<br>
+@@ -284,7 +283,6 @@ static int dwc3_xlnx_remove(struct platform_device *pdev)<br>
+ 	of_platform_depopulate(dev);<br>
+ <br>
+ 	clk_bulk_disable_unprepare(priv_data->num_clocks, priv_data->clks);<br>
+-	clk_bulk_put_all(priv_data->num_clocks, priv_data->clks);<br>
+ 	priv_data->num_clocks = 0;<br>
+ <br>
+ 	pm_runtime_disable(dev);<br>
+-- <br>
+2.1.1<br>
+<br>
+<br>
+

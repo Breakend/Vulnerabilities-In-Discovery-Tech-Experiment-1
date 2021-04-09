@@ -1,0 +1,223 @@
+Add basic stress test for sigtrap handling as a perf tool built-in test.<br>
+This allows sanity checking the basic sigtrap functionality from within<br>
+the perf tool.<br>
+<br>
+Note: A more elaborate kselftest version of this test can also be found<br>
+in tools/testing/selftests/perf_events/sigtrap_threads.c.<br>
+<br>
+Signed-off-by: Marco Elver <elver@xxxxxxxxxx><br>
+---<br>
+v4:<br>
+* Update for new perf_event_attr::sig_data / si_perf handling.<br>
+<br>
+v3:<br>
+* Added to series (per suggestion from Ian Rogers).<br>
+---<br>
+ tools/perf/tests/Build          |   1 +<br>
+ tools/perf/tests/builtin-test.c |   5 ++<br>
+ tools/perf/tests/sigtrap.c      | 150 ++++++++++++++++++++++++++++++++<br>
+ tools/perf/tests/tests.h        |   1 +<br>
+ 4 files changed, 157 insertions(+)<br>
+ create mode 100644 tools/perf/tests/sigtrap.c<br>
+<br>
+diff --git a/tools/perf/tests/Build b/tools/perf/tests/Build<br>
+index 650aec19d490..a429c7a02b37 100644<br>
+--- a/tools/perf/tests/Build<br>
++++ b/tools/perf/tests/Build<br>
+@@ -64,6 +64,7 @@ perf-y += parse-metric.o<br>
+ perf-y += pe-file-parsing.o<br>
+ perf-y += expand-cgroup.o<br>
+ perf-y += perf-time-to-tsc.o<br>
++perf-y += sigtrap.o<br>
+ <br>
+ $(OUTPUT)tests/llvm-src-base.c: tests/bpf-script-example.c tests/Build<br>
+ 	$(call rule_mkdir)<br>
+diff --git a/tools/perf/tests/builtin-test.c b/tools/perf/tests/builtin-test.c<br>
+index c4b888f18e9c..28a1cb5eaa77 100644<br>
+--- a/tools/perf/tests/builtin-test.c<br>
++++ b/tools/perf/tests/builtin-test.c<br>
+@@ -359,6 +359,11 @@ static struct test generic_tests[] = {<br>
+ 		.func = test__perf_time_to_tsc,<br>
+ 		.is_supported = test__tsc_is_supported,<br>
+ 	},<br>
++	{<br>
++		.desc = "Sigtrap support",<br>
++		.func = test__sigtrap,<br>
++		.is_supported = test__wp_is_supported, /* uses wp for test */<br>
++	},<br>
+ 	{<br>
+ 		.func = NULL,<br>
+ 	},<br>
+diff --git a/tools/perf/tests/sigtrap.c b/tools/perf/tests/sigtrap.c<br>
+new file mode 100644<br>
+index 000000000000..c367cc2f64d5<br>
+--- /dev/null<br>
++++ b/tools/perf/tests/sigtrap.c<br>
+@@ -0,0 +1,150 @@<br>
++// SPDX-License-Identifier: GPL-2.0<br>
++/*<br>
++ * Basic test for sigtrap support.<br>
++ *<br>
++ * Copyright (C) 2021, Google LLC.<br>
++ */<br>
++<br>
++#include <stdint.h><br>
++#include <stdlib.h><br>
++#include <linux/hw_breakpoint.h><br>
++#include <pthread.h><br>
++#include <signal.h><br>
++#include <sys/ioctl.h><br>
++#include <sys/syscall.h><br>
++#include <unistd.h><br>
++<br>
++#include "cloexec.h"<br>
++#include "debug.h"<br>
++#include "event.h"<br>
++#include "tests.h"<br>
++#include "../perf-sys.h"<br>
++<br>
++#define NUM_THREADS 5<br>
++<br>
++static struct {<br>
++	int tids_want_signal;		/* Which threads still want a signal. */<br>
++	int signal_count;		/* Sanity check number of signals received. */<br>
++	volatile int iterate_on;	/* Variable to set breakpoint on. */<br>
++	siginfo_t first_siginfo;	/* First observed siginfo_t. */<br>
++} ctx;<br>
++<br>
++#define TEST_SIG_DATA (~(uint64_t)(&ctx.iterate_on))<br>
++<br>
++static struct perf_event_attr make_event_attr(void)<br>
++{<br>
++	struct perf_event_attr attr = {<br>
++		.type		= PERF_TYPE_BREAKPOINT,<br>
++		.size		= sizeof(attr),<br>
++		.sample_period	= 1,<br>
++		.disabled	= 1,<br>
++		.bp_addr	= (unsigned long)&ctx.iterate_on,<br>
++		.bp_type	= HW_BREAKPOINT_RW,<br>
++		.bp_len		= HW_BREAKPOINT_LEN_1,<br>
++		.inherit	= 1, /* Children inherit events ... */<br>
++		.inherit_thread = 1, /* ... but only cloned with CLONE_THREAD. */<br>
++		.remove_on_exec = 1, /* Required by sigtrap. */<br>
++		.sigtrap	= 1, /* Request synchronous SIGTRAP on event. */<br>
++		.sig_data	= TEST_SIG_DATA,<br>
++	};<br>
++	return attr;<br>
++}<br>
++<br>
++static void<br>
++sigtrap_handler(int signum __maybe_unused, siginfo_t *info, void *ucontext __maybe_unused)<br>
++{<br>
++	if (!__atomic_fetch_add(&ctx.signal_count, 1, __ATOMIC_RELAXED))<br>
++		ctx.first_siginfo = *info;<br>
++	__atomic_fetch_sub(&ctx.tids_want_signal, syscall(SYS_gettid), __ATOMIC_RELAXED);<br>
++}<br>
++<br>
++static void *test_thread(void *arg)<br>
++{<br>
++	pthread_barrier_t *barrier = (pthread_barrier_t *)arg;<br>
++	pid_t tid = syscall(SYS_gettid);<br>
++	int i;<br>
++<br>
++	pthread_barrier_wait(barrier);<br>
++<br>
++	__atomic_fetch_add(&ctx.tids_want_signal, tid, __ATOMIC_RELAXED);<br>
++	for (i = 0; i < ctx.iterate_on - 1; i++)<br>
++		__atomic_fetch_add(&ctx.tids_want_signal, tid, __ATOMIC_RELAXED);<br>
++<br>
++	return NULL;<br>
++}<br>
++<br>
++static int run_test_threads(pthread_t *threads, pthread_barrier_t *barrier)<br>
++{<br>
++	int i;<br>
++<br>
++	pthread_barrier_wait(barrier);<br>
++	for (i = 0; i < NUM_THREADS; i++)<br>
++		TEST_ASSERT_EQUAL("pthread_join() failed", pthread_join(threads[i], NULL), 0);<br>
++<br>
++	return TEST_OK;<br>
++}<br>
++<br>
++static int run_stress_test(int fd, pthread_t *threads, pthread_barrier_t *barrier)<br>
++{<br>
++	int ret;<br>
++<br>
++	ctx.iterate_on = 3000;<br>
++<br>
++	TEST_ASSERT_EQUAL("misfired signal?", ctx.signal_count, 0);<br>
++	TEST_ASSERT_EQUAL("enable failed", ioctl(fd, PERF_EVENT_IOC_ENABLE, 0), 0);<br>
++	ret = run_test_threads(threads, barrier);<br>
++	TEST_ASSERT_EQUAL("disable failed", ioctl(fd, PERF_EVENT_IOC_DISABLE, 0), 0);<br>
++<br>
++	TEST_ASSERT_EQUAL("unexpected sigtraps", ctx.signal_count, NUM_THREADS * ctx.iterate_on);<br>
++	TEST_ASSERT_EQUAL("missing signals or incorrectly delivered", ctx.tids_want_signal, 0);<br>
++	TEST_ASSERT_VAL("unexpected si_addr", ctx.first_siginfo.si_addr == &ctx.iterate_on);<br>
++	TEST_ASSERT_EQUAL("unexpected si_errno", ctx.first_siginfo.si_errno, PERF_TYPE_BREAKPOINT);<br>
++#if 0 /* FIXME: test build and enable when libc's signal.h has si_perf. */<br>
++	TEST_ASSERT_VAL("unexpected si_perf", ctx.first_siginfo.si_perf == TEST_SIG_DATA);<br>
++#endif<br>
++<br>
++	return ret;<br>
++}<br>
++<br>
++int test__sigtrap(struct test *test __maybe_unused, int subtest __maybe_unused)<br>
++{<br>
++	struct perf_event_attr attr = make_event_attr();<br>
++	struct sigaction action = {};<br>
++	struct sigaction oldact;<br>
++	pthread_t threads[NUM_THREADS];<br>
++	pthread_barrier_t barrier;<br>
++	int i, fd, ret = TEST_FAIL;<br>
++<br>
++	pthread_barrier_init(&barrier, NULL, NUM_THREADS + 1);<br>
++<br>
++	action.sa_flags = SA_SIGINFO | SA_NODEFER;<br>
++	action.sa_sigaction = sigtrap_handler;<br>
++	sigemptyset(&action.sa_mask);<br>
++	if (sigaction(SIGTRAP, &action, &oldact)) {<br>
++		pr_debug("FAILED sigaction()\n");<br>
++		goto out;<br>
++	}<br>
++<br>
++	fd = sys_perf_event_open(&attr, 0, -1, -1, perf_event_open_cloexec_flag());<br>
++	if (fd < 0) {<br>
++		pr_debug("FAILED sys_perf_event_open()\n");<br>
++		goto out_restore_sigaction;<br>
++	}<br>
++<br>
++	for (i = 0; i < NUM_THREADS; i++) {<br>
++		if (pthread_create(&threads[i], NULL, test_thread, &barrier)) {<br>
++			pr_debug("FAILED pthread_create()");<br>
++			goto out_close_perf_event;<br>
++		}<br>
++	}<br>
++<br>
++	ret = run_stress_test(fd, threads, &barrier);<br>
++<br>
++out_close_perf_event:<br>
++	close(fd);<br>
++out_restore_sigaction:<br>
++	sigaction(SIGTRAP, &oldact, NULL);<br>
++out:<br>
++	pthread_barrier_destroy(&barrier);<br>
++	return ret;<br>
++}<br>
+diff --git a/tools/perf/tests/tests.h b/tools/perf/tests/tests.h<br>
+index b85f005308a3..c3f2e2ecbfd6 100644<br>
+--- a/tools/perf/tests/tests.h<br>
++++ b/tools/perf/tests/tests.h<br>
+@@ -127,6 +127,7 @@ int test__parse_metric(struct test *test, int subtest);<br>
+ int test__pe_file_parsing(struct test *test, int subtest);<br>
+ int test__expand_cgroup_events(struct test *test, int subtest);<br>
+ int test__perf_time_to_tsc(struct test *test, int subtest);<br>
++int test__sigtrap(struct test *test, int subtest);<br>
+ <br>
+ bool test__bp_signal_is_supported(void);<br>
+ bool test__bp_account_is_supported(void);<br>
+-- <br>
+2.31.0.208.g409f899ff0-goog<br>
+<br>
+<br>
+

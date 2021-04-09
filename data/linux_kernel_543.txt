@@ -1,0 +1,48 @@
+No one calls this outside of the tty_io.c file, so mark this static and<br>
+do not export the symbol anymore.<br>
+<br>
+Cc: Jiri Slaby <jirislaby@xxxxxxxxxx><br>
+Signed-off-by: Greg Kroah-Hartman <gregkh@xxxxxxxxxxxxxxxxxxx><br>
+---<br>
+ drivers/tty/tty_io.c | 3 +--<br>
+ include/linux/tty.h  | 1 -<br>
+ 2 files changed, 1 insertion(+), 3 deletions(-)<br>
+<br>
+diff --git a/drivers/tty/tty_io.c b/drivers/tty/tty_io.c<br>
+index 1c480c04374c..aa959f3371b1 100644<br>
+--- a/drivers/tty/tty_io.c<br>
++++ b/drivers/tty/tty_io.c<br>
+@@ -547,7 +547,7 @@ EXPORT_SYMBOL_GPL(tty_wakeup);<br>
+  *	This is available to the pty code so if the master closes, if the<br>
+  *	slave is a redirect it can release the redirect.<br>
+  */<br>
+-struct file *tty_release_redirect(struct tty_struct *tty)<br>
++static struct file *tty_release_redirect(struct tty_struct *tty)<br>
+ {<br>
+ 	struct file *f = NULL;<br>
+ <br>
+@@ -560,7 +560,6 @@ struct file *tty_release_redirect(struct tty_struct *tty)<br>
+ <br>
+ 	return f;<br>
+ }<br>
+-EXPORT_SYMBOL_GPL(tty_release_redirect);<br>
+ <br>
+ /**<br>
+  *	__tty_hangup		-	actual handler for hangup events<br>
+diff --git a/include/linux/tty.h b/include/linux/tty.h<br>
+index 4b21d47bc098..1b6f5dc3dcb2 100644<br>
+--- a/include/linux/tty.h<br>
++++ b/include/linux/tty.h<br>
+@@ -396,7 +396,6 @@ extern struct tty_struct *tty_kopen_shared(dev_t device);<br>
+ extern void tty_kclose(struct tty_struct *tty);<br>
+ extern int tty_dev_name_to_number(const char *name, dev_t *number);<br>
+ extern ssize_t redirected_tty_write(struct kiocb *, struct iov_iter *);<br>
+-extern struct file *tty_release_redirect(struct tty_struct *tty);<br>
+ #else<br>
+ static inline void tty_kref_put(struct tty_struct *tty)<br>
+ { }<br>
+-- <br>
+2.31.1<br>
+<br>
+<br>
+

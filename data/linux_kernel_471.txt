@@ -1,0 +1,64 @@
+This commit fixes below sparse warnings with W=2 about shadow<br>
+declarations:<br>
+<br>
+drivers/bus/mhi/core/main.c: In function ‘parse_xfer_event’:<br>
+drivers/bus/mhi/core/main.c:667:17: warning: declaration of ‘flags’ shadows a previous local [-Wshadow]<br>
+  667 |   unsigned long flags;<br>
+      |                 ^~~~~<br>
+drivers/bus/mhi/core/main.c:565:16: note: shadowed declaration is here<br>
+  565 |  unsigned long flags = 0;<br>
+      |                ^~~~~<br>
+drivers/bus/mhi/core/main.c: In function ‘mhi_process_ctrl_ev_ring’:<br>
+drivers/bus/mhi/core/main.c:856:23: warning: declaration of ‘new_state’ shadows a previous local [-Wshadow]<br>
+  856 |     enum mhi_pm_state new_state;<br>
+      |                       ^~~~~~~~~<br>
+drivers/bus/mhi/core/main.c:837:19: note: shadowed declaration is here<br>
+  837 |    enum mhi_state new_state;<br>
+      |                   ^~~~~~~~~<br>
+<br>
+Signed-off-by: Manivannan Sadhasivam <manivannan.sadhasivam@xxxxxxxxxx><br>
+---<br>
+<br>
+Changes in v2:<br>
+<br>
+* Used a separate "mhi_pm_state" variable<br>
+<br>
+ drivers/bus/mhi/core/main.c | 8 +++-----<br>
+ 1 file changed, 3 insertions(+), 5 deletions(-)<br>
+<br>
+diff --git a/drivers/bus/mhi/core/main.c b/drivers/bus/mhi/core/main.c<br>
+index b0c8afe16e3a..47a8df550fe0 100644<br>
+--- a/drivers/bus/mhi/core/main.c<br>
++++ b/drivers/bus/mhi/core/main.c<br>
+@@ -664,8 +664,6 @@ static int parse_xfer_event(struct mhi_controller *mhi_cntrl,<br>
+ 	case MHI_EV_CC_OOB:<br>
+ 	case MHI_EV_CC_DB_MODE:<br>
+ 	{<br>
+-		unsigned long flags;<br>
+-<br>
+ 		mhi_chan->db_cfg.db_mode = 1;<br>
+ 		read_lock_irqsave(&mhi_cntrl->pm_lock, flags);<br>
+ 		if (tre_ring->wp != tre_ring->rp &&<br>
+@@ -853,14 +851,14 @@ int mhi_process_ctrl_ev_ring(struct mhi_controller *mhi_cntrl,<br>
+ 				break;<br>
+ 			case MHI_STATE_SYS_ERR:<br>
+ 			{<br>
+-				enum mhi_pm_state new_state;<br>
++				enum mhi_pm_state pm_state;<br>
+ <br>
+ 				dev_dbg(dev, "System error detected\n");<br>
+ 				write_lock_irq(&mhi_cntrl->pm_lock);<br>
+-				new_state = mhi_tryset_pm_state(mhi_cntrl,<br>
++				pm_state = mhi_tryset_pm_state(mhi_cntrl,<br>
+ 							MHI_PM_SYS_ERR_DETECT);<br>
+ 				write_unlock_irq(&mhi_cntrl->pm_lock);<br>
+-				if (new_state == MHI_PM_SYS_ERR_DETECT)<br>
++				if (pm_state == MHI_PM_SYS_ERR_DETECT)<br>
+ 					mhi_pm_sys_err_handler(mhi_cntrl);<br>
+ 				break;<br>
+ 			}<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

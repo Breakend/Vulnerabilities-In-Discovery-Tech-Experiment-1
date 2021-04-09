@@ -1,0 +1,32 @@
+On Thu, Apr 08, 2021 at 10:38:15AM +0200, Greg Kroah-Hartman wrote:<br>
+><i> On Thu, Apr 08, 2021 at 11:28:09AM +0300, Heikki Krogerus wrote:</i><br>
+><i> > On Wed, Apr 07, 2021 at 05:15:40PM +0800, Zhen Lei wrote:</i><br>
+><i> > > Fixes the following W=1 kernel build warning:</i><br>
+><i> > > </i><br>
+><i> > > drivers/usb/typec/tcpm/tcpm.c:2107:39: warning: ‘tcpm_altmode_ops’ defined but not used [-Wunused-const-variable=]</i><br>
+><i> > > </i><br>
+><i> > > The reference to the variable 'tcpm_altmode_ops' is deleted by the</i><br>
+><i> > > commit a079973f462a ("usb: typec: tcpm: Remove tcpc_config configuration</i><br>
+><i> > > mechanism").</i><br>
+><i> > > </i><br>
+><i> > > By the way, the static functions referenced only by the variable</i><br>
+><i> > > 'tcpm_altmode_ops' are deleted accordingly.</i><br>
+><i> > > </i><br>
+><i> > > Reported-by: Hulk Robot <hulkci@xxxxxxxxxx></i><br>
+><i> > > Signed-off-by: Zhen Lei <thunder.leizhen@xxxxxxxxxx></i><br>
+><i> > </i><br>
+><i> > Oh, I thought this was already fixed. Should this go into the stable</i><br>
+><i> > trees as well?</i><br>
+><i> </i><br>
+><i> We do not build kernels by default with "W=1" yet, so it's not needed</i><br>
+><i> in stable kernels.</i><br>
+<br>
+Okay, got it.<br>
+<br>
+thanks,<br>
+<br>
+-- <br>
+heikki<br>
+<br>
+<br>
+

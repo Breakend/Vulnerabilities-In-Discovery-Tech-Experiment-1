@@ -1,0 +1,203 @@
+In fsdax mode, WRITE and ZERO on a shared extent need CoW performed. After<br>
+CoW, new allocated extents needs to be remapped to the file.  So, add an<br>
+iomap_end for dax write ops to do the remapping work.<br>
+<br>
+Signed-off-by: Shiyang Ruan <ruansy.fnst@xxxxxxxxxxx><br>
+---<br>
+ fs/xfs/xfs_bmap_util.c |  3 +--<br>
+ fs/xfs/xfs_file.c      |  9 +++----<br>
+ fs/xfs/xfs_iomap.c     | 58 +++++++++++++++++++++++++++++++++++++++++-<br>
+ fs/xfs/xfs_iomap.h     |  4 +++<br>
+ fs/xfs/xfs_iops.c      |  7 +++--<br>
+ fs/xfs/xfs_reflink.c   |  3 +--<br>
+ 6 files changed, 69 insertions(+), 15 deletions(-)<br>
+<br>
+diff --git a/fs/xfs/xfs_bmap_util.c b/fs/xfs/xfs_bmap_util.c<br>
+index e7d68318e6a5..9fcea33dd2c9 100644<br>
+--- a/fs/xfs/xfs_bmap_util.c<br>
++++ b/fs/xfs/xfs_bmap_util.c<br>
+@@ -954,8 +954,7 @@ xfs_free_file_space(<br>
+ 		return 0;<br>
+ 	if (offset + len > XFS_ISIZE(ip))<br>
+ 		len = XFS_ISIZE(ip) - offset;<br>
+-	error = iomap_zero_range(VFS_I(ip), offset, len, NULL,<br>
+-			&xfs_buffered_write_iomap_ops);<br>
++	error = xfs_iomap_zero_range(VFS_I(ip), offset, len, NULL);<br>
+ 	if (error)<br>
+ 		return error;<br>
+ <br>
+diff --git a/fs/xfs/xfs_file.c b/fs/xfs/xfs_file.c<br>
+index a007ca0711d9..5795d5d6f869 100644<br>
+--- a/fs/xfs/xfs_file.c<br>
++++ b/fs/xfs/xfs_file.c<br>
+@@ -684,11 +684,8 @@ xfs_file_dax_write(<br>
+ 	pos = iocb->ki_pos;<br>
+ <br>
+ 	trace_xfs_file_dax_write(iocb, from);<br>
+-	ret = dax_iomap_rw(iocb, from, &xfs_direct_write_iomap_ops);<br>
+-	if (ret > 0 && iocb->ki_pos > i_size_read(inode)) {<br>
+-		i_size_write(inode, iocb->ki_pos);<br>
+-		error = xfs_setfilesize(ip, pos, ret);<br>
+-	}<br>
++	ret = dax_iomap_rw(iocb, from, &xfs_dax_write_iomap_ops);<br>
++<br>
+ out:<br>
+ 	if (iolock)<br>
+ 		xfs_iunlock(ip, iolock);<br>
+@@ -1309,7 +1306,7 @@ __xfs_filemap_fault(<br>
+ <br>
+ 		ret = dax_iomap_fault(vmf, pe_size, &pfn, NULL,<br>
+ 				(write_fault && !vmf->cow_page) ?<br>
+-				 &xfs_direct_write_iomap_ops :<br>
++				 &xfs_dax_write_iomap_ops :<br>
+ 				 &xfs_read_iomap_ops);<br>
+ 		if (ret & VM_FAULT_NEEDDSYNC)<br>
+ 			ret = dax_finish_sync_fault(vmf, pe_size, pfn);<br>
+diff --git a/fs/xfs/xfs_iomap.c b/fs/xfs/xfs_iomap.c<br>
+index e17ab7f42928..f818f989687b 100644<br>
+--- a/fs/xfs/xfs_iomap.c<br>
++++ b/fs/xfs/xfs_iomap.c<br>
+@@ -760,7 +760,8 @@ xfs_direct_write_iomap_begin(<br>
+ <br>
+ 		/* may drop and re-acquire the ilock */<br>
+ 		error = xfs_reflink_allocate_cow(ip, &imap, &cmap, &shared,<br>
+-				&lockmode, flags & IOMAP_DIRECT);<br>
++				&lockmode,<br>
++				flags & IOMAP_DIRECT || IS_DAX(inode));<br>
+ 		if (error)<br>
+ 			goto out_unlock;<br>
+ 		if (shared)<br>
+@@ -853,6 +854,38 @@ const struct iomap_ops xfs_direct_write_iomap_ops = {<br>
+ 	.iomap_begin		= xfs_direct_write_iomap_begin,<br>
+ };<br>
+ <br>
++static int<br>
++xfs_dax_write_iomap_end(<br>
++	struct inode		*inode,<br>
++	loff_t			pos,<br>
++	loff_t			length,<br>
++	ssize_t			written,<br>
++	unsigned int		flags,<br>
++	struct iomap		*iomap)<br>
++{<br>
++	int			error = 0;<br>
++	xfs_inode_t		*ip = XFS_I(inode);<br>
++	bool			cow = xfs_is_cow_inode(ip);<br>
++<br>
++	if (pos + written > i_size_read(inode)) {<br>
++		i_size_write(inode, pos + written);<br>
++		error = xfs_setfilesize(ip, pos, written);<br>
++		if (error && cow) {<br>
++			xfs_reflink_cancel_cow_range(ip, pos, written, true);<br>
++			return error;<br>
++		}<br>
++	}<br>
++	if (cow)<br>
++		error = xfs_reflink_end_cow(ip, pos, written);<br>
++<br>
++	return error;<br>
++}<br>
++<br>
++const struct iomap_ops xfs_dax_write_iomap_ops = {<br>
++	.iomap_begin		= xfs_direct_write_iomap_begin,<br>
++	.iomap_end		= xfs_dax_write_iomap_end,<br>
++};<br>
++<br>
+ static int<br>
+ xfs_buffered_write_iomap_begin(<br>
+ 	struct inode		*inode,<br>
+@@ -1314,3 +1347,26 @@ xfs_xattr_iomap_begin(<br>
+ const struct iomap_ops xfs_xattr_iomap_ops = {<br>
+ 	.iomap_begin		= xfs_xattr_iomap_begin,<br>
+ };<br>
++<br>
++int<br>
++xfs_iomap_zero_range(<br>
++	struct inode		*inode,<br>
++	loff_t			offset,<br>
++	loff_t			len,<br>
++	bool			*did_zero)<br>
++{<br>
++	return iomap_zero_range(inode, offset, len, did_zero,<br>
++			IS_DAX(inode) ? &xfs_dax_write_iomap_ops :<br>
++					&xfs_buffered_write_iomap_ops);<br>
++}<br>
++<br>
++int<br>
++xfs_iomap_truncate_page(<br>
++	struct inode		*inode,<br>
++	loff_t			pos,<br>
++	bool			*did_zero)<br>
++{<br>
++	return iomap_truncate_page(inode, pos, did_zero,<br>
++			IS_DAX(inode) ? &xfs_dax_write_iomap_ops :<br>
++					&xfs_buffered_write_iomap_ops);<br>
++}<br>
+diff --git a/fs/xfs/xfs_iomap.h b/fs/xfs/xfs_iomap.h<br>
+index 7d3703556d0e..8adb2bf78a5a 100644<br>
+--- a/fs/xfs/xfs_iomap.h<br>
++++ b/fs/xfs/xfs_iomap.h<br>
+@@ -14,6 +14,9 @@ struct xfs_bmbt_irec;<br>
+ int xfs_iomap_write_direct(struct xfs_inode *ip, xfs_fileoff_t offset_fsb,<br>
+ 		xfs_fileoff_t count_fsb, struct xfs_bmbt_irec *imap);<br>
+ int xfs_iomap_write_unwritten(struct xfs_inode *, xfs_off_t, xfs_off_t, bool);<br>
++int xfs_iomap_zero_range(struct inode *inode, loff_t offset, loff_t len,<br>
++		bool *did_zero);<br>
++int xfs_iomap_truncate_page(struct inode *inode, loff_t pos, bool *did_zero);<br>
+ xfs_fileoff_t xfs_iomap_eof_align_last_fsb(struct xfs_inode *ip,<br>
+ 		xfs_fileoff_t end_fsb);<br>
+ <br>
+@@ -42,6 +45,7 @@ xfs_aligned_fsb_count(<br>
+ <br>
+ extern const struct iomap_ops xfs_buffered_write_iomap_ops;<br>
+ extern const struct iomap_ops xfs_direct_write_iomap_ops;<br>
++extern const struct iomap_ops xfs_dax_write_iomap_ops;<br>
+ extern const struct iomap_ops xfs_read_iomap_ops;<br>
+ extern const struct iomap_ops xfs_seek_iomap_ops;<br>
+ extern const struct iomap_ops xfs_xattr_iomap_ops;<br>
+diff --git a/fs/xfs/xfs_iops.c b/fs/xfs/xfs_iops.c<br>
+index 66ebccb5a6ff..db8eeaa8a773 100644<br>
+--- a/fs/xfs/xfs_iops.c<br>
++++ b/fs/xfs/xfs_iops.c<br>
+@@ -879,8 +879,8 @@ xfs_setattr_size(<br>
+ 	 */<br>
+ 	if (newsize > oldsize) {<br>
+ 		trace_xfs_zero_eof(ip, oldsize, newsize - oldsize);<br>
+-		error = iomap_zero_range(inode, oldsize, newsize - oldsize,<br>
+-				&did_zeroing, &xfs_buffered_write_iomap_ops);<br>
++		error = xfs_iomap_zero_range(inode, oldsize, newsize - oldsize,<br>
++				&did_zeroing);<br>
+ 	} else {<br>
+ 		/*<br>
+ 		 * iomap won't detect a dirty page over an unwritten block (or a<br>
+@@ -892,8 +892,7 @@ xfs_setattr_size(<br>
+ 						     newsize);<br>
+ 		if (error)<br>
+ 			return error;<br>
+-		error = iomap_truncate_page(inode, newsize, &did_zeroing,<br>
+-				&xfs_buffered_write_iomap_ops);<br>
++		error = xfs_iomap_truncate_page(inode, newsize, &did_zeroing);<br>
+ 	}<br>
+ <br>
+ 	if (error)<br>
+diff --git a/fs/xfs/xfs_reflink.c b/fs/xfs/xfs_reflink.c<br>
+index 9ef9f98725a2..a4cd6e8a7aa0 100644<br>
+--- a/fs/xfs/xfs_reflink.c<br>
++++ b/fs/xfs/xfs_reflink.c<br>
+@@ -1266,8 +1266,7 @@ xfs_reflink_zero_posteof(<br>
+ 		return 0;<br>
+ <br>
+ 	trace_xfs_zero_eof(ip, isize, pos - isize);<br>
+-	return iomap_zero_range(VFS_I(ip), isize, pos - isize, NULL,<br>
+-			&xfs_buffered_write_iomap_ops);<br>
++	return xfs_iomap_zero_range(VFS_I(ip), isize, pos - isize, NULL);<br>
+ }<br>
+ <br>
+ /*<br>
+-- <br>
+2.31.0<br>
+<br>
+<br>
+<br>
+<br>
+

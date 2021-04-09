@@ -1,0 +1,76 @@
+Implement akcipher_alg->set_sig_params for rsassa-psspad to receive the<br>
+salt length and MGF hash function for the signature being verified.<br>
+<br>
+Signed-off-by: Varad Gautam <varad.gautam@xxxxxxxx><br>
+---<br>
+v2: Set mgf_hash_algo in psspad_set_sig_params. v1 assumed this to be the same<br>
+  as the digest hash.<br>
+<br>
+ crypto/rsa-psspad.c                  | 21 ++++++++++++++++++++-<br>
+ include/crypto/internal/rsa-common.h |  2 ++<br>
+ 2 files changed, 22 insertions(+), 1 deletion(-)<br>
+<br>
+diff --git a/crypto/rsa-psspad.c b/crypto/rsa-psspad.c<br>
+index 855e82ca071a7..eec303bb55b2d 100644<br>
+--- a/crypto/rsa-psspad.c<br>
++++ b/crypto/rsa-psspad.c<br>
+@@ -9,6 +9,7 @@<br>
+ #include <crypto/hash.h><br>
+ #include <crypto/internal/akcipher.h><br>
+ #include <crypto/internal/rsa-common.h><br>
++#include <crypto/public_key.h><br>
+ <br>
+ static int psspad_setup_shash(struct crypto_shash **hash_tfm, struct shash_desc **desc,<br>
+ 			      const char *hash_algo)<br>
+@@ -33,6 +34,23 @@ static void psspad_free_shash(struct crypto_shash *hash_tfm, struct shash_desc *<br>
+ 	crypto_free_shash(hash_tfm);<br>
+ }<br>
+ <br>
++static int psspad_set_sig_params(struct crypto_akcipher *tfm,<br>
++				 const void *sig,<br>
++				 unsigned int siglen)<br>
++{<br>
++	struct akcipher_instance *inst = akcipher_alg_instance(tfm);<br>
++	struct rsapad_inst_ctx *ictx = akcipher_instance_ctx(inst);<br>
++	const struct public_key_signature *s = sig;<br>
++<br>
++	if (!sig)<br>
++		return -EINVAL;<br>
++<br>
++	ictx->salt_len = s->salt_length;<br>
++	ictx->mgf_hash_algo = s->mgf_hash_algo;<br>
++<br>
++	return 0;<br>
++}<br>
++<br>
+ static int psspad_s_v_e_d(struct akcipher_request *req)<br>
+ {<br>
+ 	return -EOPNOTSUPP;<br>
+@@ -48,7 +66,8 @@ static struct akcipher_alg psspad_alg = {<br>
+ 	.verify = psspad_s_v_e_d,<br>
+ 	.set_pub_key = rsapad_set_pub_key,<br>
+ 	.set_priv_key = rsapad_set_priv_key,<br>
+-	.max_size = rsapad_get_max_size<br>
++	.max_size = rsapad_get_max_size,<br>
++	.set_sig_params = psspad_set_sig_params<br>
+ };<br>
+ <br>
+ static int psspad_create(struct crypto_template *tmpl, struct rtattr **tb)<br>
+diff --git a/include/crypto/internal/rsa-common.h b/include/crypto/internal/rsa-common.h<br>
+index 4fa3cf5a989cc..8b7ba0174d5bf 100644<br>
+--- a/include/crypto/internal/rsa-common.h<br>
++++ b/include/crypto/internal/rsa-common.h<br>
+@@ -26,6 +26,8 @@ struct rsapad_tfm_ctx {<br>
+ struct rsapad_inst_ctx {<br>
+ 	struct crypto_akcipher_spawn spawn;<br>
+ 	const struct rsa_asn1_template *digest_info;<br>
++	u16 salt_len;<br>
++	const char *mgf_hash_algo;<br>
+ };<br>
+ <br>
+ struct rsapad_akciper_req_ctx {<br>
+-- <br>
+2.30.2<br>
+<br>
+<br>
+

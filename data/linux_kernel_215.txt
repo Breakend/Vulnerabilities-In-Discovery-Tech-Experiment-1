@@ -1,0 +1,31 @@
+Thanks Lorenzo.<br>
+<br>
+><i> -----Original Message-----</i><br>
+><i> From: Lorenzo Pieralisi <lorenzo.pieralisi@xxxxxxx></i><br>
+><i> Sent: Wednesday, April 7, 2021 9:32 PM</i><br>
+><i> To: linux-pci@xxxxxxxxxxxxxxx; Bharat Kumar Gogada <bharatku@xxxxxxxxxx>;</i><br>
+><i> linux-kernel@xxxxxxxxxxxxxxx</i><br>
+><i> Cc: lorenzo.pieralisi@xxxxxxx; bhelgaas@xxxxxxxxxx</i><br>
+><i> Subject: Re: [PATCH v3 1/2] PCI: xilinx-nwl: Enable coherent PCIe DMA traffic</i><br>
+><i> using CCI</i><br>
+><i> </i><br>
+><i> On Mon, 22 Feb 2021 14:17:31 +0530, Bharat Kumar Gogada wrote:</i><br>
+><i> > Add support for routing PCIe DMA traffic coherently when Cache</i><br>
+><i> > Coherent Interconnect (CCI) is enabled in the system.</i><br>
+><i> > The "dma-coherent" property is used to determine if CCI is enabled or</i><br>
+><i> > not.</i><br>
+><i> > Refer to <a  rel="nofollow" href="https://developer.arm.com/documentation/ddi0470/k/preface">https://developer.arm.com/documentation/ddi0470/k/preface</a></i><br>
+><i> > for the CCI specification.</i><br>
+><i> </i><br>
+><i> Applied to pci/xilinx, thanks!</i><br>
+><i> </i><br>
+><i> [1/2] PCI: xilinx-nwl: Enable coherent PCIe DMA traffic using CCI</i><br>
+><i>       <a  rel="nofollow" href="https://git.kernel.org/lpieralisi/pci/c/213e122052">https://git.kernel.org/lpieralisi/pci/c/213e122052</a></i><br>
+><i> [2/2] PCI: xilinx-nwl: Add optional "dma-coherent" property</i><br>
+><i>       <a  rel="nofollow" href="https://git.kernel.org/lpieralisi/pci/c/1c4422f226">https://git.kernel.org/lpieralisi/pci/c/1c4422f226</a></i><br>
+><i> </i><br>
+><i> Thanks,</i><br>
+><i> Lorenzo</i><br>
+<br>
+<br>
+

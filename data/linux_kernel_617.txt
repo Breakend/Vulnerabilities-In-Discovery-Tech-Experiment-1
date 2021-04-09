@@ -1,0 +1,91 @@
+On Thu, Apr 08, 2021 at 04:44:23PM +0200, Vitaly Kuznetsov wrote:<br>
+><i> CAUTION: This email originated from outside of the organization. Do not click links or open attachments unless you can confirm the sender and know the content is safe.</i><br>
+><i></i><br>
+><i></i><br>
+><i></i><br>
+><i> Siddharth Chandrasekaran <sidcha@xxxxxxxxx> writes:</i><br>
+><i></i><br>
+><i> > On Thu, Apr 08, 2021 at 02:05:53PM +0200, Vitaly Kuznetsov wrote:</i><br>
+><i> >> Siddharth Chandrasekaran <sidcha@xxxxxxxxx> writes:</i><br>
+><i> >></i><br>
+><i> >> > Now that all extant hypercalls that can use XMM registers (based on</i><br>
+><i> >> > spec) for input/outputs are patched to support them, we can start</i><br>
+><i> >> > advertising this feature to guests.</i><br>
+><i> >> ></i><br>
+><i> >> > Cc: Alexander Graf <graf@xxxxxxxxxx></i><br>
+><i> >> > Cc: Evgeny Iakovlev <eyakovl@xxxxxxxxx></i><br>
+><i> >> > Signed-off-by: Siddharth Chandrasekaran <sidcha@xxxxxxxxx></i><br>
+><i> >> > ---</i><br>
+><i> >> >  arch/x86/include/asm/hyperv-tlfs.h | 4 ++--</i><br>
+><i> >> >  arch/x86/kvm/hyperv.c              | 1 +</i><br>
+><i> >> >  2 files changed, 3 insertions(+), 2 deletions(-)</i><br>
+><i> >> ></i><br>
+><i> >> > diff --git a/arch/x86/include/asm/hyperv-tlfs.h b/arch/x86/include/asm/hyperv-tlfs.h</i><br>
+><i> >> > index e6cd3fee562b..1f160ef60509 100644</i><br>
+><i> >> > --- a/arch/x86/include/asm/hyperv-tlfs.h</i><br>
+><i> >> > +++ b/arch/x86/include/asm/hyperv-tlfs.h</i><br>
+><i> >> > @@ -49,10 +49,10 @@</i><br>
+><i> >> >  /* Support for physical CPU dynamic partitioning events is available*/</i><br>
+><i> >> >  #define HV_X64_CPU_DYNAMIC_PARTITIONING_AVAILABLE    BIT(3)</i><br>
+><i> >> >  /*</i><br>
+><i> >> > - * Support for passing hypercall input parameter block via XMM</i><br>
+><i> >> > + * Support for passing hypercall input and output parameter block via XMM</i><br>
+><i> >> >   * registers is available</i><br>
+><i> >> >   */</i><br>
+><i> >> > -#define HV_X64_HYPERCALL_PARAMS_XMM_AVAILABLE                BIT(4)</i><br>
+><i> >> > +#define HV_X64_HYPERCALL_PARAMS_XMM_AVAILABLE                BIT(4) | BIT(15)</i><br>
+><i> >></i><br>
+><i> >> TLFS 6.0b states that there are two distinct bits for input and output:</i><br>
+><i> >></i><br>
+><i> >> CPUID Leaf 0x40000003.EDX:</i><br>
+><i> >> Bit 4: support for passing hypercall input via XMM registers is available.</i><br>
+><i> >> Bit 15: support for returning hypercall output via XMM registers is available.</i><br>
+><i> >></i><br>
+><i> >> and HV_X64_HYPERCALL_PARAMS_XMM_AVAILABLE is not currently used</i><br>
+><i> >> anywhere, I'd suggest we just rename</i><br>
+><i> >></i><br>
+><i> >> HV_X64_HYPERCALL_PARAMS_XMM_AVAILABLE to HV_X64_HYPERCALL_XMM_INPUT_AVAILABLE</i><br>
+><i> >> and add HV_X64_HYPERCALL_XMM_OUTPUT_AVAILABLE (bit 15).</i><br>
+><i> ></i><br>
+><i> > That is how I had it initially; but then noticed that we would never</i><br>
+><i> > need to use either of them separately. So it seemed like a reasonable</i><br>
+><i> > abstraction to put them together.</i><br>
+><i> ></i><br>
+><i></i><br>
+><i> Actually, we may. In theory, KVM userspace may decide to expose just</i><br>
+><i> one of these two to the guest as it is not obliged to copy everything</i><br>
+><i> from KVM_GET_SUPPORTED_HV_CPUID so we will need separate</i><br>
+><i> guest_cpuid_has() checks.</i><br>
+<br>
+Makes sense. I'll split them and add the checks.<br>
+<br>
+><i> (This reminds me of something I didn't see in your series:</i><br>
+><i> we need to check that XMM hypercall parameters support was actually</i><br>
+><i> exposed to the guest as it is illegal for a guest to use it otherwise --</i><br>
+><i> and we will likely need two checks, for input and output).</i><br>
+<br>
+We observed that Windows expects Hyper-V to support XMM params even if<br>
+we don't advertise this feature but if userspace wants to hide this<br>
+feature and the guest does it anyway, then it makes sense to treat it as<br>
+an illegal OP.<br>
+<br>
+><i> Also, (and that's what triggered my comment) all other HV_ACCESS_* in</i><br>
+><i> kvm_get_hv_cpuid() are single bits so my first impression was that you</i><br>
+><i> forgot one bit, but then I saw that you combined them together.</i><br>
+<br>
+~ Sid.<br>
+<br>
+<br>
+<br>
+Amazon Development Center Germany GmbH<br>
+Krausenstr. 38<br>
+10117 Berlin<br>
+Geschaeftsfuehrung: Christian Schlaeger, Jonathan Weiss<br>
+Eingetragen am Amtsgericht Charlottenburg unter HRB 149173 B<br>
+Sitz: Berlin<br>
+Ust-ID: DE 289 237 879<br>
+<br>
+<br>
+<br>
+<br>
+

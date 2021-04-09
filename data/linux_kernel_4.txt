@@ -1,0 +1,25 @@
+wcd9335.c: undefined reference to 'devm_regmap_add_irq_chip'<br>
+<br>
+Signed-off-by: Marc Gonzalez <marc.w.gonzalez@xxxxxxx><br>
+Signed-off-by: Mark Brown <broonie@xxxxxxxxxx><br>
+---<br>
+ sound/soc/codecs/Kconfig | 1 +<br>
+ 1 file changed, 1 insertion(+)<br>
+<br>
+diff --git a/sound/soc/codecs/Kconfig b/sound/soc/codecs/Kconfig<br>
+index 419114edfd57..667fc1d59e18 100644<br>
+--- a/sound/soc/codecs/Kconfig<br>
++++ b/sound/soc/codecs/Kconfig<br>
+@@ -1151,6 +1151,7 @@ config SND_SOC_WCD9335<br>
+ 	tristate "WCD9335 Codec"<br>
+ 	depends on SLIMBUS<br>
+ 	select REGMAP_SLIMBUS<br>
++	select REGMAP_IRQ<br>
+ 	help<br>
+ 	  The WCD9335 is a standalone Hi-Fi audio CODEC IC, supports<br>
+ 	  Qualcomm Technologies, Inc. (QTI) multimedia solutions,<br>
+-- <br>
+2.20.1<br>
+<br>
+<br>
+

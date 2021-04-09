@@ -1,0 +1,65 @@
+On 7/04/21 9:08 pm, Asutosh Das wrote:<br>
+><i> During runtime-suspend of ufs host, the scsi devices are</i><br>
+><i> already suspended and so are the queues associated with them.</i><br>
+><i> But the ufs host sends SSU (START_STOP_UNIT) to wlun</i><br>
+><i> during its runtime-suspend.</i><br>
+><i> During the process blk_queue_enter checks if the queue is not in</i><br>
+><i> suspended state. If so, it waits for the queue to resume, and never</i><br>
+><i> comes out of it.</i><br>
+><i> The commit</i><br>
+><i> (d55d15a33: scsi: block: Do not accept any requests while suspended)</i><br>
+><i> adds the check if the queue is in suspended state in blk_queue_enter().</i><br>
+><i> </i><br>
+><i> Call trace:</i><br>
+><i>  __switch_to+0x174/0x2c4</i><br>
+><i>  __schedule+0x478/0x764</i><br>
+><i>  schedule+0x9c/0xe0</i><br>
+><i>  blk_queue_enter+0x158/0x228</i><br>
+><i>  blk_mq_alloc_request+0x40/0xa4</i><br>
+><i>  blk_get_request+0x2c/0x70</i><br>
+><i>  __scsi_execute+0x60/0x1c4</i><br>
+><i>  ufshcd_set_dev_pwr_mode+0x124/0x1e4</i><br>
+><i>  ufshcd_suspend+0x208/0x83c</i><br>
+><i>  ufshcd_runtime_suspend+0x40/0x154</i><br>
+><i>  ufshcd_pltfrm_runtime_suspend+0x14/0x20</i><br>
+><i>  pm_generic_runtime_suspend+0x28/0x3c</i><br>
+><i>  __rpm_callback+0x80/0x2a4</i><br>
+><i>  rpm_suspend+0x308/0x614</i><br>
+><i>  rpm_idle+0x158/0x228</i><br>
+><i>  pm_runtime_work+0x84/0xac</i><br>
+><i>  process_one_work+0x1f0/0x470</i><br>
+><i>  worker_thread+0x26c/0x4c8</i><br>
+><i>  kthread+0x13c/0x320</i><br>
+><i>  ret_from_fork+0x10/0x18</i><br>
+><i> </i><br>
+><i> Fix this by registering ufs device wlun as a scsi driver and</i><br>
+><i> registering it for block runtime-pm. Also make this as a</i><br>
+><i> supplier for all other luns. That way, this device wlun</i><br>
+><i> suspends after all the consumers and resumes after</i><br>
+><i> hba resumes.</i><br>
+><i> </i><br>
+><i> Co-developed-by: Can Guo <cang@xxxxxxxxxxxxxx></i><br>
+><i> Signed-off-by: Can Guo <cang@xxxxxxxxxxxxxx></i><br>
+><i> Signed-off-by: Asutosh Das <asutoshd@xxxxxxxxxxxxxx></i><br>
+><i> ---</i><br>
+<br>
+<SNIP><br>
+<br>
+><i> +#ifdef CONFIG_PM_SLEEP</i><br>
+><i> +static int ufshcd_wl_poweroff(struct device *dev)</i><br>
+><i> +{</i><br>
+><i> +	struct ufs_hba *hba = dev_get_drvdata(dev);</i><br>
+<br>
+Should be:<br>
+<br>
+	struct scsi_device *sdev = to_scsi_device(dev);<br>
+	struct ufs_hba *hba = shost_priv(sdev->host);<br>
+<br>
+><i> +</i><br>
+><i> +	__ufshcd_wl_suspend(hba, UFS_SHUTDOWN_PM);</i><br>
+><i> +	return 0;</i><br>
+><i> +}</i><br>
+><i> +#endif</i><br>
+<br>
+<br>
+

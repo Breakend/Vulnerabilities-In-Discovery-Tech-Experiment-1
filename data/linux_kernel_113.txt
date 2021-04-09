@@ -1,0 +1,27 @@
+On Thu, Apr 1, 2021 at 7:58 PM YueHaibing <yuehaibing@xxxxxxxxxx> wrote:<br>
+><i></i><br>
+><i> There is no caller in tree, so can remove it.</i><br>
+><i></i><br>
+><i> Signed-off-by: YueHaibing <yuehaibing@xxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  include/linux/freezer.h | 1 -</i><br>
+><i>  1 file changed, 1 deletion(-)</i><br>
+><i></i><br>
+><i> diff --git a/include/linux/freezer.h b/include/linux/freezer.h</i><br>
+><i> index 27828145ca09..0621c5f86c39 100644</i><br>
+><i> --- a/include/linux/freezer.h</i><br>
+><i> +++ b/include/linux/freezer.h</i><br>
+><i> @@ -279,7 +279,6 @@ static inline int freeze_kernel_threads(void) { return -ENOSYS; }</i><br>
+><i>  static inline void thaw_processes(void) {}</i><br>
+><i>  static inline void thaw_kernel_threads(void) {}</i><br>
+><i></i><br>
+><i> -static inline bool try_to_freeze_nowarn(void) { return false; }</i><br>
+><i>  static inline bool try_to_freeze(void) { return false; }</i><br>
+><i></i><br>
+><i>  static inline void freezer_do_not_count(void) {}</i><br>
+><i> --</i><br>
+<br>
+Applied as 5.13 material, thanks!<br>
+<br>
+<br>
+

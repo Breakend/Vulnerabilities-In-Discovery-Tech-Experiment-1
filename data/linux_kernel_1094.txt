@@ -1,0 +1,39 @@
+<br>
+On 08/04/2021 08:11, Dinghao Liu wrote:<br>
+><i> pm_runtime_get_sync() will increase the rumtime PM counter</i><br>
+><i> even it returns an error. Thus a pairing decrement is needed</i><br>
+><i> to prevent refcount leak. Fix this by replacing this API with</i><br>
+><i> pm_runtime_resume_and_get(), which will not change the runtime</i><br>
+><i> PM counter on error.</i><br>
+><i> </i><br>
+><i> Signed-off-by: Dinghao Liu <dinghao.liu@xxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  drivers/dma/tegra20-apb-dma.c | 2 +-</i><br>
+><i>  1 file changed, 1 insertion(+), 1 deletion(-)</i><br>
+><i> </i><br>
+><i> diff --git a/drivers/dma/tegra20-apb-dma.c b/drivers/dma/tegra20-apb-dma.c</i><br>
+><i> index 71827d9b0aa1..73178afaf4c2 100644</i><br>
+><i> --- a/drivers/dma/tegra20-apb-dma.c</i><br>
+><i> +++ b/drivers/dma/tegra20-apb-dma.c</i><br>
+><i> @@ -723,7 +723,7 @@ static void tegra_dma_issue_pending(struct dma_chan *dc)</i><br>
+><i>  		goto end;</i><br>
+><i>  	}</i><br>
+><i>  	if (!tdc->busy) {</i><br>
+><i> -		err = pm_runtime_get_sync(tdc->tdma->dev);</i><br>
+><i> +		err = pm_runtime_resume_and_get(tdc->tdma->dev);</i><br>
+><i>  		if (err < 0) {</i><br>
+><i>  			dev_err(tdc2dev(tdc), "Failed to enable DMA\n");</i><br>
+><i>  			goto end;</i><br>
+><i> </i><br>
+<br>
+<br>
+Thanks! Looks like there are two instances of this that need fixing.<br>
+<br>
+Cheers<br>
+Jon<br>
+<br>
+-- <br>
+nvpublic<br>
+<br>
+<br>
+

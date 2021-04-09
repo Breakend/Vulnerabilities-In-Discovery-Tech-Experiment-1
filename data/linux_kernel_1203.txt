@@ -1,0 +1,63 @@
+Hi, Matthias<br>
+<br>
+On Tue, 2021-04-06 at 15:55 +0200, Matthias Brugger wrote:<br>
+><i> </i><br>
+><i> On 01/04/2021 08:38, Nina Wu wrote:</i><br>
+><i> > From: Nina Wu <Nina-CM.Wu@xxxxxxxxxxxx></i><br>
+><i> > </i><br>
+><i> > Add compatible to support mt8192.</i><br>
+><i> > </i><br>
+><i> > Signed-off-by: Nina Wu <Nina-CM.Wu@xxxxxxxxxxxx></i><br>
+><i> > ---</i><br>
+><i> </i><br>
+><i> </i><br>
+><i> Looks good, I'd like to see DTS for this as well, although I understand it</i><br>
+><i> depends on the clock patch series. Please note so in either below the '---' or</i><br>
+><i> in a cover letter.</i><br>
+><i> </i><br>
+><i> Regards,</i><br>
+><i> Matthias</i><br>
+><i> </i><br>
+<br>
+I will add devapc nodes in DTS in the next version.<br>
+<br>
+Thanks<br>
+<br>
+><i> </i><br>
+><i> >  drivers/soc/mediatek/mtk-devapc.c | 15 +++++++++++++++</i><br>
+><i> >  1 file changed, 15 insertions(+)</i><br>
+><i> > </i><br>
+><i> > diff --git a/drivers/soc/mediatek/mtk-devapc.c b/drivers/soc/mediatek/mtk-devapc.c</i><br>
+><i> > index af55c01..a5c15b5 100644</i><br>
+><i> > --- a/drivers/soc/mediatek/mtk-devapc.c</i><br>
+><i> > +++ b/drivers/soc/mediatek/mtk-devapc.c</i><br>
+><i> > @@ -251,11 +251,26 @@ static const struct mtk_devapc_data devapc_mt6779 = {</i><br>
+><i> >  	.vio_shift_con_offset = 0xF20,</i><br>
+><i> >  };</i><br>
+><i> >  </i><br>
+><i> > +static const struct mtk_devapc_data devapc_mt8192 = {</i><br>
+><i> > +	.vio_mask_offset = 0x0,</i><br>
+><i> > +	.vio_sta_offset = 0x400,</i><br>
+><i> > +	.vio_dbg0_offset = 0x900,</i><br>
+><i> > +	.vio_dbg1_offset = 0x904,</i><br>
+><i> > +	.vio_dbg2_offset = 0x908,</i><br>
+><i> > +	.apc_con_offset = 0xF00,</i><br>
+><i> > +	.vio_shift_sta_offset = 0xF20,</i><br>
+><i> > +	.vio_shift_sel_offset = 0xF30,</i><br>
+><i> > +	.vio_shift_con_offset = 0xF10,</i><br>
+><i> > +};</i><br>
+><i> > +</i><br>
+><i> >  static const struct of_device_id mtk_devapc_dt_match[] = {</i><br>
+><i> >  	{</i><br>
+><i> >  		.compatible = "mediatek,mt6779-devapc",</i><br>
+><i> >  		.data = &devapc_mt6779,</i><br>
+><i> >  	}, {</i><br>
+><i> > +		.compatible = "mediatek,mt8192-devapc",</i><br>
+><i> > +		.data = &devapc_mt8192,</i><br>
+><i> > +	}, {</i><br>
+><i> >  	},</i><br>
+><i> >  };</i><br>
+><i> >  </i><br>
+><i> > </i><br>
+<br>
+

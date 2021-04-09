@@ -1,0 +1,82 @@
+On Tue, Apr 06, 2021 at 05:26:28PM +0800, Greentime Hu wrote:<br>
+><i> This patchset includes SiFive FU740 PCIe host controller driver. We also</i><br>
+><i> add pcie_aux clock and pcie_power_on_reset controller to prci driver for</i><br>
+><i> PCIe driver to use it.</i><br>
+><i> </i><br>
+><i> This is tested with e1000e: Intel(R) PRO/1000 Network Card, AMD Radeon R5</i><br>
+><i> 230 graphics card and SP M.2 PCIe Gen 3 SSD in SiFive Unmatched based on</i><br>
+><i> v5.11 Linux kernel.</i><br>
+><i> </i><br>
+><i> Changes in v5:</i><br>
+><i>  - Fix typo in comments</i><br>
+><i>  - Keep comments style consistent</i><br>
+><i>  - Refine some error handling codes</i><br>
+><i>  - Remove unneeded header file including</i><br>
+><i>  - Merge fu740_pcie_ltssm_enable implementation to fu740_pcie_start_link</i><br>
+><i> </i><br>
+><i> Changes in v4:</i><br>
+><i>  - Fix Wunused-but-set-variable warning in prci driver</i><br>
+><i> </i><br>
+><i> Changes in v3:</i><br>
+><i>  - Remove items that has been defined</i><br>
+><i>  - Refine format of sifive,fu740-pcie.yaml</i><br>
+><i>  - Replace perstn-gpios with the common one</i><br>
+><i>  - Change DBI mapping space to 2GB from 4GB</i><br>
+><i>  - Refine drivers/reset/Kconfig</i><br>
+><i> </i><br>
+><i> Changes in v2:</i><br>
+><i>  - Refine codes based on reviewers' feedback</i><br>
+><i>  - Remove define and use the common one</i><br>
+><i>  - Replace __raw_writel with writel_relaxed</i><br>
+><i>  - Split fu740_phyregreadwrite to write function</i><br>
+><i>  - Use readl_poll_timeout in stead of while loop checking</i><br>
+><i>  - Use dwc common codes</i><br>
+><i>  - Use gpio descriptors and the gpiod_* api.</i><br>
+><i>  - Replace devm_ioremap_resource with devm_platform_ioremap_resource_byname</i><br>
+><i>  - Replace devm_reset_control_get with devm_reset_control_get_exclusive</i><br>
+><i>  - Add more comments for delay and sleep</i><br>
+><i>  - Remove "phy ? x : y" expressions</i><br>
+><i>  - Refine code logic to remove possible infinite loop</i><br>
+><i>  - Replace magic number with meaningful define</i><br>
+><i>  - Remove fu740_pcie_pm_ops</i><br>
+><i>  - Use builtin_platform_driver</i><br>
+><i> </i><br>
+><i> Greentime Hu (5):</i><br>
+><i>   clk: sifive: Add pcie_aux clock in prci driver for PCIe driver</i><br>
+><i>   clk: sifive: Use reset-simple in prci driver for PCIe driver</i><br>
+><i>   MAINTAINERS: Add maintainers for SiFive FU740 PCIe driver</i><br>
+><i>   dt-bindings: PCI: Add SiFive FU740 PCIe host controller</i><br>
+><i>   riscv: dts: Add PCIe support for the SiFive FU740-C000 SoC</i><br>
+><i> </i><br>
+><i> Paul Walmsley (1):</i><br>
+><i>   PCI: fu740: Add SiFive FU740 PCIe host controller driver</i><br>
+<br>
+I can pull the patches above into the PCI tree (but will drop patch 6 -<br>
+dts changes), is it OK for you ? Please let me know how you would like<br>
+to upstream it.<br>
+<br>
+Lorenzo<br>
+<br>
+><i>  .../bindings/pci/sifive,fu740-pcie.yaml       | 113 +++++++</i><br>
+><i>  MAINTAINERS                                   |   8 +</i><br>
+><i>  arch/riscv/boot/dts/sifive/fu740-c000.dtsi    |  33 ++</i><br>
+><i>  drivers/clk/sifive/Kconfig                    |   2 +</i><br>
+><i>  drivers/clk/sifive/fu740-prci.c               |  11 +</i><br>
+><i>  drivers/clk/sifive/fu740-prci.h               |   2 +-</i><br>
+><i>  drivers/clk/sifive/sifive-prci.c              |  54 +++</i><br>
+><i>  drivers/clk/sifive/sifive-prci.h              |  13 +</i><br>
+><i>  drivers/pci/controller/dwc/Kconfig            |   9 +</i><br>
+><i>  drivers/pci/controller/dwc/Makefile           |   1 +</i><br>
+><i>  drivers/pci/controller/dwc/pcie-fu740.c       | 308 ++++++++++++++++++</i><br>
+><i>  drivers/reset/Kconfig                         |   1 +</i><br>
+><i>  include/dt-bindings/clock/sifive-fu740-prci.h |   1 +</i><br>
+><i>  13 files changed, 555 insertions(+), 1 deletion(-)</i><br>
+><i>  create mode 100644 Documentation/devicetree/bindings/pci/sifive,fu740-pcie.yaml</i><br>
+><i>  create mode 100644 drivers/pci/controller/dwc/pcie-fu740.c</i><br>
+><i> </i><br>
+><i> -- </i><br>
+><i> 2.30.2</i><br>
+><i> </i><br>
+<br>
+<br>
+

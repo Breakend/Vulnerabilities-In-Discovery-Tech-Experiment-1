@@ -1,0 +1,62 @@
+On Thu, Apr 08, 2021 at 01:37:34AM -0700, Michel Lespinasse wrote:<br>
+><i> On Thu, Apr 08, 2021 at 08:13:43AM +0100, Matthew Wilcox wrote:</i><br>
+><i> > On Thu, Apr 08, 2021 at 09:00:26AM +0200, Peter Zijlstra wrote:</i><br>
+><i> > > On Wed, Apr 07, 2021 at 10:27:12PM +0100, Matthew Wilcox wrote:</i><br>
+><i> > > > Doing I/O without any lock held already works; it just uses the file</i><br>
+><i> > > > refcount.  It would be better to use a vma refcount, as I already said.</i><br>
+><i> > > </i><br>
+><i> > > The original workload that I developed SPF for (waaaay back when) was</i><br>
+><i> > > prefaulting a single huge vma. Using a vma refcount was a total loss</i><br>
+><i> > > because it resulted in the same cacheline contention that down_read()</i><br>
+><i> > > was having.</i><br>
+><i> > > </i><br>
+><i> > > As such, I'm always incredibly sad to see mention of vma refcounts.</i><br>
+><i> > > They're fundamentally not solving the problem :/</i><br>
+><i> > </i><br>
+><i> > OK, let me outline my locking scheme because I think it's rather better</i><br>
+><i> > than Michel's.  The vma refcount is the slow path.</i><br>
+><i> > </i><br>
+><i> > 1. take the RCU read lock</i><br>
+><i> > 2. walk the pgd/p4d/pud/pmd</i><br>
+><i> > 3. allocate page tables if necessary.  *handwave GFP flags*.</i><br>
+><i> > 4. walk the vma tree</i><br>
+><i> > 5. call ->map_pages</i><br>
+><i> > 6. take ptlock</i><br>
+><i> > 7. insert page(s)</i><br>
+><i> > 8. drop ptlock</i><br>
+><i> > if this all worked out, we're done, drop the RCU read lock and return.</i><br>
+><i> > 9. increment vma refcount</i><br>
+><i> > 10. drop RCU read lock</i><br>
+><i> > 11. call ->fault</i><br>
+><i> > 12. decrement vma refcount</i><br>
+><i> </i><br>
+><i> Note that most of your proposed steps seem similar in principle to mine.</i><br>
+><i> Looking at the fast path (steps 1-8):</i><br>
+><i> - step 2 sounds like the speculative part of __handle_mm_fault()</i><br>
+><i> - (step 3 not included in my proposal)</i><br>
+><i> - step 4 is basically the lookup I currently have in the arch fault handler</i><br>
+><i> - step 6 sounds like the speculative part of map_pte_lock()</i><br>
+><i> </i><br>
+><i> I have working implementations for each step, while your proposal</i><br>
+><i> summarizes each as a point item. It's not clear to me what to make of it;</i><br>
+><i> presumably you would be "filling in the blanks" in a different way</i><br>
+><i> than I have but you are not explaining how. Are you suggesting that</i><br>
+><i> the precautions taken in each step to avoid races with mmap writers</i><br>
+><i> would not be necessary in your proposal ? if that is the case, what is</i><br>
+><i> the alternative mechanism would you use to handle such races ?</i><br>
+<br>
+I don't know if you noticed, I've been a little busy with memory folios.<br>
+I did tell you that on the call, but you don't seem to retain anything<br>
+I tell you on the call, so maybe I shouldn't bother calling in any more.<br>
+<br>
+><i> Going back to the source of this, you suggested not copying the VMA,</i><br>
+><i> what is your proposed alternative ? Do you suggest that fault handlers</i><br>
+><i> should deal with the vma potentially mutating under them ? Or should</i><br>
+><i> mmap writers consider vmas as immutable and copy them whenever they</i><br>
+><i> want to change them ? or are you implying a locking mechanism that would</i><br>
+><i> prevent mmap writers from executing while the fault is running ?</i><br>
+<br>
+The VMA should be immutable, as I explained to you before.<br>
+<br>
+<br>
+

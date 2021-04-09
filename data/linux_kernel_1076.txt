@@ -1,0 +1,25 @@
+When slim_register_controller() fails, a pairing PM usage counter<br>
+increment is needed to keep the counter balanced.<br>
+<br>
+Signed-off-by: Dinghao Liu <dinghao.liu@xxxxxxxxxx><br>
+---<br>
+ drivers/slimbus/qcom-ngd-ctrl.c | 1 +<br>
+ 1 file changed, 1 insertion(+)<br>
+<br>
+diff --git a/drivers/slimbus/qcom-ngd-ctrl.c b/drivers/slimbus/qcom-ngd-ctrl.c<br>
+index c054e83ab636..99cf2ab3d862 100644<br>
+--- a/drivers/slimbus/qcom-ngd-ctrl.c<br>
++++ b/drivers/slimbus/qcom-ngd-ctrl.c<br>
+@@ -1268,6 +1268,7 @@ static int qcom_slim_ngd_enable(struct qcom_slim_ngd_ctrl *ctrl, bool enable)<br>
+ 		ret = slim_register_controller(&ctrl->ctrl);<br>
+ 		if (ret) {<br>
+ 			dev_err(ctrl->dev, "error adding slim controller\n");<br>
++			pm_runtime_get_noresume(ctrl->dev);<br>
+ 			return ret;<br>
+ 		}<br>
+ <br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+

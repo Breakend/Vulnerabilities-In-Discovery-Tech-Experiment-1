@@ -1,0 +1,25 @@
+Hey Zhang,<br>
+<br>
+On Thu, 8 Apr 2021 at 09:10, zhangjianhua (E) <zhangjianhua18@xxxxxxxxxx> wrote:<br>
+><i></i><br>
+><i> Hello Robert</i><br>
+><i></i><br>
+><i> I am sorry that I make a mistake about the compiling error of lt8912b,</i><br>
+><i></i><br>
+><i> the reason is that lt8912b miss the header file <linux/gpio/consumer.h>.</i><br>
+><i></i><br>
+><i> Although there are many files reference gpiod_set_value_cansleep() and</i><br>
+><i></i><br>
+><i> devm_gpiod_get_optional(), they all include <linux/gpio/consumer.h></i><br>
+><i></i><br>
+><i> and not occur the compiling error like lt8912b. I have send the second</i><br>
+><i></i><br>
+><i> version patch, please read.</i><br>
+<br>
+No worries at all, and good job finding the real issue. I'll have a<br>
+look at the next version.<br>
+<br>
+Rob.<br>
+<br>
+<br>
+

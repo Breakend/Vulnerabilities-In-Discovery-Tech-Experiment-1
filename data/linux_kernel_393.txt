@@ -1,0 +1,26 @@
+Aligns line break with the remaining function arguments<br>
+to the open parenthesis. Issue found by checkpatch.<br>
+<br>
+Signed-off-by: Aline Santana Cordeiro <alinesantanacordeiro@xxxxxxxxx><br>
+---<br>
+ drivers/staging/media/hantro/hantro_mpeg2.c | 2 +-<br>
+ 1 file changed, 1 insertion(+), 1 deletion(-)<br>
+<br>
+diff --git a/drivers/staging/media/hantro/hantro_mpeg2.c b/drivers/staging/media/hantro/hantro_mpeg2.c<br>
+index 1d334e6..53a99a9 100644<br>
+--- a/drivers/staging/media/hantro/hantro_mpeg2.c<br>
++++ b/drivers/staging/media/hantro/hantro_mpeg2.c<br>
+@@ -19,7 +19,7 @@ static const u8 zigzag[64] = {<br>
+ };<br>
+ <br>
+ void hantro_mpeg2_dec_copy_qtable(u8 *qtable,<br>
+-	const struct v4l2_ctrl_mpeg2_quantization *ctrl)<br>
++				  const struct v4l2_ctrl_mpeg2_quantization *ctrl)<br>
+ {<br>
+ 	int i, n;<br>
+ <br>
+-- <br>
+2.7.4<br>
+<br>
+<br>
+

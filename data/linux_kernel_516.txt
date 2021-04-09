@@ -1,0 +1,36 @@
+
+kindly ping<br>
+<br>
+<br>
+Hi, jejb, martin, would you mind to take a look for these tiny clean up 
+patches.
+<br>
+<br>
+<br>
+Thanks<br>
+<br>
+Jiaxing<br>
+<br>
+<br>
+On 2021/3/25 20:29, Luo Jiaxing wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+Two types of errors are detected by the checkpatch.<br>
+1. Alignment between switches and cases<br>
+2. Improper use of some spaces<br>
+<br>
+Here are the clean up patches.<br>
+<br>
+Luo Jiaxing (2):<br>
+   scsi: libsas: make switch and case at the same indent in<br>
+     sas_to_ata_err()<br>
+   scsi: libsas: clean up for white spaces<br>
+<br>
+  drivers/scsi/libsas/sas_ata.c      | 74 ++++++++++++++++++--------------------<br>
+  drivers/scsi/libsas/sas_discover.c |  2 +-<br>
+  drivers/scsi/libsas/sas_expander.c | 15 ++++----<br>
+  3 files changed, 43 insertions(+), 48 deletions(-)<br>
+<br>
+</blockquote>
+<br>
+<br>
+

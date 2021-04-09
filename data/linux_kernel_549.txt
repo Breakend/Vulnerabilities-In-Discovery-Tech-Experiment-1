@@ -1,0 +1,51 @@
+On Thu, Apr 08, 2021 at 07:36:37PM +0200, Uwe Kleine-König wrote:<br>
+><i> On Thu, Apr 08, 2021 at 05:51:36PM +0200, Clemens Gruber wrote:</i><br>
+><i> > On Thu, Apr 08, 2021 at 02:50:40PM +0200, Thierry Reding wrote:</i><br>
+><i> > > Yes, I think that's basically what this is saying. I think we're perhaps</i><br>
+><i> > > getting hung up on the terminology here. PWM_STAGGERING_ALLOWED gives</i><br>
+><i> > > the impression that we're dealing with some provider-specific feature,</i><br>
+><i> > > whereas what we really want to express is that the PWM doesn't care</i><br>
+><i> > > exactly when the active cycle starts and based on that a provider that</i><br>
+><i> > > can support it may optimize the EMI behavior.</i><br>
+><i> > > </i><br>
+><i> > > Maybe we can find a better name for this? Ultimately what this means is</i><br>
+><i> > > that the consumer is primarily interested in the power output of the PWM</i><br>
+><i> > > rather than the exact shape of the signal. So perhaps something like</i><br>
+><i> > > PWM_USAGE_POWER would be more appropriate.</i><br>
+><i> > </i><br>
+><i> > Yes, although it would then no longer be obvious that this feature leads</i><br>
+><i> > to improved EMI behavior, as long as we mention that in the docs, I</i><br>
+><i> > think it's a good idea</i><br>
+><i> > </i><br>
+><i> > Maybe document it as follows?</i><br>
+><i> > PWM_USAGE_POWER - Allow the driver to delay the start of the cycle</i><br>
+><i> > for EMI improvements, as long as the power output stays the same</i><br>
+><i> </i><br>
+><i> I don't like both names, because for someone who is only halfway into</i><br>
+><i> PWM stuff it is not understandable. Maybe ALLOW_PHASE_SHIFT?</i><br>
+<br>
+Sounds good to me.<br>
+<br>
+><i> When a consumer is only interested in the power output than</i><br>
+><i> </i><br>
+><i> 	.period = 20</i><br>
+><i> 	.duty_cycle = 5</i><br>
+><i> </i><br>
+><i> would also be an allowed response for the request</i><br>
+><i> </i><br>
+><i> 	.period = 200</i><br>
+><i> 	.duty_cycle = 50</i><br>
+><i> </i><br>
+><i> and this is not what is in the focus here.</i><br>
+<br>
+Right.<br>
+<br>
+If Thierry agrees, I can spin up a new revision.<br>
+<br>
+Maybe we can get it into 5.13 after all.<br>
+<br>
+Thanks,<br>
+Clemens<br>
+<br>
+<br>
+

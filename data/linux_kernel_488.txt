@@ -1,0 +1,29 @@
+Am Donnerstag, den 08.04.2021, 15:16 +0200 schrieb Johan Hovold:<br>
+><i> TIOCSSERIAL is a horrid, underspecified, legacy interface which for most</i><br>
+><i> serial devices is only useful for setting the close_delay and</i><br>
+><i> closing_wait parameters.</i><br>
+><i> </i><br>
+><i> The xmit_fifo_size parameter could be used to set the hardware transmit</i><br>
+><i> fifo size of a legacy UART when it could not be detected, but the</i><br>
+><i> interface is limited to eight bits and should be left unset when it is</i><br>
+><i> not used.</i><br>
+><i> </i><br>
+><i> Similarly, baud_base could be used to set the UART base clock when it</i><br>
+><i> could not be detected, but might as well be left unset when it is not</i><br>
+><i> known (which is the case for CDC).</i><br>
+><i> </i><br>
+><i> Fix the cdc-acm TIOCGSERIAL implementation by dropping its custom</i><br>
+><i> interpretation of the unused xmit_fifo_size and baud_base fields, which</i><br>
+><i> overflowed the former with the URB buffer size and set the latter to the</i><br>
+><i> current line speed. Also return the port line number, which is the only</i><br>
+><i> other value used besides the close parameters.</i><br>
+><i> </i><br>
+><i> Note that the current line speed can still be retrieved through the</i><br>
+><i> standard termios interfaces.</i><br>
+><i> </i><br>
+><i> Fixes: 18c75720e667 ("USB: allow users to run setserial with cdc-acm")</i><br>
+><i> Signed-off-by: Johan Hovold <johan@xxxxxxxxxx></i><br>
+Acked-by: Oliver Neukum <oneukum@xxxxxxxx><br>
+<br>
+<br>
+

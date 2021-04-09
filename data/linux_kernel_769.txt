@@ -1,0 +1,45 @@
+Enable 16/32 bits per word support for spi-imx slave mode.<br>
+It only support 8 bits per word in slave mode before.<br>
+<br>
+Signed-off-by: Clark Wang <xiaoning.wang@xxxxxxx><br>
+Reviewed-by: Haibo Chen <haibo.chen@xxxxxxx><br>
+---<br>
+ drivers/spi/spi-imx.c | 13 +++++++++++--<br>
+ 1 file changed, 11 insertions(+), 2 deletions(-)<br>
+<br>
+diff --git a/drivers/spi/spi-imx.c b/drivers/spi/spi-imx.c<br>
+index 4fe767acaca7..24ba7ab1b05d 100644<br>
+--- a/drivers/spi/spi-imx.c<br>
++++ b/drivers/spi/spi-imx.c<br>
+@@ -386,7 +386,12 @@ static void spi_imx_buf_tx_swap(struct spi_imx_data *spi_imx)<br>
+ <br>
+ static void mx53_ecspi_rx_slave(struct spi_imx_data *spi_imx)<br>
+ {<br>
+-	u32 val = be32_to_cpu(readl(spi_imx->base + MXC_CSPIRXDATA));<br>
++	u32 val = readl(spi_imx->base + MXC_CSPIRXDATA);<br>
++<br>
++	if (spi_imx->bits_per_word <= 8)<br>
++		val = be32_to_cpu(val);<br>
++	else if (spi_imx->bits_per_word <= 16)<br>
++		val = (val << 16) | (val >> 16);<br>
+ <br>
+ 	if (spi_imx->rx_buf) {<br>
+ 		int n_bytes = spi_imx->slave_burst % sizeof(val);<br>
+@@ -415,7 +420,11 @@ static void mx53_ecspi_tx_slave(struct spi_imx_data *spi_imx)<br>
+ 	if (spi_imx->tx_buf) {<br>
+ 		memcpy(((u8 *)&val) + sizeof(val) - n_bytes,<br>
+ 		       spi_imx->tx_buf, n_bytes);<br>
+-		val = cpu_to_be32(val);<br>
++		if (spi_imx->bits_per_word <= 8)<br>
++			val = cpu_to_be32(val);<br>
++		else if (spi_imx->bits_per_word <= 16)<br>
++			val = (val << 16) | (val >> 16);<br>
++<br>
+ 		spi_imx->tx_buf += n_bytes;<br>
+ 	}<br>
+ <br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

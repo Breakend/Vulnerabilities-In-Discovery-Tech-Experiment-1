@@ -1,0 +1,70 @@
+mask_irq() lets an IRQ with IRQD_IRQ_FLOW_MASKED set be further masked via<br>
+chip->irq_mask(). This is necessary for unhandled IRQs as we want to keep<br>
+them masked beyond eoi_irq() (which clears IRQD_IRQ_FLOW_MASKED).<br>
+<br>
+This is however not necessary in paths that do end up handling the IRQ and<br>
+are bounded by a final eoi_irq() - this is the case for chips with<br>
+IRQCHIP_AUTOMASKS_FLOW and IRQCHIP_EOI_THREADED.<br>
+<br>
+Make handle_strict_flow_irq() leverage IRQCHIP_AUTOMASKS_FLOW and issue an<br>
+ack_irq() rather than a mask_ack_irq() when possible.<br>
+<br>
+Signed-off-by: Valentin Schneider <valentin.schneider@xxxxxxx><br>
+---<br>
+ kernel/irq/chip.c | 19 +++++++++++++++----<br>
+ 1 file changed, 15 insertions(+), 4 deletions(-)<br>
+<br>
+diff --git a/kernel/irq/chip.c b/kernel/irq/chip.c<br>
+index 6c033b0044cb..1add0b4f0662 100644<br>
+--- a/kernel/irq/chip.c<br>
++++ b/kernel/irq/chip.c<br>
+@@ -909,10 +909,9 @@ void handle_strict_flow_irq(struct irq_desc *desc)<br>
+ 	struct irq_chip *chip = desc->irq_data.chip;<br>
+ <br>
+ 	raw_spin_lock(&desc->lock);<br>
+-	mask_ack_irq(desc);<br>
+ <br>
+ 	if (!irq_may_run(desc))<br>
+-		goto out;<br>
++		goto out_mask;<br>
+ <br>
+ 	desc->istate &= ~(IRQS_REPLAY | IRQS_WAITING);<br>
+ <br>
+@@ -922,10 +921,21 @@ void handle_strict_flow_irq(struct irq_desc *desc)<br>
+ 	 */<br>
+ 	if (unlikely(!desc->action || irqd_irq_disabled(&desc->irq_data))) {<br>
+ 		desc->istate |= IRQS_PENDING;<br>
+-		goto out;<br>
++		goto out_mask;<br>
+ 	}<br>
+ <br>
+ 	kstat_incr_irqs_this_cpu(desc);<br>
++	/*<br>
++	 * Masking is required if IRQ is ONESHOT and we can't rely on the<br>
++	 * flow-masking persisting down to irq_finalize_oneshot()<br>
++	 * (in the IRQ thread).<br>
++	 */<br>
++	if ((desc->istate & IRQS_ONESHOT) &&<br>
++	    (!(chip->flags & IRQCHIP_AUTOMASKS_FLOW) ||<br>
++	     !(chip->flags & IRQCHIP_EOI_THREADED)))<br>
++		mask_ack_irq(desc);<br>
++	else<br>
++		ack_irq(desc);<br>
+ <br>
+ 	handle_irq_event(desc);<br>
+ <br>
+@@ -933,7 +943,8 @@ void handle_strict_flow_irq(struct irq_desc *desc)<br>
+ <br>
+ 	raw_spin_unlock(&desc->lock);<br>
+ 	return;<br>
+-out:<br>
++out_mask:<br>
++	mask_ack_irq(desc);<br>
+ 	/*<br>
+ 	 * XXX: this is where IRQCHIP_EOI_IF_HANDLED would be checked, but<br>
+ 	 * it's conceptually incompatible with this handler (it breaks the<br>
+-- <br>
+2.25.1<br>
+<br>
+<br>
+

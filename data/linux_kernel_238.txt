@@ -1,0 +1,36 @@
+Hi guys,<br>
+<br>
+There is a problem between the PT driver and the AUX allocator that results<br>
+in smaller buffers consisting of 2 high-order regions, which also means<br>
+only 2 possibilities of where PMI gets generated and where tracing stops.<br>
+<br>
+This is not good enough for double buffering: when we get a PMI mid-buffer,<br>
+we update the ->aux_head etc and immediately start a new transaction while<br>
+observing ->aux_tail to still be zero, which makes the PT driver put a stop<br>
+bit at the end of the buffer. However quick userspace is to update the<br>
+->aux_tail, that second transaction/PERF_RECORD_AUX ends up truncated.<br>
+<br>
+The proposed solution here is to set up attr.aux_watermark to a quarter of<br>
+the buffer. Unfortunately, at the moment, the PT driver is not equipped to<br>
+deal with aux_watermark that's smaller than the AUX allocation order. I<br>
+could fix this in the driver itself, but, seeing as it's the only PMU that<br>
+actually uses the 'order' from AUX allocations, I'd rather fix the<br>
+allocator instead, which is done in patch 1/2.<br>
+<br>
+Patch 2/2 could be replaced by instead changing the in-kernel aux_watermark<br>
+default, but that may interfere with PMU drivers that don't ignore said<br>
+watermark / handle->wakeup (afaict, that's only arm_spe).<br>
+<br>
+Alexander Shishkin (2):<br>
+  perf: Cap allocation order at aux_watermark<br>
+  perf intel-pt: Use aux_watermark<br>
+<br>
+ kernel/events/ring_buffer.c         | 34 +++++++++++++++--------------<br>
+ tools/perf/arch/x86/util/intel-pt.c |  4 ++++<br>
+ 2 files changed, 22 insertions(+), 16 deletions(-)<br>
+<br>
+-- <br>
+2.30.2<br>
+<br>
+<br>
+

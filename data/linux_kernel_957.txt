@@ -1,0 +1,29 @@
+On Thu, Apr 08, 2021 at 11:32:23AM +0200, Borislav Petkov wrote:<br>
+><i> On Thu, Apr 08, 2021 at 12:13:21PM +0300, Jarkko Sakkinen wrote:</i><br>
+><i> > Actually I think read-only sysctl attributes would be a better idea.</i><br>
+><i> </i><br>
+><i> I still think debugfs is the right *start* for this: you play with them,</i><br>
+><i> see what makes sense and what not, tweak them, etc, and then you cast</i><br>
+><i> them in stone.</i><br>
+<br>
+Yup. Also better to see what makes sense in the context of virtualization.<br>
+Too many (unknown) unknowns to make the right call.<br>
+<br>
+><i> Not cast them in stone and see if anyone is even interested. So pls keep</i><br>
+><i> them in debugfs for now - you can always do whatever, later, when it</i><br>
+><i> turns out that those are useful.</i><br>
+<br>
+I'll do that.<br>
+<br>
+><i> Thx.</i><br>
+><i> </i><br>
+><i> -- </i><br>
+><i> Regards/Gruss,</i><br>
+><i>     Boris.</i><br>
+><i> </i><br>
+><i> <a  rel="nofollow" href="https://people.kernel.org/tglx/notes-about-netiquette">https://people.kernel.org/tglx/notes-about-netiquette</a></i><br>
+<br>
+/Jarkko<br>
+<br>
+<br>
+

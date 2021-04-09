@@ -1,0 +1,34 @@
+This series aims to clarify the behavior of the KVM_GET_EMULATED_CPUID<br>
+ioctl, and fix a corner case where -E2BIG is returned when<br>
+the nent field of struct kvm_cpuid2 is matching the amount of<br>
+emulated entries that kvm returns.<br>
+<br>
+Patch 1 proposes the nent field fix to cpuid.c,<br>
+patch 2 updates the ioctl documentation accordingly and<br>
+patches 3 and 4 extend the x86_64/get_cpuid_test.c selftest to check<br>
+the intended behavior of KVM_GET_EMULATED_CPUID.<br>
+<br>
+Signed-off-by: Emanuele Giuseppe Esposito <eesposit@xxxxxxxxxx><br>
+---<br>
+v4:<br>
+- Address nitpicks given in the mailing list<br>
+<br>
+Emanuele Giuseppe Esposito (4):<br>
+  KVM: x86: Fix a spurious -E2BIG in KVM_GET_EMULATED_CPUID<br>
+  Documentation: KVM: update KVM_GET_EMULATED_CPUID ioctl description<br>
+  selftests: add kvm_get_emulated_cpuid to processor.h<br>
+  selftests: KVM: extend get_cpuid_test to include<br>
+    KVM_GET_EMULATED_CPUID<br>
+<br>
+ Documentation/virt/kvm/api.rst                | 10 +--<br>
+ arch/x86/kvm/cpuid.c                          | 33 ++++---<br>
+ .../selftests/kvm/include/x86_64/processor.h  |  1 +<br>
+ .../selftests/kvm/lib/x86_64/processor.c      | 33 +++++++<br>
+ .../selftests/kvm/x86_64/get_cpuid_test.c     | 90 ++++++++++++++++++-<br>
+ 5 files changed, 142 insertions(+), 25 deletions(-)<br>
+<br>
+-- <br>
+2.30.2<br>
+<br>
+<br>
+

@@ -1,0 +1,36 @@
+
+On 08/04/2021 06.03, Will Deacon wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em"><blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+I would rewrite above as<br>
+<br>
+void __iomem *ret;<br>
+<br>
+ret = ioremap_np(offset, size);<br>
+if (ret)<br>
+   return ret;<br>
+<br>
+return ioremap(offset, size);<br>
+</blockquote>
+<br>
+Looks like it might be one of those rare occasions where the GCC ternary if<br>
+extension thingy comes in handy:<br>
+<br>
+	return ioremap_np(offset, size) ?: ioremap(offset, size);<br>
+</blockquote>
+<br>
+Today I learned that this one is kosher in kernel code. Handy! Let's go 
+with that.
+<br>
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+Acked-by: Will Deacon <will@xxxxxxxxxx><br>
+</blockquote>
+<br>
+Thanks!<br>
+<br>
+--<br>
+Hector Martin (marcan@xxxxxxxxx)<br>
+Public Key: <a  rel="nofollow" href="https://mrcn.st/pub">https://mrcn.st/pub</a><br>
+<br>
+<br>
+

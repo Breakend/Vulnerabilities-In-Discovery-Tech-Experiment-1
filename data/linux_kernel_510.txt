@@ -1,0 +1,36 @@
+The DRM_SIL_SII8620 kconfig has a weak `imply` dependency<br>
+on EXTCON, which causes issues when sii8620 is built<br>
+as a builtin and EXTCON is built as a module.<br>
+<br>
+The symptoms are 'undefined reference' errors caused<br>
+by the symbols in EXTCON not being available<br>
+to the sii8620 driver.<br>
+<br>
+Signed-off-by: Robert Foss <robert.foss@xxxxxxxxxx><br>
+Reported-by: kernel test robot <lkp@xxxxxxxxx><br>
+---<br>
+<br>
+Changes since v1:<br>
+ - Fix typo on comment<br>
+<br>
+ drivers/gpu/drm/bridge/Kconfig | 2 +-<br>
+ 1 file changed, 1 insertion(+), 1 deletion(-)<br>
+<br>
+diff --git a/drivers/gpu/drm/bridge/Kconfig b/drivers/gpu/drm/bridge/Kconfig<br>
+index 22a467abd3e9..2289b44613af 100644<br>
+--- a/drivers/gpu/drm/bridge/Kconfig<br>
++++ b/drivers/gpu/drm/bridge/Kconfig<br>
+@@ -169,7 +169,7 @@ config DRM_SIL_SII8620<br>
+ 	tristate "Silicon Image SII8620 HDMI/MHL bridge"<br>
+ 	depends on OF<br>
+ 	select DRM_KMS_HELPER<br>
+-	imply EXTCON<br>
++	depends on EXTCON || !EXTCON # if EXTCON=m, this cannot be built-in<br>
+ 	depends on RC_CORE || !RC_CORE<br>
+ 	help<br>
+ 	  Silicon Image SII8620 HDMI/MHL bridge chip driver.<br>
+-- <br>
+2.31.0.30.g398dba342d.dirty<br>
+<br>
+<br>
+

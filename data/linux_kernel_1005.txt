@@ -1,0 +1,36 @@
+On Thu, Apr 8, 2021 at 11:19 AM Dinghao Liu <dinghao.liu@xxxxxxxxxx> wrote:<br>
+><i></i><br>
+><i> When hmm_pool_register() fails, a pairing PM usage counter</i><br>
+><i> increment is needed to keep the counter balanced. It's the</i><br>
+><i> same for the following error paths.</i><br>
+<br>
+Acked-by: Andy Shevchenko <andy.shevchenko@xxxxxxxxx><br>
+<br>
+><i> Signed-off-by: Dinghao Liu <dinghao.liu@xxxxxxxxxx></i><br>
+><i> ---</i><br>
+><i>  drivers/staging/media/atomisp/pci/atomisp_v4l2.c | 1 +</i><br>
+><i>  1 file changed, 1 insertion(+)</i><br>
+><i></i><br>
+><i> diff --git a/drivers/staging/media/atomisp/pci/atomisp_v4l2.c b/drivers/staging/media/atomisp/pci/atomisp_v4l2.c</i><br>
+><i> index 0295e2e32d79..02f774ed80c8 100644</i><br>
+><i> --- a/drivers/staging/media/atomisp/pci/atomisp_v4l2.c</i><br>
+><i> +++ b/drivers/staging/media/atomisp/pci/atomisp_v4l2.c</i><br>
+><i> @@ -1815,6 +1815,7 @@ static int atomisp_pci_probe(struct pci_dev *pdev, const struct pci_device_id *i</i><br>
+><i>         hmm_cleanup();</i><br>
+><i>         hmm_pool_unregister(HMM_POOL_TYPE_RESERVED);</i><br>
+><i>  hmm_pool_fail:</i><br>
+><i> +       pm_runtime_get_noresume(&pdev->dev);</i><br>
+><i>         destroy_workqueue(isp->wdt_work_queue);</i><br>
+><i>  wdt_work_queue_fail:</i><br>
+><i>         atomisp_acc_cleanup(isp);</i><br>
+><i> --</i><br>
+><i> 2.17.1</i><br>
+><i></i><br>
+<br>
+<br>
+-- <br>
+With Best Regards,<br>
+Andy Shevchenko<br>
+<br>
+<br>
+

@@ -1,0 +1,90 @@
+Linus,<br>
+<br>
+please pull sound fixes for v5.12-rc7 from:<br>
+<br>
+  git://git.kernel.org/pub/scm/linux/kernel/git/tiwai/sound.git tags/sound-5.12-rc7<br>
+<br>
+The topmost commit is c8426b2700b57d2760ff335840a02f66a64b6044<br>
+<br>
+----------------------------------------------------------------<br>
+<br>
+sound fixes for 5.12-rc7<br>
+<br>
+This batch became unexpectedly bigger due to the pending ASoC<br>
+patches, but all look small and fine device-specific fixes.<br>
+Many of the commits are for ASoC Intel drivers, while the rest<br>
+are for ASoC small codec/platform fixes and HD-audio quirks.<br>
+<br>
+----------------------------------------------------------------<br>
+<br>
+Alexander Shiyan (1):<br>
+      ASoC: fsl_esai: Fix TDM slot setup for I2S mode<br>
+<br>
+Bastian Germann (1):<br>
+      ASoC: sunxi: sun4i-codec: fill ASoC card owner<br>
+<br>
+Guennadi Liakhovetski (1):<br>
+      ASoC: SOF: Intel: HDA: fix core status verification<br>
+<br>
+Hans de Goede (2):<br>
+      ASoC: intel: atom: Stop advertising non working S24LE support<br>
+      ASoC: intel: atom: Remove 44100 sample-rate from the media and deep-buffer DAI descriptions<br>
+<br>
+Jonas Holmberg (1):<br>
+      ALSA: aloop: Fix initialization of controls<br>
+<br>
+Libin Yang (5):<br>
+      ASoC: SOF: Intel: TGL: fix EHL ops<br>
+      ASoC: SOF: Intel: TGL: set shutdown callback to hda_dsp_shutdown<br>
+      ASoC: SOF: Intel: ICL: set shutdown callback to hda_dsp_shutdown<br>
+      ASoC: SOF: Intel: CNL: set shutdown callback to hda_dsp_shutdown<br>
+      ASoC: SOF: Intel: APL: set shutdown callback to hda_dsp_shutdown<br>
+<br>
+Pierre-Louis Bossart (2):<br>
+      ASoC: SOF: core: harden shutdown helper<br>
+      ASoC: SOF: Intel: move ELH chip info<br>
+<br>
+Ryan Lee (2):<br>
+      ASoC: max98373: Changed amp shutdown register as volatile<br>
+      ASoC: max98373: Added 30ms turn on/off time delay<br>
+<br>
+Shengjiu Wang (1):<br>
+      ASoC: wm8960: Fix wrong bclk and lrclk with pll enabled for some chips<br>
+<br>
+Srinivas Kandagatla (2):<br>
+      ASoC: codecs: lpass-tx-macro: set npl clock rate correctly<br>
+      ASoC: codecs: lpass-rx-macro: set npl clock rate correctly<br>
+<br>
+Takashi Iwai (2):<br>
+      ALSA: hda/conexant: Apply quirk for another HP ZBook G5 model<br>
+      ALSA: hda/realtek: Fix speaker amp setup on Acer Aspire E1<br>
+<br>
+kernel test robot (1):<br>
+      ASoC: cygnus: fix for_each_child.cocci warnings<br>
+<br>
+---<br>
+ sound/drivers/aloop.c                        | 11 ++++++++---<br>
+ sound/pci/hda/patch_conexant.c               |  1 +<br>
+ sound/pci/hda/patch_realtek.c                | 16 ++++++++++++++++<br>
+ sound/soc/bcm/cygnus-ssp.c                   |  4 +++-<br>
+ sound/soc/codecs/lpass-rx-macro.c            |  2 +-<br>
+ sound/soc/codecs/lpass-tx-macro.c            |  2 +-<br>
+ sound/soc/codecs/max98373-i2c.c              |  1 +<br>
+ sound/soc/codecs/max98373-sdw.c              |  1 +<br>
+ sound/soc/codecs/max98373.c                  |  2 ++<br>
+ sound/soc/codecs/wm8960.c                    |  8 +++++++-<br>
+ sound/soc/fsl/fsl_esai.c                     |  8 +++++---<br>
+ sound/soc/intel/atom/sst-mfld-platform-pcm.c | 12 ++++++------<br>
+ sound/soc/sof/core.c                         |  8 +++++++-<br>
+ sound/soc/sof/intel/apl.c                    |  3 ++-<br>
+ sound/soc/sof/intel/cnl.c                    | 19 ++-----------------<br>
+ sound/soc/sof/intel/hda-dsp.c                | 21 +++++++++++++++++----<br>
+ sound/soc/sof/intel/hda.h                    |  1 +<br>
+ sound/soc/sof/intel/icl.c                    |  3 ++-<br>
+ sound/soc/sof/intel/pci-tgl.c                |  2 +-<br>
+ sound/soc/sof/intel/tgl.c                    | 18 +++++++++++++++++-<br>
+ sound/soc/sunxi/sun4i-codec.c                |  5 +++++<br>
+ 21 files changed, 106 insertions(+), 42 deletions(-)<br>
+<br>
+<br>
+

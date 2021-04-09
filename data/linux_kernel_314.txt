@@ -1,0 +1,46 @@
+Currently the bitmap_remap() and bitmap_bitremap() are available<br>
+only for CONFIG_NUMA=y case, while some users may benefit out of it<br>
+and being independent to NUMA code. Make them available to users<br>
+by moving out of ifdeffery and exporting for modules.<br>
+<br>
+Signed-off-by: Andy Shevchenko <andriy.shevchenko@xxxxxxxxxxxxxxx><br>
+---<br>
+ lib/bitmap.c | 5 +++--<br>
+ 1 file changed, 3 insertions(+), 2 deletions(-)<br>
+<br>
+diff --git a/lib/bitmap.c b/lib/bitmap.c<br>
+index 74ceb02f45e3..7b6b2a67a6a6 100644<br>
+--- a/lib/bitmap.c<br>
++++ b/lib/bitmap.c<br>
+@@ -784,8 +784,6 @@ int bitmap_parse(const char *start, unsigned int buflen,<br>
+ }<br>
+ EXPORT_SYMBOL(bitmap_parse);<br>
+ <br>
+-<br>
+-#ifdef CONFIG_NUMA<br>
+ /**<br>
+  * bitmap_pos_to_ord - find ordinal of set bit at given position in bitmap<br>
+  *	@buf: pointer to a bitmap<br>
+@@ -894,6 +892,7 @@ void bitmap_remap(unsigned long *dst, const unsigned long *src,<br>
+ 			set_bit(bitmap_ord_to_pos(new, n % w, nbits), dst);<br>
+ 	}<br>
+ }<br>
++EXPORT_SYMBOL(bitmap_remap);<br>
+ <br>
+ /**<br>
+  * bitmap_bitremap - Apply map defined by a pair of bitmaps to a single bit<br>
+@@ -931,7 +930,9 @@ int bitmap_bitremap(int oldbit, const unsigned long *old,<br>
+ 	else<br>
+ 		return bitmap_ord_to_pos(new, n % w, bits);<br>
+ }<br>
++EXPORT_SYMBOL(bitmap_bitremap);<br>
+ <br>
++#ifdef CONFIG_NUMA<br>
+ /**<br>
+  * bitmap_onto - translate one bitmap relative to another<br>
+  *	@dst: resulting translated bitmap<br>
+-- <br>
+2.30.2<br>
+<br>
+<br>
+

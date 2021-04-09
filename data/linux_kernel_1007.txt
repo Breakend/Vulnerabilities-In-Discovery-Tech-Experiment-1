@@ -1,0 +1,38 @@
+
+On 08/04/21 14:00, Marcelo Tosatti wrote:<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em"><blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+<br>
+KVM_REQ_MCLOCK_INPROGRESS is only needed to kick running vCPUs out of the<br>
+execution loop;<br>
+</blockquote>
+We do not want vcpus with different system_timestamp/tsc_timestamp<br>
+pair:<br>
+<br>
+  * To avoid that problem, do not allow visibility of distinct<br>
+  * system_timestamp/tsc_timestamp values simultaneously: use a master<br>
+  * copy of host monotonic time values. Update that master copy<br>
+  * in lockstep.<br>
+<br>
+So KVM_REQ_MCLOCK_INPROGRESS also ensures that no vcpu enters<br>
+guest mode (via vcpu->requests check before VM-entry) with a<br>
+different system_timestamp/tsc_timestamp pair.<br>
+</blockquote>
+<br>
+Yes this is what KVM_REQ_MCLOCK_INPROGRESS does, but it does not have to 
+be done that way.  All you really need is the IPI with KVM_REQUEST_WAIT, 
+which ensures that updates happen after the vCPUs have exited guest 
+mode.  You don't need to loop on vcpu->requests for example, because 
+kvm_guest_time_update could just spin on pvclock_gtod_sync_lock until 
+pvclock_update_vm_gtod_copy is done.
+<br>
+<br>
+So this morning I tried protecting the kvm->arch fields for kvmclock 
+using a seqcount, which is nice also because get_kvmclock_ns() does not 
+have to bounce the cacheline of pvclock_gtod_sync_lock anymore.  I'll 
+post it tomorrow or next week.
+<br>
+<br>
+Paolo<br>
+<br>
+<br>
+

@@ -1,0 +1,140 @@
+On Wed, 7 Apr 2021 at 19:19, Tim Chen <tim.c.chen@xxxxxxxxxxxxxxx> wrote:<br>
+><i></i><br>
+><i></i><br>
+><i></i><br>
+><i> On 4/7/21 7:02 AM, Vincent Guittot wrote:</i><br>
+><i> > Hi Tim,</i><br>
+><i> ></i><br>
+><i> > On Wed, 24 Mar 2021 at 17:05, Tim Chen <tim.c.chen@xxxxxxxxxxxxxxx> wrote:</i><br>
+><i> >></i><br>
+><i> >></i><br>
+><i> >></i><br>
+><i> >> On 3/24/21 6:44 AM, Vincent Guittot wrote:</i><br>
+><i> >>> Hi Tim,</i><br>
+><i> >></i><br>
+><i> >>></i><br>
+><i> >>> IIUC your problem, we call update_blocked_averages() but because of:</i><br>
+><i> >>></i><br>
+><i> >>>               if (this_rq->avg_idle < curr_cost + sd->max_newidle_lb_cost) {</i><br>
+><i> >>>                       update_next_balance(sd, &next_balance);</i><br>
+><i> >>>                       break;</i><br>
+><i> >>>               }</i><br>
+><i> >>></i><br>
+><i> >>> the for_each_domain loop stops even before running load_balance on the 1st</i><br>
+><i> >>> sched domain level which means that update_blocked_averages() was called</i><br>
+><i> >>> unnecessarily.</i><br>
+><i> >>></i><br>
+><i> >></i><br>
+><i> >> That's right</i><br>
+><i> >></i><br>
+><i> >>> And this is even more true with a small sysctl_sched_migration_cost which allows newly</i><br>
+><i> >>> idle LB for very small this_rq->avg_idle. We could wonder why you set such a low value</i><br>
+><i> >>> for sysctl_sched_migration_cost which is lower than the max_newidle_lb_cost of the</i><br>
+><i> >>> smallest domain but that's probably because of task_hot().</i><br>
+><i> >>></i><br>
+><i> >>> if avg_idle is lower than the sd->max_newidle_lb_cost of the 1st sched_domain, we should</i><br>
+><i> >>> skip spin_unlock/lock and for_each_domain() loop entirely</i><br>
+><i> >>></i><br>
+><i> >>> Maybe something like below:</i><br>
+><i> >>></i><br>
+><i> >></i><br>
+><i> >> The patch makes sense.  I'll ask our benchmark team to queue this patch for testing.</i><br>
+><i> ></i><br>
+><i> > Do you have feedback from your benchmark team ?</i><br>
+><i> ></i><br>
+><i></i><br>
+><i> Vincent,</i><br>
+><i></i><br>
+><i> Thanks for following up. I just got some data back from the benchmark team.</i><br>
+><i> The performance didn't change with your patch.  And the overall cpu% of update_blocked_averages</i><br>
+><i> also remain at about the same level.  My first thought was perhaps this update</i><br>
+><i> still didn't catch all the calls to update_blocked_averages</i><br>
+><i></i><br>
+><i>         if (this_rq->avg_idle < sysctl_sched_migration_cost ||</i><br>
+><i> -           !READ_ONCE(this_rq->rd->overload)) {</i><br>
+><i> +           !READ_ONCE(this_rq->rd->overload) ||</i><br>
+><i> +           (sd && this_rq->avg_idle < sd->max_newidle_lb_cost)) {</i><br>
+><i></i><br>
+><i> To experiment, I added one more check on the next_balance to further limit</i><br>
+><i> the path to actually do idle load balance with the next_balance time.</i><br>
+><i></i><br>
+><i>         if (this_rq->avg_idle < sysctl_sched_migration_cost ||</i><br>
+><i> -           !READ_ONCE(this_rq->rd->overload)) {</i><br>
+><i> +           time_before(jiffies, this_rq->next_balance) ||</i><br>
+><i> +           !READ_ONCE(this_rq->rd->overload) ||</i><br>
+><i> +           (sd && this_rq->avg_idle < sd->max_newidle_lb_cost)) {</i><br>
+><i></i><br>
+><i> I was suprised to find the overall cpu% consumption of update_blocked_averages</i><br>
+><i> and throughput of the benchmark still didn't change much.  So I took a</i><br>
+><i> peek into the profile and found the update_blocked_averages calls shifted to the idle load balancer.</i><br>
+><i> The call to update_locked_averages was reduced in newidle_balance so the patch did</i><br>
+><i> what we intended.  But the overall rate of calls to</i><br>
+<br>
+At least , we have removed the useless call to update_blocked_averages<br>
+in newidle_balance when we will not perform any newly idle load<br>
+balance<br>
+<br>
+><i> update_blocked_averages remain roughly the same, shifting from</i><br>
+><i> newidle_balance to run_rebalance_domains.</i><br>
+><i></i><br>
+><i>    100.00%  (ffffffff810cf070)</i><br>
+><i>             |</i><br>
+><i>             ---update_blocked_averages</i><br>
+><i>                |</i><br>
+><i>                |--95.47%--run_rebalance_domains</i><br>
+><i>                |          __do_softirq</i><br>
+><i>                |          |</i><br>
+><i>                |          |--94.27%--asm_call_irq_on_stack</i><br>
+><i>                |          |          do_softirq_own_stack</i><br>
+<br>
+The call of  update_blocked_averages mainly comes from SCHED_SOFTIRQ.<br>
+And as a result, not from the new path<br>
+do_idle()->nohz_run_idle_balance() which has been added by this patch<br>
+to defer the call to update_nohz_stats() after newlyidle_balance and<br>
+before entering idle.<br>
+<br>
+><i>                |          |          |</i><br>
+><i>                |          |          |--93.74%--irq_exit_rcu</i><br>
+><i>                |          |          |          |</i><br>
+><i>                |          |          |          |--88.20%--sysvec_apic_timer_interrupt</i><br>
+><i>                |          |          |          |          asm_sysvec_apic_timer_interrupt</i><br>
+><i>                |          |          |          |          |</i><br>
+><i>                ...</i><br>
+><i>                |</i><br>
+><i>                |</i><br>
+><i>                 --4.53%--newidle_balance</i><br>
+><i>                           pick_next_task_fair</i><br>
+><i></i><br>
+><i> I was expecting idle load balancer to be rate limited to 60 Hz, which</i><br>
+<br>
+Why 60Hz ?<br>
+<br>
+><i> should be 15 jiffies apart on the test system with CONFIG_HZ_250.</i><br>
+><i> When I did a trace on a single CPU, I see that update_blocked_averages</i><br>
+><i> are often called between 1 to 4 jiffies apart, which is at a much higher</i><br>
+><i> rate than I expected.  I haven't taken a closer look yet.  But you may</i><br>
+<br>
+2 things can trigger a SCHED_SOFTIRQ/run_rebalance_domains:<br>
+- the need for an update of blocked load which should not happen more<br>
+than once every 32ms which means a rate of around 30Hz<br>
+- the need for a load balance of a sched_domain. The min interval for<br>
+a sched_domain is its weight when the CPU is idle which is usually few<br>
+jiffies<br>
+<br>
+The only idea that I have for now is that we spend less time in<br>
+newidle_balance which changes the dynamic of your system.<br>
+<br>
+In your trace, could you check if update_blocked_averages is called<br>
+during the tick ? and Is the current task idle task ?<br>
+<br>
+Vincent<br>
+<br>
+><i> have a better idea.  I won't have access to the test system and workload</i><br>
+><i> till probably next week.</i><br>
+><i></i><br>
+><i> Thanks.</i><br>
+><i></i><br>
+><i> Tim</i><br>
+<br>
+<br>
+

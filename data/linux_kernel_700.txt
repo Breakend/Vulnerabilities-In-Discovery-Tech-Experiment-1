@@ -1,0 +1,34 @@
+The PM reference count is not expected to be incremented on return in<br>
+ipi2c_imx_master_enable().<br>
+<br>
+However, pm_runtime_get_sync() will increment the PM reference count<br>
+even on failure. forgetting to put the reference again will result in<br>
+a leak.<br>
+<br>
+Replace it with pm_runtime_resume_and_get() to keep the usage counter<br>
+balanced.<br>
+<br>
+Reported-by: Hulk Robot <hulkci@xxxxxxxxxx><br>
+Signed-off-by: Ye Weihua <yeweihua4@xxxxxxxxxx><br>
+---<br>
+ drivers/i2c/busses/i2c-imx-lpi2c.c | 2 +-<br>
+ 1 file changed, 1 insertion(+), 1 deletion(-)<br>
+<br>
+diff --git a/drivers/i2c/busses/i2c-imx-lpi2c.c b/drivers/i2c/busses/i2c-imx-lpi2c.c<br>
+index 9db6ccded5e9..8b9ba055c418 100644<br>
+--- a/drivers/i2c/busses/i2c-imx-lpi2c.c<br>
++++ b/drivers/i2c/busses/i2c-imx-lpi2c.c<br>
+@@ -259,7 +259,7 @@ static int lpi2c_imx_master_enable(struct lpi2c_imx_struct *lpi2c_imx)<br>
+ 	unsigned int temp;<br>
+ 	int ret;<br>
+ <br>
+-	ret = pm_runtime_get_sync(lpi2c_imx->adapter.dev.parent);<br>
++	ret = pm_runtime_resume_and_get(lpi2c_imx->adapter.dev.parent);<br>
+ 	if (ret < 0)<br>
+ 		return ret;<br>
+ <br>
+-- <br>
+2.17.1<br>
+<br>
+<br>
+

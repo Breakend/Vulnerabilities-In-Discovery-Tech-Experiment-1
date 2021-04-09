@@ -1,0 +1,88 @@
+On 2021-04-02 22:48, Dave Hansen wrote:<br>
+><i> On 4/2/21 1:20 PM, Jethro Beekman wrote:</i><br>
+><i>> On 2021-04-02 21:50, Dave Hansen wrote:</i><br>
+><i>>> Again, how does this save space?</i><br>
+><i>>></i><br>
+><i>>> Are you literally talking about the temporary cost of allocating *one* page?</i><br>
+><i>></i><br>
+><i>> No I'm talking about the amount of disk space/network traffic needed</i><br>
+><i>> to distribute the application.</i><br>
+><i> </i><br>
+><i> Am I just horribly confused about how executable formats work?</i><br>
+><i> </i><br>
+><i> Executables go through an SGX loader that copies them into SGX memory</i><br>
+><i> with the kernel's help.</i><br>
+><i> </i><br>
+><i> That executable can have *ANY* format, really.</i><br>
+><i> </i><br>
+><i> Then, a loader needs to read that format and turn it into data that can</i><br>
+><i> be shoved into the kernel.</i><br>
+<br>
+Sure, you can define any compression format or conversion rules between executable formats. But the native “executable format” for SGX is very clearly defined in the Intel SDM as a specific sequence of ECREATE, EADD, EEXTEND and EINIT calls. It's that sequence that's used for loading the enclave and it's that sequence that's used for code signing. So when I say save space I mean save space in the native format.<br>
+<br>
+Not EEXTENDing unnecessarily also reduces enclave load time if you're looking for additional arguments.<br>
+<br>
+><i> The simplest way to do this is to just</i><br>
+><i> mmap() the executable and point the kernel ioctl()'s at the executable's</i><br>
+><i> pages one-by-one.</i><br>
+><i> </i><br>
+><i> The other way a loader *could* work is to copy the data to a temporary</i><br>
+><i> location and then hand the temporary location to the SGX ioctl()s.</i><br>
+><i> </i><br>
+><i> Let's say the kernel *REQUIRED* page-aligned and page-sized ioctl()</i><br>
+><i> arguments forever.  If an executable had a 256-byte-sized chunk of data,</i><br>
+><i> all the loader would have to do is allocate a page, copy the data in</i><br>
+><i> there, and then pass that whole page into the ioctl().</i><br>
+><i> </i><br>
+><i> In other words, the loading restrictions (page alignment) have little to</i><br>
+><i> nothing to do with the format of the thing loading the executable.</i><br>
+><i> </i><br>
+><i> But, in no way does a kernel page-size-based ABI *REQUIRE* that an</i><br>
+><i> underlying binary format represent things only in page-sized chunks.</i><br>
+><i> Look at how many page-sized executables there are in /bin.  Yet, they</i><br>
+><i> can only be mapped into the address space in PAGE_SIZE increments.</i><br>
+><i> </i><br>
+><i>>>>> Does any actual, real-world enclave want this functionality?  Why?</i><br>
+><i>>></i><br>
+><i>>> I didn't see an answer on this one.</i><br>
+><i>></i><br>
+><i>> Yes, we have enclaves that use this functionality. They already exist</i><br>
+><i>> so they can't be changed (without changing the measurement) and we'd</i><br>
+><i>> like to stop using the out of tree driver as soon as possible.</i><br>
+><i>> However, we are not able to load the enclaves.</i><br>
+><i> OK, so please give this series another shot.  Please explain why you</i><br>
+><i> *ACTUALLY* need it and what the goals are.  Please explain why you can't</i><br>
+><i> just relax the restrictions of the existing add ioctl() to take</i><br>
+><i> <PAGE_SIZE arguments.</i><br>
+><i> </i><br>
+><i> As far as I can tell, there are only two coherent arguments for this</i><br>
+><i> functionality:</i><br>
+><i> 1. It makes the loader simpler so that it doesn't need temporary pages</i><br>
+><i> 2. It would allow old enclaves created with non-upstream-Linux SGX</i><br>
+><i>    implementations to end up with the same signatures on these</i><br>
+><i>    implementations as upstream Linux.</i><br>
+><i> </i><br>
+><i> I find both of those pretty weak arguments.  Doing #2 just for the</i><br>
+><i> out-of-tree Linux implementation also encourages folks to establish ABI</i><br>
+><i> out of the tree and then foist it on upstream later.  That's not super cool.</i><br>
+><i> But, I guess this would be nice to the folks that have gone to the</i><br>
+><i> trouble of building SGX enclaves for all these years with no upstream</i><br>
+><i> support.</i><br>
+<br>
+Linux doesn't exist in a vacuum. People who write SGX applications write those applications for SGX, not for Linux. For Linux to claim to support SGX version 1, it should support all SGX version 1 applications. The current implementation is not SGX version 1, it's some limited subset of it.<br>
+<br>
+The cost to Linux for supporting all of SGX version 1 seems excessively low.<br>
+<br>
+SGX defines lots of things and you may not see the use case for all of this immediately. No one has a usecase for creating enclaves with SECS.SSAFRAMESIZE = 1000 or TCS.NSSA = 3. Why did you not demand checks for this in the ECREATE/EADD ioctls?<br>
+<br>
+><i> </i><br>
+><i> I'll try to look at it with fresh eyes once this is in place.</i><br>
+><i> </i><br>
+<br>
+--<br>
+Jethro Beekman | Fortanix<br>
+<br>
+<p><strong>Attachment:
+<a href="00901/smime.p7s" ><tt>smime.p7s</tt></a></strong><br>
+<em>Description:</em> S/MIME Cryptographic Signature</p>
+

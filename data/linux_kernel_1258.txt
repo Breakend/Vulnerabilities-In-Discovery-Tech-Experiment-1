@@ -1,0 +1,46 @@
+
+<br>
+<br>
+Le 08/04/2021 à 03:18, Yu Kuai a écrit :<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">
+The sparse tool complains as follow:<br>
+<br>
+arch/powerpc/kernel/btext.c:48:5: warning:<br>
+  symbol 'boot_text_mapped' was not declared. Should it be static?<br>
+<br>
+This symbol is not used outside of btext.c, so this commit make<br>
+it static.<br>
+<br>
+Signed-off-by: Yu Kuai <yukuai3@xxxxxxxxxx><br>
+---<br>
+  arch/powerpc/kernel/btext.c | 2 +-<br>
+  1 file changed, 1 insertion(+), 1 deletion(-)<br>
+<br>
+diff --git a/arch/powerpc/kernel/btext.c b/arch/powerpc/kernel/btext.c<br>
+index 359d0f4ca532..8df9230be6fa 100644<br>
+--- a/arch/powerpc/kernel/btext.c<br>
++++ b/arch/powerpc/kernel/btext.c<br>
+@@ -45,7 +45,7 @@ unsigned long disp_BAT[2] __initdata = {0, 0};<br>
+  
+  static unsigned char vga_font[cmapsz];
+<br>  
+-int boot_text_mapped __force_data = 0;
+<br>
++static int boot_text_mapped __force_data;<br>
+</blockquote>
+<br>
+Are you sure the initialisation to 0 can be removed ? Usually initialisation to 0 is not needed 
+because not initialised variables go in the BSS section which is zeroed at startup. But here the 
+variable is flagged with __force_data so it is not going in the BSS section.
+<br>
+<br>
+<br>
+<blockquote style="border-left: #5555EE solid 0.2em; margin: 0em; padding-left: 0.85em">  
+  extern void rmci_on(void);
+<br>
+  extern void rmci_off(void);<br>
+<br>
+</blockquote>
+<br>
+<br>
+

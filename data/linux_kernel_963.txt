@@ -1,0 +1,86 @@
+On Thu, Apr 08, 2021 at 10:49:58AM +0200, Borislav Petkov wrote:<br>
+><i> On Wed, Apr 07, 2021 at 02:43:10PM -0700, Luck, Tony wrote:</i><br>
+><i> > On Wed, Apr 07, 2021 at 11:18:16PM +0200, Borislav Petkov wrote:</i><br>
+><i> > > On Thu, Mar 25, 2021 at 05:02:34PM -0700, Tony Luck wrote:</i><br>
+><i> > > > Andy Lutomirski pointed out that sending SIGBUS to tasks that</i><br>
+><i> > > > hit poison in the kernel copying syscall parameters from user</i><br>
+><i> > > > address space is not the right semantic.</i><br>
+><i> > > </i><br>
+><i> > > What does that mean exactly?</i><br>
+><i> > </i><br>
+><i> > Andy said that a task could check a memory range for poison by</i><br>
+><i> > doing:</i><br>
+><i> > </i><br>
+><i> > 	ret = write(fd, buf, size);</i><br>
+><i> > 	if (ret == size) {</i><br>
+><i> > 		memory range is all good</i><br>
+><i> > 	}</i><br>
+><i> > </i><br>
+><i> > That doesn't work if the kernel sends a SIGBUS.</i><br>
+><i> > </i><br>
+><i> > It doesn't seem a likely scenario ... but Andy is correct that</i><br>
+><i> > the above ought to work.</i><br>
+><i> </i><br>
+><i> We need to document properly what this is aiming to fix. He said</i><br>
+><i> something yesterday along the lines of kthread_use_mm() hitting a SIGBUS</i><br>
+><i> when a kthread "attaches" to an address space. I'm still unclear as to</i><br>
+><i> how exactly that happens - there are only a handful of kthread_use_mm()</i><br>
+><i> users in the tree...</i><br>
+<br>
+Also not clear to me either ... but sending a SIGBUS to a kthread isn't<br>
+going to do anything useful. So avoiding doing that is another worthy<br>
+goal.<br>
+<br>
+><i> > Yes. This is for kernel reading memory belongng to "current" task.</i><br>
+><i> </i><br>
+><i> Provided "current" is really the task to which the poison page belongs.</i><br>
+><i> That kthread_use_mm() thing sounded like the wrong task gets killed. But that</i><br>
+><i> needs more details.</i><br>
+<br>
+With these patches nothing gets killed when kernel touches user poison.<br>
+If this is in a regular system call then these patches will return EFAULT<br>
+to the user (but now that I see EHWPOISON exists that looks like a better<br>
+choice - so applications can distinguish the "I just used an invalid address in<br>
+a parameter to a syscall" from "This isn't my fault, the memory broke".<br>
+<br>
+><i> > Same in that the page gets unmapped. Different in that there</i><br>
+><i> > is no SIGBUS if the kernel did the access for the user.</i><br>
+><i> </i><br>
+><i> What is even the actual use case with sending tasks SIGBUS on poison</i><br>
+><i> consumption? KVM? Others?</i><br>
+<br>
+KVM apparently passes a machine check into the guest. Though it seems<br>
+to be misisng the MCG_STATUS information to tell the guest whether this<br>
+is an "Action Required" machine check, or an "Action Optional" (i.e.<br>
+whether the poison was found synchonously by execution of the current<br>
+instruction, or asynchronously).<br>
+<br>
+><i> Are we documenting somewhere: "if your process gets a SIGBUS and this</i><br>
+><i> and that, which means your page got offlined, you should do this and</i><br>
+><i> that to recover"?</i><br>
+<br>
+There is the ancient Documentation/vm/hwpoison.rst from 2009 ... nothing<br>
+seems wrong in that, but could use some updates.  I don't know how much<br>
+detail we might want to go into on recovery stratgies for applications.<br>
+In terms of production s/w there was one ISV who prototyped recovery<br>
+for their application but last time I checked didn't enable it in the<br>
+production version.<br>
+<br>
+Essentially it boils down to:<br>
+SIGBUS handler gets additional data giving virtual address that has gone away<br>
+<br>
+1) Can the application replace the lost page?<br>
+	Use mmap(addr, MAP_FIXED, ...) to map a fresh page into the gap<br>
+	and fill with replacement data. This case can return from SIGBUS<br>
+	handler to re-execute failed instruction<br>
+2) Can the application continue in degraded mode w/o the lost page?<br>
+	Hunt down pointers to lost page and update structures to say<br>
+	"this data lost". Use siglongjmp() to go to preset recovery path<br>
+3) Can the application shut down gracefully?<br>
+	Record details of the lost page. Inform next-of-kin. Exit.<br>
+4) Default - just exit<br>
+<br>
+-Tony<br>
+<br>
+<br>
+

@@ -1,0 +1,57 @@
+On Thu, Apr 8, 2021 at 3:59 PM Naresh Kamboju <naresh.kamboju@xxxxxxxxxx> wrote:<br>
+><i> On Thu, 8 Apr 2021 at 15:17, Andy Shevchenko <andy.shevchenko@xxxxxxxxx> wrote:</i><br>
+><i> > On Thu, Apr 8, 2021 at 11:33 AM Naresh Kamboju</i><br>
+><i> > <naresh.kamboju@xxxxxxxxxx> wrote:</i><br>
+><i> > > On Thu, 8 Apr 2021 at 04:21, Andy Shevchenko <andy.shevchenko@xxxxxxxxx> wrote:</i><br>
+><i> > > > On Thu, Apr 8, 2021 at 12:38 AM Naresh Kamboju</i><br>
+><i> > > > <naresh.kamboju@xxxxxxxxxx> wrote:</i><br>
+><i> > > > ></i><br>
+><i> > > > > While running kselftest recently added gpio gpio-sim.sh test case the following</i><br>
+><i> > > > > warning was triggered on Linux next tag 20210330 tag running on arm64 juno</i><br>
+><i> > > > > and hikey devices.</i><br>
+><i> > > > ></i><br>
+><i> > > > > GOOD: next-20210326</i><br>
+><i> > > > > BAD: next-20210330</i><br>
+><i> > > > ></i><br>
+><i> > > > > This is still happening today on Linux next tag 20210407.</i><br>
+><i> > > ></i><br>
+><i> > > > Can you add the following</i><br>
+><i> > > ></i><br>
+><i> > > >   sysfs_attr_init(attrs[i]);</i><br>
+><i> > > ></i><br>
+><i> > > > to the end of the loop in gpio_sim_setup_sysfs()?</i><br>
+><i> > ></i><br>
+><i> > > Do you mean like this,</i><br>
+><i> > ></i><br>
+><i> > > diff --git a/drivers/gpio/gpio-sim.c b/drivers/gpio/gpio-sim.c</i><br>
+><i> > > index ea17289a869c..5fe67ccf45f7 100644</i><br>
+><i> > > --- a/drivers/gpio/gpio-sim.c</i><br>
+><i> > > +++ b/drivers/gpio/gpio-sim.c</i><br>
+><i> > > @@ -296,6 +296,7 @@ static int gpio_sim_setup_sysfs(struct gpio_sim_chip *chip)</i><br>
+><i> > >                 dev_attr->store = gpio_sim_sysfs_line_store;</i><br>
+><i> > ></i><br>
+><i> > >                 attrs[i] = &dev_attr->attr;</i><br>
+><i> > > +               sysfs_attr_init(attrs[i]);</i><br>
+><i> > >         }</i><br>
+><i> > ></i><br>
+><i> > >         chip->attr_group.name = "line-ctrl";</i><br>
+><i> ></i><br>
+><i> > Precisely.</i><br>
+><i></i><br>
+><i> As per your suggestions the above line added and build tested</i><br>
+><i> the reported issue is fixed now.</i><br>
+><i></i><br>
+><i> Reported-by: Naresh Kamboju <naresh.kamboju@xxxxxxxxxx></i><br>
+><i> Tested-by: Naresh Kamboju <naresh.kamboju@xxxxxxxxxx></i><br>
+<br>
+Thanks, I'll send a formal patch.<br>
+<br>
+The rest I leave for Bart to figure out what to do.<br>
+<br>
+<br>
+-- <br>
+With Best Regards,<br>
+Andy Shevchenko<br>
+<br>
+<br>
+

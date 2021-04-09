@@ -1,0 +1,29 @@
+The kernel-doc run gave a warning for Xilinx DWC3 driver:<br>
+<br>
+drivers/usb/dwc3/dwc3-xilinx.c:27: warning: expecting prototype for<br>
+dwc3(). Prototype was for XLNX_USB_PHY_RST_EN() instead<br>
+<br>
+Basically it was due to an extra '*' in line:2. This patch fixes the same.<br>
+<br>
+Signed-off-by: Manish Narani <manish.narani@xxxxxxxxxx><br>
+Reported-by: kernel test robot <lkp@xxxxxxxxx><br>
+---<br>
+ drivers/usb/dwc3/dwc3-xilinx.c | 2 +-<br>
+ 1 file changed, 1 insertion(+), 1 deletion(-)<br>
+<br>
+diff --git a/drivers/usb/dwc3/dwc3-xilinx.c b/drivers/usb/dwc3/dwc3-xilinx.c<br>
+index a59e149..f42f4cb 100644<br>
+--- a/drivers/usb/dwc3/dwc3-xilinx.c<br>
++++ b/drivers/usb/dwc3/dwc3-xilinx.c<br>
+@@ -1,5 +1,5 @@<br>
+ // SPDX-License-Identifier: GPL-2.0<br>
+-/**<br>
++/*<br>
+  * dwc3-xilinx.c - Xilinx DWC3 controller specific glue driver<br>
+  *<br>
+  * Authors: Manish Narani <manish.narani@xxxxxxxxxx><br>
+-- <br>
+2.1.1<br>
+<br>
+<br>
+

@@ -1,0 +1,9 @@
+I was working on some checkpatch fixes for ddk750_dvi.h and ddk750_dvi.c<br>
+when I noticed that dviInit function does not seem to be invoked in any<br>
+of the files that belong to this driver and can be removed. Am I missing something?<br>
+<br>
+Thank you,<br>
+Pavle<br>
+<br>
+<br>
+

@@ -1,0 +1,42 @@
+On Tue, Apr 06, 2021 at 04:17:10PM -0700, Ricardo Neri wrote:<br>
+><i> On Tue, Apr 06, 2021 at 01:17:28PM +0200, Peter Zijlstra wrote:</i><br>
+><i> > On Mon, Apr 05, 2021 at 09:11:07PM -0700, Ricardo Neri wrote:</i><br>
+><i> > > @@ -8507,6 +8619,10 @@ static bool update_sd_pick_busiest(struct lb_env *env,</i><br>
+><i> > >  	if (!sgs->sum_h_nr_running)</i><br>
+><i> > >  		return false;</i><br>
+><i> > >  </i><br>
+><i> > > +	if (sgs->group_type == group_asym_packing &&</i><br>
+><i> > > +	    !asym_can_pull_tasks(env->dst_cpu, sds, sgs, sg))</i><br>
+><i> > > +		return false;</i><br>
+><i> > </i><br>
+><i> > All of this makes my head hurt; but afaict this isn't right.</i><br>
+><i> > </i><br>
+><i> > Your update_sg_lb_stats() change makes that we unconditionally set</i><br>
+><i> > sgs->group_asym_packing, and then this is to undo that. But it's not</i><br>
+><i> > clear this covers all cases right.</i><br>
+><i> </i><br>
+><i> We could not make a decision to set sgs->group_asym_packing in</i><br>
+><i> update_sg_lb_stats() because we don't have information about the dst_cpu</i><br>
+><i> and its SMT siblings if any. That is the reason I proposed to delay the</i><br>
+><i> decision to update_sd_pick_busiest(), where we can compare local and</i><br>
+><i> sgs.</i><br>
+<br>
+Yeah, I sorta got that.<br>
+<br>
+><i> > Even if !sched_asym_prefer(), we could end up selecting this sg as</i><br>
+><i> > busiest, but you're just bailing out here.</i><br>
+><i> </i><br>
+><i> Even if sgs->group_asym_packing is unconditionally set, sgs can still</i><br>
+><i> be classified as group_overloaded and group_imbalanced. In such cases</i><br>
+><i> we wouldn't bailout. sgs could not be classified as group_fully_busy</i><br>
+><i> or group_has_spare and we would bailout, though. Is your concern about</i><br>
+><i> these? I can fixup these two cases.</i><br>
+<br>
+Yes. Either explain (in a comment) why those cases are not relevant, or<br>
+handle them properly.<br>
+<br>
+Because when reading this, it wasn't at all obvious that this is correct<br>
+or as intended.<br>
+<br>
+<br>
+

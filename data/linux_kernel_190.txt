@@ -1,0 +1,16 @@
+This includes a follow up patch to Tegra186 AHCI support patch series<br>
+<a  rel="nofollow" href="https://lore.kernel.org/patchwork/cover/1408752/">https://lore.kernel.org/patchwork/cover/1408752/</a><br>
+<br>
+<br>
+Sowjanya Komatineni (1):<br>
+  ata: ahci_tegra: call tegra_powergate_power_off only when PM domain is<br>
+    not present<br>
+<br>
+ drivers/ata/ahci_tegra.c | 3 ++-<br>
+ 1 file changed, 2 insertions(+), 1 deletion(-)<br>
+<br>
+-- <br>
+2.7.4<br>
+<br>
+<br>
+
